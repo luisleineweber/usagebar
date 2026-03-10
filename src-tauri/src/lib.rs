@@ -11,8 +11,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use keyring::Entry;
 use serde::Serialize;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_log::{Target, TargetKind};
 use uuid::Uuid;
@@ -22,6 +23,34 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 const GLOBAL_SHORTCUT_STORE_KEY: &str = "globalShortcut";
 const APP_STARTED_TRACKED_DAY_KEY_PREFIX: &str = "analytics.app_started_day.";
+const PROVIDER_SECRET_KEYRING_TARGET: &str = "OpenUsage";
+
+fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
+    format!("OpenUsage Provider Secret {} {}", provider_id, secret_key)
+}
+
+fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<String> {
+    match (provider_id, secret_key) {
+        ("opencode", "cookieHeader") => vec!["OpenCode Cookie Header".to_string()],
+        _ => Vec::new(),
+    }
+}
+
+fn delete_provider_secret_service(service: &str) -> Result<(), String> {
+    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, service)
+        .map_err(|error| format!("credential store unavailable: {}", error))?;
+    match entry.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let message = error.to_string().to_lowercase();
+            if message.contains("no entry") || message.contains("not found") {
+                Ok(())
+            } else {
+                Err(format!("credential delete failed: {}", error))
+            }
+        }
+    }
+}
 
 fn app_started_day_key(version: &str) -> String {
     format!("{}{}", APP_STARTED_TRACKED_DAY_KEY_PREFIX, version)
@@ -109,6 +138,8 @@ pub struct PluginMeta {
     pub name: String,
     pub icon_url: String,
     pub brand_color: Option<String>,
+    pub support_state: String,
+    pub support_message: Option<String>,
     pub lines: Vec<ManifestLineDto>,
     pub links: Vec<PluginLinkDto>,
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
@@ -159,10 +190,15 @@ fn init_panel(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 fn hide_panel(app_handle: tauri::AppHandle) {
-    use tauri_nspanel::ManagerExt;
-    if let Ok(panel) = app_handle.get_webview_panel("main") {
-        panel.hide();
+    use tauri::Manager;
+    if let Some(window) = app_handle.get_webview_window("main") {
+        let _ = window.hide();
     }
+}
+
+#[tauri::command]
+fn reposition_panel(app_handle: tauri::AppHandle) {
+    panel::reposition_panel(&app_handle);
 }
 
 #[tauri::command]
@@ -221,6 +257,10 @@ async fn start_probe_batch(
         }
         None => plugins,
     };
+    let selected_plugins: Vec<_> = selected_plugins
+        .into_iter()
+        .filter(|plugin| plugin_is_probe_supported(&plugin.manifest.id))
+        .collect();
 
     let response_plugin_ids: Vec<String> = selected_plugins
         .iter()
@@ -299,12 +339,73 @@ async fn start_probe_batch(
 
 #[tauri::command]
 fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
-    // macOS log directory: ~/Library/Logs/{bundleIdentifier}
-    let home = dirs::home_dir().ok_or("no home dir")?;
-    let bundle_id = app_handle.config().identifier.clone();
-    let log_dir = home.join("Library").join("Logs").join(&bundle_id);
+    let log_dir = app_handle.path().app_log_dir().map_err(|e| e.to_string())?;
     let log_file = log_dir.join(format!("{}.log", app_handle.package_info().name));
     Ok(log_file.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn set_provider_secret(provider_id: String, secret_key: String, value: String) -> Result<(), String> {
+    let trimmed_provider = provider_id.trim();
+    let trimmed_secret = secret_key.trim();
+    let trimmed_value = value.trim();
+
+    if trimmed_provider.is_empty() || trimmed_secret.is_empty() {
+        return Err("provider and secret key are required".to_string());
+    }
+    if trimmed_value.is_empty() {
+        return Err("secret value cannot be empty".to_string());
+    }
+
+    let service = provider_secret_service(trimmed_provider, trimmed_secret);
+    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, &service)
+        .map_err(|error| format!("credential store unavailable: {}", error))?;
+
+    entry
+        .set_password(trimmed_value)
+        .map_err(|error| format!("credential write failed: {}", error))
+}
+
+#[tauri::command]
+fn delete_provider_secret(provider_id: String, secret_key: String) -> Result<(), String> {
+    let trimmed_provider = provider_id.trim();
+    let trimmed_secret = secret_key.trim();
+
+    if trimmed_provider.is_empty() || trimmed_secret.is_empty() {
+        return Err("provider and secret key are required".to_string());
+    }
+
+    let mut services = vec![provider_secret_service(trimmed_provider, trimmed_secret)];
+    services.extend(provider_secret_legacy_services(trimmed_provider, trimmed_secret));
+
+    for service in services {
+        delete_provider_secret_service(&service)?;
+    }
+
+    Ok(())
+}
+
+fn plugin_support_for_current_platform(plugin_id: &str) -> (&'static str, Option<String>) {
+    if cfg!(target_os = "windows") {
+        const WINDOWS_SUPPORTED_IDS: &[&str] =
+            &["antigravity", "claude", "codex", "cursor", "opencode"];
+        if WINDOWS_SUPPORTED_IDS.contains(&plugin_id) {
+            return ("supported", None);
+        }
+        return (
+            "comingSoonOnWindows",
+            Some("Coming soon on Windows.".to_string()),
+        );
+    }
+
+    ("supported", None)
+}
+
+fn plugin_is_probe_supported(plugin_id: &str) -> bool {
+    matches!(
+        plugin_support_for_current_platform(plugin_id),
+        ("supported", None) | ("supported", Some(_))
+    )
 }
 
 /// Update the global shortcut registration.
@@ -367,9 +468,7 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
     };
     log::debug!("list_plugins: {} plugins", plugins.len());
 
-    plugins
-        .into_iter()
-        .map(|plugin| {
+    plugins.into_iter().map(|plugin| {
             // Extract primary candidates: progress lines with primary_order, sorted by order
             let mut candidates: Vec<_> = plugin
                 .manifest
@@ -381,11 +480,16 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
             let primary_candidates: Vec<String> =
                 candidates.iter().map(|line| line.label.clone()).collect();
 
+            let (support_state, support_message) =
+                plugin_support_for_current_platform(&plugin.manifest.id);
+
             PluginMeta {
                 id: plugin.manifest.id,
                 name: plugin.manifest.name,
                 icon_url: plugin.icon_data_url,
                 brand_color: plugin.manifest.brand_color,
+                support_state: support_state.to_string(),
+                support_message,
                 lines: plugin
                     .manifest
                     .lines
@@ -420,7 +524,6 @@ pub fn run() {
         .plugin(tauri_plugin_aptabase::Builder::new("A-US-6435241436").build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_nspanel::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -441,10 +544,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             init_panel,
             hide_panel,
+            reposition_panel,
             open_devtools,
             start_probe_batch,
             list_plugins,
             get_log_path,
+            set_provider_secret,
+            delete_provider_secret,
             update_global_shortcut
         ])
         .setup(|app| {

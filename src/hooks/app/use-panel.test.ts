@@ -38,7 +38,7 @@ vi.mock("@tauri-apps/api/window", () => ({
   },
 }))
 
-import { usePanel } from "@/hooks/app/use-panel"
+import { panelMaxHeightForView, usePanel } from "@/hooks/app/use-panel"
 
 describe("usePanel", () => {
   beforeEach(() => {
@@ -70,6 +70,7 @@ describe("usePanel", () => {
         showAbout: false,
         setShowAbout,
         displayPlugins: [],
+        onPanelFocus: vi.fn(),
       })
     )
 
@@ -104,6 +105,7 @@ describe("usePanel", () => {
         showAbout: false,
         setShowAbout: vi.fn(),
         displayPlugins: [],
+        onPanelFocus: vi.fn(),
       })
     )
 
@@ -136,6 +138,7 @@ describe("usePanel", () => {
         showAbout: false,
         setShowAbout: vi.fn(),
         displayPlugins: [],
+        onPanelFocus: vi.fn(),
       })
     )
 
@@ -149,5 +152,32 @@ describe("usePanel", () => {
     await waitFor(() => {
       expect(unlistenShowAbout).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it("calls onPanelFocus when the window gains focus", async () => {
+    const onPanelFocus = vi.fn()
+
+    renderHook(() =>
+      usePanel({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        showAbout: false,
+        setShowAbout: vi.fn(),
+        displayPlugins: [],
+        onPanelFocus,
+      })
+    )
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"))
+    })
+
+    expect(onPanelFocus).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses larger height caps for settings and provider detail views", () => {
+    expect(panelMaxHeightForView("home")).toBe(720)
+    expect(panelMaxHeightForView("settings")).toBe(980)
+    expect(panelMaxHeightForView("opencode")).toBe(860)
   })
 })
