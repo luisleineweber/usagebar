@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { AppShell } from "@/components/app/app-shell"
 import { useAppPluginViews } from "@/hooks/app/use-app-plugin-views"
@@ -12,6 +12,15 @@ import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { track } from "@/lib/analytics"
 import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
+import {
+  clearProviderSecretMetadata,
+  loadProviderConfigs,
+  saveProviderConfigs,
+  setProviderSecretMetadata,
+  updateProviderConfig,
+  type ProviderConfig,
+} from "@/lib/provider-settings"
+import { deleteProviderSecret, setProviderSecret } from "@/lib/provider-secrets"
 import { type PluginContextAction } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
@@ -36,12 +45,16 @@ function App() {
     setPluginsMeta,
     pluginSettings,
     setPluginSettings,
+    providerConfigs,
+    setProviderConfigs,
   } = useAppPluginStore(
     useShallow((state) => ({
       pluginsMeta: state.pluginsMeta,
       setPluginsMeta: state.setPluginsMeta,
       pluginSettings: state.pluginSettings,
       setPluginSettings: state.setPluginSettings,
+      providerConfigs: state.providerConfigs,
+      setProviderConfigs: state.setProviderConfigs,
     }))
   )
 
@@ -172,6 +185,24 @@ function App() {
     pluginsMeta,
   })
 
+  useEffect(() => {
+    let cancelled = false
+
+    loadProviderConfigs()
+      .then((configs) => {
+        if (!cancelled) {
+          setProviderConfigs(configs)
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load provider configs:", error)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [setProviderConfigs])
+
   const { displayPlugins, navPlugins, selectedPlugin } = useAppPluginViews({
     activeView,
     setActiveView,
@@ -179,6 +210,93 @@ function App() {
     pluginsMeta,
     pluginStates,
   })
+
+  const providerConfigsRef = useRef(providerConfigs)
+  useEffect(() => {
+    providerConfigsRef.current = providerConfigs
+  }, [providerConfigs])
+
+  const providerSetupPlugins = useMemo(() => {
+    const metaById = new Map(pluginsMeta.map((plugin) => [plugin.id, plugin]))
+    const orderedIds = pluginSettings?.order.length
+      ? pluginSettings.order
+      : pluginsMeta.map((plugin) => plugin.id)
+
+    const entries: Array<{
+      meta: typeof pluginsMeta[number]
+      config: (typeof providerConfigs)[string] | undefined
+      state: (typeof pluginStates)[string] | undefined
+    }> = []
+
+    for (const id of orderedIds) {
+      const meta = metaById.get(id)
+      if (!meta) continue
+      entries.push({
+        meta,
+        config: providerConfigs[id],
+        state: pluginStates[id],
+      })
+    }
+
+    return entries
+  }, [pluginSettings?.order, pluginStates, pluginsMeta, providerConfigs])
+
+  const persistProviderConfigs = useCallback(async (nextConfigs: typeof providerConfigs) => {
+    setProviderConfigs(nextConfigs)
+    await saveProviderConfigs(nextConfigs)
+  }, [setProviderConfigs])
+
+  const handleProviderConfigChange = useCallback(async (
+    providerId: string,
+    patch: Partial<ProviderConfig>
+  ) => {
+    const nextConfigs = updateProviderConfig(providerConfigsRef.current, providerId, patch)
+    await persistProviderConfigs(nextConfigs)
+  }, [persistProviderConfigs])
+
+  const handleProviderSecretSave = useCallback(async (
+    providerId: string,
+    secretKey: string,
+    value: string
+  ) => {
+    await setProviderSecret(providerId, secretKey, value)
+    const nextConfigs = setProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
+    await persistProviderConfigs(nextConfigs)
+  }, [persistProviderConfigs])
+
+  const handleProviderSecretDelete = useCallback(async (
+    providerId: string,
+    secretKey: string
+  ) => {
+    await deleteProviderSecret(providerId, secretKey)
+    const nextConfigs = clearProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
+    await persistProviderConfigs(nextConfigs)
+  }, [persistProviderConfigs])
+
+  const handlePanelFocus = useCallback(() => {
+    if (!pluginSettings) return
+
+    const disabledSet = new Set(pluginSettings.disabled)
+    const metaById = new Map(pluginsMeta.map((plugin) => [plugin.id, plugin]))
+    const supportedEnabledIds = pluginSettings.order.filter((id) => {
+      if (disabledSet.has(id)) return false
+      const meta = metaById.get(id)
+      return meta?.supportState !== "comingSoonOnWindows"
+    })
+
+    const idsToRefresh = activeView !== "home" && activeView !== "settings"
+      ? supportedEnabledIds.filter((id) => id === activeView)
+      : supportedEnabledIds.filter((id) => {
+          const state = pluginStates[id]
+          if (!state) return true
+          if (state.loading) return false
+          return state.error !== null || state.data === null
+        })
+
+    for (const id of idsToRefresh) {
+      handleRetryPlugin(id)
+    }
+  }, [activeView, handleRetryPlugin, pluginSettings, pluginStates, pluginsMeta])
 
   const pluginSettingsRef = useRef(pluginSettings)
   useEffect(() => {
@@ -217,18 +335,21 @@ function App() {
 
   const isPluginRefreshAvailable = useCallback(
     (pluginId: string) => {
+      const pluginMeta = pluginsMeta.find((plugin) => plugin.id === pluginId)
+      if (pluginMeta?.supportState === "comingSoonOnWindows") return false
       const pluginState = pluginStates[pluginId]
       if (!pluginState) return true
       if (pluginState.loading) return false
       if (!pluginState.lastManualRefreshAt) return true
       return Date.now() - pluginState.lastManualRefreshAt >= REFRESH_COOLDOWN_MS
     },
-    [pluginStates]
+    [pluginStates, pluginsMeta]
   )
 
   return (
     <AppShell
       onRefreshAll={handleRefreshAll}
+      onPanelFocus={handlePanelFocus}
       navPlugins={navPlugins}
       displayPlugins={displayPlugins}
       settingsPlugins={settingsPlugins}
@@ -240,6 +361,11 @@ function App() {
         onRetryPlugin: handleRetryPlugin,
         onReorder: handleReorder,
         onToggle: handleToggle,
+        providerSetupPlugins,
+        providerConfigs,
+        onProviderConfigChange: handleProviderConfigChange,
+        onProviderSecretSave: handleProviderSecretSave,
+        onProviderSecretDelete: handleProviderSecretDelete,
         onAutoUpdateIntervalChange: handleAutoUpdateIntervalChange,
         onThemeModeChange: handleThemeModeChange,
         onDisplayModeChange: handleDisplayModeChange,

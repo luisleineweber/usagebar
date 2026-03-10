@@ -20,7 +20,7 @@ export function OverviewPage({
   if (plugins.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-8">
-        No providers enabled
+        No active providers
       </div>
     )
   }

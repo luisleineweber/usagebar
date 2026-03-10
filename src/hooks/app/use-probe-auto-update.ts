@@ -40,11 +40,15 @@ export function useProbeAutoUpdate({
     scheduleNext()
 
     const interval = setInterval(() => {
-      setLoadingForPlugins(enabledIds)
-      startBatch(enabledIds).catch((error) => {
-        console.error("Failed to start auto-update batch:", error)
-        setErrorForPlugins(enabledIds, "Failed to start probe")
-      })
+      startBatch(enabledIds)
+        .then((startedIds) => {
+          if (!startedIds || startedIds.length === 0) return
+          setLoadingForPlugins(startedIds)
+        })
+        .catch((error) => {
+          console.error("Failed to start auto-update batch:", error)
+          setErrorForPlugins(enabledIds, "Failed to start probe")
+        })
       scheduleNext()
     }, intervalMs)
 

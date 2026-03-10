@@ -15,7 +15,7 @@ import {
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
   DEFAULT_THEME_MODE,
-  getEnabledPluginIds,
+  getProbeEligiblePluginIds,
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadGlobalShortcut,
@@ -163,7 +163,7 @@ export function useSettingsBootstrap({
           setStartOnLogin(storedStartOnLogin)
           setMenubarIconStyle(storedMenubarIconStyle)
 
-          const enabledIds = getEnabledPluginIds(normalized)
+          const enabledIds = getProbeEligiblePluginIds(normalized, availablePlugins)
           setLoadingForPlugins(enabledIds)
           try {
             await startBatch(enabledIds)

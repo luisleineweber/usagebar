@@ -3,7 +3,7 @@ import { resolveResource } from "@tauri-apps/api/path"
 import { TrayIcon } from "@tauri-apps/api/tray"
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { DisplayMode, MenubarIconStyle, PluginSettings } from "@/lib/settings"
-import { getEnabledPluginIds } from "@/lib/settings"
+import { getProbeEligiblePluginIds } from "@/lib/settings"
 import { getTrayIconSizePx, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
 import { getTrayPrimaryBars, type TrayPrimaryBar } from "@/lib/tray-primary-progress"
 import type { PluginState } from "@/hooks/app/types"
@@ -171,7 +171,7 @@ export function useTrayIcon({
         return
       }
 
-      const enabledPluginIds = getEnabledPluginIds(currentSettings)
+      const enabledPluginIds = getProbeEligiblePluginIds(currentSettings, pluginsMetaRef.current)
       if (enabledPluginIds.length === 0) {
         setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
         restoreGaugeIcon()

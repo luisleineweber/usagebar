@@ -27,6 +27,8 @@ const state = vi.hoisted(() => ({
   saveGlobalShortcutMock: vi.fn(),
   loadStartOnLoginMock: vi.fn(),
   saveStartOnLoginMock: vi.fn(),
+  loadProviderConfigsMock: vi.fn(),
+  saveProviderConfigsMock: vi.fn(),
   autostartEnableMock: vi.fn(),
   autostartDisableMock: vi.fn(),
   autostartIsEnabledMock: vi.fn(),
@@ -241,6 +243,15 @@ vi.mock("@/lib/settings", async () => {
   }
 })
 
+vi.mock("@/lib/provider-settings", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/provider-settings")>("@/lib/provider-settings")
+  return {
+    ...actual,
+    loadProviderConfigs: state.loadProviderConfigsMock,
+    saveProviderConfigs: state.saveProviderConfigsMock,
+  }
+})
+
 import { App } from "@/App"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
@@ -277,6 +288,8 @@ describe("App", () => {
     state.saveGlobalShortcutMock.mockReset()
     state.loadStartOnLoginMock.mockReset()
     state.saveStartOnLoginMock.mockReset()
+    state.loadProviderConfigsMock.mockReset()
+    state.saveProviderConfigsMock.mockReset()
     state.autostartEnableMock.mockReset()
     state.autostartDisableMock.mockReset()
     state.autostartIsEnabledMock.mockReset()
@@ -314,6 +327,8 @@ describe("App", () => {
     state.saveGlobalShortcutMock.mockResolvedValue(undefined)
     state.loadStartOnLoginMock.mockResolvedValue(false)
     state.saveStartOnLoginMock.mockResolvedValue(undefined)
+    state.loadProviderConfigsMock.mockResolvedValue({})
+    state.saveProviderConfigsMock.mockResolvedValue(undefined)
     state.autostartEnableMock.mockResolvedValue(undefined)
     state.autostartDisableMock.mockResolvedValue(undefined)
     state.autostartIsEnabledMock.mockResolvedValue(false)
@@ -1094,14 +1109,14 @@ describe("App", () => {
         expect.objectContaining({ disabled: expect.arrayContaining(["a"]) })
       )
     )
-    await screen.findByText("No providers enabled")
+    await screen.findByText("No active providers")
     expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
   })
 
   it("shows empty state when all plugins disabled", async () => {
     state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: ["a", "b"] })
     render(<App />)
-    await screen.findByText("No providers enabled")
+    await screen.findByText("No active providers")
     expect(screen.getByText("Paused")).toBeInTheDocument()
   })
 

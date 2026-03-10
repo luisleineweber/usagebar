@@ -277,6 +277,22 @@ export function getEnabledPluginIds(settings: PluginSettings): string[] {
   return settings.order.filter((id) => !disabledSet.has(id));
 }
 
+export function isPluginProbeSupported(plugin: Pick<PluginMeta, "supportState">): boolean {
+  return plugin.supportState !== "comingSoonOnWindows";
+}
+
+export function getProbeEligiblePluginIds(
+  settings: PluginSettings,
+  plugins: PluginMeta[]
+): string[] {
+  const supportedIds = new Set(
+    plugins
+      .filter((plugin) => isPluginProbeSupported(plugin))
+      .map((plugin) => plugin.id)
+  );
+  return getEnabledPluginIds(settings).filter((id) => supportedIds.has(id));
+}
+
 function isGlobalShortcut(value: unknown): value is GlobalShortcut {
   if (value === null) return true;
   return typeof value === "string";

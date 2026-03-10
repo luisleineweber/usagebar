@@ -21,55 +21,69 @@ export function useAppPluginViews({
   pluginsMeta,
   pluginStates,
 }: UseAppPluginViewsArgs) {
-  const displayPlugins = useMemo<DisplayPluginState[]>(() => {
+  const enabledSupportedPlugins = useMemo<DisplayPluginState[]>(() => {
     if (!pluginSettings) return []
     const disabledSet = new Set(pluginSettings.disabled)
     const metaById = new Map(pluginsMeta.map((plugin) => [plugin.id, plugin]))
 
     return pluginSettings.order
-      .filter((id) => !disabledSet.has(id))
       .map((id) => {
         const meta = metaById.get(id)
         if (!meta) return null
+        const isSupported = meta.supportState !== "comingSoonOnWindows"
+        const isEnabled = !disabledSet.has(id)
+        if (!isEnabled || !isSupported) return null
         const state =
-          pluginStates[id] ?? { data: null, loading: false, error: null, lastManualRefreshAt: null }
-        return { meta, ...state }
+          pluginStates[id] ?? {
+            data: null,
+            loading: false,
+            error: null,
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          }
+        return {
+          meta,
+          ...state,
+          data: state.data,
+          loading: state.loading,
+          error: state.error,
+        }
       })
       .filter((plugin): plugin is DisplayPluginState => Boolean(plugin))
   }, [pluginSettings, pluginStates, pluginsMeta])
 
-  const navPlugins = useMemo<NavPlugin[]>(() => {
-    if (!pluginSettings) return []
-    const disabledSet = new Set(pluginSettings.disabled)
-    const metaById = new Map(pluginsMeta.map((plugin) => [plugin.id, plugin]))
+  const displayPlugins = useMemo<DisplayPluginState[]>(
+    () =>
+      enabledSupportedPlugins.filter(
+        (plugin) => plugin.loading || plugin.data !== null || plugin.error !== null
+      ),
+    [enabledSupportedPlugins]
+  )
 
-    return pluginSettings.order
-      .filter((id) => !disabledSet.has(id))
-      .map((id) => metaById.get(id))
-      .filter((plugin): plugin is PluginMeta => Boolean(plugin))
-      .map((plugin) => ({
-        id: plugin.id,
-        name: plugin.name,
-        iconUrl: plugin.iconUrl,
-        brandColor: plugin.brandColor,
-      }))
-  }, [pluginSettings, pluginsMeta])
+  const navPlugins = useMemo<NavPlugin[]>(() => {
+    return enabledSupportedPlugins.map((plugin) => ({
+      id: plugin.meta.id,
+      name: plugin.meta.name,
+      iconUrl: plugin.meta.iconUrl,
+      brandColor: plugin.meta.brandColor,
+    }))
+  }, [enabledSupportedPlugins])
 
   useEffect(() => {
     if (activeView === "home" || activeView === "settings") return
     if (!pluginSettings) return
     const isKnownPlugin = pluginsMeta.some((plugin) => plugin.id === activeView)
     if (!isKnownPlugin) return
-    const isStillEnabled = navPlugins.some((plugin) => plugin.id === activeView)
+    const isStillEnabled = enabledSupportedPlugins.some((plugin) => plugin.meta.id === activeView)
     if (!isStillEnabled) {
       setActiveView("home")
     }
-  }, [activeView, navPlugins, pluginSettings, pluginsMeta, setActiveView])
+  }, [activeView, enabledSupportedPlugins, pluginSettings, pluginsMeta, setActiveView])
 
   const selectedPlugin = useMemo(() => {
     if (activeView === "home" || activeView === "settings") return null
-    return displayPlugins.find((plugin) => plugin.meta.id === activeView) ?? null
-  }, [activeView, displayPlugins])
+    return enabledSupportedPlugins.find((plugin) => plugin.meta.id === activeView) ?? null
+  }, [activeView, enabledSupportedPlugins])
 
   return {
     displayPlugins,

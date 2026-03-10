@@ -15,11 +15,12 @@ describe("ProviderDetailPage", () => {
         displayMode="used"
         resetTimerDisplayMode="relative"
         plugin={{
-          meta: { id: "a", name: "Alpha", iconUrl: "", lines: [] },
+          meta: { id: "a", name: "Alpha", iconUrl: "", lines: [], primaryCandidates: [] },
           data: { providerId: "a", displayName: "Alpha", iconUrl: "", lines: [] },
           loading: false,
           error: null,
           lastManualRefreshAt: null,
+          lastSuccessAt: null,
         }}
       />
     )
@@ -32,11 +33,12 @@ describe("ProviderDetailPage", () => {
         displayMode="used"
         resetTimerDisplayMode="relative"
         plugin={{
-          meta: { id: "a", name: "Alpha", iconUrl: "", lines: [] },
+          meta: { id: "a", name: "Alpha", iconUrl: "", lines: [], primaryCandidates: [] },
           data: null,
           loading: false,
           error: null,
           lastManualRefreshAt: null,
+          lastSuccessAt: null,
         }}
       />
     )
@@ -54,12 +56,14 @@ describe("ProviderDetailPage", () => {
             name: "Alpha",
             iconUrl: "",
             lines: [],
+            primaryCandidates: [],
             links: [{ label: "Status", url: "https://status.example.com" }],
           },
           data: null,
           loading: false,
           error: null,
           lastManualRefreshAt: null,
+          lastSuccessAt: null,
         }}
       />
     )

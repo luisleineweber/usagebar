@@ -6,6 +6,8 @@ export type SettingsPluginState = {
   id: string
   name: string
   enabled: boolean
+  supported?: boolean
+  supportMessage?: string
 }
 
 type UseSettingsPluginListArgs = {
@@ -26,6 +28,12 @@ export function useSettingsPluginList({ pluginSettings, pluginsMeta }: UseSettin
           id,
           name: meta.name,
           enabled: !pluginSettings.disabled.includes(id),
+          ...(meta.supportState === "comingSoonOnWindows"
+            ? {
+                supported: false,
+                supportMessage: meta.supportMessage ?? "Coming soon on Windows.",
+              }
+            : {}),
         }
       })
       .filter((plugin): plugin is SettingsPluginState => Boolean(plugin))

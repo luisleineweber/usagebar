@@ -19,7 +19,9 @@ import { GripVertical } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { GlobalShortcutSection } from "@/components/global-shortcut-section";
+import { ProviderSetupPanel } from "@/components/provider-setup-panel";
 import { getBarFillLayout, getTrayIconSizePx } from "@/lib/tray-bars-icon";
+import type { ProviderConfig } from "@/lib/provider-settings";
 import {
   AUTO_UPDATE_OPTIONS,
   DISPLAY_MODE_OPTIONS,
@@ -35,11 +37,14 @@ import {
 } from "@/lib/settings";
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon";
 import { cn } from "@/lib/utils";
+import type { ProviderSetupEntry } from "@/components/app/app-content";
 
 interface PluginConfig {
   id: string;
   name: string;
   enabled: boolean;
+  supported?: boolean;
+  supportMessage?: string | null;
 }
 
 const TRAY_PREVIEW_SIZE_PX = getTrayIconSizePx(1);
@@ -240,11 +245,15 @@ function SortablePluginItem({
         )}
       >
         {plugin.name}
+        {plugin.supported === false && plugin.supportMessage && (
+          <span className="block text-xs text-muted-foreground">{plugin.supportMessage}</span>
+        )}
       </span>
 
       <Checkbox
         key={`${plugin.id}-${plugin.enabled}`}
         checked={plugin.enabled}
+        disabled={plugin.supported === false}
         onCheckedChange={() => onToggle(plugin.id)}
       />
     </div>
@@ -255,6 +264,11 @@ interface SettingsPageProps {
   plugins: PluginConfig[];
   onReorder: (orderedIds: string[]) => void;
   onToggle: (id: string) => void;
+  providerSetupPlugins: ProviderSetupEntry[];
+  onRetryPlugin: (id: string) => void;
+  onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>;
+  onProviderSecretSave: (providerId: string, secretKey: string, value: string) => Promise<void>;
+  onProviderSecretDelete: (providerId: string, secretKey: string) => Promise<void>;
   autoUpdateInterval: AutoUpdateIntervalMinutes;
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void;
   themeMode: ThemeMode;
@@ -276,6 +290,11 @@ export function SettingsPage({
   plugins,
   onReorder,
   onToggle,
+  providerSetupPlugins,
+  onRetryPlugin,
+  onProviderConfigChange,
+  onProviderSecretSave,
+  onProviderSecretDelete,
   autoUpdateInterval,
   onAutoUpdateIntervalChange,
   themeMode,
@@ -483,6 +502,26 @@ export function SettingsPage({
           />
           Start on login
         </label>
+      </section>
+      <section>
+        <h3 className="text-lg font-semibold mb-0">Provider Setup</h3>
+        <p className="text-sm text-muted-foreground mb-2">
+          Configure providers, inspect auth sources, and save manual credentials securely
+        </p>
+        <div className="space-y-2">
+          {providerSetupPlugins.map((plugin) => (
+            <ProviderSetupPanel
+              key={plugin.meta.id}
+              plugin={plugin.meta}
+              config={plugin.config}
+              state={plugin.state}
+              onRetry={plugin.meta.supportState === "comingSoonOnWindows" ? undefined : () => onRetryPlugin(plugin.meta.id)}
+              onConfigChange={onProviderConfigChange}
+              onSecretSave={onProviderSecretSave}
+              onSecretDelete={onProviderSecretDelete}
+            />
+          ))}
+        </div>
       </section>
       <section>
         <h3 className="text-lg font-semibold mb-0">Plugins</h3>

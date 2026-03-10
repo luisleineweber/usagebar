@@ -24,6 +24,8 @@ interface NavPlugin {
   name: string
   iconUrl: string
   brandColor?: string
+  supportState?: "supported" | "comingSoonOnWindows"
+  supportMessage?: string | null
 }
 
 interface SideNavProps {
@@ -146,7 +148,11 @@ export function SideNav({
           <span
             role="img"
             aria-label={plugin.name}
-            className="size-6 inline-block"
+            title={plugin.supportState === "comingSoonOnWindows" ? plugin.supportMessage ?? undefined : undefined}
+            className={cn(
+              "size-6 inline-block",
+              plugin.supportState === "comingSoonOnWindows" ? "opacity-45" : ""
+            )}
             style={{
               backgroundColor: getIconColor(plugin.brandColor, isDark),
               WebkitMaskImage: `url(${plugin.iconUrl})`,

@@ -35,6 +35,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           loading: true,
           error: null,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
+          lastSuccessAt: existing?.lastSuccessAt ?? null,
         }
       }
       return next
@@ -51,6 +52,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           loading: false,
           error,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
+          lastSuccessAt: existing?.lastSuccessAt ?? null,
         }
       }
       return next
@@ -74,6 +76,9 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           lastManualRefreshAt: !errorMessage && isManual
             ? Date.now()
             : prev[output.providerId]?.lastManualRefreshAt ?? null,
+          lastSuccessAt: !errorMessage
+            ? Date.now()
+            : prev[output.providerId]?.lastSuccessAt ?? null,
         },
       }))
 

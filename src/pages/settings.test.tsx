@@ -47,6 +47,17 @@ const defaultProps = {
   plugins: [{ id: "a", name: "Alpha", enabled: true }],
   onReorder: vi.fn(),
   onToggle: vi.fn(),
+  providerSetupPlugins: [
+    {
+      meta: { id: "opencode", name: "OpenCode", iconUrl: "", lines: [], primaryCandidates: [] },
+      config: { source: "manual" as const },
+      state: { data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null },
+    },
+  ],
+  onRetryPlugin: vi.fn(),
+  onProviderConfigChange: vi.fn(async () => undefined),
+  onProviderSecretSave: vi.fn(async () => undefined),
+  onProviderSecretDelete: vi.fn(async () => undefined),
   autoUpdateInterval: 15 as const,
   onAutoUpdateIntervalChange: vi.fn(),
   themeMode: "system" as const,
@@ -225,6 +236,12 @@ describe("SettingsPage", () => {
     render(<SettingsPage {...defaultProps} />)
     expect(screen.queryByText("Bar Icon")).not.toBeInTheDocument()
     expect(screen.queryByText("Show percentage")).not.toBeInTheDocument()
+  })
+
+  it("renders provider setup section", () => {
+    render(<SettingsPage {...defaultProps} />)
+    expect(screen.getByText("Provider Setup")).toBeInTheDocument()
+    expect(screen.getByTestId("provider-setup-opencode")).toBeInTheDocument()
   })
 
   it("toggles start on login checkbox", async () => {

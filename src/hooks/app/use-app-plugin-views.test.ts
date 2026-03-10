@@ -39,6 +39,7 @@ describe("useAppPluginViews", () => {
             loading: true,
             error: null,
             lastManualRefreshAt: null,
+            lastSuccessAt: null,
           },
         },
       })
@@ -55,6 +56,46 @@ describe("useAppPluginViews", () => {
         brandColor: "#000000",
       },
     ])
+  })
+
+  it("keeps errored providers visible in home and nav", () => {
+    const pluginSettings: PluginSettings = {
+      order: ["codex", "cursor"],
+      disabled: [],
+    }
+
+    const pluginsMeta = [
+      createPluginMeta("codex", "Codex"),
+      createPluginMeta("cursor", "Cursor"),
+    ]
+
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        pluginSettings,
+        pluginsMeta,
+        pluginStates: {
+          codex: {
+            data: { providerId: "codex", displayName: "Codex", lines: [], iconUrl: "/codex.svg" },
+            loading: false,
+            error: null,
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          },
+          cursor: {
+            data: null,
+            loading: false,
+            error: "Not logged in",
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          },
+        },
+      })
+    )
+
+    expect(result.current.displayPlugins.map((plugin) => plugin.meta.id)).toEqual(["codex", "cursor"])
+    expect(result.current.navPlugins.map((plugin) => plugin.id)).toEqual(["codex", "cursor"])
   })
 
   it("falls back to home when active provider becomes disabled", async () => {
@@ -120,7 +161,15 @@ describe("useAppPluginViews", () => {
         setActiveView: vi.fn(),
         pluginSettings,
         pluginsMeta: [createPluginMeta("codex", "Codex")],
-        pluginStates: {},
+        pluginStates: {
+          codex: {
+            data: { providerId: "codex", displayName: "Codex", lines: [], iconUrl: "/codex.svg" },
+            loading: false,
+            error: null,
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          },
+        },
       })
     )
 

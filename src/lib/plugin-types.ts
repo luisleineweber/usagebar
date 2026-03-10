@@ -36,11 +36,15 @@ export type PluginOutput = {
   iconUrl: string
 }
 
+export type PluginSupportState = "supported" | "comingSoonOnWindows"
+
 export type PluginMeta = {
   id: string
   name: string
   iconUrl: string
   brandColor?: string
+  supportState?: PluginSupportState
+  supportMessage?: string | null
   lines: ManifestLine[]
   links?: PluginLink[]
   /** Ordered list of primary metric candidates. Frontend picks first available. */

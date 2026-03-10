@@ -3,10 +3,13 @@ import { OverviewPage } from "@/pages/overview"
 import { ProviderDetailPage } from "@/pages/provider-detail"
 import { SettingsPage } from "@/pages/settings"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
+import type { PluginState } from "@/hooks/app/types"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
+import type { PluginMeta } from "@/lib/plugin-types"
+import type { ProviderConfig } from "@/lib/provider-settings"
 import type {
   AutoUpdateIntervalMinutes,
   DisplayMode,
@@ -22,10 +25,21 @@ type AppContentDerivedProps = {
   selectedPlugin: DisplayPluginState | null
 }
 
+export type ProviderSetupEntry = {
+  meta: PluginMeta
+  config?: ProviderConfig
+  state?: PluginState
+}
+
 export type AppContentActionProps = {
   onRetryPlugin: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
+  providerSetupPlugins: ProviderSetupEntry[]
+  providerConfigs: Record<string, ProviderConfig>
+  onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
+  onProviderSecretSave: (providerId: string, secretKey: string, value: string) => Promise<void>
+  onProviderSecretDelete: (providerId: string, secretKey: string) => Promise<void>
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   onThemeModeChange: (mode: ThemeMode) => void
   onDisplayModeChange: (mode: DisplayMode) => void
@@ -46,6 +60,11 @@ export function AppContent({
   onRetryPlugin,
   onReorder,
   onToggle,
+  providerSetupPlugins,
+  providerConfigs,
+  onProviderConfigChange,
+  onProviderSecretSave,
+  onProviderSecretDelete,
   onAutoUpdateIntervalChange,
   onThemeModeChange,
   onDisplayModeChange,
@@ -100,6 +119,11 @@ export function AppContent({
         plugins={settingsPlugins}
         onReorder={onReorder}
         onToggle={onToggle}
+        providerSetupPlugins={providerSetupPlugins}
+        onRetryPlugin={onRetryPlugin}
+        onProviderConfigChange={onProviderConfigChange}
+        onProviderSecretSave={onProviderSecretSave}
+        onProviderSecretDelete={onProviderSecretDelete}
         autoUpdateInterval={autoUpdateInterval}
         onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
         themeMode={themeMode}
@@ -120,13 +144,19 @@ export function AppContent({
   }
 
   const handleRetry = selectedPlugin
+    && selectedPlugin.meta.supportState !== "comingSoonOnWindows"
     ? () => onRetryPlugin(selectedPlugin.meta.id)
     : /* v8 ignore next */ undefined
 
   return (
     <ProviderDetailPage
       plugin={selectedPlugin}
+      providerConfig={selectedPlugin ? providerConfigs[selectedPlugin.meta.id] : undefined}
+      providerState={selectedPlugin?.meta ? selectedPlugin : undefined}
       onRetry={handleRetry}
+      onProviderConfigChange={onProviderConfigChange}
+      onProviderSecretSave={onProviderSecretSave}
+      onProviderSecretDelete={onProviderSecretDelete}
       displayMode={displayMode}
       resetTimerDisplayMode={resetTimerDisplayMode}
       onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
