@@ -1,18 +1,36 @@
+use base64::Engine;
+use keyring::Entry;
 use rquickjs::{Ctx, Exception, Function, Object};
+use rusqlite::{types::ValueRef, Connection, OpenFlags};
+use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 6] = [
+const WHITELISTED_ENV_VARS: [&str; 8] = [
     "CODEX_HOME",
     "ZAI_API_KEY",
     "GLM_API_KEY",
     "MINIMAX_API_KEY",
     "MINIMAX_API_TOKEN",
     "MINIMAX_CN_API_KEY",
+    "OPENCODE_COOKIE_HEADER",
+    "OPENCODE_WORKSPACE_ID",
 ];
+const KEYRING_TARGET: &str = "OpenUsage";
+
+fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
+    format!("OpenUsage Provider Secret {} {}", provider_id, secret_key)
+}
+
+fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<String> {
+    match (provider_id, secret_key) {
+        ("opencode", "cookieHeader") => vec!["OpenCode Cookie Header".to_string()],
+        _ => Vec::new(),
+    }
+}
 
 fn last_non_empty_trimmed_line(text: &str) -> Option<String> {
     text.lines()
@@ -304,8 +322,10 @@ pub fn inject_host_api<'js>(
     inject_log(ctx, &host, plugin_id)?;
     inject_fs(ctx, &host)?;
     inject_env(ctx, &host, plugin_id)?;
+    inject_provider_config(ctx, &host, plugin_id, app_data_dir)?;
     inject_http(ctx, &host, plugin_id)?;
     inject_keychain(ctx, &host)?;
+    inject_provider_secrets(ctx, &host, plugin_id)?;
     inject_sqlite(ctx, &host)?;
     inject_ls(ctx, &host, plugin_id)?;
     inject_ccusage(ctx, &host, plugin_id)?;
@@ -426,6 +446,74 @@ fn inject_env<'js>(ctx: &Ctx<'js>, host: &Object<'js>, _plugin_id: &str) -> rqui
         })?,
     )?;
     host.set("env", env_obj)?;
+    Ok(())
+}
+
+fn provider_settings_paths(app_data_dir: &Path) -> [PathBuf; 2] {
+    [
+        app_data_dir.join("settings.json"),
+        app_data_dir.join(".store").join("settings.json"),
+    ]
+}
+
+fn load_provider_config_map(app_data_dir: &Path) -> HashMap<String, JsonValue> {
+    for path in provider_settings_paths(app_data_dir) {
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(_) => continue,
+        };
+        let json: JsonValue = match serde_json::from_str(&text) {
+            Ok(json) => json,
+            Err(_) => continue,
+        };
+        let configs = match json.get("providerConfigs").and_then(JsonValue::as_object) {
+            Some(configs) => configs,
+            None => continue,
+        };
+        return configs
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+    }
+
+    HashMap::new()
+}
+
+fn inject_provider_config<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+    app_data_dir: &PathBuf,
+) -> rquickjs::Result<()> {
+    let provider_config_obj = Object::new(ctx.clone())?;
+    let pid = plugin_id.to_string();
+    let data_dir = app_data_dir.clone();
+
+    provider_config_obj.set(
+        "get",
+        Function::new(ctx.clone(), move |key: String| -> Option<String> {
+            let configs = load_provider_config_map(&data_dir);
+            let entry = configs.get(&pid)?;
+            let object = entry.as_object()?;
+            let value = object.get(&key)?;
+            value.as_str().map(str::to_string)
+        })?,
+    )?;
+
+    let pid = plugin_id.to_string();
+    let data_dir = app_data_dir.clone();
+    provider_config_obj.set(
+        "getAll",
+        Function::new(ctx.clone(), move || -> String {
+            let configs = load_provider_config_map(&data_dir);
+            configs
+                .get(&pid)
+                .and_then(|value| serde_json::to_string(value).ok())
+                .unwrap_or_else(|| "{}".to_string())
+        })?,
+    )?;
+
+    host.set("providerConfig", provider_config_obj)?;
     Ok(())
 }
 
@@ -907,6 +995,140 @@ struct LsDiscoverResult {
     extension_port: Option<i32>,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct WindowsProcessEntry {
+    process_id: i32,
+    command_line: Option<String>,
+}
+
+fn ls_list_processes() -> std::io::Result<Vec<(i32, String)>> {
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress",
+            ])
+            .output()?;
+
+        if !output.status.success() {
+            return Ok(Vec::new());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let trimmed = stdout.trim();
+        if trimmed.is_empty() || trimmed == "null" {
+            return Ok(Vec::new());
+        }
+
+        let mut out = Vec::new();
+        if trimmed.starts_with('[') {
+            let rows: Vec<WindowsProcessEntry> =
+                serde_json::from_str(trimmed).unwrap_or_default();
+            for row in rows {
+                if let Some(command) = row.command_line {
+                    let command = command.trim();
+                    if !command.is_empty() {
+                        out.push((row.process_id, command.to_string()));
+                    }
+                }
+            }
+        } else if trimmed.starts_with('{') {
+            if let Ok(row) = serde_json::from_str::<WindowsProcessEntry>(trimmed) {
+                if let Some(command) = row.command_line {
+                    let command = command.trim();
+                    if !command.is_empty() {
+                        out.push((row.process_id, command.to_string()));
+                    }
+                }
+            }
+        }
+
+        return Ok(out);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let ps_output = Command::new("/bin/ps")
+            .args(["-ax", "-o", "pid=,command="])
+            .output()?;
+
+        if !ps_output.status.success() {
+            return Ok(Vec::new());
+        }
+
+        let ps_stdout = String::from_utf8_lossy(&ps_output.stdout);
+        let mut out = Vec::new();
+        for line in ps_stdout.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let mut parts = trimmed.splitn(2, char::is_whitespace);
+            let pid_str = match parts.next() {
+                Some(s) => s.trim(),
+                None => continue,
+            };
+            let command = match parts.next() {
+                Some(s) => s.trim(),
+                None => continue,
+            };
+
+            if let Ok(pid) = pid_str.parse::<i32>() {
+                out.push((pid, command.to_string()));
+            }
+        }
+        Ok(out)
+    }
+}
+
+fn ls_listening_ports(process_pid: i32) -> std::io::Result<Vec<i32>> {
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("netstat").args(["-ano", "-p", "tcp"]).output()?;
+        if !output.status.success() {
+            return Ok(Vec::new());
+        }
+        return Ok(ls_parse_netstat_ports(
+            &String::from_utf8_lossy(&output.stdout),
+            process_pid,
+        ));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let lsof_path = ["/usr/sbin/lsof", "/usr/bin/lsof"]
+            .iter()
+            .find(|p| std::path::Path::new(p).exists())
+            .copied();
+
+        if let Some(lsof) = lsof_path {
+            match Command::new(lsof)
+                .args([
+                    "-nP",
+                    "-iTCP",
+                    "-sTCP:LISTEN",
+                    "-a",
+                    "-p",
+                    &process_pid.to_string(),
+                ])
+                .output()
+            {
+                Ok(o) if o.status.success() => {
+                    return Ok(ls_parse_listening_ports(&String::from_utf8_lossy(&o.stdout)));
+                }
+                Ok(_) => return Ok(Vec::new()),
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(Vec::new())
+    }
+}
+
 fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquickjs::Result<()> {
     let ls_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
@@ -927,23 +1149,19 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                     opts.markers
                 );
 
-                let ps_output = match std::process::Command::new("/bin/ps")
-                    .args(["-ax", "-o", "pid=,command="])
-                    .output()
-                {
-                    Ok(o) => o,
+                let process_rows = match ls_list_processes() {
+                    Ok(rows) => rows,
                     Err(e) => {
-                        log::warn!("[plugin:{}] ps failed: {}", pid, e);
+                        log::warn!("[plugin:{}] process listing failed: {}", pid, e);
                         return Ok("null".to_string());
                     }
                 };
 
-                if !ps_output.status.success() {
-                    log::warn!("[plugin:{}] ps returned non-zero", pid);
+                if process_rows.is_empty() {
+                    log::warn!("[plugin:{}] process listing returned no rows", pid);
                     return Ok("null".to_string());
                 }
 
-                let ps_stdout = String::from_utf8_lossy(&ps_output.stdout);
                 let process_name_lower = opts.process_name.to_lowercase();
                 let markers_lower: Vec<String> =
                     opts.markers.iter().map(|m| m.to_lowercase()).collect();
@@ -952,24 +1170,14 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                 // Matching priority:
                 //   1. Exact --ide_name / --app_data_dir flag value (prevents
                 //      "windsurf" matching "windsurf-next")
-                //   2. Path substring (/<marker>/) as fallback when no flags found
+                //   2. Path substring as fallback when no flags found
                 let mut found: Option<(i32, String)> = None;
 
-                for line in ps_stdout.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.is_empty() {
+                for (row_pid, command) in process_rows.iter() {
+                    let command = command.trim();
+                    if command.is_empty() {
                         continue;
                     }
-
-                    let mut parts = trimmed.splitn(2, char::is_whitespace);
-                    let pid_str = match parts.next() {
-                        Some(s) => s.trim(),
-                        None => continue,
-                    };
-                    let command = match parts.next() {
-                        Some(s) => s.trim(),
-                        None => continue,
-                    };
 
                     let command_lower = command.to_lowercase();
 
@@ -990,17 +1198,18 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                         if let Some(ref dir) = app_data {
                             return *dir == *m;
                         }
-                        // Fallback: path substring
-                        command_lower.contains(&format!("/{}/", m))
+                        let slash = format!("/{}/", m);
+                        let backslash = format!("\\{}\\", m);
+                        command_lower.contains(&slash)
+                            || command_lower.contains(&backslash)
+                            || command_lower.contains(m)
                     });
                     if !has_marker {
                         continue;
                     }
 
-                    if let Ok(p) = pid_str.parse::<i32>() {
-                        found = Some((p, command.to_string()));
-                        break;
-                    }
+                    found = Some((*row_pid, command.to_string()));
+                    break;
                 }
 
                 let (process_pid, command) = match found {
@@ -1037,39 +1246,17 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                     }
                 }
 
-                // Find lsof binary
-                let lsof_path = ["/usr/sbin/lsof", "/usr/bin/lsof"]
-                    .iter()
-                    .find(|p| std::path::Path::new(p).exists())
-                    .copied();
-
-                let ports = if let Some(lsof) = lsof_path {
-                    match std::process::Command::new(lsof)
-                        .args([
-                            "-nP",
-                            "-iTCP",
-                            "-sTCP:LISTEN",
-                            "-a",
-                            "-p",
-                            &process_pid.to_string(),
-                        ])
-                        .output()
-                    {
-                        Ok(o) if o.status.success() => {
-                            ls_parse_listening_ports(&String::from_utf8_lossy(&o.stdout))
-                        }
-                        Ok(_) => {
-                            log::warn!("[plugin:{}] lsof returned non-zero", pid);
-                            Vec::new()
-                        }
-                        Err(e) => {
-                            log::warn!("[plugin:{}] lsof failed: {}", pid, e);
-                            Vec::new()
-                        }
+                let ports = match ls_listening_ports(process_pid) {
+                    Ok(ports) => ports,
+                    Err(e) => {
+                        log::warn!(
+                            "[plugin:{}] failed to enumerate listening ports for pid {}: {}",
+                            pid,
+                            process_pid,
+                            e
+                        );
+                        Vec::new()
                     }
-                } else {
-                    log::warn!("[plugin:{}] lsof not found", pid);
-                    Vec::new()
                 };
 
                 if ports.is_empty() && extension_port.is_none() {
@@ -1143,6 +1330,7 @@ fn ls_extract_flag(command: &str, flag: &str) -> Option<String> {
 }
 
 /// Parse listening port numbers from `lsof -nP -iTCP -sTCP:LISTEN` output.
+#[cfg(not(target_os = "windows"))]
 fn ls_parse_listening_ports(output: &str) -> Vec<i32> {
     let mut ports = std::collections::BTreeSet::new();
     for line in output.lines() {
@@ -1163,6 +1351,39 @@ fn ls_parse_listening_ports(output: &str) -> Vec<i32> {
             }
         }
     }
+    ports.into_iter().collect()
+}
+
+fn ls_parse_netstat_ports(output: &str, process_pid: i32) -> Vec<i32> {
+    let mut ports = std::collections::BTreeSet::new();
+    let pid_text = process_pid.to_string();
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || !trimmed.starts_with("TCP") {
+            continue;
+        }
+
+        let cols: Vec<&str> = trimmed.split_whitespace().collect();
+        if cols.len() < 5 {
+            continue;
+        }
+
+        let state_idx = cols.len() - 2;
+        let pid_idx = cols.len() - 1;
+        if cols[pid_idx] != pid_text || cols[state_idx] != "LISTENING" {
+            continue;
+        }
+
+        if let Some(port_str) = cols[1].rsplit(':').next() {
+            if let Ok(port) = port_str.trim().parse::<i32>() {
+                if port > 0 && port < 65536 {
+                    ports.insert(port);
+                }
+            }
+        }
+    }
+
     ports.into_iter().collect()
 }
 
@@ -1757,32 +1978,18 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, service: String| -> rquickjs::Result<String> {
-                if !cfg!(target_os = "macos") {
-                    return Err(Exception::throw_message(
+                let entry = Entry::new(KEYRING_TARGET, &service).map_err(|e| {
+                    Exception::throw_message(
                         &ctx_inner,
-                        "keychain API is only supported on macOS",
-                    ));
-                }
-                let output = std::process::Command::new("security")
-                    .args(["find-generic-password", "-s", &service, "-w"])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("keychain read failed: {}", e),
-                        )
-                    })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let first_line = stderr.lines().next().unwrap_or("").trim();
-                    return Err(Exception::throw_message(
+                        &format!("credential store unavailable: {}", e),
+                    )
+                })?;
+                entry.get_password().map_err(|e| {
+                    Exception::throw_message(
                         &ctx_inner,
-                        &format!("keychain item not found: {}", first_line),
-                    ));
-                }
-
-                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+                        &format!("credential read failed: {}", e),
+                    )
+                })
             },
         )?,
     )?;
@@ -1792,74 +1999,97 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, service: String, value: String| -> rquickjs::Result<()> {
-                if !cfg!(target_os = "macos") {
-                    return Err(Exception::throw_message(
+                let entry = Entry::new(KEYRING_TARGET, &service).map_err(|e| {
+                    Exception::throw_message(
                         &ctx_inner,
-                        "keychain API is only supported on macOS",
-                    ));
-                }
-
-                // First, try to find existing entry and extract its account
-                let mut account_arg: Option<String> = None;
-                let find_output = std::process::Command::new("security")
-                    .args(["find-generic-password", "-s", &service])
-                    .output();
-
-                if let Ok(output) = find_output {
-                    if output.status.success() {
-                        // Parse account from output: "acct"<blob>="value"
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        for line in stdout.lines() {
-                            if let Some(start) = line.find("\"acct\"<blob>=\"") {
-                                let rest = &line[start + 14..];
-                                if let Some(end) = rest.find('"') {
-                                    account_arg = Some(rest[..end].to_string());
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Build command with account if found
-                let output = if let Some(ref acct) = account_arg {
-                    std::process::Command::new("security")
-                        .args([
-                            "add-generic-password",
-                            "-s",
-                            &service,
-                            "-a",
-                            acct,
-                            "-w",
-                            &value,
-                            "-U",
-                        ])
-                        .output()
-                } else {
-                    std::process::Command::new("security")
-                        .args(["add-generic-password", "-s", &service, "-w", &value, "-U"])
-                        .output()
-                }
-                .map_err(|e| {
-                    Exception::throw_message(&ctx_inner, &format!("keychain write failed: {}", e))
+                        &format!("credential store unavailable: {}", e),
+                    )
                 })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let first_line = stderr.lines().next().unwrap_or("").trim();
-                    return Err(Exception::throw_message(
+                entry.set_password(&value).map_err(|e| {
+                    Exception::throw_message(
                         &ctx_inner,
-                        &format!("keychain write failed: {}", first_line),
-                    ));
-                }
+                        &format!("credential write failed: {}", e),
+                    )
+                })
+            },
+        )?,
+    )?;
 
-                Ok(())
+    keychain_obj.set(
+        "deleteGenericPassword",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, service: String| -> rquickjs::Result<()> {
+                let entry = Entry::new(KEYRING_TARGET, &service).map_err(|e| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("credential store unavailable: {}", e),
+                    )
+                })?;
+                entry.delete_credential().map_err(|e| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("credential delete failed: {}", e),
+                    )
+                })
             },
         )?,
     )?;
 
     host.set("keychain", keychain_obj)?;
     Ok(())
+}
+
+fn inject_provider_secrets<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+) -> rquickjs::Result<()> {
+    let provider_secrets_obj = Object::new(ctx.clone())?;
+    let pid = plugin_id.to_string();
+
+    provider_secrets_obj.set(
+        "read",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, secret_key: String| -> rquickjs::Result<String> {
+                let mut services = vec![provider_secret_service(&pid, &secret_key)];
+                services.extend(provider_secret_legacy_services(&pid, &secret_key));
+
+                for service in services {
+                    let entry = Entry::new(KEYRING_TARGET, &service).map_err(|e| {
+                        Exception::throw_message(
+                            &ctx_inner,
+                            &format!("credential store unavailable: {}", e),
+                        )
+                    })?;
+                    if let Ok(password) = entry.get_password() {
+                        return Ok(password);
+                    }
+                }
+
+                Err(Exception::throw_message(
+                    &ctx_inner,
+                    "provider secret not found",
+                ))
+            },
+        )?,
+    )?;
+
+    host.set("providerSecrets", provider_secrets_obj)?;
+    Ok(())
+}
+
+fn sqlite_json_value(value: ValueRef<'_>) -> JsonValue {
+    match value {
+        ValueRef::Null => JsonValue::Null,
+        ValueRef::Integer(v) => JsonValue::from(v),
+        ValueRef::Real(v) => JsonValue::from(v),
+        ValueRef::Text(v) => JsonValue::String(String::from_utf8_lossy(v).to_string()),
+        ValueRef::Blob(v) => {
+            JsonValue::String(base64::engine::general_purpose::STANDARD.encode(v))
+        }
+    }
 }
 
 fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
@@ -1877,48 +2107,43 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
                     ));
                 }
                 let expanded = expand_path(&db_path);
-
-                // Prefer a normal read-only open so WAL contents are visible (common for app state DBs).
-                // Fall back to immutable=1 to bypass WAL/SHM lock issues after macOS sleep.
-                let primary = std::process::Command::new("sqlite3")
-                    .args(["-readonly", "-json", &expanded, &sql])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(&ctx_inner, &format!("sqlite3 exec failed: {}", e))
-                    })?;
-
-                if primary.status.success() {
-                    return Ok(String::from_utf8_lossy(&primary.stdout).to_string());
+                let conn = Connection::open_with_flags(
+                    &expanded,
+                    OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+                )
+                .map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite open failed: {}", e))
+                })?;
+                let mut stmt = conn.prepare(&sql).map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite prepare failed: {}", e))
+                })?;
+                let column_names: Vec<String> =
+                    stmt.column_names().iter().map(|name| (*name).to_string()).collect();
+                let mut rows = stmt.query([]).map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite query failed: {}", e))
+                })?;
+                let mut out = Vec::new();
+                while let Some(row) = rows.next().map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite row read failed: {}", e))
+                })? {
+                    let mut obj = JsonMap::new();
+                    for (index, column_name) in column_names.iter().enumerate() {
+                        let value = row.get_ref(index).map_err(|e| {
+                            Exception::throw_message(
+                                &ctx_inner,
+                                &format!("sqlite column read failed: {}", e),
+                            )
+                        })?;
+                        obj.insert(column_name.clone(), sqlite_json_value(value));
+                    }
+                    out.push(JsonValue::Object(obj));
                 }
-
-                // Percent-encode special chars for valid URI (% must be first!)
-                let encoded = expanded
-                    .replace('%', "%25")
-                    .replace(' ', "%20")
-                    .replace('#', "%23")
-                    .replace('?', "%3F");
-                let uri_path = format!("file:{}?immutable=1", encoded);
-                let fallback = std::process::Command::new("sqlite3")
-                    .args(["-readonly", "-json", &uri_path, &sql])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(&ctx_inner, &format!("sqlite3 exec failed: {}", e))
-                    })?;
-
-                if !fallback.status.success() {
-                    let stderr_primary = String::from_utf8_lossy(&primary.stderr);
-                    let stderr_fallback = String::from_utf8_lossy(&fallback.stderr);
-                    return Err(Exception::throw_message(
+                serde_json::to_string(&out).map_err(|e| {
+                    Exception::throw_message(
                         &ctx_inner,
-                        &format!(
-                            "sqlite3 error: {} (fallback: {})",
-                            stderr_primary.trim(),
-                            stderr_fallback.trim()
-                        ),
-                    ));
-                }
-
-                Ok(String::from_utf8_lossy(&fallback.stdout).to_string())
+                        &format!("sqlite result serialization failed: {}", e),
+                    )
+                })
             },
         )?,
     )?;
@@ -1935,22 +2160,18 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
                     ));
                 }
                 let expanded = expand_path(&db_path);
-                let output = std::process::Command::new("sqlite3")
-                    .args([&expanded, &sql])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(&ctx_inner, &format!("sqlite3 exec failed: {}", e))
-                    })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        &format!("sqlite3 error: {}", stderr.trim()),
-                    ));
-                }
-
-                Ok(())
+                let conn = Connection::open_with_flags(
+                    &expanded,
+                    OpenFlags::SQLITE_OPEN_READ_WRITE
+                        | OpenFlags::SQLITE_OPEN_URI
+                        | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+                )
+                .map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite open failed: {}", e))
+                })?;
+                conn.execute_batch(&sql).map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite exec failed: {}", e))
+                })
             },
         )?,
     )?;

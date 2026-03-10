@@ -857,6 +857,28 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Usage request failed after refresh")
   })
 
+  it("falls back to local ccusage when OAuth credentials are missing", async () => {
+    const today = new Date()
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    ctx.host.ccusage.query = vi.fn(() => ({
+      status: "ok",
+      data: {
+        daily: [
+          { date: todayKey, totalTokens: 150, totalCost: 0.75 },
+        ],
+      },
+    }))
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBeNull()
+    expect(result.lines.find((line) => line.label === "Today")).toBeTruthy()
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
   it("throws usage request failed when retryOnceOnAuth throws a non-string error", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => true

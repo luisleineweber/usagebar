@@ -1,6 +1,5 @@
 (function () {
   var LS_SERVICE = "exa.language_server_pb.LanguageServerService"
-  var STATE_DB = "~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb"
   var CLOUD_CODE_URLS = [
     "https://daily-cloudcode-pa.googleapis.com",
     "https://cloudcode-pa.googleapis.com",
@@ -61,12 +60,34 @@
     return fields
   }
 
+  function stateDbPath(ctx) {
+    if (ctx.app.platform === "windows") {
+      return "~/AppData/Roaming/Antigravity/User/globalStorage/state.vscdb"
+    }
+    if (ctx.app.platform === "linux") {
+      return "~/.config/Antigravity/User/globalStorage/state.vscdb"
+    }
+    return "~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb"
+  }
+
+  function lsProcessName(ctx) {
+    if (ctx.app.platform === "windows") return "language_server_windows"
+    if (ctx.app.platform === "linux") return "language_server_linux"
+    return "language_server_macos"
+  }
+
+  function lsOsName(ctx) {
+    if (ctx.app.platform === "windows") return "windows"
+    if (ctx.app.platform === "linux") return "linux"
+    return "macos"
+  }
+
   // --- SQLite credential reading ---
 
   function loadApiKey(ctx) {
     try {
       var rows = ctx.host.sqlite.query(
-        STATE_DB,
+        stateDbPath(ctx),
         "SELECT value FROM ItemTable WHERE key = 'antigravityAuthStatus' LIMIT 1"
       )
       var parsed = ctx.util.tryParseJson(rows)
@@ -83,7 +104,7 @@
   function loadProtoTokens(ctx) {
     try {
       var rows = ctx.host.sqlite.query(
-        STATE_DB,
+        stateDbPath(ctx),
         "SELECT value FROM ItemTable WHERE key = 'jetskiStateSync.agentManagerInitState' LIMIT 1"
       )
       var parsed = ctx.util.tryParseJson(rows)
@@ -177,7 +198,7 @@
 
   function discoverLs(ctx) {
     return ctx.host.ls.discover({
-      processName: "language_server_macos",
+      processName: lsProcessName(ctx),
       markers: ["antigravity"],
       csrfFlag: "--csrf_token",
       portFlag: "--extension_server_port",
@@ -200,7 +221,7 @@
             extensionVersion: "unknown",
             ide: "antigravity",
             ideVersion: "unknown",
-            os: "macos",
+            os: lsOsName(ctx),
           },
         },
       }),

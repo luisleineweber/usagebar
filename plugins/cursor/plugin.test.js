@@ -50,6 +50,72 @@ describe("cursor plugin", () => {
     expect(ctx.host.keychain.readGenericPassword).toHaveBeenCalledWith("cursor-refresh-token")
   })
 
+  it("uses Windows roaming state DB on Windows", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      expect(db).toBe("~/AppData/Roaming/Cursor/User/globalStorage/state.vscdb")
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: "token" }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("GetCurrentPeriodUsage")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            enabled: true,
+            planUsage: { totalSpend: 1200, limit: 2400 },
+          }),
+        }
+      }
+      return { status: 200, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+  })
+
+  it("falls back to request-based usage for free accounts when planUsage is unavailable", async () => {
+    const ctx = makeCtx()
+    const payload = Buffer.from(JSON.stringify({ exp: 9999999999, sub: "auth0|user-1" }), "utf8")
+      .toString("base64")
+      .replace(/=+$/g, "")
+    const accessToken = `a.${payload}.c`
+
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: accessToken }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("GetCurrentPeriodUsage")) {
+        return { status: 200, bodyText: JSON.stringify({ enabled: false }) }
+      }
+      if (url.includes("/api/usage")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            "gpt-4": {
+              numRequests: 12,
+              maxRequestUsage: 150,
+            },
+            startOfMonth: "2026-03-01T00:00:00.000Z",
+          }),
+        }
+      }
+      return { status: 200, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Requests")).toBeTruthy()
+  })
+
   it("refreshes keychain access token and persists to keychain source", async () => {
     const ctx = makeCtx()
     const expiredPayload = Buffer.from(JSON.stringify({ exp: 1 }), "utf8")
@@ -651,7 +717,7 @@ describe("cursor plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Cursor request-based usage data unavailable")
   })
 
-  it("does not use request-based fallback for disabled team accounts", async () => {
+  it("uses request-based fallback for disabled team accounts when usage data is available", async () => {
     const ctx = makeCtx()
     const accessToken = makeJwt({ sub: "google-oauth2|user_abc123", exp: 9999999999 })
     let restUsageCalled = false
@@ -687,8 +753,9 @@ describe("cursor plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("No active Cursor subscription.")
-    expect(restUsageCalled).toBe(false)
+    const result = plugin.probe(ctx)
+    expect(restUsageCalled).toBe(true)
+    expect(result.lines.find((line) => line.label === "Requests")).toBeTruthy()
   })
 
   it("still throws no subscription for non-enterprise accounts without planUsage", async () => {

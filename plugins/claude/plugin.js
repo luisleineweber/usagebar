@@ -390,9 +390,73 @@
     }))
   }
 
+  function appendTokenUsageLines(lines, ctx, usage) {
+    const now = new Date()
+    const todayKey = dayKeyFromDate(now)
+    const yesterday = new Date(now.getTime())
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayKey = dayKeyFromDate(yesterday)
+
+    let todayEntry = null
+    let yesterdayEntry = null
+    for (let i = 0; i < usage.daily.length; i++) {
+      const usageDayKey = dayKeyFromUsageDate(usage.daily[i].date)
+      if (usageDayKey === todayKey) {
+        todayEntry = usage.daily[i]
+        continue
+      }
+      if (usageDayKey === yesterdayKey) {
+        yesterdayEntry = usage.daily[i]
+      }
+    }
+
+    pushDayUsageLine(lines, ctx, "Today", todayEntry)
+    pushDayUsageLine(lines, ctx, "Yesterday", yesterdayEntry)
+
+    let totalTokens = 0
+    let totalCostNanos = 0
+    let hasCost = false
+    for (let i = 0; i < usage.daily.length; i++) {
+      const day = usage.daily[i]
+      const dayTokens = Number(day.totalTokens)
+      if (Number.isFinite(dayTokens)) {
+        totalTokens += dayTokens
+      }
+      const dayCost = usageCostUsd(day)
+      if (dayCost != null) {
+        totalCostNanos += Math.round(dayCost * 1e9)
+        hasCost = true
+      }
+    }
+    if (totalTokens > 0) {
+      lines.push(ctx.line.text({
+        label: "Last 30 Days",
+        value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
+      }))
+    }
+  }
+
+  function buildLocalUsageOnlyResult(ctx) {
+    const usageResult = queryTokenUsage(ctx)
+    if (usageResult.status !== "ok") {
+      return null
+    }
+    const lines = []
+    appendTokenUsageLines(lines, ctx, usageResult.data)
+    if (lines.length === 0) {
+      lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
+    }
+    return { plan: null, lines: lines }
+  }
+
   function probe(ctx) {
     const creds = loadCredentials(ctx)
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
+      const localOnly = buildLocalUsageOnlyResult(ctx)
+      if (localOnly) {
+        ctx.host.log.info("using ccusage fallback without OAuth credentials")
+        return localOnly
+      }
       ctx.host.log.error("probe failed: not logged in")
       throw "Not logged in. Run `claude` to authenticate."
     }
@@ -513,50 +577,7 @@
 
     const usageResult = queryTokenUsage(ctx)
     if (usageResult.status === "ok") {
-      const usage = usageResult.data
-      const now = new Date()
-      const todayKey = dayKeyFromDate(now)
-      const yesterday = new Date(now.getTime())
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayKey = dayKeyFromDate(yesterday)
-
-      let todayEntry = null
-      let yesterdayEntry = null
-      for (let i = 0; i < usage.daily.length; i++) {
-        const usageDayKey = dayKeyFromUsageDate(usage.daily[i].date)
-        if (usageDayKey === todayKey) {
-          todayEntry = usage.daily[i]
-          continue
-        }
-        if (usageDayKey === yesterdayKey) {
-          yesterdayEntry = usage.daily[i]
-        }
-      }
-
-      pushDayUsageLine(lines, ctx, "Today", todayEntry)
-      pushDayUsageLine(lines, ctx, "Yesterday", yesterdayEntry)
-
-      let totalTokens = 0
-      let totalCostNanos = 0
-      let hasCost = false
-      for (let i = 0; i < usage.daily.length; i++) {
-        const day = usage.daily[i]
-        const dayTokens = Number(day.totalTokens)
-        if (Number.isFinite(dayTokens)) {
-          totalTokens += dayTokens
-        }
-        const dayCost = usageCostUsd(day)
-        if (dayCost != null) {
-          totalCostNanos += Math.round(dayCost * 1e9)
-          hasCost = true
-        }
-      }
-      if (totalTokens > 0) {
-        lines.push(ctx.line.text({
-          label: "Last 30 Days",
-          value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
-        }))
-      }
+      appendTokenUsageLines(lines, ctx, usageResult.data)
     }
 
     if (lines.length === 0) {

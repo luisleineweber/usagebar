@@ -477,6 +477,41 @@ describe("antigravity plugin", () => {
     expect(capturedMetadata.ideName).toBe("antigravity")
   })
 
+  it("uses Windows paths and LS metadata on Windows", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    setupSqliteMock(ctx, makeAuthStatusJson())
+    const discovery = makeDiscovery()
+
+    let discoverOpts = null
+    let probedOs = null
+    ctx.host.ls.discover.mockImplementation((opts) => {
+      discoverOpts = opts
+      return discovery
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("GetUnleashData")) {
+        const body = JSON.parse(opts.bodyText)
+        probedOs = body.context.properties.os
+        return { status: 200, bodyText: "{}" }
+      }
+      return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse({ planName: null })) }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBeNull()
+    expect(result.lines.length).toBeGreaterThan(0)
+    expect(discoverOpts.processName).toBe("language_server_windows")
+    expect(probedOs).toBe("windows")
+    expect(ctx.host.sqlite.query).toHaveBeenCalledWith(
+      "~/AppData/Roaming/Antigravity/User/globalStorage/state.vscdb",
+      expect.stringContaining("antigravityAuthStatus")
+    )
+  })
+
   it("works without apiKey when SQLite returns empty", async () => {
     const ctx = makeCtx()
     const discovery = makeDiscovery()
