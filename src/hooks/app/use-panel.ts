@@ -7,15 +7,63 @@ import type { ActiveView } from "@/components/side-nav"
 const PANEL_WIDTH = 400
 const HOME_PANEL_MAX_HEIGHT_PX = 720
 const DETAIL_PANEL_MAX_HEIGHT_PX = 860
-const SETTINGS_PANEL_MAX_HEIGHT_PX = 980
 const MAX_HEIGHT_FALLBACK_PX = 820
 const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.9
-const PANEL_RESIZE_DURATION_MS = 160
+const SIDE_NAV_VERTICAL_PADDING_PX = 24
+const SIDE_NAV_BUTTON_HEIGHT_PX = 44
+const SIDE_NAV_STATIC_BUTTON_COUNT = 3 // Home + Help + Settings
+const PANEL_RESIZE_STEP_MS = 18
+const PANEL_RESIZE_MIN_DELTA_PX = 36
+const PANEL_RESIZE_MAX_STEPS = 3
+
+function getMonitorLogicalHeight(monitor: Awaited<ReturnType<typeof currentMonitor>>): number | null {
+  if (!monitor) return null
+  const workAreaHeight = monitor.workArea?.size.height
+  if (typeof workAreaHeight === "number" && Number.isFinite(workAreaHeight) && workAreaHeight > 0) {
+    return workAreaHeight
+  }
+  const monitorHeight = monitor.size?.height
+  if (typeof monitorHeight === "number" && Number.isFinite(monitorHeight) && monitorHeight > 0) {
+    return monitorHeight
+  }
+  return null
+}
 
 export function panelMaxHeightForView(activeView: ActiveView): number {
-  if (activeView === "settings") return SETTINGS_PANEL_MAX_HEIGHT_PX
   if (activeView === "home") return HOME_PANEL_MAX_HEIGHT_PX
   return DETAIL_PANEL_MAX_HEIGHT_PX
+}
+
+export function panelMinHeightForNav(providerCount: number): number {
+  const normalizedProviderCount = Math.max(0, Math.floor(providerCount))
+  const buttonCount = SIDE_NAV_STATIC_BUTTON_COUNT + normalizedProviderCount
+  return SIDE_NAV_VERTICAL_PADDING_PX + buttonCount * SIDE_NAV_BUTTON_HEIGHT_PX
+}
+
+function buildResizeHeights(fromHeight: number, toHeight: number): number[] {
+  const roundedFrom = Math.max(1, Math.round(fromHeight))
+  const roundedTo = Math.max(1, Math.round(toHeight))
+  if (roundedTo <= roundedFrom) return [roundedTo]
+  const delta = Math.abs(roundedTo - roundedFrom)
+  if (delta < PANEL_RESIZE_MIN_DELTA_PX) return [roundedTo]
+
+  const stepCount = Math.min(PANEL_RESIZE_MAX_STEPS, Math.max(2, Math.ceil(delta / 140)))
+  const heights: number[] = []
+  for (let step = 1; step <= stepCount; step += 1) {
+    const progress = step / stepCount
+    const easedProgress = 1 - Math.pow(1 - progress, 2)
+    const nextHeight = Math.max(
+      1,
+      Math.round(roundedFrom + (roundedTo - roundedFrom) * easedProgress)
+    )
+    if (heights[heights.length - 1] !== nextHeight) {
+      heights.push(nextHeight)
+    }
+  }
+  if (heights[heights.length - 1] !== roundedTo) {
+    heights.push(roundedTo)
+  }
+  return heights
 }
 
 type UsePanelArgs = {
@@ -24,6 +72,7 @@ type UsePanelArgs = {
   showAbout: boolean
   setShowAbout: (value: boolean) => void
   displayPlugins: unknown[]
+  navPluginCount: number
   onPanelFocus?: () => void
 }
 
@@ -33,6 +82,7 @@ export function usePanel({
   showAbout,
   setShowAbout,
   displayPlugins,
+  navPluginCount,
   onPanelFocus,
 }: UsePanelArgs) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -43,26 +93,10 @@ export function usePanel({
   const [canScrollDown, setCanScrollDown] = useState(false)
   const [panelHeightPx, setPanelHeightPx] = useState<number | null>(null)
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
-  const resizeFrameRef = useRef<number | null>(null)
   const currentPanelHeightPxRef = useRef<number | null>(null)
   const maxPanelHeightPxRef = useRef<number | null>(null)
-
-  const cancelResizeFrame = () => {
-    if (resizeFrameRef.current === null) return
-    if (typeof window.cancelAnimationFrame === "function") {
-      window.cancelAnimationFrame(resizeFrameRef.current)
-    } else {
-      window.clearTimeout(resizeFrameRef.current)
-    }
-    resizeFrameRef.current = null
-  }
-
-  const requestPanelFrame = (callback: FrameRequestCallback) => {
-    if (typeof window.requestAnimationFrame === "function") {
-      return window.requestAnimationFrame(callback)
-    }
-    return window.setTimeout(() => callback(performance.now()), 16)
-  }
+  const targetPanelHeightPxRef = useRef<number | null>(null)
+  const resizeSequenceIdRef = useRef(0)
 
   useEffect(() => {
     if (!isTauri()) return
@@ -137,53 +171,60 @@ export function usePanel({
 
     const currentWindow = getCurrentWindow()
 
+    const pauseBetweenResizeSteps = () =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, PANEL_RESIZE_STEP_MS)
+      })
+
     const applyHeight = (factor: number, width: number, logicalHeight: number) => {
       const roundedHeight = Math.max(1, Math.round(logicalHeight))
-      currentPanelHeightPxRef.current = roundedHeight
-      setPanelHeightPx((prev) => (prev === roundedHeight ? prev : roundedHeight))
-      void Promise.resolve(
-        currentWindow.setSize(new PhysicalSize(width, Math.ceil(roundedHeight * factor)))
-      )
-        .then(() => invoke("reposition_panel"))
-        .catch((e) => {
-          console.error("Failed to resize window:", e)
-        })
-    }
+      if (targetPanelHeightPxRef.current === roundedHeight) return
+      const previousHeight = currentPanelHeightPxRef.current
+        ?? Math.max(1, Math.round(window.innerHeight || 0))
+      const heights = buildResizeHeights(previousHeight, roundedHeight)
+      const sequenceId = resizeSequenceIdRef.current + 1
+      resizeSequenceIdRef.current = sequenceId
+      targetPanelHeightPxRef.current = roundedHeight
 
-    const animateHeight = (factor: number, width: number, targetLogicalHeight: number) => {
-      const roundedTargetHeight = Math.max(1, Math.round(targetLogicalHeight))
-      const currentHeight = currentPanelHeightPxRef.current
+      const operation = async () => {
+        let lastHeight = previousHeight
+        for (let index = 0; index < heights.length; index += 1) {
+          if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
+          const nextHeight = heights[index]
+          const isGrowing = nextHeight > lastHeight
 
-      cancelResizeFrame()
+          currentPanelHeightPxRef.current = nextHeight
+          setPanelHeightPx((prev) => (prev === nextHeight ? prev : nextHeight))
 
-      if (currentHeight === null || Math.abs(currentHeight - roundedTargetHeight) <= 1) {
-        applyHeight(factor, width, roundedTargetHeight)
-        return
-      }
+          const resizeWindow = () =>
+            Promise.resolve(currentWindow.setSize(new PhysicalSize(width, Math.ceil(nextHeight * factor))))
+          const repositionWindow = () =>
+            Promise.resolve(invoke("reposition_panel", { panelHeightPx: nextHeight }))
 
-      const startHeight = currentHeight
-      const startTime = performance.now()
+          if (isGrowing) {
+            await repositionWindow()
+            if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
+            await resizeWindow()
+          } else {
+            await resizeWindow()
+            if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
+            await repositionWindow()
+          }
 
-      const step = (timestamp: number) => {
-        if (isDisposed) return
-        const progress = Math.min((timestamp - startTime) / PANEL_RESIZE_DURATION_MS, 1)
-        const easedProgress = 1 - Math.pow(1 - progress, 3)
-        const nextHeight =
-          startHeight + ((roundedTargetHeight - startHeight) * easedProgress)
-
-        applyHeight(factor, width, nextHeight)
-
-        if (progress < 1) {
-          resizeFrameRef.current = requestPanelFrame(step)
-        } else {
-          resizeFrameRef.current = null
+          lastHeight = nextHeight
+          if (index < heights.length - 1) {
+            await pauseBetweenResizeSteps()
+          }
         }
       }
 
-      resizeFrameRef.current = requestPanelFrame(step)
+      void operation().catch((e) => {
+        console.error("Failed to resize window:", e)
+      })
     }
 
     const resizeWindow = async () => {
+      if (isDisposed) return
       const factor = window.devicePixelRatio
       const width = Math.ceil(PANEL_WIDTH * factor)
       const contentHeightLogical = Math.ceil(
@@ -207,6 +248,7 @@ export function usePanel({
         1,
         contentHeightLogical + footerHeightLogical + paddingTopLogical + paddingBottomLogical
       )
+      const navMinHeightLogical = panelMinHeightForNav(navPluginCount)
       const panelMaxHeightPx = panelMaxHeightForView(activeView)
 
       let maxHeightPhysical: number | null = null
@@ -214,9 +256,10 @@ export function usePanel({
 
       try {
         const monitor = await currentMonitor()
-        if (monitor) {
+        const monitorHeight = getMonitorLogicalHeight(monitor)
+        if (monitorHeight !== null) {
           maxHeightPhysical = Math.floor(
-            Math.min(monitor.size.height * MAX_HEIGHT_FRACTION_OF_MONITOR, panelMaxHeightPx * factor)
+            Math.min(monitorHeight * factor * MAX_HEIGHT_FRACTION_OF_MONITOR, panelMaxHeightPx * factor)
           )
           maxHeightLogical = Math.floor(maxHeightPhysical / factor)
         }
@@ -237,7 +280,12 @@ export function usePanel({
         setMaxPanelHeightPx(maxHeightLogical)
       }
 
-      animateHeight(factor, width, Math.min(desiredHeightLogical, maxHeightLogical))
+      const nextHeightLogical = Math.min(
+        maxHeightLogical,
+        Math.max(navMinHeightLogical, desiredHeightLogical)
+      )
+
+      applyHeight(factor, width, nextHeightLogical)
     }
 
     resizeWindow()
@@ -249,10 +297,10 @@ export function usePanel({
 
     return () => {
       isDisposed = true
-      cancelResizeFrame()
+      resizeSequenceIdRef.current += 1
       observer.disconnect()
     }
-  }, [activeView, displayPlugins])
+  }, [activeView, displayPlugins, navPluginCount])
 
   useEffect(() => {
     const el = scrollRef.current

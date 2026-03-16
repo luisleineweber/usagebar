@@ -1,5 +1,6 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import type { ReactNode } from "react"
+import { useState } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -42,22 +43,56 @@ vi.mock("@dnd-kit/utilities", () => ({
 }))
 
 import { SettingsPage } from "@/pages/settings"
+import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
+
+const providers: SettingsPluginState[] = [
+  {
+    id: "opencode",
+    name: "OpenCode",
+    iconUrl: "/opencode.svg",
+    brandColor: "#16a34a",
+    enabled: true,
+    supported: true,
+    supportState: "experimental",
+    supportMessage: "Experimental on Windows.",
+    meta: {
+      id: "opencode",
+      name: "OpenCode",
+      iconUrl: "/opencode.svg",
+      brandColor: "#16a34a",
+      supportState: "experimental",
+      supportMessage: "Experimental on Windows.",
+      lines: [],
+      primaryCandidates: [],
+    },
+    state: { data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null },
+    config: { source: "manual", workspaceId: "wrk_123" },
+  },
+  {
+    id: "codex",
+    name: "Codex",
+    iconUrl: "/codex.svg",
+    brandColor: "#000000",
+    enabled: false,
+    supported: true,
+    supportState: "supported",
+    supportMessage: null,
+    meta: {
+      id: "codex",
+      name: "Codex",
+      iconUrl: "/codex.svg",
+      brandColor: "#000000",
+      lines: [],
+      primaryCandidates: [],
+    },
+    state: { data: null, loading: false, error: "Not signed in", lastManualRefreshAt: null, lastSuccessAt: null },
+  },
+]
 
 const defaultProps = {
-  plugins: [{ id: "a", name: "Alpha", enabled: true }],
+  providers,
   onReorder: vi.fn(),
   onToggle: vi.fn(),
-  providerSetupPlugins: [
-    {
-      meta: { id: "opencode", name: "OpenCode", iconUrl: "", lines: [], primaryCandidates: [] },
-      config: { source: "manual" as const },
-      state: { data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null },
-    },
-  ],
-  onRetryPlugin: vi.fn(),
-  onProviderConfigChange: vi.fn(async () => undefined),
-  onProviderSecretSave: vi.fn(async () => undefined),
-  onProviderSecretDelete: vi.fn(async () => undefined),
   autoUpdateInterval: 15 as const,
   onAutoUpdateIntervalChange: vi.fn(),
   themeMode: "system" as const,
@@ -78,6 +113,26 @@ const defaultProps = {
   onGlobalShortcutChange: vi.fn(),
   startOnLogin: false,
   onStartOnLoginChange: vi.fn(),
+  onProviderConfigChange: vi.fn(async () => undefined),
+  onProviderSecretSave: vi.fn(async () => undefined),
+  onProviderSecretDelete: vi.fn(async () => undefined),
+  onRetryProvider: vi.fn(),
+}
+
+function TestHarness(overrides: Partial<typeof defaultProps> = {}) {
+  const [settingsTab, setSettingsTab] = useState<"general" | "providers">("general")
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(providers[0]!.id)
+
+  return (
+    <SettingsPage
+      {...defaultProps}
+      {...overrides}
+      settingsTab={settingsTab}
+      onSettingsTabChange={setSettingsTab}
+      selectedProviderId={selectedProviderId}
+      onSelectedProviderChange={setSelectedProviderId}
+    />
+  )
 }
 
 afterEach(() => {
@@ -85,174 +140,61 @@ afterEach(() => {
 })
 
 describe("SettingsPage", () => {
-  it("toggles plugins", async () => {
+  it("renders General and Providers tabs", () => {
+    render(<TestHarness />)
+    expect(screen.getByRole("tab", { name: "General" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Providers" })).toBeInTheDocument()
+  })
+
+  it("renders global settings on the General tab", () => {
+    render(<TestHarness />)
+    expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
+    expect(screen.getByText("Menubar Icon")).toBeInTheDocument()
+    expect(screen.queryByText("Reorder your lineup and select a provider to manage.")).not.toBeInTheDocument()
+  })
+
+  it("switches to the Providers tab and shows provider detail", async () => {
+    render(<TestHarness />)
+    await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
+
+    expect(screen.getByText("Reorder your lineup and select a provider to manage.")).toBeInTheDocument()
+    expect(screen.getByTestId("provider-settings-opencode")).toBeInTheDocument()
+    expect(screen.getByText("Experimental on Windows.")).toBeInTheDocument()
+  })
+
+  it("selects another provider from the Providers tab", async () => {
+    render(<TestHarness />)
+    await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
+    await userEvent.click(screen.getByRole("button", { name: /codex/i }))
+
+    expect(screen.getByTestId("provider-settings-codex")).toBeInTheDocument()
+    expect(screen.getAllByText("Not signed in").length).toBeGreaterThan(0)
+  })
+
+  it("reorders providers from the Providers tab", async () => {
+    const onReorder = vi.fn()
+    render(<TestHarness onReorder={onReorder} />)
+    await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
+
+    latestOnDragEnd?.({ active: { id: "opencode" }, over: { id: "codex" } })
+    expect(onReorder).toHaveBeenCalledWith(["codex", "opencode"])
+  })
+
+  it("toggles providers from the Providers tab", async () => {
     const onToggle = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        plugins={[
-          { id: "b", name: "Beta", enabled: false },
-        ]}
-        onToggle={onToggle}
-      />
-    )
-    const checkboxes = screen.getAllByRole("checkbox")
-    await userEvent.click(checkboxes[checkboxes.length - 1])
-    expect(onToggle).toHaveBeenCalledWith("b")
+    render(<TestHarness onToggle={onToggle} />)
+    await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
+
+    const codexRow = screen.getByRole("button", { name: /codex/i })
+    const checkbox = within(codexRow).getByRole("checkbox")
+    await userEvent.click(checkbox)
+    expect(onToggle).toHaveBeenCalledWith("codex")
   })
 
-  it("reorders plugins on drag end", () => {
-    const onReorder = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        plugins={[
-          { id: "a", name: "Alpha", enabled: true },
-          { id: "b", name: "Beta", enabled: true },
-        ]}
-        onReorder={onReorder}
-      />
-    )
-    latestOnDragEnd?.({ active: { id: "a" }, over: { id: "b" } })
-    expect(onReorder).toHaveBeenCalledWith(["b", "a"])
-  })
-
-  it("ignores invalid drag end", () => {
-    const onReorder = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        onReorder={onReorder}
-      />
-    )
-    latestOnDragEnd?.({ active: { id: "a" }, over: null })
-    latestOnDragEnd?.({ active: { id: "a" }, over: { id: "a" } })
-    expect(onReorder).not.toHaveBeenCalled()
-  })
-
-  it("updates auto-update interval", async () => {
+  it("updates auto-update interval on the General tab", async () => {
     const onAutoUpdateIntervalChange = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
-      />
-    )
+    render(<TestHarness onAutoUpdateIntervalChange={onAutoUpdateIntervalChange} />)
     await userEvent.click(screen.getByText("30 min"))
     expect(onAutoUpdateIntervalChange).toHaveBeenCalledWith(30)
-  })
-
-  it("shows auto-update helper text", () => {
-    render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("How obsessive are you")).toBeInTheDocument()
-  })
-
-  it("renders app theme section with theme options", () => {
-    render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("App Theme")).toBeInTheDocument()
-    expect(screen.getByText("How it looks around here")).toBeInTheDocument()
-    expect(screen.getByText("System")).toBeInTheDocument()
-    expect(screen.getByText("Light")).toBeInTheDocument()
-    expect(screen.getByText("Dark")).toBeInTheDocument()
-  })
-
-  it("updates theme mode", async () => {
-    const onThemeModeChange = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        onThemeModeChange={onThemeModeChange}
-      />
-    )
-    await userEvent.click(screen.getByText("Dark"))
-    expect(onThemeModeChange).toHaveBeenCalledWith("dark")
-  })
-
-  it("updates display mode", async () => {
-    const onDisplayModeChange = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        onDisplayModeChange={onDisplayModeChange}
-      />
-    )
-    await userEvent.click(screen.getByRole("radio", { name: "Left" }))
-    expect(onDisplayModeChange).toHaveBeenCalledWith("left")
-  })
-
-  it("updates reset timer display mode", async () => {
-    const onResetTimerDisplayModeChange = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
-      />
-    )
-    await userEvent.click(screen.getByRole("radio", { name: /Absolute/ }))
-    expect(onResetTimerDisplayModeChange).toHaveBeenCalledWith("absolute")
-  })
-
-  it("renders renamed usage section heading", () => {
-    render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("Usage Mode")).toBeInTheDocument()
-  })
-
-  it("renders reset timers section heading", () => {
-    render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("Reset Timers")).toBeInTheDocument()
-  })
-
-  it("renders menubar icon section", () => {
-    render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("Menubar Icon")).toBeInTheDocument()
-    expect(screen.getByText("What shows in the menu bar")).toBeInTheDocument()
-  })
-
-  it("clicking Bars triggers onMenubarIconStyleChange(\"bars\")", async () => {
-    const onMenubarIconStyleChange = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        onMenubarIconStyleChange={onMenubarIconStyleChange}
-      />
-    )
-    await userEvent.click(screen.getByRole("radio", { name: "Bars" }))
-    expect(onMenubarIconStyleChange).toHaveBeenCalledWith("bars")
-  })
-
-  it("clicking Donut triggers onMenubarIconStyleChange(\"donut\")", async () => {
-    const onMenubarIconStyleChange = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        onMenubarIconStyleChange={onMenubarIconStyleChange}
-      />
-    )
-    await userEvent.click(screen.getByRole("radio", { name: "Donut" }))
-    expect(onMenubarIconStyleChange).toHaveBeenCalledWith("donut")
-  })
-
-  it("does not render removed bar icon controls", () => {
-    render(<SettingsPage {...defaultProps} />)
-    expect(screen.queryByText("Bar Icon")).not.toBeInTheDocument()
-    expect(screen.queryByText("Show percentage")).not.toBeInTheDocument()
-  })
-
-  it("renders provider setup section", () => {
-    render(<SettingsPage {...defaultProps} />)
-    expect(screen.getByText("Provider Setup")).toBeInTheDocument()
-    expect(screen.getByTestId("provider-setup-opencode")).toBeInTheDocument()
-  })
-
-  it("toggles start on login checkbox", async () => {
-    const onStartOnLoginChange = vi.fn()
-    render(
-      <SettingsPage
-        {...defaultProps}
-        onStartOnLoginChange={onStartOnLoginChange}
-      />
-    )
-    await userEvent.click(screen.getByText("Start on login"))
-    expect(onStartOnLoginChange).toHaveBeenCalledWith(true)
   })
 })

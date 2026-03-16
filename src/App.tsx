@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { AppShell } from "@/components/app/app-shell"
 import { useAppPluginViews } from "@/hooks/app/use-app-plugin-views"
@@ -6,7 +6,6 @@ import { useProbe } from "@/hooks/app/use-probe"
 import { useSettingsBootstrap } from "@/hooks/app/use-settings-bootstrap"
 import { useSettingsDisplayActions } from "@/hooks/app/use-settings-display-actions"
 import { useSettingsPluginActions } from "@/hooks/app/use-settings-plugin-actions"
-import { useSettingsPluginList } from "@/hooks/app/use-settings-plugin-list"
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
@@ -180,11 +179,6 @@ function App() {
     scheduleTrayIconUpdate,
   })
 
-  const settingsPlugins = useSettingsPluginList({
-    pluginSettings,
-    pluginsMeta,
-  })
-
   useEffect(() => {
     let cancelled = false
 
@@ -216,31 +210,6 @@ function App() {
     providerConfigsRef.current = providerConfigs
   }, [providerConfigs])
 
-  const providerSetupPlugins = useMemo(() => {
-    const metaById = new Map(pluginsMeta.map((plugin) => [plugin.id, plugin]))
-    const orderedIds = pluginSettings?.order.length
-      ? pluginSettings.order
-      : pluginsMeta.map((plugin) => plugin.id)
-
-    const entries: Array<{
-      meta: typeof pluginsMeta[number]
-      config: (typeof providerConfigs)[string] | undefined
-      state: (typeof pluginStates)[string] | undefined
-    }> = []
-
-    for (const id of orderedIds) {
-      const meta = metaById.get(id)
-      if (!meta) continue
-      entries.push({
-        meta,
-        config: providerConfigs[id],
-        state: pluginStates[id],
-      })
-    }
-
-    return entries
-  }, [pluginSettings?.order, pluginStates, pluginsMeta, providerConfigs])
-
   const persistProviderConfigs = useCallback(async (nextConfigs: typeof providerConfigs) => {
     setProviderConfigs(nextConfigs)
     await saveProviderConfigs(nextConfigs)
@@ -259,18 +228,28 @@ function App() {
     secretKey: string,
     value: string
   ) => {
-    await setProviderSecret(providerId, secretKey, value)
-    const nextConfigs = setProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
-    await persistProviderConfigs(nextConfigs)
+    try {
+      await setProviderSecret(providerId, secretKey, value)
+      const nextConfigs = setProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
+      await persistProviderConfigs(nextConfigs)
+    } catch (error) {
+      console.error("Failed to save provider secret:", error)
+      throw error
+    }
   }, [persistProviderConfigs])
 
   const handleProviderSecretDelete = useCallback(async (
     providerId: string,
     secretKey: string
   ) => {
-    await deleteProviderSecret(providerId, secretKey)
-    const nextConfigs = clearProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
-    await persistProviderConfigs(nextConfigs)
+    try {
+      await deleteProviderSecret(providerId, secretKey)
+      const nextConfigs = clearProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
+      await persistProviderConfigs(nextConfigs)
+    } catch (error) {
+      console.error("Failed to delete provider secret:", error)
+      throw error
+    }
   }, [persistProviderConfigs])
 
   const handlePanelFocus = useCallback(() => {
@@ -352,7 +331,6 @@ function App() {
       onPanelFocus={handlePanelFocus}
       navPlugins={navPlugins}
       displayPlugins={displayPlugins}
-      settingsPlugins={settingsPlugins}
       autoUpdateNextAt={autoUpdateNextAt}
       selectedPlugin={selectedPlugin}
       onPluginContextAction={handlePluginContextAction}
@@ -361,8 +339,6 @@ function App() {
         onRetryPlugin: handleRetryPlugin,
         onReorder: handleReorder,
         onToggle: handleToggle,
-        providerSetupPlugins,
-        providerConfigs,
         onProviderConfigChange: handleProviderConfigChange,
         onProviderSecretSave: handleProviderSecretSave,
         onProviderSecretDelete: handleProviderSecretDelete,

@@ -3,10 +3,10 @@ import { AppContent, type AppContentActionProps } from "@/components/app/app-con
 import { PanelFooter } from "@/components/panel-footer"
 import { SideNav, type NavPlugin, type PluginContextAction } from "@/components/side-nav"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
-import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import { useAppVersion } from "@/hooks/app/use-app-version"
 import { usePanel } from "@/hooks/app/use-panel"
 import { useAppUpdate } from "@/hooks/use-app-update"
+import { openSettingsWindow } from "@/lib/settings-window"
 import { useAppUiStore } from "@/stores/app-ui-store"
 
 type AppShellProps = {
@@ -14,7 +14,6 @@ type AppShellProps = {
   onPanelFocus?: () => void
   navPlugins: NavPlugin[]
   displayPlugins: DisplayPluginState[]
-  settingsPlugins: SettingsPluginState[]
   autoUpdateNextAt: number | null
   selectedPlugin: DisplayPluginState | null
   onPluginContextAction: (pluginId: string, action: PluginContextAction) => void
@@ -27,7 +26,6 @@ export function AppShell({
   onPanelFocus,
   navPlugins,
   displayPlugins,
-  settingsPlugins,
   autoUpdateNextAt,
   selectedPlugin,
   onPluginContextAction,
@@ -63,6 +61,7 @@ export function AppShell({
     showAbout,
     setShowAbout,
     displayPlugins,
+    navPluginCount: navPlugins.length,
     onPanelFocus,
   })
 
@@ -81,7 +80,7 @@ export function AppShell({
   return (
     <div ref={containerRef} className="flex flex-col bg-card">
       <div
-        className="relative bg-card rounded-xl overflow-hidden select-none w-full border flex flex-col transition-[height,max-height] duration-150 ease-out"
+        className="relative bg-card rounded-xl overflow-hidden select-none w-full border flex flex-col"
         style={panelStyle}
       >
         <div className="flex flex-1 min-h-0 flex-row">
@@ -89,6 +88,9 @@ export function AppShell({
             activeView={activeView}
             onViewChange={setActiveView}
             plugins={navPlugins}
+            onOpenSettings={() => {
+              void openSettingsWindow({ tab: "general" }).catch(console.error)
+            }}
             onPluginContextAction={onPluginContextAction}
             isPluginRefreshAvailable={isPluginRefreshAvailable}
           />
@@ -99,7 +101,6 @@ export function AppShell({
                   <AppContent
                     {...appContentProps}
                     displayPlugins={displayPlugins}
-                    settingsPlugins={settingsPlugins}
                     selectedPlugin={selectedPlugin}
                   />
                 </div>

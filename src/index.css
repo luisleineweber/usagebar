@@ -150,6 +150,13 @@ body,
   padding: 0;
 }
 
+html[data-window="settings"],
+html[data-window="settings"] body,
+html[data-window="settings"] #root {
+  min-height: 100%;
+  overflow: auto;
+}
+
 /* Hide scrollbar track globally */
 .scrollbar-none {
   scrollbar-width: none;          /* Firefox */

@@ -2,6 +2,7 @@
 mod app_nap;
 mod panel;
 mod plugin_engine;
+mod settings_window;
 mod tray;
 #[cfg(target_os = "macos")]
 mod webkit_config;
@@ -43,13 +44,27 @@ fn delete_provider_secret_service(service: &str) -> Result<(), String> {
         Ok(()) => Ok(()),
         Err(error) => {
             let message = error.to_string().to_lowercase();
-            if message.contains("no entry") || message.contains("not found") {
+            if is_missing_credential_error(&message) {
                 Ok(())
             } else {
                 Err(format!("credential delete failed: {}", error))
             }
         }
     }
+}
+
+fn is_missing_credential_error(message: &str) -> bool {
+    let normalized = message.to_lowercase();
+
+    normalized.contains("no entry")
+        || normalized.contains("no matching entry found")
+        || normalized.contains("not found")
+        || normalized.contains("cannot find")
+        || normalized.contains("element not found")
+        || normalized.contains("credential not found")
+        || normalized.contains("specified file could not be found")
+        || normalized.contains("system cannot find the file specified")
+        || normalized.contains("os error 1168")
 }
 
 fn app_started_day_key(version: &str) -> String {
@@ -84,7 +99,10 @@ fn track_app_started_once_per_day_per_version(app: &tauri::App) {
     let store = match app.handle().store("settings.json") {
         Ok(store) => store,
         Err(error) => {
-            log::warn!("Failed to access settings store for app_started gate: {}", error);
+            log::warn!(
+                "Failed to access settings store for app_started gate: {}",
+                error
+            );
             return;
         }
     };
@@ -118,7 +136,10 @@ fn managed_shortcut_slot() -> &'static Mutex<Option<String>> {
 
 /// Shared shortcut handler that toggles the panel when the shortcut is pressed.
 #[cfg(desktop)]
-fn handle_global_shortcut(app: &tauri::AppHandle, event: tauri_plugin_global_shortcut::ShortcutEvent) {
+fn handle_global_shortcut(
+    app: &tauri::AppHandle,
+    event: tauri_plugin_global_shortcut::ShortcutEvent,
+) {
     if event.state == ShortcutState::Pressed {
         log::debug!("Global shortcut triggered");
         panel::toggle_panel(app);
@@ -140,6 +161,7 @@ pub struct PluginMeta {
     pub brand_color: Option<String>,
     pub support_state: String,
     pub support_message: Option<String>,
+    pub is_surfaced: bool,
     pub lines: Vec<ManifestLineDto>,
     pub links: Vec<PluginLinkDto>,
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
@@ -197,8 +219,33 @@ fn hide_panel(app_handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn reposition_panel(app_handle: tauri::AppHandle) {
-    panel::reposition_panel(&app_handle);
+fn reposition_panel(app_handle: tauri::AppHandle, panel_height_px: Option<f64>) {
+    panel::reposition_panel(&app_handle, panel_height_px);
+}
+
+#[tauri::command]
+fn show_panel_for_view(app_handle: tauri::AppHandle, view: String) -> Result<(), String> {
+    let normalized_view = view.trim().to_string();
+    if normalized_view.is_empty() {
+        return Err("view must not be empty".to_string());
+    }
+
+    panel::reposition_panel(&app_handle, None);
+    panel::show_panel(&app_handle);
+    app_handle
+        .emit("tray:navigate", normalized_view)
+        .map_err(|error| format!("failed to navigate tray panel: {}", error))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_settings_window(
+    app_handle: tauri::AppHandle,
+    tab: Option<String>,
+    provider_id: Option<String>,
+) -> Result<(), String> {
+    settings_window::open(&app_handle, tab, provider_id)
 }
 
 #[tauri::command]
@@ -259,7 +306,7 @@ async fn start_probe_batch(
     };
     let selected_plugins: Vec<_> = selected_plugins
         .into_iter()
-        .filter(|plugin| plugin_is_probe_supported(&plugin.manifest.id))
+        .filter(|plugin| plugin_is_probe_supported(&plugin.manifest))
         .collect();
 
     let response_plugin_ids: Vec<String> = selected_plugins
@@ -310,9 +357,19 @@ async fn start_probe_batch(
                     if has_error {
                         log::warn!("probe {} completed with error", plugin_id);
                     } else {
-                        log::info!("probe {} completed ok ({} lines)", plugin_id, output.lines.len());
+                        log::info!(
+                            "probe {} completed ok ({} lines)",
+                            plugin_id,
+                            output.lines.len()
+                        );
                     }
-                    let _ = handle.emit("probe:result", ProbeResult { batch_id: bid, output });
+                    let _ = handle.emit(
+                        "probe:result",
+                        ProbeResult {
+                            batch_id: bid,
+                            output,
+                        },
+                    );
                 }
                 Err(_) => {
                     log::error!("probe {} panicked", plugin_id);
@@ -345,7 +402,11 @@ fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn set_provider_secret(provider_id: String, secret_key: String, value: String) -> Result<(), String> {
+fn set_provider_secret(
+    provider_id: String,
+    secret_key: String,
+    value: String,
+) -> Result<(), String> {
     let trimmed_provider = provider_id.trim();
     let trimmed_secret = secret_key.trim();
     let trimmed_value = value.trim();
@@ -358,12 +419,26 @@ fn set_provider_secret(provider_id: String, secret_key: String, value: String) -
     }
 
     let service = provider_secret_service(trimmed_provider, trimmed_secret);
+    log::info!(
+        "setting provider secret for provider='{}' key='{}'",
+        trimmed_provider,
+        trimmed_secret
+    );
     let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, &service)
         .map_err(|error| format!("credential store unavailable: {}", error))?;
 
     entry
         .set_password(trimmed_value)
-        .map_err(|error| format!("credential write failed: {}", error))
+        .map_err(|error| format!("credential write failed: {}", error))?;
+
+    let read_back = entry
+        .get_password()
+        .map_err(|error| format!("credential read-after-write failed: {}", error))?;
+    if read_back != trimmed_value {
+        return Err("credential read-after-write mismatch".to_string());
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -375,44 +450,87 @@ fn delete_provider_secret(provider_id: String, secret_key: String) -> Result<(),
         return Err("provider and secret key are required".to_string());
     }
 
+    log::info!(
+        "deleting provider secret for provider='{}' key='{}'",
+        trimmed_provider,
+        trimmed_secret
+    );
     let mut services = vec![provider_secret_service(trimmed_provider, trimmed_secret)];
-    services.extend(provider_secret_legacy_services(trimmed_provider, trimmed_secret));
+    services.extend(provider_secret_legacy_services(
+        trimmed_provider,
+        trimmed_secret,
+    ));
 
     for service in services {
-        delete_provider_secret_service(&service)?;
+        if let Err(error) = delete_provider_secret_service(&service) {
+            log::error!(
+                "provider secret delete failed for provider='{}' key='{}' service='{}': {}",
+                trimmed_provider,
+                trimmed_secret,
+                service,
+                error
+            );
+            return Err(error);
+        }
     }
 
     Ok(())
 }
 
-fn plugin_support_for_current_platform(plugin_id: &str) -> (&'static str, Option<String>) {
-    if cfg!(target_os = "windows") {
-        const WINDOWS_SUPPORTED_IDS: &[&str] =
-            &["antigravity", "claude", "codex", "cursor", "opencode"];
-        if WINDOWS_SUPPORTED_IDS.contains(&plugin_id) {
-            return ("supported", None);
-        }
-        return (
-            "comingSoonOnWindows",
-            Some("Coming soon on Windows.".to_string()),
-        );
-    }
-
-    ("supported", None)
+struct ResolvedPluginSupport {
+    support_state: &'static str,
+    support_message: Option<String>,
+    is_surfaced: bool,
+    probe_supported: bool,
 }
 
-fn plugin_is_probe_supported(plugin_id: &str) -> bool {
-    matches!(
-        plugin_support_for_current_platform(plugin_id),
-        ("supported", None) | ("supported", Some(_))
-    )
+fn plugin_support_for_current_platform(
+    manifest: &plugin_engine::manifest::PluginManifest,
+) -> ResolvedPluginSupport {
+    if cfg!(target_os = "windows") {
+        let windows = &manifest.platform_support.windows;
+        let (support_state, probe_supported, default_message) = match windows.state {
+            plugin_engine::manifest::WindowsSupportState::Supported => ("supported", true, None),
+            plugin_engine::manifest::WindowsSupportState::Experimental => (
+                "experimental",
+                true,
+                Some("Experimental on Windows.".to_string()),
+            ),
+            plugin_engine::manifest::WindowsSupportState::Blocked => (
+                "comingSoonOnWindows",
+                false,
+                Some("Coming soon on Windows.".to_string()),
+            ),
+        };
+
+        return ResolvedPluginSupport {
+            support_state,
+            support_message: windows.message.clone().or(default_message),
+            is_surfaced: windows.surfaced,
+            probe_supported,
+        };
+    }
+
+    ResolvedPluginSupport {
+        support_state: "supported",
+        support_message: None,
+        is_surfaced: true,
+        probe_supported: true,
+    }
+}
+
+fn plugin_is_probe_supported(manifest: &plugin_engine::manifest::PluginManifest) -> bool {
+    plugin_support_for_current_platform(manifest).probe_supported
 }
 
 /// Update the global shortcut registration.
 /// Pass `null` to disable the shortcut, or a shortcut string like "CommandOrControl+Shift+U".
 #[cfg(desktop)]
 #[tauri::command]
-fn update_global_shortcut(app_handle: tauri::AppHandle, shortcut: Option<String>) -> Result<(), String> {
+fn update_global_shortcut(
+    app_handle: tauri::AppHandle,
+    shortcut: Option<String>,
+) -> Result<(), String> {
     let global_shortcut = app_handle.global_shortcut();
     let normalized_shortcut = shortcut.and_then(|value| {
         let trimmed = value.trim().to_string();
@@ -439,7 +557,11 @@ fn update_global_shortcut(app_handle: tauri::AppHandle, shortcut: Option<String>
                 *managed_shortcut = None;
             }
             Err(e) => {
-                log::warn!("Failed to unregister existing shortcut '{}': {}", existing, e);
+                log::warn!(
+                    "Failed to unregister existing shortcut '{}': {}",
+                    existing,
+                    e
+                );
             }
         }
     }
@@ -468,7 +590,9 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
     };
     log::debug!("list_plugins: {} plugins", plugins.len());
 
-    plugins.into_iter().map(|plugin| {
+    plugins
+        .into_iter()
+        .map(|plugin| {
             // Extract primary candidates: progress lines with primary_order, sorted by order
             let mut candidates: Vec<_> = plugin
                 .manifest
@@ -480,16 +604,16 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
             let primary_candidates: Vec<String> =
                 candidates.iter().map(|line| line.label.clone()).collect();
 
-            let (support_state, support_message) =
-                plugin_support_for_current_platform(&plugin.manifest.id);
+            let support = plugin_support_for_current_platform(&plugin.manifest);
 
             PluginMeta {
                 id: plugin.manifest.id,
                 name: plugin.manifest.name,
                 icon_url: plugin.icon_data_url,
                 brand_color: plugin.manifest.brand_color,
-                support_state: support_state.to_string(),
-                support_message,
+                support_state: support.support_state.to_string(),
+                support_message: support.support_message,
+                is_surfaced: support.is_surfaced,
                 lines: plugin
                     .manifest
                     .lines
@@ -545,6 +669,8 @@ pub fn run() {
             init_panel,
             hide_panel,
             reposition_panel,
+            show_panel_for_view,
+            open_settings_window,
             open_devtools,
             start_probe_batch,
             list_plugins,
@@ -583,7 +709,8 @@ pub fn run() {
 
             tray::create(app.handle())?;
 
-            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
 
             // Register global shortcut from stored settings
             #[cfg(desktop)]
@@ -604,7 +731,8 @@ pub fn run() {
                                     },
                                 ) {
                                     log::warn!("Failed to register initial global shortcut: {}", e);
-                                } else if let Ok(mut managed_shortcut) = managed_shortcut_slot().lock()
+                                } else if let Ok(mut managed_shortcut) =
+                                    managed_shortcut_slot().lock()
                                 {
                                     *managed_shortcut = Some(shortcut.to_string());
                                 } else {
@@ -625,7 +753,38 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{app_started_day_key, should_track_app_started};
+    use super::{
+        app_started_day_key, is_missing_credential_error, plugin_is_probe_supported,
+        plugin_support_for_current_platform, should_track_app_started,
+    };
+    use crate::plugin_engine::manifest::{
+        PlatformSupport, PluginManifest, WindowsSupportConfig, WindowsSupportState,
+    };
+
+    fn make_manifest(
+        windows_state: WindowsSupportState,
+        surfaced: bool,
+        message: Option<&str>,
+    ) -> PluginManifest {
+        PluginManifest {
+            schema_version: 1,
+            id: "x".to_string(),
+            name: "X".to_string(),
+            version: "0.0.1".to_string(),
+            entry: "plugin.js".to_string(),
+            icon: "icon.svg".to_string(),
+            brand_color: None,
+            lines: Vec::new(),
+            links: Vec::new(),
+            platform_support: PlatformSupport {
+                windows: WindowsSupportConfig {
+                    state: windows_state,
+                    surfaced,
+                    message: message.map(|value| value.to_string()),
+                },
+            },
+        }
+    }
 
     #[test]
     fn should_track_when_no_previous_day() {
@@ -649,5 +808,52 @@ mod tests {
         assert_ne!(v1_key, v2_key);
         assert!(v1_key.ends_with("0.6.2"));
         assert!(v2_key.ends_with("0.6.3"));
+    }
+
+    #[test]
+    fn missing_credential_error_variants_are_tolerated() {
+        assert!(is_missing_credential_error("No entry found"));
+        assert!(is_missing_credential_error(
+            "No matching entry found in secure storage"
+        ));
+        assert!(is_missing_credential_error("Element not found"));
+        assert!(is_missing_credential_error(
+            "The system cannot find the file specified. (os error 1168)"
+        ));
+        assert!(is_missing_credential_error("credential not found"));
+        assert!(!is_missing_credential_error("permission denied"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn experimental_windows_provider_is_probe_supported() {
+        let manifest = make_manifest(
+            WindowsSupportState::Experimental,
+            true,
+            Some("Experimental on Windows."),
+        );
+
+        let support = plugin_support_for_current_platform(&manifest);
+        assert_eq!(support.support_state, "experimental");
+        assert!(support.is_surfaced);
+        assert_eq!(
+            support.support_message.as_deref(),
+            Some("Experimental on Windows.")
+        );
+        assert!(plugin_is_probe_supported(&manifest));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn blocked_windows_provider_is_not_probe_supported() {
+        let manifest = make_manifest(WindowsSupportState::Blocked, true, None);
+
+        let support = plugin_support_for_current_platform(&manifest);
+        assert_eq!(support.support_state, "comingSoonOnWindows");
+        assert_eq!(
+            support.support_message.as_deref(),
+            Some("Coming soon on Windows.")
+        );
+        assert!(!plugin_is_probe_supported(&manifest));
     }
 }

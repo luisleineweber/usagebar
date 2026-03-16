@@ -181,8 +181,7 @@ export function useTrayIcon({
       const style = menubarIconStyleRef.current
       const sizePx = getTrayIconSizePx(window.devicePixelRatio)
       const nextActiveView = activeViewRef.current
-      const activeProviderId =
-        nextActiveView !== "home" && nextActiveView !== "settings" ? nextActiveView : null
+      const activeProviderId = nextActiveView !== "home" ? nextActiveView : null
 
       let trayProviderId: string | null = null
       if (activeProviderId && enabledPluginIds.includes(activeProviderId)) {

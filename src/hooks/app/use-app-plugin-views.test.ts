@@ -58,6 +58,33 @@ describe("useAppPluginViews", () => {
     ])
   })
 
+  it("does not treat settings as a special active view anymore", () => {
+    const pluginSettings: PluginSettings = {
+      order: ["codex"],
+      disabled: [],
+    }
+
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "settings",
+        setActiveView: vi.fn(),
+        pluginSettings,
+        pluginsMeta: [createPluginMeta("codex", "Codex")],
+        pluginStates: {
+          codex: {
+            data: { providerId: "codex", displayName: "Codex", lines: [], iconUrl: "/codex.svg" },
+            loading: false,
+            error: null,
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          },
+        },
+      })
+    )
+
+    expect(result.current.selectedPlugin).toBeNull()
+  })
+
   it("keeps errored providers visible in home and nav", () => {
     const pluginSettings: PluginSettings = {
       order: ["codex", "cursor"],

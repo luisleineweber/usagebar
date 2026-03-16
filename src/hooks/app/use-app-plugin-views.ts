@@ -66,11 +66,13 @@ export function useAppPluginViews({
       name: plugin.meta.name,
       iconUrl: plugin.meta.iconUrl,
       brandColor: plugin.meta.brandColor,
+      supportState: plugin.meta.supportState,
+      supportMessage: plugin.meta.supportMessage,
     }))
   }, [enabledSupportedPlugins])
 
   useEffect(() => {
-    if (activeView === "home" || activeView === "settings") return
+    if (activeView === "home") return
     if (!pluginSettings) return
     const isKnownPlugin = pluginsMeta.some((plugin) => plugin.id === activeView)
     if (!isKnownPlugin) return
@@ -81,7 +83,7 @@ export function useAppPluginViews({
   }, [activeView, enabledSupportedPlugins, pluginSettings, pluginsMeta, setActiveView])
 
   const selectedPlugin = useMemo(() => {
-    if (activeView === "home" || activeView === "settings") return null
+    if (activeView === "home") return null
     return enabledSupportedPlugins.find((plugin) => plugin.meta.id === activeView) ?? null
   }, [activeView, enabledSupportedPlugins])
 

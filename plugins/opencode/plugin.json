@@ -6,6 +6,12 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#111111",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Experimental on Windows. Manual cookie mode is the supported setup path right now."
+    }
+  },
   "links": [
     { "label": "Dashboard", "url": "https://opencode.ai/" }
   ],

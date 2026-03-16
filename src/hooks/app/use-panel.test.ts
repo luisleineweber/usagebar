@@ -38,7 +38,7 @@ vi.mock("@tauri-apps/api/window", () => ({
   },
 }))
 
-import { panelMaxHeightForView, usePanel } from "@/hooks/app/use-panel"
+import { panelMaxHeightForView, panelMinHeightForNav, usePanel } from "@/hooks/app/use-panel"
 
 describe("usePanel", () => {
   beforeEach(() => {
@@ -70,6 +70,7 @@ describe("usePanel", () => {
         showAbout: false,
         setShowAbout,
         displayPlugins: [],
+        navPluginCount: 0,
         onPanelFocus: vi.fn(),
       })
     )
@@ -105,6 +106,7 @@ describe("usePanel", () => {
         showAbout: false,
         setShowAbout: vi.fn(),
         displayPlugins: [],
+        navPluginCount: 0,
         onPanelFocus: vi.fn(),
       })
     )
@@ -138,6 +140,7 @@ describe("usePanel", () => {
         showAbout: false,
         setShowAbout: vi.fn(),
         displayPlugins: [],
+        navPluginCount: 0,
         onPanelFocus: vi.fn(),
       })
     )
@@ -164,6 +167,7 @@ describe("usePanel", () => {
         showAbout: false,
         setShowAbout: vi.fn(),
         displayPlugins: [],
+        navPluginCount: 0,
         onPanelFocus,
       })
     )
@@ -175,9 +179,13 @@ describe("usePanel", () => {
     expect(onPanelFocus).toHaveBeenCalledTimes(1)
   })
 
-  it("uses larger height caps for settings and provider detail views", () => {
+  it("uses larger height caps for home and provider detail views", () => {
     expect(panelMaxHeightForView("home")).toBe(720)
-    expect(panelMaxHeightForView("settings")).toBe(980)
     expect(panelMaxHeightForView("opencode")).toBe(860)
+  })
+
+  it("keeps a minimum height for the nav icon stack", () => {
+    expect(panelMinHeightForNav(0)).toBe(156)
+    expect(panelMinHeightForNav(4)).toBe(332)
   })
 })

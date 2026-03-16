@@ -1,7 +1,7 @@
 use base64::Engine;
 use keyring::Entry;
 use rquickjs::{Ctx, Exception, Function, Object};
-use rusqlite::{types::ValueRef, Connection, OpenFlags};
+use rusqlite::{Connection, OpenFlags, types::ValueRef};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
@@ -30,6 +30,20 @@ fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<S
         ("opencode", "cookieHeader") => vec!["OpenCode Cookie Header".to_string()],
         _ => Vec::new(),
     }
+}
+
+fn is_missing_credential_error(message: &str) -> bool {
+    let normalized = message.to_lowercase();
+
+    normalized.contains("no entry")
+        || normalized.contains("no matching entry found")
+        || normalized.contains("not found")
+        || normalized.contains("cannot find")
+        || normalized.contains("element not found")
+        || normalized.contains("credential not found")
+        || normalized.contains("specified file could not be found")
+        || normalized.contains("system cannot find the file specified")
+        || normalized.contains("os error 1168")
 }
 
 fn last_non_empty_trimmed_line(text: &str) -> Option<String> {
@@ -1025,8 +1039,7 @@ fn ls_list_processes() -> std::io::Result<Vec<(i32, String)>> {
 
         let mut out = Vec::new();
         if trimmed.starts_with('[') {
-            let rows: Vec<WindowsProcessEntry> =
-                serde_json::from_str(trimmed).unwrap_or_default();
+            let rows: Vec<WindowsProcessEntry> = serde_json::from_str(trimmed).unwrap_or_default();
             for row in rows {
                 if let Some(command) = row.command_line {
                     let command = command.trim();
@@ -1088,7 +1101,9 @@ fn ls_list_processes() -> std::io::Result<Vec<(i32, String)>> {
 fn ls_listening_ports(process_pid: i32) -> std::io::Result<Vec<i32>> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("netstat").args(["-ano", "-p", "tcp"]).output()?;
+        let output = Command::new("netstat")
+            .args(["-ano", "-p", "tcp"])
+            .output()?;
         if !output.status.success() {
             return Ok(Vec::new());
         }
@@ -1118,7 +1133,9 @@ fn ls_listening_ports(process_pid: i32) -> std::io::Result<Vec<i32>> {
                 .output()
             {
                 Ok(o) if o.status.success() => {
-                    return Ok(ls_parse_listening_ports(&String::from_utf8_lossy(&o.stdout)));
+                    return Ok(ls_parse_listening_ports(&String::from_utf8_lossy(
+                        &o.stdout,
+                    )));
                 }
                 Ok(_) => return Ok(Vec::new()),
                 Err(e) => return Err(e),
@@ -1701,16 +1718,12 @@ fn ccusage_runner_args(
     let package_spec = ccusage_package_spec(provider);
     let mut args: Vec<String> = match kind {
         CcusageRunnerKind::Bunx => vec!["--silent".to_string(), package_spec.clone()],
-        CcusageRunnerKind::PnpmDlx => vec![
-            "-s".to_string(),
-            "dlx".to_string(),
-            package_spec.clone(),
-        ],
-        CcusageRunnerKind::YarnDlx => vec![
-            "dlx".to_string(),
-            "-q".to_string(),
-            package_spec.clone(),
-        ],
+        CcusageRunnerKind::PnpmDlx => {
+            vec!["-s".to_string(), "dlx".to_string(), package_spec.clone()]
+        }
+        CcusageRunnerKind::YarnDlx => {
+            vec!["dlx".to_string(), "-q".to_string(), package_spec.clone()]
+        }
         CcusageRunnerKind::NpmExec => vec![
             "exec".to_string(),
             "--yes".to_string(),
@@ -1985,10 +1998,7 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
                     )
                 })?;
                 entry.get_password().map_err(|e| {
-                    Exception::throw_message(
-                        &ctx_inner,
-                        &format!("credential read failed: {}", e),
-                    )
+                    Exception::throw_message(&ctx_inner, &format!("credential read failed: {}", e))
                 })
             },
         )?,
@@ -2006,10 +2016,7 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
                     )
                 })?;
                 entry.set_password(&value).map_err(|e| {
-                    Exception::throw_message(
-                        &ctx_inner,
-                        &format!("credential write failed: {}", e),
-                    )
+                    Exception::throw_message(&ctx_inner, &format!("credential write failed: {}", e))
                 })
             },
         )?,
@@ -2063,8 +2070,18 @@ fn inject_provider_secrets<'js>(
                             &format!("credential store unavailable: {}", e),
                         )
                     })?;
-                    if let Ok(password) = entry.get_password() {
-                        return Ok(password);
+                    match entry.get_password() {
+                        Ok(password) => return Ok(password),
+                        Err(error) => {
+                            let message = error.to_string();
+                            if is_missing_credential_error(&message) {
+                                continue;
+                            }
+                            return Err(Exception::throw_message(
+                                &ctx_inner,
+                                &format!("credential read failed: {}", error),
+                            ));
+                        }
                     }
                 }
 
@@ -2086,9 +2103,7 @@ fn sqlite_json_value(value: ValueRef<'_>) -> JsonValue {
         ValueRef::Integer(v) => JsonValue::from(v),
         ValueRef::Real(v) => JsonValue::from(v),
         ValueRef::Text(v) => JsonValue::String(String::from_utf8_lossy(v).to_string()),
-        ValueRef::Blob(v) => {
-            JsonValue::String(base64::engine::general_purpose::STANDARD.encode(v))
-        }
+        ValueRef::Blob(v) => JsonValue::String(base64::engine::general_purpose::STANDARD.encode(v)),
     }
 }
 
@@ -2117,8 +2132,11 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
                 let mut stmt = conn.prepare(&sql).map_err(|e| {
                     Exception::throw_message(&ctx_inner, &format!("sqlite prepare failed: {}", e))
                 })?;
-                let column_names: Vec<String> =
-                    stmt.column_names().iter().map(|name| (*name).to_string()).collect();
+                let column_names: Vec<String> = stmt
+                    .column_names()
+                    .iter()
+                    .map(|name| (*name).to_string())
+                    .collect();
                 let mut rows = stmt.query([]).map_err(|e| {
                     Exception::throw_message(&ctx_inner, &format!("sqlite query failed: {}", e))
                 })?;
@@ -2240,6 +2258,22 @@ mod tests {
                 .get("writeGenericPassword")
                 .expect("writeGenericPassword");
         });
+    }
+
+    #[test]
+    fn missing_credential_error_variants_are_tolerated_for_provider_secret_reads() {
+        assert!(is_missing_credential_error("No entry found"));
+        assert!(is_missing_credential_error(
+            "No matching entry found in secure storage"
+        ));
+        assert!(is_missing_credential_error("Element not found"));
+        assert!(is_missing_credential_error(
+            "The system cannot find the file specified. (os error 1168)"
+        ));
+        assert!(is_missing_credential_error("credential not found"));
+        assert!(!is_missing_credential_error(
+            "Access is denied. (os error 5)"
+        ));
     }
 
     #[test]

@@ -1,18 +1,12 @@
+import { Button } from "@/components/ui/button"
 import { ProviderCard } from "@/components/provider-card"
-import { ProviderSetupPanel } from "@/components/provider-setup-panel"
-import type { PluginState } from "@/hooks/app/types"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
-import type { ProviderConfig } from "@/lib/provider-settings"
 import type { DisplayMode, ResetTimerDisplayMode } from "@/lib/settings"
 
 interface ProviderDetailPageProps {
   plugin: DisplayPluginState | null
-  providerConfig?: ProviderConfig
-  providerState?: PluginState
   onRetry?: () => void
-  onProviderConfigChange?: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
-  onProviderSecretSave?: (providerId: string, secretKey: string, value: string) => Promise<void>
-  onProviderSecretDelete?: (providerId: string, secretKey: string) => Promise<void>
+  onOpenProviderSettings?: (providerId: string) => void
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
   onResetTimerDisplayModeToggle?: () => void
@@ -20,12 +14,8 @@ interface ProviderDetailPageProps {
 
 export function ProviderDetailPage({
   plugin,
-  providerConfig,
-  providerState,
   onRetry,
-  onProviderConfigChange,
-  onProviderSecretSave,
-  onProviderSecretDelete,
+  onOpenProviderSettings,
   displayMode,
   resetTimerDisplayMode,
   onResetTimerDisplayModeToggle,
@@ -56,15 +46,21 @@ export function ProviderDetailPage({
         resetTimerDisplayMode={resetTimerDisplayMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
-      <ProviderSetupPanel
-        plugin={plugin.meta}
-        config={providerConfig}
-        state={providerState}
-        onRetry={onRetry}
-        onConfigChange={onProviderConfigChange}
-        onSecretSave={onProviderSecretSave}
-        onSecretDelete={onProviderSecretDelete}
-      />
+      <section className="rounded-xl border border-border/70 bg-muted/35 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold tracking-[0.02em]">Provider settings</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Provider settings open in a separate settings window so the tray popup stays focused on usage.
+            </p>
+          </div>
+          {onOpenProviderSettings && (
+            <Button type="button" size="sm" onClick={() => onOpenProviderSettings(plugin.meta.id)}>
+              Manage provider
+            </Button>
+          )}
+        </div>
+      </section>
     </div>
   )
 }

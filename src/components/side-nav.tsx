@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
 import { getRelativeLuminance } from "@/lib/color"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 
-type ActiveView = "home" | "settings" | string
+type ActiveView = "home" | string
 
 type PluginContextAction = "reload" | "remove"
 
@@ -24,7 +24,7 @@ interface NavPlugin {
   name: string
   iconUrl: string
   brandColor?: string
-  supportState?: "supported" | "comingSoonOnWindows"
+  supportState?: "supported" | "experimental" | "comingSoonOnWindows"
   supportMessage?: string | null
 }
 
@@ -32,6 +32,7 @@ interface SideNavProps {
   activeView: ActiveView
   onViewChange: (view: ActiveView) => void
   plugins: NavPlugin[]
+  onOpenSettings?: () => void
   onPluginContextAction?: (pluginId: string, action: PluginContextAction) => void
   isPluginRefreshAvailable?: (pluginId: string) => boolean
 }
@@ -76,6 +77,7 @@ export function SideNav({
   activeView,
   onViewChange,
   plugins,
+  onOpenSettings,
   onPluginContextAction,
   isPluginRefreshAvailable,
 }: SideNavProps) {
@@ -148,7 +150,7 @@ export function SideNav({
           <span
             role="img"
             aria-label={plugin.name}
-            title={plugin.supportState === "comingSoonOnWindows" ? plugin.supportMessage ?? undefined : undefined}
+            title={plugin.supportState !== "supported" ? plugin.supportMessage ?? undefined : undefined}
             className={cn(
               "size-6 inline-block",
               plugin.supportState === "comingSoonOnWindows" ? "opacity-45" : ""
@@ -185,8 +187,8 @@ export function SideNav({
 
       {/* Settings */}
       <NavButton
-        isActive={activeView === "settings"}
-        onClick={() => onViewChange("settings")}
+        isActive={false}
+        onClick={() => onOpenSettings?.()}
         aria-label="Settings"
       >
         <Settings className="size-6" />
