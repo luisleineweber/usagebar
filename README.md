@@ -1,18 +1,20 @@
-# Track all your AI coding subscriptions in one place
+# UsageBar
 
-See your usage at a glance from your menu bar. No digging through dashboards.
+Windows-first tray app for tracking AI coding subscription usage across providers in one place.
 
-![OpenUsage Screenshot](screenshot.png)
+UsageBar is a fork of [OpenUsage](https://github.com/robinebers/openusage), redirected toward a Windows-native desktop experience instead of preserving upstream compatibility as the main constraint.
+
+![UsageBar Screenshot](screenshot.png)
 
 ## Download
 
-[**Download the latest release**](https://github.com/robinebers/openusage/releases/latest) (macOS, Apple Silicon & Intel)
+[**Download the latest release**](https://github.com/Loues000/usagebar/releases/latest)
 
 The app auto-updates. Install once and you're set.
 
 ## What It Does
 
-OpenUsage lives in your menu bar and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels. No mental math required.
+UsageBar lives in your Windows tray and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels. No dashboard hopping.
 
 - **One glance.** All your AI tools, one panel.
 - **Always up-to-date.** Refreshes automatically on a schedule you pick.
@@ -21,6 +23,12 @@ OpenUsage lives in your menu bar and shows you how much of your AI coding subscr
 - **Plugin-based.** New providers get added without updating the whole app.
 
 ## Supported Providers
+
+Windows-first fork status today:
+
+- Working on Windows: Antigravity, Claude, Codex, Cursor, Ollama
+- Experimental on Windows: JetBrains AI Assistant, OpenCode
+- Settings-only placeholders on Windows for now: Amp, Copilot, Factory / Droid, Gemini, Kimi Code, MiniMax, Perplexity, Windsurf, Z.ai
 
 - [**Amp**](docs/providers/amp.md) / free tier, bonus, credits
 - [**Antigravity**](docs/providers/antigravity.md) / all models
@@ -34,45 +42,39 @@ OpenUsage lives in your menu bar and shows you how much of your AI coding subscr
 - [**Kimi Code**](docs/providers/kimi.md) / session, weekly
 - [**MiniMax**](docs/providers/minimax.md) / coding plan session
 - [**OpenCode**](https://opencode.ai/) / session, weekly
+- [**Ollama**](docs/providers/ollama.md) / plan, session, weekly
 - [**Windsurf**](docs/providers/windsurf.md) / prompt credits, flex credits
 - [**Z.ai**](docs/providers/zai.md) / session, weekly, web searches
 
 ### Maybe Soon
 
-- [Vercel AI Gateway](https://github.com/robinebers/openusage/issues/18)
+Near-term Windows rollout candidates:
 
-Community contributions welcome.
-Want a provider that's not listed? [Open an issue.](https://github.com/robinebers/openusage/issues/new)
+- **Copilot** / official `gh` auth flow, multi-account handling, Windows validation
+- **Gemini** / Windows CLI auth discovery, OAuth and API-key validation
+- **Vercel AI Gateway** / shared gateway key flow once the core Windows provider path is steadier
 
-## Open Source, Community Driven
+Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/usagebar/issues/new)
 
-OpenUsage is built by its users. Hundreds of people use it daily, and the project grows through community contributions: new providers, bug fixes, and ideas.
+## Fork Direction
 
-I maintain the project as a guide and quality gatekeeper, but this is your app as much as mine. If something is missing or broken, the best way to get it fixed is to contribute by opening an issue, or submitting a PR.
+This repository is no longer trying to stay narrowly aligned with upstream pull-request boundaries. The priority here is a clean Windows tray app, a plugin-first provider model, and pragmatic product decisions for this fork.
 
-Plugins are currently bundled as we build our the API, but soon will be made flexible so you can build and load their own.
+That means the fork can change UX, provider strategy, release packaging, and architecture when that is the right tradeoff for Windows.
 
-### How to Contribute
+Upstream lineage stays visible and upstream fixes can still be pulled in through `upstream`, but this repository should be read as its own product direction.
+
+## Contributing
 
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
-- **Fix a bug.** PRs welcome. Provide before/after screenshots.
-- **Request a feature.** [Open an issue](https://github.com/robinebers/openusage/issues/new) and make your case.
+- **Fix a bug.** Keep the change small, focused, and verified.
+- **Request a feature.** [Open an issue.](https://github.com/Loues000/usagebar/issues/new) Include the provider, auth source, and Windows-specific constraints.
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 
-## Built Entirely with AI
+## Lineage
 
-Not a single line of code in this project was read or written by hand. 100% AI-generated, AI-reviewed, AI-shipped — using [Cursor](https://cursor.com), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and [Codex CLI](https://github.com/openai/codex).
-
-OpenUsage is a real-world example of what I teach in the [AI Builder's Blueprint](https://itsbyrob.in/EBDqgJ6) — a proven process for building and shipping software with AI, no coding background required.
-
-## Sponsors
-
-OpenUsage is supported by our sponsors. Become a sponsor to get your logo here and on [openusage.ai](https://openusage.ai).
-
-[Become a Sponsor](https://github.com/sponsors/robinebers)
-
-<!-- Add sponsor logos here -->
+UsageBar started from the [OpenUsage](https://github.com/robinebers/openusage) codebase. This fork also borrows practical Windows ideas from [CodexBar](https://github.com/steipete/CodexBar) and provider reference patterns from [ccusage](https://github.com/ryoppippi/ccusage) where they fit.
 
 ## Credits
 
@@ -91,4 +93,13 @@ Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](http
 
 ### Stack
 
-...
+- Tauri v2
+- Rust
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS v4
+- Zustand
+- Vitest
+
+</details>
