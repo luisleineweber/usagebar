@@ -30,6 +30,14 @@ function makeInfoPlist(version) {
 </plist>`
 }
 
+function makeProductJson(overrides) {
+  return JSON.stringify(Object.assign({
+    windsurfVersion: "1.9544.26",
+    codeiumVersion: "1.48.2",
+    version: "1.106.0",
+  }, overrides))
+}
+
 function makeLsResponse(overrides) {
   var base = {
     userStatus: {
@@ -171,6 +179,38 @@ describe("windsurf plugin", () => {
     const parsed = JSON.parse(sentBody)
     expect(parsed.metadata.apiKey).toBe("sk-ws-01-mykey")
     expect(parsed.metadata.ideName).toBe("windsurf")
+  })
+
+  it("uses Windows LS discovery metadata on Windows", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+
+    let discoverArgs = null
+    let probeBody = null
+    ctx.host.ls.discover.mockImplementation((opts) => {
+      discoverArgs = opts
+      return makeDiscovery({ extra: { windsurf_version: "1.9544.26" } })
+    })
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (String(sql).includes("windsurfAuthStatus")) {
+        return makeAuthStatus("sk-ws-01-test")
+      }
+      return "[]"
+    })
+    ctx.host.http.request.mockImplementation((reqOpts) => {
+      var url = String(reqOpts.url)
+      if (url.includes("GetUnleashData")) {
+        probeBody = JSON.parse(reqOpts.bodyText)
+        return { status: 200, bodyText: "{}" }
+      }
+      return { status: 200, bodyText: JSON.stringify(makeLsResponse()) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(discoverArgs.processName).toBe("language_server_windows")
+    expect(probeBody.context.properties.os).toBe("windows")
   })
 
   it("returns null from LS when no API key", async () => {
@@ -491,10 +531,20 @@ describe("windsurf plugin", () => {
 
   function setupCloudMock(ctx, apiKey, cloudResponse, opts) {
     var stateDb = (opts && opts.stateDb) || "Windsurf/"
+    var productJsonPath = (opts && opts.productJsonPath) || (stateDb === "Windsurf - Next/" ? "D:/Windsurf - Next/resources/app/product.json" : "D:/Windsurf/resources/app/product.json")
     var appPlist = (opts && opts.appPlist) || (stateDb === "Windsurf - Next/" ? "/Applications/Windsurf - Next.app/Contents/Info.plist" : "/Applications/Windsurf.app/Contents/Info.plist")
     var appVersion = (opts && opts.appVersion) || "1.108.2"
+    var extensionVersion = (opts && opts.extensionVersion) || appVersion
     ctx.host.ls.discover.mockReturnValue(null)
-    ctx.host.fs.writeText(appPlist, makeInfoPlist(appVersion))
+    if (ctx.app.platform === "windows") {
+      ctx.host.fs.writeText(productJsonPath, makeProductJson({
+        windsurfVersion: appVersion,
+        codeiumVersion: extensionVersion,
+        version: appVersion,
+      }))
+    } else {
+      ctx.host.fs.writeText(appPlist, makeInfoPlist(appVersion))
+    }
     ctx.host.sqlite.query.mockImplementation((db, sql) => {
       if (String(sql).includes("windsurfAuthStatus") && String(db).includes(stateDb)) {
         return makeAuthStatus(apiKey)
@@ -558,6 +608,40 @@ describe("windsurf plugin", () => {
     expect(body.metadata.ideVersion).toBe("1.108.2")
     expect(body.metadata.extensionVersion).toBe("1.108.2")
     expect(body.metadata.locale).toBe("en")
+  })
+
+  it("cloud fallback uses Windows SQLite and product metadata on Windows", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    setupCloudMock(ctx, "sk-ws-01-cloud", {
+      status: 200,
+      bodyText: JSON.stringify(makeLsResponse()),
+    }, {
+      appVersion: "1.9544.26",
+      extensionVersion: "1.48.2",
+    })
+
+    let queriedDb = null
+    let capturedReq = null
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (String(sql).includes("windsurfAuthStatus")) {
+        queriedDb = db
+        return makeAuthStatus("sk-ws-01-cloud")
+      }
+      return "[]"
+    })
+    ctx.host.http.request.mockImplementation((reqOpts) => {
+      capturedReq = reqOpts
+      return { status: 200, bodyText: JSON.stringify(makeLsResponse()) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(queriedDb).toBe("~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb")
+    const body = JSON.parse(capturedReq.bodyText)
+    expect(body.metadata.ideVersion).toBe("1.9544.26")
+    expect(body.metadata.extensionVersion).toBe("1.48.2")
   })
 
   it("cloud auth failure (401) falls through to error", async () => {
