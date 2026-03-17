@@ -292,3 +292,20 @@
 - Verified the active `gh` account shape locally with `gh auth status --json hosts` plus `%AppData%\\GitHub CLI\\hosts.yml`.
 - Verified the Copilot plugin slice with `bun run test -- plugins/copilot/plugin.test.js` -> 1 file passed, 35 tests passed.
 - Verified the injected host keychain API surface with `cargo test keychain_api_exposes_account_read_and_write --manifest-path src-tauri/Cargo.toml` -> 1 Rust test passed.
+
+# Land Amp as a Windows-experimental provider
+
+## Acceptance Criteria
+- [x] Amp explicitly stays on the existing home-relative secrets path because the official Windows path `%USERPROFILE%\\.local\\share\\amp\\secrets.json` matches the current plugin lookup.
+- [x] Focused Amp tests include a Windows-specific secrets-file path regression.
+- [x] `plugins/amp/plugin.json` marks Amp as `experimental` on Windows so it can be surfaced and probed.
+- [x] Amp rollout/provider docs reflect the Windows-experimental state and narrow the remaining gap to real signed-in Windows validation.
+
+## Plan
+- [x] Record the Amp Windows path default in `docs/choices.md` and note the task slice.
+- [x] Add a focused Windows-path Amp test without changing the underlying auth model.
+- [x] Flip Amp to Windows-experimental in the manifest and update the rollout/status/provider docs plus lessons/breadcrumbs.
+- [x] Verify with the focused Amp test command before marking the slice done.
+
+## Verification Notes
+- Verified the Amp slice with `bun run test -- plugins/amp/plugin.test.js` -> 1 file passed, 29 tests passed.

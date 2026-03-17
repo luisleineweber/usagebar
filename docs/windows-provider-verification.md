@@ -79,3 +79,11 @@ Current Windows validation targets:
 - `gh auth status` and `gh auth switch` active-account alignment
 - Account-specific keychain entry `gh:github.com:<login>`
 - Free-tier and paid-tier response shapes from `copilot_internal/user`
+
+## Amp
+
+Current Windows validation targets:
+
+- `%USERPROFILE%\.local\share\amp\secrets.json`
+- Missing-file behavior before Amp Code sign-in
+- Free-balance and credits-only display text parsing on Windows

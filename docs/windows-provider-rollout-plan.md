@@ -108,7 +108,7 @@ These references should shape implementation choices instead of treating the Win
 | Cursor | Partially working | P0 | account-state variance across free/trial/paid/team/enterprise |
 | Ollama | Working v1 | P0 | only manual cookie mode exists |
 | OpenCode | Experimental | P1 | browser import + real-world cookie/workspace validation |
-| Amp | Not started for Windows | P2 | Windows auth/source path design |
+| Amp | Experimental | P2 | real signed-in Windows validation |
 | Copilot | Experimental | P2 | real free/paid validation plus broader multi-account runtime evidence |
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |
 | JetBrains AI Assistant | Experimental | P2 | real IDE/account validation beyond XML path coverage |
@@ -225,11 +225,12 @@ Verification:
 ### Amp
 
 Current state:
-- Documented, but not Windows-supported in the fork.
+- Surfaced on Windows as an experimental provider.
+- Uses Amp CLI's existing home-relative secrets file path, which already maps to `%USERPROFILE%\.local\share\amp\secrets.json` on Windows.
 
 Next slice:
-- Determine the real Windows auth source used by Amp CLI.
-- Add Windows file-path resolution for the secrets file or an alternate Windows credential source.
+- Run the provider on a real signed-in Amp Code setup on Windows.
+- Confirm the current home-relative secrets path is enough in real installs and not just the documented default.
 
 Verification:
 - Signed-in Amp CLI on Windows.

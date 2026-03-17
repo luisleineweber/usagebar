@@ -17,6 +17,7 @@ Working now:
 - Manifest-driven Windows provider support/surfacing metadata
 - Codex on Windows
 - Antigravity on Windows, including free-usage style pools when exposed by the local app
+- Amp surfaced as an experimental Windows provider via the documented CLI secrets path
 - Cursor Windows roaming DB lookup
 - Claude local-usage fallback through `ccusage`
 - Copilot surfaced as an experimental Windows provider with active `gh` account selection
@@ -28,6 +29,7 @@ Working now:
 ## Current Limitations
 
 - Cursor still needs more real-world validation across free and paid account states.
+- Amp still needs a real signed-in Windows validation pass.
 - Claude Windows auth/session parity is incomplete.
 - Copilot still needs real free/paid validation and multi-account runtime evidence on Windows.
 - Gemini still needs real signed-in Windows validation beyond the new CLI path coverage.
