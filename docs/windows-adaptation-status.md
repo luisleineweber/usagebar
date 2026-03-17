@@ -23,7 +23,8 @@ Working now:
 - Copilot surfaced as an experimental Windows provider with active `gh` account selection
 - OpenCode surfaced again as an experimental Windows provider
 - Gemini surfaced as an experimental Windows provider with Windows CLI OAuth path discovery
-- JetBrains AI Assistant surfaced as an experimental Windows provider
+- Windsurf surfaced as an experimental Windows provider with Windows LS/SQLite/product metadata support
+- JetBrains AI Assistant surfaced as a supported Windows provider
 - JetBrains now scans both JetBrains and Android Studio (`Google`) roaming roots, with case-insensitive IDE directory matching
 
 ## Current Limitations
@@ -51,6 +52,7 @@ Observed runtime behavior:
 - Codex displays usage on Windows.
 - Claude no longer depends only on the older OAuth credential path.
 - Cursor Windows pathing has been corrected, but more runtime validation is still needed.
+- JetBrains AI Assistant parses the real local Windows quota XML correctly on this machine.
 
 ## Next Steps
 

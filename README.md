@@ -26,9 +26,9 @@ UsageBar lives in your Windows tray and shows you how much of your AI coding sub
 
 Windows-first fork status today:
 
-- Working on Windows: Antigravity, Claude, Codex, Cursor, Ollama
-- Experimental on Windows: JetBrains AI Assistant, OpenCode
-- Settings-only placeholders on Windows for now: Amp, Copilot, Factory / Droid, Gemini, Kimi Code, MiniMax, Perplexity, Windsurf, Z.ai
+- Working on Windows: Antigravity, Claude, Codex, Cursor, JetBrains AI Assistant, Ollama
+- Experimental on Windows: Amp, Copilot, Gemini, OpenCode, Windsurf
+- Settings-only placeholders on Windows for now: Factory / Droid, Kimi Code, MiniMax, Perplexity, Z.ai
 
 - [**Amp**](docs/providers/amp.md) / free tier, bonus, credits
 - [**Antigravity**](docs/providers/antigravity.md) / all models
