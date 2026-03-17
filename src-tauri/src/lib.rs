@@ -25,9 +25,54 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 const GLOBAL_SHORTCUT_STORE_KEY: &str = "globalShortcut";
 const APP_STARTED_TRACKED_DAY_KEY_PREFIX: &str = "analytics.app_started_day.";
 const PROVIDER_SECRET_KEYRING_TARGET: &str = "OpenUsage";
+#[cfg(target_os = "windows")]
+const PROVIDER_SECRET_WINDOWS_USER: &str = "provider-secret";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ProviderSecretEntrySpec<'a> {
+    target: Option<&'a str>,
+    service: &'a str,
+    user: &'a str,
+}
 
 fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
     format!("OpenUsage Provider Secret {} {}", provider_id, secret_key)
+}
+
+fn provider_secret_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
+    #[cfg(target_os = "windows")]
+    {
+        return ProviderSecretEntrySpec {
+            target: Some(service),
+            service: PROVIDER_SECRET_KEYRING_TARGET,
+            user: PROVIDER_SECRET_WINDOWS_USER,
+        };
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        ProviderSecretEntrySpec {
+            target: None,
+            service: PROVIDER_SECRET_KEYRING_TARGET,
+            user: service,
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn provider_secret_legacy_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
+    ProviderSecretEntrySpec {
+        target: None,
+        service: PROVIDER_SECRET_KEYRING_TARGET,
+        user: service,
+    }
+}
+
+fn open_provider_secret_entry(spec: ProviderSecretEntrySpec<'_>) -> Result<Entry, keyring::Error> {
+    match spec.target {
+        Some(target) => Entry::new_with_target(target, spec.service, spec.user),
+        None => Entry::new(spec.service, spec.user),
+    }
 }
 
 fn provider_display_name(provider_id: &str) -> String {
@@ -63,19 +108,28 @@ fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<S
 }
 
 fn delete_provider_secret_service(service: &str) -> Result<(), String> {
-    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, service)
-        .map_err(|error| format!("credential store unavailable: {}", error))?;
-    match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            let message = error.to_string().to_lowercase();
-            if is_missing_credential_error(&message) {
-                Ok(())
-            } else {
-                Err(format!("credential delete failed: {}", error))
+    let mut specs = vec![provider_secret_entry_spec(service)];
+    #[cfg(target_os = "windows")]
+    {
+        specs.push(provider_secret_legacy_entry_spec(service));
+    }
+
+    for spec in specs {
+        let entry = open_provider_secret_entry(spec)
+            .map_err(|error| format!("credential store unavailable: {}", error))?;
+        match entry.delete_credential() {
+            Ok(()) => {}
+            Err(error) => {
+                let message = error.to_string().to_lowercase();
+                if is_missing_credential_error(&message) {
+                    continue;
+                }
+                return Err(format!("credential delete failed: {}", error));
             }
         }
     }
+
+    Ok(())
 }
 
 fn is_missing_credential_error(message: &str) -> bool {
@@ -98,12 +152,13 @@ fn read_provider_secret_service(
     service: &str,
 ) -> Result<String, String> {
     let label = provider_secret_label(provider_id, secret_key);
-    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, service).map_err(|error| {
-        format!(
-            "Could not access the system credential vault for {}: {}",
-            label, error
-        )
-    })?;
+    let entry =
+        open_provider_secret_entry(provider_secret_entry_spec(service)).map_err(|error| {
+            format!(
+                "Could not access the system credential vault for {}: {}",
+                label, error
+            )
+        })?;
     entry.get_password().map_err(|error| {
         format!(
             "Saved {}, but could not read it back from a fresh system credential vault lookup: {}",
@@ -491,12 +546,13 @@ fn set_provider_secret(
         trimmed_provider,
         trimmed_secret
     );
-    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, &service).map_err(|error| {
-        format!(
-            "Could not access the system credential vault for {}: {}",
-            label, error
-        )
-    })?;
+    let entry =
+        open_provider_secret_entry(provider_secret_entry_spec(&service)).map_err(|error| {
+            format!(
+                "Could not access the system credential vault for {}: {}",
+                label, error
+            )
+        })?;
 
     entry.set_password(trimmed_value).map_err(|error| {
         format!(
@@ -828,8 +884,9 @@ pub fn run() {
 mod tests {
     use super::{
         app_started_day_key, is_missing_credential_error, plugin_is_probe_supported,
-        plugin_support_for_current_platform, provider_secret_label, provider_secret_service,
-        should_track_app_started, verify_provider_secret_write_with_fresh_lookup,
+        plugin_support_for_current_platform, provider_secret_entry_spec, provider_secret_label,
+        provider_secret_service, should_track_app_started,
+        verify_provider_secret_write_with_fresh_lookup,
     };
     use crate::plugin_engine::manifest::{
         PlatformSupport, PluginManifest, WindowsSupportConfig, WindowsSupportState,
@@ -939,6 +996,17 @@ mod tests {
                 label
             ))
         );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn provider_secret_entry_spec_uses_explicit_windows_target() {
+        let service = provider_secret_service("ollama", "cookieHeader");
+        let spec = provider_secret_entry_spec(&service);
+
+        assert_eq!(spec.target, Some(service.as_str()));
+        assert_eq!(spec.service, "OpenUsage");
+        assert_eq!(spec.user, "provider-secret");
     }
 
     #[cfg(target_os = "windows")]
