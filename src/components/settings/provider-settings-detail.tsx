@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import type { PluginState } from "@/hooks/app/types"
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { ProviderConfig } from "@/lib/provider-settings"
+import { getErrorMessage } from "@/lib/error-utils"
 import {
   getProviderSettingsDefinition,
   getProviderSourceLabel,
@@ -127,7 +128,7 @@ export function ProviderSettingsDetail({
       await onConfigChange(plugin.id, { source: nextSource })
       setSaveMessage(`Source set to ${nextSource === "manual" ? "Manual" : "Automatic"}.`)
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Failed to save source.")
+      setSaveError(getErrorMessage(error, "Failed to save source."))
     } finally {
       setIsSavingConfig(false)
     }
@@ -142,7 +143,7 @@ export function ProviderSettingsDetail({
       await onConfigChange(plugin.id, { workspaceId: workspaceDraft.trim() || undefined })
       setSaveMessage("Workspace override saved.")
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Failed to save workspace.")
+      setSaveError(getErrorMessage(error, "Failed to save workspace."))
     } finally {
       setIsSavingConfig(false)
     }
@@ -164,7 +165,7 @@ export function ProviderSettingsDetail({
       setSecretDraft("")
       setSaveMessage("Secret stored in the system credential vault.")
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Failed to save secret.")
+      setSaveError(getErrorMessage(error, "Failed to save secret."))
     } finally {
       setIsSavingSecret(false)
     }
@@ -180,7 +181,7 @@ export function ProviderSettingsDetail({
       setSecretDraft("")
       setSaveMessage("Stored secret removed.")
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Failed to clear secret.")
+      setSaveError(getErrorMessage(error, "Failed to clear secret."))
     } finally {
       setIsSavingSecret(false)
     }

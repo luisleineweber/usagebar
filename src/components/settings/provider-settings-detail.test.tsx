@@ -97,6 +97,29 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText("Secret stored in the system credential vault.")).toBeInTheDocument()
   })
 
+  it("shows precise string-shaped secret save errors", async () => {
+    const onSecretSave = vi.fn(async () => {
+      throw "Saved Ollama cookie header, but could not read it back from a fresh system credential vault lookup: Element not found"
+    })
+
+    render(
+      <ProviderSettingsDetail
+        plugin={ollamaPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+        onSecretSave={onSecretSave}
+      />
+    )
+
+    await userEvent.type(screen.getByLabelText("Ollama Cookie header"), "session=abc123")
+    await userEvent.click(screen.getByRole("button", { name: "Save secret" }))
+
+    await waitFor(() => {
+      expect(screen.getByText("Saved Ollama cookie header, but could not read it back from a fresh system credential vault lookup: Element not found")).toBeInTheDocument()
+    })
+  })
+
   it("clears an existing Ollama secret", async () => {
     const onSecretDelete = vi.fn(async () => undefined)
 
