@@ -67,6 +67,29 @@ fn is_missing_credential_error(message: &str) -> bool {
         || normalized.contains("os error 1168")
 }
 
+fn read_provider_secret_service(service: &str) -> Result<String, String> {
+    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, service)
+        .map_err(|error| format!("credential store unavailable: {}", error))?;
+    entry
+        .get_password()
+        .map_err(|error| format!("credential read-after-write failed: {}", error))
+}
+
+fn verify_provider_secret_write_with_fresh_lookup<F>(
+    service: &str,
+    expected_value: &str,
+    read_secret: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&str) -> Result<String, String>,
+{
+    let read_back = read_secret(service)?;
+    if read_back != expected_value {
+        return Err("credential read-after-write mismatch".to_string());
+    }
+    Ok(())
+}
+
 fn app_started_day_key(version: &str) -> String {
     format!("{}{}", APP_STARTED_TRACKED_DAY_KEY_PREFIX, version)
 }
@@ -431,14 +454,9 @@ fn set_provider_secret(
         .set_password(trimmed_value)
         .map_err(|error| format!("credential write failed: {}", error))?;
 
-    let read_back = entry
-        .get_password()
-        .map_err(|error| format!("credential read-after-write failed: {}", error))?;
-    if read_back != trimmed_value {
-        return Err("credential read-after-write mismatch".to_string());
-    }
-
-    Ok(())
+    verify_provider_secret_write_with_fresh_lookup(&service, trimmed_value, |service| {
+        read_provider_secret_service(service)
+    })
 }
 
 #[tauri::command]
@@ -755,7 +773,8 @@ pub fn run() {
 mod tests {
     use super::{
         app_started_day_key, is_missing_credential_error, plugin_is_probe_supported,
-        plugin_support_for_current_platform, should_track_app_started,
+        plugin_support_for_current_platform, provider_secret_service, should_track_app_started,
+        verify_provider_secret_write_with_fresh_lookup,
     };
     use crate::plugin_engine::manifest::{
         PlatformSupport, PluginManifest, WindowsSupportConfig, WindowsSupportState,
@@ -822,6 +841,37 @@ mod tests {
         ));
         assert!(is_missing_credential_error("credential not found"));
         assert!(!is_missing_credential_error("permission denied"));
+    }
+
+    #[test]
+    fn provider_secret_write_verification_uses_fresh_lookup_service() {
+        let service = provider_secret_service("ollama", "cookieHeader");
+        let expected = "session=abc123";
+        let mut seen_service = None;
+
+        let result =
+            verify_provider_secret_write_with_fresh_lookup(&service, expected, |service_name| {
+                seen_service = Some(service_name.to_string());
+                Ok(expected.to_string())
+            });
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(seen_service.as_deref(), Some(service.as_str()));
+    }
+
+    #[test]
+    fn provider_secret_write_verification_rejects_fresh_lookup_mismatch() {
+        let service = provider_secret_service("ollama", "cookieHeader");
+
+        let result =
+            verify_provider_secret_write_with_fresh_lookup(&service, "session=abc123", |_| {
+                Ok("session=other".to_string())
+            });
+
+        assert_eq!(
+            result,
+            Err("credential read-after-write mismatch".to_string())
+        );
     }
 
     #[cfg(target_os = "windows")]

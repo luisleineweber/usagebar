@@ -1,3 +1,21 @@
+# Fix Ollama fresh-vault verification
+
+## Acceptance Criteria
+- [x] Saving an Ollama cookie verifies the credential through a fresh vault lookup, not the same in-memory keyring entry handle.
+- [x] A focused Rust regression test covers the fresh-lookup verification helper behavior.
+- [x] Notes capture why CodexBar was useful as a functional Ollama reference but not as a vault-storage reference.
+- [x] Verification captures the focused Rust command/result before the task is marked done.
+
+## Plan
+- [x] Patch provider-secret save verification to reopen the credential entry before read-back.
+- [x] Add focused Rust coverage for the fresh-lookup verification helper.
+- [x] Update lessons/choices/breadcrumbs with the root cause and CodexBar comparison.
+- [x] Run targeted Rust verification, then mark the slice complete.
+
+## Verification Notes
+- Compared against `D:/usagebar/codexbar` and confirmed CodexBar's Ollama manual mode stores `ollamaCookieHeader` in config (`docs/configuration.md`, `Sources/CodexBar/Providers/Ollama/OllamaSettingsStore.swift`) while only using its fetcher for header normalization/session-cookie validation, so it does not exercise this Windows vault path.
+- Verified the fresh-lookup helper with `cargo test --manifest-path src-tauri/Cargo.toml provider_secret_write_verification` -> 2 Rust tests passed.
+
 # Fix Copilot gh-auth fallback on Windows
 
 ## Acceptance Criteria
