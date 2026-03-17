@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 8] = [
+const WHITELISTED_ENV_VARS: [&str; 9] = [
     "CODEX_HOME",
+    "GH_CONFIG_DIR",
     "ZAI_API_KEY",
     "GLM_API_KEY",
     "MINIMAX_API_KEY",
@@ -2023,6 +2024,24 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
     )?;
 
     keychain_obj.set(
+        "readGenericPasswordForAccount",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, service: String, account: String| -> rquickjs::Result<String> {
+                let entry = Entry::new(&service, &account).map_err(|e| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("credential store unavailable: {}", e),
+                    )
+                })?;
+                entry.get_password().map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("credential read failed: {}", e))
+                })
+            },
+        )?,
+    )?;
+
+    keychain_obj.set(
         "deleteGenericPassword",
         Function::new(
             ctx.clone(),
@@ -2241,7 +2260,7 @@ mod tests {
     }
 
     #[test]
-    fn keychain_api_exposes_write() {
+    fn keychain_api_exposes_account_read_and_write() {
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
@@ -2257,6 +2276,9 @@ mod tests {
             let _write: Function = keychain
                 .get("writeGenericPassword")
                 .expect("writeGenericPassword");
+            let _read_for_account: Function = keychain
+                .get("readGenericPasswordForAccount")
+                .expect("readGenericPasswordForAccount");
         });
     }
 

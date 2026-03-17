@@ -8,7 +8,7 @@
   "brandColor": "#A855F7",
   "platformSupport": {
     "windows": {
-      "state": "blocked"
+      "state": "experimental"
     }
   },
   "lines": [

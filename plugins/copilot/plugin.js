@@ -1,7 +1,10 @@
 (function () {
   const KEYCHAIN_SERVICE = "OpenUsage-copilot";
   const GH_KEYCHAIN_SERVICE = "gh:github.com";
+  const GH_HOST = "github.com";
   const USAGE_URL = "https://api.github.com/copilot_internal/user";
+  const WINDOWS_GH_HOSTS_PATH = "~/AppData/Roaming/GitHub CLI/hosts.yml";
+  const UNIX_GH_HOSTS_PATH = "~/.config/gh/hosts.yml";
 
   function readJson(ctx, path) {
     try {
@@ -22,16 +25,17 @@
     }
   }
 
-  function saveToken(ctx, token) {
+  function saveToken(ctx, token, login) {
+    const payload = login ? { token: token, login: login } : { token: token };
     try {
       ctx.host.keychain.writeGenericPassword(
         KEYCHAIN_SERVICE,
-        JSON.stringify({ token: token }),
+        JSON.stringify(payload),
       );
     } catch (e) {
       ctx.host.log.warn("keychain write failed: " + String(e));
     }
-    writeJson(ctx, ctx.app.pluginDataDir + "/auth.json", { token: token });
+    writeJson(ctx, ctx.app.pluginDataDir + "/auth.json", payload);
   }
 
   function clearCachedToken(ctx) {
@@ -43,14 +47,28 @@
     writeJson(ctx, ctx.app.pluginDataDir + "/auth.json", null);
   }
 
-  function loadTokenFromKeychain(ctx) {
+  function shouldUseCachedToken(activeLogin, payload) {
+    if (!activeLogin) return true;
+    const cachedLogin =
+      payload && typeof payload.login === "string" && payload.login.trim()
+        ? payload.login.trim()
+        : null;
+    if (!cachedLogin) return false;
+    return cachedLogin === activeLogin;
+  }
+
+  function loadTokenFromKeychain(ctx, activeLogin) {
     try {
       const raw = ctx.host.keychain.readGenericPassword(KEYCHAIN_SERVICE);
       if (raw) {
         const parsed = ctx.util.tryParseJson(raw);
         if (parsed && parsed.token) {
+          if (!shouldUseCachedToken(activeLogin, parsed)) {
+            ctx.host.log.info("cached token ignored because active gh account changed");
+            return null;
+          }
           ctx.host.log.info("token loaded from OpenUsage keychain");
-          return { token: parsed.token, source: "keychain" };
+          return { token: parsed.token, source: "keychain", login: parsed.login || null };
         }
       }
     } catch (e) {
@@ -59,20 +77,126 @@
     return null;
   }
 
-  function loadTokenFromGhCli(ctx) {
+  function joinPath(base, leaf) {
+    return String(base || "").replace(/[\\/]+$/, "") + "/" + leaf;
+  }
+
+  function getGhHostsPaths(ctx) {
+    const configuredDir = ctx.host.env.get("GH_CONFIG_DIR");
+    const paths = [];
+    if (configuredDir) paths.push(joinPath(configuredDir, "hosts.yml"));
+    paths.push(ctx.app.platform === "windows" ? WINDOWS_GH_HOSTS_PATH : UNIX_GH_HOSTS_PATH);
+    if (ctx.app.platform === "windows") paths.push(UNIX_GH_HOSTS_PATH);
+    return paths.filter((value, index, all) => value && all.indexOf(value) === index);
+  }
+
+  function parseGhActiveLogin(text, host) {
+    if (typeof text !== "string" || !text.trim()) return null;
+    const lines = text.split(/\r?\n/);
+    let inHost = false;
+    let hostIndent = -1;
+    let inUsers = false;
+    let usersIndent = -1;
+    const users = [];
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.indexOf("#") === 0) continue;
+      const indent = line.length - line.trimStart().length;
+
+      if (!inHost) {
+        if (trimmed === host + ":") {
+          inHost = true;
+          hostIndent = indent;
+        }
+        continue;
+      }
+
+      if (indent <= hostIndent && /:\s*$/.test(trimmed)) break;
+
+      if (trimmed.indexOf("user:") === 0) {
+        const login = trimmed.slice("user:".length).trim();
+        if (login) return login;
+      }
+
+      if (trimmed === "users:") {
+        inUsers = true;
+        usersIndent = indent;
+        continue;
+      }
+
+      if (inUsers) {
+        if (indent <= usersIndent) {
+          inUsers = false;
+          continue;
+        }
+        if (/^[^:#]+:\s*$/.test(trimmed)) {
+          users.push(trimmed.slice(0, -1).trim());
+        }
+      }
+    }
+
+    return users.length === 1 ? users[0] : null;
+  }
+
+  function loadGhActiveLogin(ctx) {
+    const paths = getGhHostsPaths(ctx);
+    for (let i = 0; i < paths.length; i += 1) {
+      const path = paths[i];
+      if (!ctx.host.fs.exists(path)) continue;
+      try {
+        const login = parseGhActiveLogin(ctx.host.fs.readText(path), GH_HOST);
+        if (login) return login;
+      } catch (e) {
+        ctx.host.log.info("gh hosts read failed: " + String(e));
+      }
+    }
+    return null;
+  }
+
+  function decodeGhToken(ctx, raw) {
+    let token = raw;
+    if (
+      typeof token === "string" &&
+      token.indexOf("go-keyring-base64:") === 0
+    ) {
+      token = ctx.base64.decode(token.slice("go-keyring-base64:".length));
+    }
+    return token;
+  }
+
+  function loadTokenFromGhCliAccount(ctx, login) {
+    if (!login || typeof ctx.host.keychain.readGenericPasswordForAccount !== "function") {
+      return null;
+    }
+    try {
+      const raw = ctx.host.keychain.readGenericPasswordForAccount(
+        GH_KEYCHAIN_SERVICE,
+        login,
+      );
+      const token = decodeGhToken(ctx, raw);
+      if (token) {
+        ctx.host.log.info("token loaded from gh CLI keychain for active account");
+        return { token: token, source: "gh-cli", login: login };
+      }
+    } catch (e) {
+      ctx.host.log.info("gh CLI account read failed: " + String(e));
+    }
+    return null;
+  }
+
+  function loadTokenFromGhCli(ctx, activeLogin) {
+    const activeAccountToken = loadTokenFromGhCliAccount(ctx, activeLogin);
+    if (activeAccountToken) return activeAccountToken;
+
     try {
       const raw = ctx.host.keychain.readGenericPassword(GH_KEYCHAIN_SERVICE);
       if (raw) {
-        let token = raw;
-        if (
-          typeof token === "string" &&
-          token.indexOf("go-keyring-base64:") === 0
-        ) {
-          token = ctx.base64.decode(token.slice("go-keyring-base64:".length));
-        }
+        const token = decodeGhToken(ctx, raw);
         if (token) {
           ctx.host.log.info("token loaded from gh CLI keychain");
-          return { token: token, source: "gh-cli" };
+          return { token: token, source: "gh-cli", login: activeLogin || null };
         }
       }
     } catch (e) {
@@ -81,20 +205,24 @@
     return null;
   }
 
-  function loadTokenFromStateFile(ctx) {
+  function loadTokenFromStateFile(ctx, activeLogin) {
     const data = readJson(ctx, ctx.app.pluginDataDir + "/auth.json");
     if (data && data.token) {
+      if (!shouldUseCachedToken(activeLogin, data)) {
+        ctx.host.log.info("state token ignored because active gh account changed");
+        return null;
+      }
       ctx.host.log.info("token loaded from state file");
-      return { token: data.token, source: "state" };
+      return { token: data.token, source: "state", login: data.login || null };
     }
     return null;
   }
 
-  function loadToken(ctx) {
+  function loadToken(ctx, activeLogin) {
     return (
-      loadTokenFromKeychain(ctx) ||
-      loadTokenFromGhCli(ctx) ||
-      loadTokenFromStateFile(ctx)
+      loadTokenFromKeychain(ctx, activeLogin) ||
+      loadTokenFromGhCli(ctx, activeLogin) ||
+      loadTokenFromStateFile(ctx, activeLogin)
     );
   }
 
@@ -144,7 +272,8 @@
   }
 
   function probe(ctx) {
-    const cred = loadToken(ctx);
+    const activeLogin = loadGhActiveLogin(ctx);
+    const cred = loadToken(ctx, activeLogin);
     if (!cred) {
       throw "Not logged in. Run `gh auth login` first.";
     }
@@ -165,7 +294,7 @@
       if (source === "keychain") {
         ctx.host.log.info("cached token invalid, trying fallback sources");
         clearCachedToken(ctx);
-        const fallback = loadTokenFromGhCli(ctx);
+        const fallback = loadTokenFromGhCli(ctx, activeLogin);
         if (fallback) {
           try {
             resp = fetchUsage(ctx, fallback.token);
@@ -175,7 +304,7 @@
           }
           if (resp.status >= 200 && resp.status < 300) {
             // Fallback worked, persist the new token
-            saveToken(ctx, fallback.token);
+            saveToken(ctx, fallback.token, fallback.login);
             token = fallback.token;
             source = fallback.source;
           }
@@ -198,7 +327,7 @@
 
     // Persist gh-cli token to OpenUsage keychain for future use
     if (source === "gh-cli") {
-      saveToken(ctx, token);
+      saveToken(ctx, token, cred.login);
     }
 
     const data = ctx.util.tryParseJson(resp.bodyText);

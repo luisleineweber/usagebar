@@ -109,7 +109,7 @@ These references should shape implementation choices instead of treating the Win
 | Ollama | Working v1 | P0 | only manual cookie mode exists |
 | OpenCode | Experimental | P1 | browser import + real-world cookie/workspace validation |
 | Amp | Not started for Windows | P2 | Windows auth/source path design |
-| Copilot | Not started for Windows | P2 | verify `gh` token and keyring flow on Windows |
+| Copilot | Experimental | P2 | real free/paid validation plus broader multi-account runtime evidence |
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |
 | JetBrains AI Assistant | Experimental | P2 | real IDE/account validation beyond XML path coverage |
 | Kimi Code | Not started for Windows | P2 | verify Windows credential/file locations |
@@ -239,18 +239,18 @@ Verification:
 ### Copilot
 
 Current state:
-- Documented, but not Windows-supported in the fork.
+- Surfaced on Windows as an experimental provider.
+- Resolves the active `gh` login from `hosts.yml` and targets the matching `gh:github.com:<login>` credential before falling back to the older ambiguous lookup.
+- OpenUsage's Copilot cache now stores the login alongside the token so `gh auth switch` does not silently keep using a stale cached account.
 
 Next slice:
-- Verify `gh auth login` token storage on Windows.
-- Confirm OpenUsage keyring cache works with Windows credential storage.
-- Confirm API output for both free and paid Copilot accounts on Windows.
-- Design account selection around the active `gh` account or an explicit account preference. Do not rely on service-name-only keychain reads.
-- Consider device-flow auth as a fallback path if `gh` token discovery is too ambiguous on Windows.
+- Verify real `gh auth login` behavior on Windows across free and paid Copilot accounts.
+- Confirm the active-account path stays aligned after `gh auth switch` in real multi-account environments, not just fixtures.
+- Decide later whether device-flow auth is still needed as a fallback path once the `gh` account-state path has enough runtime evidence.
 
 Verification:
-- `gh` token on Windows.
-- Cached token reuse.
+- `gh auth status` / `gh auth switch` active-account alignment on Windows.
+- Cached token reuse without reintroducing stale-account mismatches.
 - Free-tier and paid-tier responses.
 
 ### Gemini

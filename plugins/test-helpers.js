@@ -42,6 +42,7 @@ export const makeCtx = () => {
       },
       keychain: {
         readGenericPassword: vi.fn(),
+        readGenericPasswordForAccount: vi.fn(),
         writeGenericPassword: vi.fn(),
         deleteGenericPassword: vi.fn(),
       },

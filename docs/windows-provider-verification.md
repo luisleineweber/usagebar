@@ -70,3 +70,12 @@ Current Windows validation targets:
 - `~/AppData/Roaming/npm/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js`
 - `~/AppData/Roaming/npm/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js`
 - Expired-token refresh through the Windows CLI install path
+
+## Copilot
+
+Current Windows validation targets:
+
+- `~/AppData/Roaming/GitHub CLI/hosts.yml`
+- `gh auth status` and `gh auth switch` active-account alignment
+- Account-specific keychain entry `gh:github.com:<login>`
+- Free-tier and paid-tier response shapes from `copilot_internal/user`
