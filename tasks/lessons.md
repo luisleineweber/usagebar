@@ -1,0 +1,46 @@
+# Lessons
+
+- 2026-03-17: Gemini on Windows already had the main OAuth credential files under `~/.gemini`, but expired-session refresh still failed because the plugin only searched Unix-oriented `oauth2.js` install paths. Fix: add the common Windows npm-global `~/AppData/Roaming/npm/node_modules/...` candidates and cover the refresh path with a focused test. Prevention: when a provider reuses CLI OAuth files across platforms, audit both the token file path and the CLI-install path used to recover client credentials before calling Windows support complete.
+
+- 2026-03-16: Moving provider management into a standalone settings window broke the old implicit tray-panel coupling; provider selection updated only local settings state, so the main bar never reopened on that provider. Fix: add an explicit settings-to-tray bridge for user-triggered provider selection while keeping passive default selection local-only. Prevention: when extracting a workflow into a separate window, inventory every cross-window side effect the old surface provided and reintroduce the ones users still expect with explicit commands/events.
+
+- 2026-03-16: Reusing the tray popup for settings kept dragging desktop-preferences UX constraints back into a surface that should stay focused on quick usage checks. Fix: move all settings entry points to a dedicated settings window and keep the tray popup usage-only. Prevention: when a flow needs deeper configuration, scrolling, and provider management, make it a separate window early instead of stretching the tray panel beyond its job.
+- 2026-03-16: A separate settings window still felt wrong when it behaved like a fixed-height dashboard with nested scroll regions. Fix: let the settings window expand as a normal document and make the whole page scroll instead of locking the shell height and scrolling inner panes. Prevention: for desktop preferences pages, default to page-level scrolling unless a pane truly needs independent scrolling for a deliberate workflow reason.
+
+- 2026-03-11: Rust test runs that redirect `CARGO_TARGET_DIR` into ad-hoc folders like `src-tauri/target-test-temp*` can flood `git status` with thousands of fake changes. Fix: ignore the temporary target-folder pattern next to the normal Cargo `target/` rule. Prevention: whenever tests/build scripts use alternate Cargo target dirs inside the repo, add a scoped ignore rule immediately.
+
+- 2026-03-10: Panel-Repositioning darf bei laufendem Resize nicht auf eine frisch aus dem OS zurückgelesene Fensterhöhe oder eine jedes Mal neu rekonstruierte Tray-Unterkante vertrauen. Fix: Zielhöhe aus dem Frontend an `reposition_panel` übergeben, einen expliziten vertikalen Panel-Anker speichern und für Taskleisten-Clamps `workArea` statt voller Monitorgröße verwenden. Prevention: Bei anchor-basierten Desktop-Panels die feste Kante explizit speichern und Resize-/Reposition-Parameter aus derselben Quelle berechnen.
+- 2026-03-10: Native Per-Frame-Resize-Animationen eines Tray-Panels erzeugen sichtbares Jitter selbst mit korrektem Anchor. Fix: Fensterhöhe nur noch einmal pro final gemessener Zielhöhe setzen und danach einmal repositionieren. Prevention: Native Fensterbewegungen bei Menu-Bar/Tray-Panels nicht mit `requestAnimationFrame` animieren, außer die Plattform garantiert atomische Bounds-Updates.
+
+## 2026-03-10
+
+- Issue: provider setup existed both in `Settings` and in the main provider detail view, splitting the setup UX across two surfaces.
+  Fix: removed the settings copy and kept provider setup only on the provider detail page.
+  Prevention: when a workflow already lives on the provider's primary surface, avoid mirroring the full control path in settings; settings should keep global preferences only.
+- Issue: provider setup could mount expanded during the initial probe-loading phase, then collapse as soon as a successful provider state arrived, which caused a visible tray-panel height jolt on Windows.
+  Fix: start the setup panel collapsed while probe loading is in progress, then only auto-expand after loading settles still-disconnected.
+  Prevention: native tray-panel content that affects window height must not auto-expand from provisional loading state; wait for settled data before applying first-render expansion.
+- Issue: provider-secret metadata can say a secret exists even when the underlying Windows credential entry is already missing, which made `Clear secret` fail silently and block cleanup.
+  Fix: tolerate Windows missing-entry delete variants in Tauri, log save/delete failures explicitly, and keep the UI surfacing the backend error text.
+  Prevention: for credential-store deletes, treat platform-specific "not found" errors as idempotent success and always log native failures at the frontend/backend boundary.
+- Issue: even after native resize anchoring was stabilized, the panel could still look like it was falling downward because the inner shell animated its own height and sparse states let the nav column collapse too far.
+  Fix: remove the shell-level CSS height transition and enforce a nav-based minimum logical panel height derived from `Home + enabled providers + Help + Settings`.
+  Prevention: tray-panel resize polish must treat native window movement and inner layout animation separately; never animate both layers at once, and keep a minimum height for always-visible navigation.
+- Issue: upward panel growth could still show a brief downward jump because the app resized the native window before moving it to the new anchored position.
+  Fix: when the target height grows, reposition first using the final height and resize second; keep resize-first for non-growing updates.
+  Prevention: for bottom-anchored tray panels, growth updates should use `move -> resize` so the window reads as rising from the tray instead of dropping then correcting.
+- Issue: direct one-step growth fixed the anchor but still felt abrupt, while smoothing shrink paths could violate tight work-area clamps.
+  Fix: add a very short 2-3 step tween for growth only; keep shrink/clamped reductions immediate.
+  Prevention: on Windows tray panels, smooth only the upward-growth path and never interpolate through heights that would exceed the current monitor cap.
+- Issue: the Windows credential-delete tolerance test passed mixed-case native error strings, but the matcher only worked when callers lowercased the message first, which made the helper brittle and broke the Rust suite.
+  Fix: normalize case inside `is_missing_credential_error` before checking known platform variants.
+  Prevention: helper functions that classify native error text should normalize their own input instead of relying on every caller and test to pre-process strings.
+- Issue: Windows keyring delete can also return `No matching entry found in secure storage`, which is still an idempotent missing-entry case; the matcher treated it as a hard failure and blocked UI cleanup of stale secret metadata.
+  Fix: extend `is_missing_credential_error` to accept the `no matching entry found` variant and cover it with a Rust test.
+  Prevention: when treating native credential deletes as idempotent, include semantically equivalent provider/backend wording variants in regression tests, not just one platform string.
+- Issue: Ollama setup could report `Secret stored in the system credential vault` while a later probe still collapsed to the generic paste-cookie prompt, hiding whether the vault entry was missing or unreadable.
+  Fix: verify provider-secret writes with an immediate read-back in Tauri, and make the Ollama plugin surface concrete credential-vault read errors instead of always rethrowing the generic setup message.
+  Prevention: for credential-backed provider setup, success toasts must only happen after a read-back check, and plugin secret-read failures should preserve the real backend error category in user-visible probe output.
+- Issue: the plugin-host `providerSecrets.read()` helper swallowed every keyring `get_password()` failure and downgraded it to `provider secret not found`, so the UI could not distinguish a missing vault entry from a real Windows credential read error.
+  Fix: classify only known missing-entry variants as `not found` and bubble all other keyring read errors through the host API unchanged.
+  Prevention: secret-read adapters must not collapse all backend failures into a single not-found state; preserve non-idempotent errors so provider setup can show actionable diagnostics.
