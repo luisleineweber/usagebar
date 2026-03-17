@@ -21,9 +21,54 @@ const WHITELISTED_ENV_VARS: [&str; 9] = [
     "OPENCODE_WORKSPACE_ID",
 ];
 const KEYRING_TARGET: &str = "OpenUsage";
+#[cfg(target_os = "windows")]
+const PROVIDER_SECRET_WINDOWS_USER: &str = "provider-secret";
+
+#[derive(Clone, Copy)]
+struct ProviderSecretEntrySpec<'a> {
+    target: Option<&'a str>,
+    service: &'a str,
+    user: &'a str,
+}
 
 fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
     format!("OpenUsage Provider Secret {} {}", provider_id, secret_key)
+}
+
+fn provider_secret_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
+    #[cfg(target_os = "windows")]
+    {
+        return ProviderSecretEntrySpec {
+            target: Some(service),
+            service: KEYRING_TARGET,
+            user: PROVIDER_SECRET_WINDOWS_USER,
+        };
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        ProviderSecretEntrySpec {
+            target: None,
+            service: KEYRING_TARGET,
+            user: service,
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn provider_secret_legacy_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
+    ProviderSecretEntrySpec {
+        target: None,
+        service: KEYRING_TARGET,
+        user: service,
+    }
+}
+
+fn open_provider_secret_entry(spec: ProviderSecretEntrySpec<'_>) -> Result<Entry, keyring::Error> {
+    match spec.target {
+        Some(target) => Entry::new_with_target(target, spec.service, spec.user),
+        None => Entry::new(spec.service, spec.user),
+    }
 }
 
 fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<String> {
@@ -2130,23 +2175,31 @@ fn inject_provider_secrets<'js>(
                 services.extend(provider_secret_legacy_services(&pid, &secret_key));
 
                 for service in services {
-                    let entry = Entry::new(KEYRING_TARGET, &service).map_err(|e| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("credential store unavailable: {}", e),
-                        )
-                    })?;
-                    match entry.get_password() {
-                        Ok(password) => return Ok(password),
-                        Err(error) => {
-                            let message = error.to_string();
-                            if is_missing_credential_error(&message) {
-                                continue;
-                            }
-                            return Err(Exception::throw_message(
+                    let mut specs = vec![provider_secret_entry_spec(&service)];
+                    #[cfg(target_os = "windows")]
+                    {
+                        specs.push(provider_secret_legacy_entry_spec(&service));
+                    }
+
+                    for spec in specs {
+                        let entry = open_provider_secret_entry(spec).map_err(|e| {
+                            Exception::throw_message(
                                 &ctx_inner,
-                                &format!("credential read failed: {}", error),
-                            ));
+                                &format!("credential store unavailable: {}", e),
+                            )
+                        })?;
+                        match entry.get_password() {
+                            Ok(password) => return Ok(password),
+                            Err(error) => {
+                                let message = error.to_string();
+                                if is_missing_credential_error(&message) {
+                                    continue;
+                                }
+                                return Err(Exception::throw_message(
+                                    &ctx_inner,
+                                    &format!("credential read failed: {}", error),
+                                ));
+                            }
                         }
                     }
                 }
