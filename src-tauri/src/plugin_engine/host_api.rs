@@ -340,6 +340,7 @@ pub fn inject_host_api<'js>(
     inject_provider_config(ctx, &host, plugin_id, app_data_dir)?;
     inject_http(ctx, &host, plugin_id)?;
     inject_keychain(ctx, &host)?;
+    inject_gh(ctx, &host)?;
     inject_provider_secrets(ctx, &host, plugin_id)?;
     inject_sqlite(ctx, &host)?;
     inject_ls(ctx, &host, plugin_id)?;
@@ -1389,7 +1390,11 @@ fn ls_parse_netstat_ports(output: &str, process_pid: i32) -> Vec<i32> {
 
         let state_idx = cols.len() - 2;
         let pid_idx = cols.len() - 1;
-        if cols[pid_idx] != pid_text || cols[state_idx] != "LISTENING" {
+        let foreign_addr = cols[2];
+        let is_listen_row = cols[state_idx] == "LISTENING"
+            || foreign_addr == "0.0.0.0:0"
+            || foreign_addr == "[::]:0";
+        if cols[pid_idx] != pid_text || !is_listen_row {
             continue;
         }
 
@@ -2066,6 +2071,45 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
     Ok(())
 }
 
+fn inject_gh<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
+    let gh_obj = Object::new(ctx.clone())?;
+
+    gh_obj.set(
+        "readAuthToken",
+        Function::new(
+            ctx.clone(),
+            move |hostname: Option<String>, user: Option<String>| -> Option<String> {
+                let mut command = Command::new("gh");
+                command.args(["auth", "token"]);
+
+                if let Some(hostname) = hostname.as_deref() {
+                    let trimmed = hostname.trim();
+                    if !trimmed.is_empty() {
+                        command.args(["--hostname", trimmed]);
+                    }
+                }
+
+                if let Some(user) = user.as_deref() {
+                    let trimmed = user.trim();
+                    if !trimmed.is_empty() {
+                        command.args(["--user", trimmed]);
+                    }
+                }
+
+                let output = command.output().ok()?;
+                if !output.status.success() {
+                    return None;
+                }
+
+                last_non_empty_trimmed_line(&String::from_utf8_lossy(&output.stdout))
+            },
+        )?,
+    )?;
+
+    host.set("gh", gh_obj)?;
+    Ok(())
+}
+
 fn inject_provider_secrets<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
@@ -2260,6 +2304,21 @@ mod tests {
     }
 
     #[test]
+    fn ls_parse_netstat_ports_accepts_localized_windows_listen_rows() {
+        let output = "\
+  TCP    127.0.0.1:58393        127.0.0.1:9222         HERGESTELLT     9984\n\
+  TCP    127.0.0.1:63347        0.0.0.0:0              ABH\u{00D6}REN         9984\n\
+  TCP    127.0.0.1:63348        0.0.0.0:0              ABH\u{00D6}REN         9984\n\
+  TCP    127.0.0.1:63354        0.0.0.0:0              ABH\u{00D6}REN         9984\n\
+  TCP    127.0.0.1:64000        0.0.0.0:0              ABH\u{00D6}REN         1234\n";
+
+        assert_eq!(
+            ls_parse_netstat_ports(output, 9984),
+            vec![63347, 63348, 63354]
+        );
+    }
+
+    #[test]
     fn keychain_api_exposes_account_read_and_write() {
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
@@ -2279,6 +2338,10 @@ mod tests {
             let _read_for_account: Function = keychain
                 .get("readGenericPasswordForAccount")
                 .expect("readGenericPasswordForAccount");
+
+            let gh: Object = host.get("gh").expect("gh");
+            let _read_auth_token: Function =
+                gh.get("readAuthToken").expect("readAuthToken");
         });
     }
 

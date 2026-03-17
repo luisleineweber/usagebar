@@ -97,6 +97,7 @@ export function usePanel({
   const maxPanelHeightPxRef = useRef<number | null>(null)
   const targetPanelHeightPxRef = useRef<number | null>(null)
   const resizeSequenceIdRef = useRef(0)
+  const requestPanelResizeRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     if (!isTauri()) return
@@ -114,6 +115,7 @@ export function usePanel({
     }
 
     const handleFocus = () => {
+      requestPanelResizeRef.current()
       onPanelFocus?.()
     }
 
@@ -288,16 +290,24 @@ export function usePanel({
       applyHeight(factor, width, nextHeightLogical)
     }
 
-    resizeWindow()
+    const scheduleResize = () => {
+      void resizeWindow().catch((e) => {
+        console.error("Failed to resize window:", e)
+      })
+    }
+    requestPanelResizeRef.current = scheduleResize
+
+    scheduleResize()
 
     const observer = new ResizeObserver(() => {
-      resizeWindow()
+      scheduleResize()
     })
     observer.observe(container)
 
     return () => {
       isDisposed = true
       resizeSequenceIdRef.current += 1
+      requestPanelResizeRef.current = () => {}
       observer.disconnect()
     }
   }, [activeView, displayPlugins, navPluginCount])

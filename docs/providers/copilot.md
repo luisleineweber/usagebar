@@ -14,7 +14,8 @@ The plugin looks for a GitHub token in this order:
 1. **OpenUsage Keychain** (`OpenUsage-copilot`) - Token previously cached by the plugin, but only reused when its stored login still matches the active `gh` account
 2. **GitHub CLI Active Account** (`hosts.yml` + `gh:github.com:<login>`) - Token for the active `gh` login selected by `gh auth status` / `gh auth switch`
 3. **GitHub CLI Legacy Keychain** (`gh:github.com`) - Fallback when no active-account entry can be resolved
-4. **State File** (`auth.json`) - Fallback file-based storage
+4. **GitHub CLI Command** (`gh auth token`) - Fallback when the local `gh` session is healthy but the direct credential-store read still misses
+5. **State File** (`auth.json`) - Fallback file-based storage
 
 ### Setup
 
@@ -32,6 +33,7 @@ gh auth switch
 ```
 
 Once authenticated via gh CLI, the plugin caches the token in the OpenUsage keychain together with the active login so later probes stay aligned with the selected `gh` account.
+If Windows Credential Manager lookup misses even though `gh` is already logged in, OpenUsage now falls back to the CLI's own `gh auth token` command before reporting a logged-out state.
 
 ## API
 

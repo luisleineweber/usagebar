@@ -1,3 +1,42 @@
+# Fix Copilot gh-auth fallback on Windows
+
+## Acceptance Criteria
+- [x] Copilot can acquire a GitHub token from the active `gh` login even when the keychain lookup path misses.
+- [x] The plugin prefers existing cached/keychain paths first and only falls back to `gh auth token` when needed.
+- [x] Focused Copilot coverage includes the `gh auth token` fallback path.
+- [x] Verification captures the focused test command/result before the task is marked done.
+
+## Plan
+- [x] Add a small host API helper for `gh auth token`.
+- [x] Use that helper as a Copilot fallback after the keychain paths.
+- [x] Add focused plugin coverage for the direct `gh` fallback path.
+- [x] Run targeted verification, then update lessons/breadcrumbs and mark the slice complete.
+
+## Verification Notes
+- Confirmed locally that `gh auth status --json hosts` reports the active account `Loues000`, `gh auth token` returns a token successfully, and Windows Credential Manager contains `gh:github.com:Loues000`; the break was in OpenUsage's narrower token-read path, not in the user's GH login state.
+- Verified the Copilot plugin slice with `npx vitest run plugins/copilot/plugin.test.js` -> 1 file passed, 36 tests passed.
+- Verified the host API surface with `cargo test --manifest-path src-tauri/Cargo.toml keychain_api_exposes_account_read_and_write` -> 1 Rust test passed.
+
+# Fix Antigravity quota source and tray first-open sizing
+
+## Acceptance Criteria
+- [x] Antigravity on localized Windows still discovers real LS listening ports instead of falling back to stale cloud quota data.
+- [x] A focused Rust regression test covers non-English `netstat` listening-state output.
+- [x] The tray popup remeasures itself when it gains focus so first open does not stay at the hidden-startup height.
+- [x] A focused frontend regression test covers the focus-time resize path.
+- [x] Verification captures the focused Rust and Vitest commands/results before the task is marked done.
+
+## Plan
+- [x] Patch Windows LS port parsing to stop depending on the English `LISTENING` token.
+- [x] Add a focused Rust test for localized Windows `netstat` output.
+- [x] Trigger a panel resize pass on popup focus and cover it with a focused app test.
+- [x] Run the targeted verification commands, then update lessons/breadcrumbs and mark the slice complete.
+
+## Verification Notes
+- Confirmed on this Windows machine that Antigravity's live LS process exposes the real quota fractions on localhost (`Gemini 3.1 Pro (High/Low) = 0.6`, `Gemini 3 Flash = 1.0`, `Claude/GPT-OSS = 0.2`) while the stale fallback path was showing the incorrect `100%`/`6d 23h` data.
+- Verified the localized Windows LS parser with `cargo test --manifest-path src-tauri/Cargo.toml ls_parse_netstat_ports_accepts_localized_windows_listen_rows` -> 1 Rust test passed.
+- Verified the tray sizing slice with `npx vitest run src/App.test.tsx -t "remeasures the panel when the popup gains focus|passes the target panel height when repositioning after resize"` -> 1 file passed, 2 tests passed.
+
 # Sync non-colliding upstream changes
 
 ## Acceptance Criteria

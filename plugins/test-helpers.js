@@ -46,6 +46,9 @@ export const makeCtx = () => {
         writeGenericPassword: vi.fn(),
         deleteGenericPassword: vi.fn(),
       },
+      gh: {
+        readAuthToken: vi.fn(() => null),
+      },
       sqlite: {
         query: vi.fn(() => "[]"),
         exec: vi.fn(),

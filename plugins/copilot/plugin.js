@@ -218,10 +218,27 @@
     return null;
   }
 
+  function loadTokenFromGhCommand(ctx, activeLogin) {
+    if (!ctx.host.gh || typeof ctx.host.gh.readAuthToken !== "function") {
+      return null;
+    }
+    try {
+      const token = ctx.host.gh.readAuthToken(GH_HOST, activeLogin || null);
+      if (token) {
+        ctx.host.log.info("token loaded from gh auth token command");
+        return { token: token, source: "gh-cli-command", login: activeLogin || null };
+      }
+    } catch (e) {
+      ctx.host.log.info("gh auth token command failed: " + String(e));
+    }
+    return null;
+  }
+
   function loadToken(ctx, activeLogin) {
     return (
       loadTokenFromKeychain(ctx, activeLogin) ||
       loadTokenFromGhCli(ctx, activeLogin) ||
+      loadTokenFromGhCommand(ctx, activeLogin) ||
       loadTokenFromStateFile(ctx, activeLogin)
     );
   }
@@ -294,7 +311,9 @@
       if (source === "keychain") {
         ctx.host.log.info("cached token invalid, trying fallback sources");
         clearCachedToken(ctx);
-        const fallback = loadTokenFromGhCli(ctx, activeLogin);
+        const fallback =
+          loadTokenFromGhCli(ctx, activeLogin) ||
+          loadTokenFromGhCommand(ctx, activeLogin);
         if (fallback) {
           try {
             resp = fetchUsage(ctx, fallback.token);
@@ -326,7 +345,7 @@
     }
 
     // Persist gh-cli token to OpenUsage keychain for future use
-    if (source === "gh-cli") {
+    if (source === "gh-cli" || source === "gh-cli-command") {
       saveToken(ctx, token, cred.login);
     }
 

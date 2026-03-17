@@ -49,6 +49,13 @@ function setGhCliAccountKeychain(ctx, login, value) {
   });
 }
 
+function setGhCliCommandToken(ctx, token) {
+  ctx.host.gh.readAuthToken.mockImplementation((host, user) => {
+    if (host !== "github.com") return null;
+    return token;
+  });
+}
+
 function setGhHosts(ctx, text) {
   ctx.host.fs.writeText("~/AppData/Roaming/GitHub CLI/hosts.yml", text);
 }
@@ -133,6 +140,26 @@ describe("copilot plugin", () => {
     expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
     const call = ctx.host.http.request.mock.calls[0][0];
     expect(call.headers.Authorization).toBe("token gho_encoded_token");
+  });
+
+  it("loads token from gh auth token command when keychain paths miss", async () => {
+    const ctx = makePluginTestContext();
+    ctx.app.platform = "windows";
+    setGhHosts(ctx, ["github.com:", "    users:", "        Loues000:", "    user: Loues000"].join("\n"));
+    setGhCliCommandToken(ctx, "gho_command_token");
+    mockUsageOk(ctx);
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
+    expect(ctx.host.gh.readAuthToken).toHaveBeenCalledWith("github.com", "Loues000");
+    const call = ctx.host.http.request.mock.calls[0][0];
+    expect(call.headers.Authorization).toBe("token gho_command_token");
+    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalledWith(
+      "OpenUsage-copilot",
+      JSON.stringify({ token: "gho_command_token", login: "Loues000" }),
+    );
   });
 
   it("loads token from state file", async () => {

@@ -1252,6 +1252,31 @@ describe("App", () => {
     globalThis.ResizeObserver = OriginalResizeObserver
   })
 
+  it("remeasures the panel when the popup gains focus", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    let scrollHeightValue = 80
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        return scrollHeightValue
+      },
+    })
+
+    render(<App />)
+    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+
+    const initialHeight = (state.setSizeMock.mock.calls.at(-1)?.[0] as { height: number }).height
+    state.setSizeMock.mockClear()
+
+    scrollHeightValue = 320
+    window.dispatchEvent(new Event("focus"))
+
+    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+
+    const focusedHeight = (state.setSizeMock.mock.calls.at(-1)?.[0] as { height: number }).height
+    expect(focusedHeight).toBeGreaterThan(initialHeight)
+  })
+
   it("logs resize failures", async () => {
     state.isTauriMock.mockReturnValue(true)
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
