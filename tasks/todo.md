@@ -39,16 +39,19 @@
 # Switch Windows provider secrets to explicit targets
 
 ## Acceptance Criteria
-- [ ] Windows provider-secret writes use an explicit Credential Manager target name instead of the implicit `username.service` mapping.
-- [ ] Provider-secret reads/deletes still fall back to the old Windows mapping so existing saved secrets keep working.
-- [ ] Focused Rust coverage locks in the Windows provider-secret target spec.
-- [ ] Verification captures the focused Rust command/result before the task is marked done.
+- [x] Windows provider-secret writes use an explicit Credential Manager target name instead of the implicit `username.service` mapping.
+- [x] Provider-secret reads/deletes still fall back to the old Windows mapping so existing saved secrets keep working.
+- [x] Focused Rust coverage locks in the Windows provider-secret target spec.
+- [x] Verification captures the focused Rust command/result before the task is marked done.
 
 ## Plan
-- [ ] Add a shared Windows provider-secret target spec/helper in the Tauri backend.
-- [ ] Rewire provider-secret save/read/delete paths to prefer the explicit-target entry and fall back to the old mapping on Windows.
-- [ ] Add focused Rust coverage for the Windows target spec and legacy fallback behavior.
-- [ ] Run targeted cargo verification, then update lessons/breadcrumbs and mark the slice complete.
+- [x] Add a shared Windows provider-secret target spec/helper in the Tauri backend.
+- [x] Rewire provider-secret save/read/delete paths to prefer the explicit-target entry and fall back to the old mapping on Windows.
+- [x] Add focused Rust coverage for the Windows target spec and legacy fallback behavior.
+- [x] Run targeted cargo verification, then update lessons/breadcrumbs and mark the slice complete.
+
+## Verification Notes
+- Verified the Windows provider-secret target/spec slice with `cargo test --manifest-path src-tauri/Cargo.toml provider_secret_` -> 4 Rust tests passed.
 
 # Clarify provider-secret save errors
 
