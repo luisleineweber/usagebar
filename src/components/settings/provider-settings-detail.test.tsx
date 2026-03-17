@@ -94,7 +94,7 @@ describe("ProviderSettingsDetail", () => {
     await waitFor(() => {
       expect(onSecretSave).toHaveBeenCalledWith("ollama", "cookieHeader", "session=abc123")
     })
-    expect(screen.getByText("Secret stored in the system credential vault.")).toBeInTheDocument()
+    expect(screen.getByText("Secret stored securely for this app.")).toBeInTheDocument()
   })
 
   it("shows precise string-shaped secret save errors", async () => {
@@ -185,6 +185,23 @@ describe("ProviderSettingsDetail", () => {
     await waitFor(() => {
       expect(onConfigChange).toHaveBeenCalledWith("opencode", { source: "auto" })
     })
+  })
+
+  it("shows explicit OpenCode website and cookie capture guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={opencodePlugin}
+        enabled
+        config={{ source: "manual" }}
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/sign in at https:\/\/opencode.ai/i)).toBeInTheDocument()
+    expect(screen.getByText(/copy the full Cookie request header/i)).toBeInTheDocument()
+    expect(screen.getByText(/This is separate from OpenCode Go local CLI spend\./)).toBeInTheDocument()
+    expect(screen.getByText(/Do not paste Set-Cookie\./)).toBeInTheDocument()
   })
 
   it("shows no editable inputs for auto-detected providers", () => {

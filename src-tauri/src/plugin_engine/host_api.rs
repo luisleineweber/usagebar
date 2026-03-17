@@ -1,3 +1,4 @@
+use crate::provider_secret_store;
 use base64::Engine;
 use keyring::Entry;
 use rquickjs::{Ctx, Exception, Function, Object};
@@ -386,7 +387,7 @@ pub fn inject_host_api<'js>(
     inject_http(ctx, &host, plugin_id)?;
     inject_keychain(ctx, &host)?;
     inject_gh(ctx, &host)?;
-    inject_provider_secrets(ctx, &host, plugin_id)?;
+    inject_provider_secrets(ctx, &host, plugin_id, app_data_dir)?;
     inject_sqlite(ctx, &host)?;
     inject_ls(ctx, &host, plugin_id)?;
     inject_ccusage(ctx, &host, plugin_id)?;
@@ -2162,15 +2163,32 @@ fn inject_provider_secrets<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
     plugin_id: &str,
+    app_data_dir: &PathBuf,
 ) -> rquickjs::Result<()> {
     let provider_secrets_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
+    let data_dir = app_data_dir.clone();
 
     provider_secrets_obj.set(
         "read",
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, secret_key: String| -> rquickjs::Result<String> {
+                #[cfg(target_os = "windows")]
+                {
+                    match provider_secret_store::read_provider_secret(&data_dir, &pid, &secret_key)
+                    {
+                        Ok(Some(secret)) => return Ok(secret),
+                        Ok(None) => {}
+                        Err(error) => {
+                            return Err(Exception::throw_message(
+                                &ctx_inner,
+                                &format!("provider secret store read failed: {}", error),
+                            ));
+                        }
+                    }
+                }
+
                 let mut services = vec![provider_secret_service(&pid, &secret_key)];
                 services.extend(provider_secret_legacy_services(&pid, &secret_key));
 

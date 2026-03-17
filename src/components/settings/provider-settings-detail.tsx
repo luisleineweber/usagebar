@@ -163,7 +163,7 @@ export function ProviderSettingsDetail({
     try {
       await onSecretSave(plugin.id, definition.secretField.key, trimmed)
       setSecretDraft("")
-      setSaveMessage("Secret stored in the system credential vault.")
+      setSaveMessage("Secret stored securely for this app.")
     } catch (error) {
       setSaveError(getErrorMessage(error, "Failed to save secret."))
     } finally {

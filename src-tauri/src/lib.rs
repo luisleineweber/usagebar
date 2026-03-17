@@ -2,6 +2,7 @@
 mod app_nap;
 mod panel;
 mod plugin_engine;
+mod provider_secret_store;
 mod settings_window;
 mod tray;
 #[cfg(target_os = "macos")]
@@ -146,6 +147,7 @@ fn is_missing_credential_error(message: &str) -> bool {
         || normalized.contains("os error 1168")
 }
 
+#[cfg(not(target_os = "windows"))]
 fn read_provider_secret_service(
     provider_id: &str,
     secret_key: &str,
@@ -524,6 +526,7 @@ fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 fn set_provider_secret(
+    app_handle: tauri::AppHandle,
     provider_id: String,
     secret_key: String,
     value: String,
@@ -541,37 +544,92 @@ fn set_provider_secret(
 
     let service = provider_secret_service(trimmed_provider, trimmed_secret);
     let label = provider_secret_label(trimmed_provider, trimmed_secret);
+    let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
+        format!(
+            "Could not access the app data directory for {}: {}",
+            label, error
+        )
+    })?;
     log::info!(
         "setting provider secret for provider='{}' key='{}'",
         trimmed_provider,
         trimmed_secret
     );
-    let entry =
-        open_provider_secret_entry(provider_secret_entry_spec(&service)).map_err(|error| {
+
+    #[cfg(target_os = "windows")]
+    {
+        provider_secret_store::save_provider_secret(
+            &app_data_dir,
+            trimmed_provider,
+            trimmed_secret,
+            trimmed_value,
+        )
+        .map_err(|error| {
             format!(
-                "Could not access the system credential vault for {}: {}",
+                "Could not save {} to the Windows-protected local secret store: {}",
                 label, error
             )
         })?;
 
-    entry.set_password(trimmed_value).map_err(|error| {
-        format!(
-            "Could not save {} to the system credential vault: {}",
-            label, error
-        )
-    })?;
+        verify_provider_secret_write_with_fresh_lookup(
+            trimmed_provider,
+            trimmed_secret,
+            &service,
+            trimmed_value,
+            |_| {
+                provider_secret_store::read_provider_secret(
+                    &app_data_dir,
+                    trimmed_provider,
+                    trimmed_secret,
+                )?
+                .ok_or_else(|| {
+                    format!(
+                        "Saved {}, but it was missing from the Windows-protected local secret store on the next read.",
+                        label
+                    )
+                })
+            },
+        )?;
 
-    verify_provider_secret_write_with_fresh_lookup(
-        trimmed_provider,
-        trimmed_secret,
-        &service,
-        trimmed_value,
-        |service| read_provider_secret_service(trimmed_provider, trimmed_secret, service),
-    )
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let entry =
+            open_provider_secret_entry(provider_secret_entry_spec(&service)).map_err(|error| {
+                format!(
+                    "Could not access the system credential vault for {}: {}",
+                    label, error
+                )
+            })?;
+
+        entry.set_password(trimmed_value).map_err(|error| {
+            format!(
+                "Could not save {} to the system credential vault: {}",
+                label, error
+            )
+        })?;
+
+        return verify_provider_secret_write_with_fresh_lookup(
+            trimmed_provider,
+            trimmed_secret,
+            &service,
+            trimmed_value,
+            |service| read_provider_secret_service(trimmed_provider, trimmed_secret, service),
+        );
+    }
+
+    #[allow(unreachable_code)]
+    Ok(())
 }
 
 #[tauri::command]
-fn delete_provider_secret(provider_id: String, secret_key: String) -> Result<(), String> {
+fn delete_provider_secret(
+    app_handle: tauri::AppHandle,
+    provider_id: String,
+    secret_key: String,
+) -> Result<(), String> {
     let trimmed_provider = provider_id.trim();
     let trimmed_secret = secret_key.trim();
 
@@ -584,6 +642,31 @@ fn delete_provider_secret(provider_id: String, secret_key: String) -> Result<(),
         trimmed_provider,
         trimmed_secret
     );
+
+    #[cfg(target_os = "windows")]
+    {
+        let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
+            format!(
+                "Could not access the app data directory while removing {}: {}",
+                provider_secret_label(trimmed_provider, trimmed_secret),
+                error
+            )
+        })?;
+
+        provider_secret_store::delete_provider_secret(
+            &app_data_dir,
+            trimmed_provider,
+            trimmed_secret,
+        )
+        .map_err(|error| {
+            format!(
+                "Could not remove {} from the Windows-protected local secret store: {}",
+                provider_secret_label(trimmed_provider, trimmed_secret),
+                error
+            )
+        })?;
+    }
+
     let mut services = vec![provider_secret_service(trimmed_provider, trimmed_secret)];
     services.extend(provider_secret_legacy_services(
         trimmed_provider,
