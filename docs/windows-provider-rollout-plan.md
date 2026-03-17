@@ -111,12 +111,12 @@ These references should shape implementation choices instead of treating the Win
 | Amp | Experimental | P2 | real signed-in Windows validation |
 | Copilot | Experimental | P2 | real free/paid validation plus broader multi-account runtime evidence |
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |
-| JetBrains AI Assistant | Experimental | P2 | real IDE/account validation beyond XML path coverage |
+| JetBrains AI Assistant | Working on Windows | P1 | broader IDE/account variance beyond the current local XML path coverage |
 | Kimi Code | Not started for Windows | P2 | verify Windows credential/file locations |
 | MiniMax | Not started for Windows | P2 | verify Windows session source and auth refresh path |
 | Factory / Droid | Not started for Windows | P3 | WorkOS auth storage and refresh behavior on Windows |
 | Z.ai | Not started for Windows | P3 | Windows credential/session source unknown |
-| Windsurf | Not started for Windows | P4 | macOS-oriented local LS/process discovery assumptions |
+| Windsurf | Experimental | P2 | broader real-account/runtime validation after the Windows LS + cloud path port |
 | Perplexity | Not started for Windows | P4 | macOS app-cache dependency |
 
 ## Provider Plans
@@ -274,18 +274,18 @@ Verification:
 ### JetBrains AI Assistant
 
 Current state:
-- Surfaced on Windows as an experimental provider.
+- Surfaced on Windows as a supported provider.
 - Roaming `%APPDATA%/JetBrains/.../AIAssistantQuotaManager2.xml` discovery is implemented and covered by a focused Windows test.
 - Android Studio under `%APPDATA%/Google/...` and mixed-case IDE directory names are now covered too.
+- Replayed successfully against real local Windows quota XML on this machine from IntelliJ IDEA, PyCharm, Rider, and WebStorm.
 
 Next slice:
-- Validate actual JetBrains Windows directory layout across current IDEs.
-- Confirm which file or state object carries usable quota/session data.
-- Run the provider against at least one real JetBrains account and capture the evidence in `docs/windows-provider-verification.md`.
+- Keep the current XML path stable across more IDE/version combinations.
+- Capture one missing-quota runtime from a real signed-in IDE before broadening the support claim further.
 
 Verification:
-- At least one signed-in JetBrains IDE on Windows.
-- One focused test for Windows path scanning.
+- Real local Windows quota XML replay from at least one signed-in IDE.
+- Focused Windows path-scanning tests.
 
 ### Kimi Code
 
@@ -346,13 +346,14 @@ Verification:
 ### Windsurf
 
 Current state:
-- Documented with macOS-first local process and app-support assumptions.
-- Not Windows-supported in this fork.
+- Surfaced on Windows as an experimental provider.
+- Windows now uses `%AppData%/Roaming/.../state.vscdb`, `language_server_windows*`, and `resources/app/product.json` metadata for the local LS path and cloud fallback.
+- Focused tests cover the Windows SQLite path, Windows LS probe metadata, and Windows cloud metadata path.
 
 Next slice:
-- Port process discovery, LS probing, and SQLite auth lookup to Windows.
-- Validate Windows process naming, flags, port discovery, and app data locations.
-- Reuse Antigravity learnings where the shared language-server family allows it.
+- Run the provider against a real signed-in Windows Windsurf install with the LS live.
+- Capture one successful local LS path and one cloud-fallback-only path from a real account.
+- Confirm the Windows install-path candidate set is enough outside this machine.
 
 Verification:
 - Running Windsurf on Windows with LS path active.
@@ -399,6 +400,7 @@ Goal:
 - Gemini
 - Amp
 - JetBrains AI Assistant
+- Windsurf
 - Kimi Code
 - MiniMax
 
@@ -413,9 +415,8 @@ Goal:
 Goal:
 - Finish providers that need more provider-specific auth and refresh validation.
 
-### Phase 5: Tackle platform-heavy ports
+### Phase 5: Tackle the remaining platform-heavy ports
 
-- Windsurf
 - Perplexity
 
 Goal:

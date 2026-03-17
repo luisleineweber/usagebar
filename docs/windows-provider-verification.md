@@ -61,6 +61,21 @@ Current Windows validation targets:
 - Case-insensitive IDE directory matching
 - Missing quota file after sign-in but before first AI Assistant usage
 
+Current local evidence on this machine:
+
+- Successful replay from `IntelliJIdea2025.2`, `PyCharm2025.2`, `Rider2025.3`, and `WebStorm2025.2`
+- Real local quota XML shape matches the current parser assumptions
+
+## Windsurf
+
+Current Windows validation targets:
+
+- `~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb`
+- `~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb`
+- `language_server_windows*` process discovery plus `os: "windows"` LS probe metadata
+- `resources/app/product.json` `windsurfVersion` and `codeiumVersion`
+- Cloud fallback without a running LS
+
 ## Gemini
 
 Current Windows validation targets:
