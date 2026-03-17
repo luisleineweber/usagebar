@@ -8,8 +8,7 @@
   "brandColor": "#7d5fe6",
   "platformSupport": {
     "windows": {
-      "state": "experimental",
-      "message": "Experimental on Windows. Roaming quota XML discovery is wired up; broader IDE/account validation is still in progress."
+      "state": "supported"
     }
   },
   "lines": [
