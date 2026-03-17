@@ -1,3 +1,73 @@
+# Enable Windsurf experimental support on Windows
+
+## Acceptance Criteria
+- [x] Windsurf reads auth state from the Windows `~/AppData/Roaming/.../state.vscdb` path instead of only the macOS app-support path.
+- [x] Windsurf uses Windows-aware LS discovery metadata (`language_server_windows*`, `os: "windows"`) when probing the local language server.
+- [x] Cloud fallback reads Windows install metadata from `resources/app/product.json` and prefers `windsurfVersion` plus `codeiumVersion`.
+- [x] Focused Windsurf plugin coverage includes Windows LS and Windows cloud-fallback regressions.
+- [x] Verification captures the focused test command/result before the task is marked done.
+
+## Plan
+- [x] Patch the Windsurf plugin for Windows SQLite, LS process, and installed-version metadata.
+- [x] Add focused Windsurf tests for Windows LS probing and Windows cloud metadata.
+- [x] Update provider docs/notes and mark Windsurf as Windows-experimental.
+- [x] Run targeted verification, then review the diff and commit only the Windsurf slice.
+
+## Verification Notes
+- Confirmed locally that this Windows machine has `C:\Users\llein\AppData\Roaming\Windsurf\User\globalStorage\state.vscdb`, `D:\Windsurf\resources\app\product.json`, and `D:\Windsurf\resources\app\extensions\windsurf\bin\language_server_windows_x64.exe`; the old plugin still only targeted macOS paths and `language_server_macos`.
+- Verified the Windsurf slice with `npx vitest run plugins/windsurf/plugin.test.js` -> 1 file passed, 35 tests passed.
+
+# Fix Claude signed-in fallback on Windows
+
+## Acceptance Criteria
+- [x] Claude treats `~/.claude.json` as a valid signed-in account source when the legacy `~/.claude/.credentials.json` file is missing on Windows.
+- [x] The plugin does not treat `primaryApiKey` as a replacement for OAuth usage tokens; usage stays sourced from OAuth or local ccusage only.
+- [x] When only account metadata is available, the provider no longer throws a false `Not logged in` error and instead returns an account-present fallback state.
+- [x] Focused Claude plugin coverage includes the `~/.claude.json` account-file fallback path.
+- [x] Verification captures the focused test command/result before the task is marked done.
+
+## Plan
+- [x] Add a minimal Claude account-file reader for `~/.claude.json`.
+- [x] Reuse account-file metadata as a signed-in fallback without pretending it can fetch OAuth usage.
+- [x] Add focused plugin tests for the account-file fallback path.
+- [x] Update notes/docs, run focused verification, then mark the slice complete.
+
+## Verification Notes
+- Confirmed locally that this Windows machine has `C:\Users\llein\.claude.json` with `oauthAccount` plus `primaryApiKey`, while `C:\Users\llein\.claude\.credentials.json` is absent; the existing plugin would have treated that as logged out unless local ccusage happened to mask it.
+- Verified the Claude slice with `npx vitest run plugins/claude/plugin.test.js` -> 1 file passed, 69 tests passed.
+
+# Switch Windows provider secrets to explicit targets
+
+## Acceptance Criteria
+- [ ] Windows provider-secret writes use an explicit Credential Manager target name instead of the implicit `username.service` mapping.
+- [ ] Provider-secret reads/deletes still fall back to the old Windows mapping so existing saved secrets keep working.
+- [ ] Focused Rust coverage locks in the Windows provider-secret target spec.
+- [ ] Verification captures the focused Rust command/result before the task is marked done.
+
+## Plan
+- [ ] Add a shared Windows provider-secret target spec/helper in the Tauri backend.
+- [ ] Rewire provider-secret save/read/delete paths to prefer the explicit-target entry and fall back to the old mapping on Windows.
+- [ ] Add focused Rust coverage for the Windows target spec and legacy fallback behavior.
+- [ ] Run targeted cargo verification, then update lessons/breadcrumbs and mark the slice complete.
+
+# Clarify provider-secret save errors
+
+## Acceptance Criteria
+- [x] Saving a provider secret surfaces a precise stage-specific message for vault access, write failure, fresh read-after-write failure, or value mismatch.
+- [x] The settings UI preserves string-shaped Tauri errors instead of collapsing them to `Failed to save secret.`
+- [x] Focused frontend and Rust tests cover the new save-error wording path.
+- [x] Verification captures the focused test commands/results before the task is marked done.
+
+## Plan
+- [x] Add provider-secret save error formatters in Tauri with stage-specific wording.
+- [x] Add frontend error extraction so Tauri string rejections render exactly in settings.
+- [x] Add focused Rust and Vitest coverage for the new messages.
+- [x] Run targeted verification, then update lessons/breadcrumbs and mark the slice complete.
+
+## Verification Notes
+- Verified backend save-error wording with `cargo test --manifest-path src-tauri/Cargo.toml provider_secret_write_verification` -> 2 Rust tests passed.
+- Verified settings rendering with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 9 tests passed.
+
 # Fix Ollama fresh-vault verification
 
 ## Acceptance Criteria

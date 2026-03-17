@@ -2032,7 +2032,10 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
         "readGenericPasswordForAccount",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, service: String, account: String| -> rquickjs::Result<String> {
+            move |ctx_inner: Ctx<'_>,
+                  service: String,
+                  account: String|
+                  -> rquickjs::Result<String> {
                 let entry = Entry::new(&service, &account).map_err(|e| {
                     Exception::throw_message(
                         &ctx_inner,
@@ -2340,8 +2343,7 @@ mod tests {
                 .expect("readGenericPasswordForAccount");
 
             let gh: Object = host.get("gh").expect("gh");
-            let _read_auth_token: Function =
-                gh.get("readAuthToken").expect("readAuthToken");
+            let _read_auth_token: Function = gh.get("readAuthToken").expect("readAuthToken");
         });
     }
 

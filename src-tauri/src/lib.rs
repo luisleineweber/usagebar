@@ -30,6 +30,31 @@ fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
     format!("OpenUsage Provider Secret {} {}", provider_id, secret_key)
 }
 
+fn provider_display_name(provider_id: &str) -> String {
+    match provider_id {
+        "ollama" => "Ollama".to_string(),
+        "opencode" => "OpenCode".to_string(),
+        "codex" => "Codex".to_string(),
+        "claude" => "Claude".to_string(),
+        _ => provider_id.to_string(),
+    }
+}
+
+fn provider_secret_field_label(secret_key: &str) -> &'static str {
+    match secret_key {
+        "cookieHeader" => "cookie header",
+        _ => "secret",
+    }
+}
+
+fn provider_secret_label(provider_id: &str, secret_key: &str) -> String {
+    format!(
+        "{} {}",
+        provider_display_name(provider_id),
+        provider_secret_field_label(secret_key)
+    )
+}
+
 fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<String> {
     match (provider_id, secret_key) {
         ("opencode", "cookieHeader") => vec!["OpenCode Cookie Header".to_string()],
@@ -67,15 +92,29 @@ fn is_missing_credential_error(message: &str) -> bool {
         || normalized.contains("os error 1168")
 }
 
-fn read_provider_secret_service(service: &str) -> Result<String, String> {
-    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, service)
-        .map_err(|error| format!("credential store unavailable: {}", error))?;
-    entry
-        .get_password()
-        .map_err(|error| format!("credential read-after-write failed: {}", error))
+fn read_provider_secret_service(
+    provider_id: &str,
+    secret_key: &str,
+    service: &str,
+) -> Result<String, String> {
+    let label = provider_secret_label(provider_id, secret_key);
+    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, service).map_err(|error| {
+        format!(
+            "Could not access the system credential vault for {}: {}",
+            label, error
+        )
+    })?;
+    entry.get_password().map_err(|error| {
+        format!(
+            "Saved {}, but could not read it back from a fresh system credential vault lookup: {}",
+            label, error
+        )
+    })
 }
 
 fn verify_provider_secret_write_with_fresh_lookup<F>(
+    provider_id: &str,
+    secret_key: &str,
     service: &str,
     expected_value: &str,
     read_secret: F,
@@ -83,9 +122,13 @@ fn verify_provider_secret_write_with_fresh_lookup<F>(
 where
     F: FnOnce(&str) -> Result<String, String>,
 {
+    let label = provider_secret_label(provider_id, secret_key);
     let read_back = read_secret(service)?;
     if read_back != expected_value {
-        return Err("credential read-after-write mismatch".to_string());
+        return Err(format!(
+            "Saved {}, but the fresh system credential vault lookup returned a different value.",
+            label
+        ));
     }
     Ok(())
 }
@@ -442,21 +485,33 @@ fn set_provider_secret(
     }
 
     let service = provider_secret_service(trimmed_provider, trimmed_secret);
+    let label = provider_secret_label(trimmed_provider, trimmed_secret);
     log::info!(
         "setting provider secret for provider='{}' key='{}'",
         trimmed_provider,
         trimmed_secret
     );
-    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, &service)
-        .map_err(|error| format!("credential store unavailable: {}", error))?;
+    let entry = Entry::new(PROVIDER_SECRET_KEYRING_TARGET, &service).map_err(|error| {
+        format!(
+            "Could not access the system credential vault for {}: {}",
+            label, error
+        )
+    })?;
 
-    entry
-        .set_password(trimmed_value)
-        .map_err(|error| format!("credential write failed: {}", error))?;
+    entry.set_password(trimmed_value).map_err(|error| {
+        format!(
+            "Could not save {} to the system credential vault: {}",
+            label, error
+        )
+    })?;
 
-    verify_provider_secret_write_with_fresh_lookup(&service, trimmed_value, |service| {
-        read_provider_secret_service(service)
-    })
+    verify_provider_secret_write_with_fresh_lookup(
+        trimmed_provider,
+        trimmed_secret,
+        &service,
+        trimmed_value,
+        |service| read_provider_secret_service(trimmed_provider, trimmed_secret, service),
+    )
 }
 
 #[tauri::command]
@@ -773,8 +828,8 @@ pub fn run() {
 mod tests {
     use super::{
         app_started_day_key, is_missing_credential_error, plugin_is_probe_supported,
-        plugin_support_for_current_platform, provider_secret_service, should_track_app_started,
-        verify_provider_secret_write_with_fresh_lookup,
+        plugin_support_for_current_platform, provider_secret_label, provider_secret_service,
+        should_track_app_started, verify_provider_secret_write_with_fresh_lookup,
     };
     use crate::plugin_engine::manifest::{
         PlatformSupport, PluginManifest, WindowsSupportConfig, WindowsSupportState,
@@ -849,11 +904,16 @@ mod tests {
         let expected = "session=abc123";
         let mut seen_service = None;
 
-        let result =
-            verify_provider_secret_write_with_fresh_lookup(&service, expected, |service_name| {
+        let result = verify_provider_secret_write_with_fresh_lookup(
+            "ollama",
+            "cookieHeader",
+            &service,
+            expected,
+            |service_name| {
                 seen_service = Some(service_name.to_string());
                 Ok(expected.to_string())
-            });
+            },
+        );
 
         assert_eq!(result, Ok(()));
         assert_eq!(seen_service.as_deref(), Some(service.as_str()));
@@ -862,15 +922,22 @@ mod tests {
     #[test]
     fn provider_secret_write_verification_rejects_fresh_lookup_mismatch() {
         let service = provider_secret_service("ollama", "cookieHeader");
+        let label = provider_secret_label("ollama", "cookieHeader");
 
-        let result =
-            verify_provider_secret_write_with_fresh_lookup(&service, "session=abc123", |_| {
-                Ok("session=other".to_string())
-            });
+        let result = verify_provider_secret_write_with_fresh_lookup(
+            "ollama",
+            "cookieHeader",
+            &service,
+            "session=abc123",
+            |_| Ok("session=other".to_string()),
+        );
 
         assert_eq!(
             result,
-            Err("credential read-after-write mismatch".to_string())
+            Err(format!(
+                "Saved {}, but the fresh system credential vault lookup returned a different value.",
+                label
+            ))
         );
     }
 
