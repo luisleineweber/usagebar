@@ -1,11 +1,24 @@
 (function () {
   const CRED_FILE = "~/.claude/.credentials.json"
+  const ACCOUNT_FILE = "~/.claude.json"
   const KEYCHAIN_SERVICE = "Claude Code-credentials"
   const USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
   const REFRESH_URL = "https://platform.claude.com/v1/oauth/token"
   const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
   const SCOPES = "user:profile user:inference user:sessions:claude_code user:mcp_servers"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
+
+  function readNonEmptyString(value) {
+    if (typeof value !== "string") return ""
+    const trimmed = value.trim()
+    return trimmed || ""
+  }
+
+  function titleCaseLabel(value) {
+    const normalized = readNonEmptyString(value).replace(/[_-]+/g, " ").toLowerCase()
+    if (!normalized) return ""
+    return normalized.replace(/(^|\s)([a-z])/g, (match, prefix, letter) => prefix + letter.toUpperCase())
+  }
 
   function utf8DecodeBytes(bytes) {
     // Prefer native TextDecoder when available (QuickJS may not expose it).
@@ -121,6 +134,53 @@
     return null
   }
 
+  function extractAccountState(parsed) {
+    if (!parsed || typeof parsed !== "object") return null
+
+    const oauthAccount = parsed.oauthAccount && typeof parsed.oauthAccount === "object"
+      ? parsed.oauthAccount
+      : null
+    const primaryApiKey = readNonEmptyString(parsed.primaryApiKey)
+    if (!oauthAccount && !primaryApiKey) return null
+
+    return {
+      organizationName: readNonEmptyString(oauthAccount && oauthAccount.organizationName),
+      billingType: readNonEmptyString(oauthAccount && oauthAccount.billingType),
+      emailAddress: readNonEmptyString(oauthAccount && oauthAccount.emailAddress),
+      hasPrimaryApiKey: !!primaryApiKey,
+    }
+  }
+
+  function loadAccountFile(ctx) {
+    if (!ctx.host.fs.exists(ACCOUNT_FILE)) return null
+
+    try {
+      const text = ctx.host.fs.readText(ACCOUNT_FILE)
+      const parsed = tryParseCredentialJSON(ctx, text)
+      if (!parsed) {
+        ctx.host.log.warn("account file exists but is not valid JSON")
+        return null
+      }
+
+      const oauth = parsed.claudeAiOauth
+      const account = extractAccountState(parsed)
+      if (oauth && oauth.accessToken) {
+        ctx.host.log.info("credentials loaded from account file")
+        return { oauth, source: "account-file", fullData: parsed, account }
+      }
+      if (account) {
+        ctx.host.log.info("account metadata loaded from account file")
+        return { oauth: null, source: "account-file", fullData: parsed, account }
+      }
+
+      ctx.host.log.warn("account file exists but no valid oauth or account data")
+    } catch (e) {
+      ctx.host.log.warn("account file read failed: " + String(e))
+    }
+
+    return null
+  }
+
   function loadCredentials(ctx) {
     // Try file first
     if (ctx.host.fs.exists(CRED_FILE)) {
@@ -156,6 +216,11 @@
       }
     } catch (e) {
       ctx.host.log.info("keychain read failed (may not exist): " + String(e))
+    }
+
+    const accountFileState = loadAccountFile(ctx)
+    if (accountFileState) {
+      return accountFileState
     }
 
     ctx.host.log.warn("no credentials found")
@@ -449,14 +514,48 @@
     return { plan: null, lines: lines }
   }
 
+  function buildAccountOnlyResult(ctx, account) {
+    const lines = [
+      ctx.line.badge({ label: "Status", text: "Signed in", color: "#22c55e" }),
+      ctx.line.text({ label: "Usage", value: "OAuth usage unavailable; local usage not found" }),
+    ]
+
+    const workspace = readNonEmptyString(account && account.organizationName)
+    if (workspace) {
+      lines.splice(1, 0, ctx.line.text({ label: "Workspace", value: workspace }))
+    } else {
+      const email = readNonEmptyString(account && account.emailAddress)
+      if (email) {
+        lines.splice(1, 0, ctx.line.text({ label: "Account", value: email }))
+      }
+    }
+
+    const billingType = titleCaseLabel(account && account.billingType)
+    if (billingType) {
+      lines.splice(lines.length - 1, 0, ctx.line.text({ label: "Billing", value: billingType }))
+    }
+
+    return { plan: null, lines: lines }
+  }
+
   function probe(ctx) {
     const creds = loadCredentials(ctx)
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const localOnly = buildLocalUsageOnlyResult(ctx)
       if (localOnly) {
-        ctx.host.log.info("using ccusage fallback without OAuth credentials")
+        if (creds && creds.account) {
+          ctx.host.log.info("using ccusage fallback with account-file metadata and no OAuth credentials")
+        } else {
+          ctx.host.log.info("using ccusage fallback without OAuth credentials")
+        }
         return localOnly
       }
+
+      if (creds && creds.account) {
+        ctx.host.log.info("using account-file signed-in fallback without OAuth credentials")
+        return buildAccountOnlyResult(ctx, creds.account)
+      }
+
       ctx.host.log.error("probe failed: not logged in")
       throw "Not logged in. Run `claude` to authenticate."
     }

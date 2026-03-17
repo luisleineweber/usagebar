@@ -18,6 +18,56 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("uses the account file as a signed-in fallback when OAuth credentials are missing", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = (path) => path === "~/.claude.json"
+    ctx.host.fs.readText = () =>
+      JSON.stringify({
+        oauthAccount: {
+          organizationName: "Luis Individual Org",
+          billingType: "prepaid",
+        },
+        primaryApiKey: "sk-ant-api03-test-token",
+      })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBeNull()
+    expect(result.lines.find((line) => line.label === "Status")?.text).toBe("Signed in")
+    expect(result.lines.find((line) => line.label === "Workspace")?.value).toBe("Luis Individual Org")
+    expect(result.lines.find((line) => line.label === "Billing")?.value).toBe("Prepaid")
+    expect(result.lines.find((line) => line.label === "Usage")?.value).toContain("OAuth usage unavailable")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("uses account-file oauth credentials when the legacy credentials file is missing", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = (path) => path === "~/.claude.json"
+    ctx.host.fs.readText = () =>
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: "token",
+          subscriptionType: "pro",
+        },
+        oauthAccount: {
+          organizationName: "Luis Individual Org",
+        },
+      })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Pro")
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+  })
+
   it("throws when credentials are unreadable", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => true
