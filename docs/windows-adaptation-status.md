@@ -19,6 +19,7 @@ Working now:
 - Antigravity on Windows, including free-usage style pools when exposed by the local app
 - Cursor Windows roaming DB lookup
 - Claude local-usage fallback through `ccusage`
+- Copilot surfaced as an experimental Windows provider with active `gh` account selection
 - OpenCode surfaced again as an experimental Windows provider
 - Gemini surfaced as an experimental Windows provider with Windows CLI OAuth path discovery
 - JetBrains AI Assistant surfaced as an experimental Windows provider
@@ -28,6 +29,7 @@ Working now:
 
 - Cursor still needs more real-world validation across free and paid account states.
 - Claude Windows auth/session parity is incomplete.
+- Copilot still needs real free/paid validation and multi-account runtime evidence on Windows.
 - Gemini still needs real signed-in Windows validation beyond the new CLI path coverage.
 - Only active/logged-in providers should appear outside Settings; that cleanup is still being tightened.
 - The panel still needs better Windows anchoring when its height changes after opening.

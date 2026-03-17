@@ -199,18 +199,22 @@ const resp = ctx.host.http.request({
 })
 ```
 
-## Keychain (macOS only)
+## Keychain / Credential Store
 
 ```typescript
 host.keychain.readGenericPassword(service: string): string
+host.keychain.readGenericPasswordForAccount(service: string, account: string): string
+host.keychain.writeGenericPassword(service: string, value: string): void
+host.keychain.deleteGenericPassword(service: string): void
 ```
 
-Reads a generic password from the macOS Keychain.
+Reads and writes credentials through the platform credential store.
 
 ### Behavior
 
-- **macOS only**: Throws on other platforms
-- **Throws if not found**: Returns the password string if found, throws otherwise
+- `readGenericPassword(service)` uses the OpenUsage-scoped credential namespace.
+- `readGenericPasswordForAccount(service, account)` reads a native service/account pair directly. Use it only when a provider must integrate with an external tool's credential entry, such as GitHub CLI.
+- All keychain methods throw if the credential store is unavailable or the requested entry cannot be read.
 
 ### Example
 
