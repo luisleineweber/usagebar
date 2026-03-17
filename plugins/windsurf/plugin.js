@@ -2,29 +2,146 @@
   var LS_SERVICE = "exa.language_server_pb.LanguageServerService"
   var CLOUD_SERVICE = "exa.seat_management_pb.SeatManagementService"
   var CLOUD_URL = "https://server.codeium.com"
+  var WINDOWS_PRODUCT_PATHS = [
+    "D:/Windsurf/resources/app/product.json",
+    "~/AppData/Local/Programs/Windsurf/resources/app/product.json",
+    "C:/Program Files/Windsurf/resources/app/product.json",
+    "C:/Program Files (x86)/Windsurf/resources/app/product.json",
+  ]
+  var WINDOWS_NEXT_PRODUCT_PATHS = [
+    "D:/Windsurf - Next/resources/app/product.json",
+    "~/AppData/Local/Programs/Windsurf - Next/resources/app/product.json",
+    "C:/Program Files/Windsurf - Next/resources/app/product.json",
+    "C:/Program Files (x86)/Windsurf - Next/resources/app/product.json",
+  ]
+  var WINDOWS_PACKAGE_PATHS = [
+    "D:/Windsurf/resources/app/package.json",
+    "~/AppData/Local/Programs/Windsurf/resources/app/package.json",
+    "C:/Program Files/Windsurf/resources/app/package.json",
+    "C:/Program Files (x86)/Windsurf/resources/app/package.json",
+  ]
+  var WINDOWS_NEXT_PACKAGE_PATHS = [
+    "D:/Windsurf - Next/resources/app/package.json",
+    "~/AppData/Local/Programs/Windsurf - Next/resources/app/package.json",
+    "C:/Program Files/Windsurf - Next/resources/app/package.json",
+    "C:/Program Files (x86)/Windsurf - Next/resources/app/package.json",
+  ]
 
-  // Windsurf variants — tried in order (Windsurf first, then Windsurf Next).
+  // Windsurf variants - tried in order (Windsurf first, then Windsurf Next).
   // Markers use --ide_name exact matching in the Rust discover code.
   var VARIANTS = [
     {
       marker: "windsurf",
       ideName: "windsurf",
-      stateDb: "~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb",
+      darwinStateDb: "~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb",
+      windowsStateDb: "~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb",
       appPlist: "/Applications/Windsurf.app/Contents/Info.plist",
+      windowsProductPaths: WINDOWS_PRODUCT_PATHS,
+      windowsPackagePaths: WINDOWS_PACKAGE_PATHS,
     },
     {
       marker: "windsurf-next",
       ideName: "windsurf-next",
-      stateDb: "~/Library/Application Support/Windsurf - Next/User/globalStorage/state.vscdb",
+      darwinStateDb: "~/Library/Application Support/Windsurf - Next/User/globalStorage/state.vscdb",
+      windowsStateDb: "~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb",
       appPlist: "/Applications/Windsurf - Next.app/Contents/Info.plist",
+      windowsProductPaths: WINDOWS_NEXT_PRODUCT_PATHS,
+      windowsPackagePaths: WINDOWS_NEXT_PACKAGE_PATHS,
     },
   ]
+
+  function stateDbPath(ctx, variant) {
+    if (ctx.app.platform === "windows") return variant.windowsStateDb || variant.darwinStateDb
+    return variant.darwinStateDb
+  }
+
+  function lsProcessName(ctx) {
+    if (ctx.app.platform === "windows") return "language_server_windows"
+    if (ctx.app.platform === "linux") return "language_server_linux"
+    return "language_server_macos"
+  }
+
+  function lsOsName(ctx) {
+    if (ctx.app.platform === "windows") return "windows"
+    if (ctx.app.platform === "linux") return "linux"
+    return "macos"
+  }
+
+  function trimString(value) {
+    if (value === null || value === undefined) return null
+    var text = String(value).trim()
+    return text || null
+  }
+
+  function readJsonFile(ctx, path) {
+    if (!path || !ctx.host.fs || !ctx.host.fs.exists || !ctx.host.fs.readText) return null
+    if (!ctx.host.fs.exists(path)) return null
+    return ctx.util.tryParseJson(ctx.host.fs.readText(path))
+  }
+
+  function loadWindowsInstalledMetadata(ctx, variant) {
+    var productPaths = variant.windowsProductPaths || []
+    for (var i = 0; i < productPaths.length; i++) {
+      try {
+        var product = readJsonFile(ctx, productPaths[i])
+        if (!product || typeof product !== "object") continue
+        var ideVersion = trimString(product.windsurfVersion) || trimString(product.version)
+        var extensionVersion = trimString(product.codeiumVersion) || ideVersion
+        if (ideVersion || extensionVersion) {
+          return {
+            ideVersion: ideVersion || extensionVersion,
+            extensionVersion: extensionVersion || ideVersion,
+          }
+        }
+      } catch (e) {
+        ctx.host.log.warn("failed to read product metadata for " + variant.marker + ": " + String(e))
+      }
+    }
+
+    var packagePaths = variant.windowsPackagePaths || []
+    for (var j = 0; j < packagePaths.length; j++) {
+      try {
+        var pkg = readJsonFile(ctx, packagePaths[j])
+        var pkgVersion = pkg && typeof pkg === "object" ? trimString(pkg.version) : null
+        if (!pkgVersion) continue
+        return { ideVersion: pkgVersion, extensionVersion: pkgVersion }
+      } catch (e2) {
+        ctx.host.log.warn("failed to read package metadata for " + variant.marker + ": " + String(e2))
+      }
+    }
+
+    return null
+  }
+
+  function loadDarwinInstalledMetadata(ctx, variant) {
+    var path = variant && variant.appPlist
+    if (!path) return null
+    try {
+      if (!ctx.host.fs || !ctx.host.fs.exists || !ctx.host.fs.readText) return null
+      if (!ctx.host.fs.exists(path)) return null
+      var text = ctx.host.fs.readText(path)
+      if (!text) return null
+      var match = String(text).match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/)
+      if (!match || !match[1]) return null
+      var version = String(match[1]).trim() || null
+      if (!version) return null
+      return { ideVersion: version, extensionVersion: version }
+    } catch (e) {
+      ctx.host.log.warn("failed to read installed version for " + variant.marker + ": " + String(e))
+      return null
+    }
+  }
+
+  function loadInstalledMetadata(ctx, variant) {
+    if (ctx.app.platform === "windows") return loadWindowsInstalledMetadata(ctx, variant)
+    return loadDarwinInstalledMetadata(ctx, variant)
+  }
 
   // --- LS discovery ---
 
   function discoverLs(ctx, variant) {
     return ctx.host.ls.discover({
-      processName: "language_server_macos",
+      processName: lsProcessName(ctx),
       markers: [variant.marker],
       csrfFlag: "--csrf_token",
       portFlag: "--extension_server_port",
@@ -35,7 +152,7 @@
   function loadApiKey(ctx, variant) {
     try {
       var rows = ctx.host.sqlite.query(
-        variant.stateDb,
+        stateDbPath(ctx, variant),
         "SELECT value FROM ItemTable WHERE key = 'windsurfAuthStatus' LIMIT 1"
       )
       var parsed = ctx.util.tryParseJson(rows)
@@ -45,23 +162,6 @@
       return auth.apiKey
     } catch (e) {
       ctx.host.log.warn("failed to read API key from " + variant.marker + ": " + String(e))
-      return null
-    }
-  }
-
-  function loadInstalledVersion(ctx, variant) {
-    var path = variant && variant.appPlist
-    if (!path) return null
-    try {
-      if (!ctx.host.fs || !ctx.host.fs.exists || !ctx.host.fs.readText) return null
-      if (!ctx.host.fs.exists(path)) return null
-      var text = ctx.host.fs.readText(path)
-      if (!text) return null
-      var match = String(text).match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/)
-      if (!match || !match[1]) return null
-      return String(match[1]).trim() || null
-    } catch (e) {
-      ctx.host.log.warn("failed to read installed version for " + variant.marker + ": " + String(e))
       return null
     }
   }
@@ -82,7 +182,7 @@
             extensionVersion: "unknown",
             ide: ideName,
             ideVersion: "unknown",
-            os: "macos",
+            os: lsOsName(ctx),
           },
         },
       }),
@@ -194,14 +294,18 @@
       return null
     }
 
-    var version = (discovery.extra && discovery.extra.windsurf_version) || "unknown"
+    var installed = loadInstalledMetadata(ctx, variant)
+    var ideVersion = (discovery.extra && discovery.extra.windsurf_version) ||
+      (installed && installed.ideVersion) ||
+      "unknown"
+    var extensionVersion = (installed && installed.extensionVersion) || ideVersion
 
     var metadata = {
       apiKey: apiKey,
       ideName: variant.ideName,
-      ideVersion: version,
+      ideVersion: ideVersion,
       extensionName: variant.ideName,
-      extensionVersion: version,
+      extensionVersion: extensionVersion,
       locale: "en",
     }
 
@@ -220,7 +324,9 @@
   // --- Cloud fallback ---
 
   function callCloud(ctx, apiKey, variant) {
-    var appVersion = loadInstalledVersion(ctx, variant) || "0.0.0"
+    var installed = loadInstalledMetadata(ctx, variant) || {}
+    var ideVersion = installed.ideVersion || "0.0.0"
+    var extensionVersion = installed.extensionVersion || ideVersion
     try {
       var resp = ctx.host.http.request({
         method: "POST",
@@ -233,9 +339,9 @@
           metadata: {
             apiKey: apiKey,
             ideName: variant.ideName,
-            ideVersion: appVersion,
+            ideVersion: ideVersion,
             extensionName: variant.ideName,
-            extensionVersion: appVersion,
+            extensionVersion: extensionVersion,
             locale: "en",
           },
         }),
@@ -268,9 +374,9 @@
       if (result) return result
     }
 
-    for (var i = 0; i < VARIANTS.length; i++) {
-      var result = probeCloudVariant(ctx, VARIANTS[i])
-      if (result) return result
+    for (var j = 0; j < VARIANTS.length; j++) {
+      var cloudResult = probeCloudVariant(ctx, VARIANTS[j])
+      if (cloudResult) return cloudResult
     }
 
     throw "Start Windsurf or sign in and try again."
