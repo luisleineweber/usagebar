@@ -8,9 +8,11 @@ UsageBar is a fork of [OpenUsage](https://github.com/robinebers/openusage), redi
 
 ## Download
 
-[**Download the latest release**](https://github.com/Loues000/usagebar/releases/latest)
+There is **no release yet** for this fork.
 
-The app auto-updates. Install once and you're set.
+For now:
+- Build from source (see “Build from source” below).
+- Or follow the upstream project releases if you just want something stable: [OpenUsage releases](https://github.com/robinebers/openusage/releases).
 
 ## What It Does
 
@@ -24,11 +26,7 @@ UsageBar lives in your Windows tray and shows you how much of your AI coding sub
 
 ## Supported Providers
 
-Windows-first fork status today:
-
-- Working on Windows: Antigravity, Claude, Codex, Cursor, JetBrains AI Assistant, Ollama
-- Experimental on Windows: Amp, Copilot, Gemini, OpenCode, Windsurf
-- Settings-only placeholders on Windows for now: Augment, Factory / Droid, Kilo, Kimi Code, Kimi K2, Kiro, MiniMax, OpenRouter, Perplexity, Synthetic, Vertex AI, Warp, Z.ai
+### Documented providers
 
 - [**Amp**](docs/providers/amp.md) / free tier, bonus, credits
 - [**Antigravity**](docs/providers/antigravity.md) / all models
@@ -39,24 +37,30 @@ Windows-first fork status today:
 - [**Factory / Droid**](docs/providers/factory.md) / standard, premium tokens
 - [**Gemini**](docs/providers/gemini.md) / pro, flash, workspace/free/paid tier
 - [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) / quota, remaining
-- [**Kimi Code**](docs/providers/kimi.md) / session, weekly
+- [**Kimi**](docs/providers/kimi.md) / session, weekly
 - [**MiniMax**](docs/providers/minimax.md) / coding plan session
-- [**OpenCode**](docs/providers/opencode.md) / session, weekly web subscription usage
-- [**OpenCode Go**](docs/providers/opencode-go.md) / 5h, weekly, monthly local CLI spend
 - [**Ollama**](docs/providers/ollama.md) / plan, session, weekly
+- [**OpenCode**](docs/providers/opencode.md) / session, weekly
+- [**OpenCode (Go)**](docs/providers/opencode-go.md) / session, weekly
+- [**Perplexity**](docs/providers/perplexity.md) / groups, usage analytics, rate limits
 - [**Windsurf**](docs/providers/windsurf.md) / prompt credits, flex credits
 - [**Z.ai**](docs/providers/zai.md) / session, weekly, web searches
-- Planned Settings placeholders: Augment, Kilo, Kimi K2, Kiro, OpenRouter, Synthetic, Vertex AI, Warp
+
+### Additional plugins (docs pending)
+
+- **Augment** (`plugins/augment/`)
+- **Kilo** (`plugins/kilo/`)
+- **Kimi K2** (`plugins/kimi-k2/`)
+- **Kiro** (`plugins/kiro/`)
+- **OpenRouter** (`plugins/openrouter/`)
+- **Synthetic** (`plugins/synthetic/`)
+- **Vertex AI** (`plugins/vertex-ai/`)
+- **Warp** (`plugins/warp/`)
 
 ### Maybe Soon
 
-Near-term Windows rollout candidates:
 
-- **Copilot** / official `gh` auth flow, multi-account handling, Windows validation
-- **Gemini** / Windows CLI auth discovery, OAuth and API-key validation
-- **Vercel AI Gateway** / shared gateway key flow once the core Windows provider path is steadier
-
-Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/usagebar/issues/new)
+Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/openusage/issues/new)
 
 ## Fork Direction
 
@@ -70,7 +74,7 @@ Upstream lineage stays visible and upstream fixes can still be pulled in through
 
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
 - **Fix a bug.** Keep the change small, focused, and verified.
-- **Request a feature.** [Open an issue.](https://github.com/Loues000/usagebar/issues/new) Include the provider, auth source, and Windows-specific constraints.
+- **Request a feature.** [Open an issue.](https://github.com/Loues000/openusage/issues/new) Include the provider, auth source, and Windows-specific constraints.
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 
