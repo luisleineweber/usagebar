@@ -220,32 +220,18 @@
     })
   }
 
-  function probePort(ctx, scheme, port, csrf) {
-    ctx.host.http.request({
-      method: "POST",
-      url: scheme + "://127.0.0.1:" + port + "/" + LS_SERVICE + "/GetUnleashData",
-      headers: {
-        "Content-Type": "application/json",
-        "Connect-Protocol-Version": "1",
-        "x-codeium-csrf-token": csrf,
-      },
-      bodyText: JSON.stringify({
-        context: { properties: { devMode: "false", extensionVersion: "unknown", ide: "antigravity", ideVersion: "unknown", os: lsOsName(ctx) } },
-      }),
-      timeoutMs: 5000,
-      dangerouslyIgnoreTls: scheme === "https",
-    })
-    return true
-  }
-
-  function findWorkingPort(ctx, discovery) {
+  function lsCandidates(discovery) {
+    var candidates = []
     var ports = discovery.ports || []
     for (var i = 0; i < ports.length; i++) {
-      try { if (probePort(ctx, "https", ports[i], discovery.csrf)) return { port: ports[i], scheme: "https" } } catch (e) {}
-      try { if (probePort(ctx, "http", ports[i], discovery.csrf)) return { port: ports[i], scheme: "http" } } catch (e) {}
+      candidates.push({ port: ports[i], scheme: "https", kind: "port" })
+      candidates.push({ port: ports[i], scheme: "http", kind: "port" })
     }
-    if (discovery.extensionPort) return { port: discovery.extensionPort, scheme: "http" }
-    return null
+    if (discovery.extensionPort) {
+      candidates.push({ port: discovery.extensionPort, scheme: "http", kind: "extensionPort" })
+      candidates.push({ port: discovery.extensionPort, scheme: "https", kind: "extensionPort" })
+    }
+    return candidates
   }
 
   function callLs(ctx, port, scheme, csrf, method, body) {
@@ -503,23 +489,49 @@
   function probeLs(ctx, apiKey) {
     var discovery = discoverLs(ctx)
     if (!discovery) return null
-    var found = findWorkingPort(ctx, discovery)
-    if (!found) return null
 
     var metadata = { ideName: "antigravity", extensionName: "antigravity", ideVersion: "unknown", locale: "en" }
     if (apiKey) metadata.apiKey = apiKey
 
-    var data = null
-    try {
-      data = callLs(ctx, found.port, found.scheme, discovery.csrf, "GetUserStatus", { metadata: metadata })
-    } catch (e) {
-      ctx.host.log.warn("GetUserStatus threw: " + String(e))
+    var candidates = lsCandidates(discovery)
+    for (var i = 0; i < candidates.length; i++) {
+      var candidate = candidates[i]
+      var data = null
+      try {
+        data = callLs(ctx, candidate.port, candidate.scheme, discovery.csrf, "GetUserStatus", { metadata: metadata })
+      } catch (e) {
+        ctx.host.log.warn(
+          "GetUserStatus threw on " +
+            candidate.kind +
+            " " +
+            candidate.scheme +
+            "://" +
+            candidate.port +
+            ": " +
+            String(e)
+        )
+      }
+      if (!(data && data.userStatus)) {
+        try {
+          data = callLs(ctx, candidate.port, candidate.scheme, discovery.csrf, "GetCommandModelConfigs", { metadata: metadata })
+        } catch (e) {
+          ctx.host.log.warn(
+            "GetCommandModelConfigs threw on " +
+              candidate.kind +
+              " " +
+              candidate.scheme +
+              "://" +
+              candidate.port +
+              ": " +
+              String(e)
+          )
+        }
+      }
+      if (!data) continue
+      var parsed = parseLsResult(data)
+      if (parsed.models.length > 0 || parsed.plan) return parsed
     }
-    if (!(data && data.userStatus)) {
-      data = callLs(ctx, found.port, found.scheme, discovery.csrf, "GetCommandModelConfigs", { metadata: metadata })
-    }
-    if (!data) return null
-    return parseLsResult(data)
+    return null
   }
 
   function requestCloudCode(ctx, token) {

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "augment",
+  "name": "Augment",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "platformSupport": {
+    "windows": {
+      "state": "blocked",
+      "message": "Windows placeholder. Planned path: local Augment app or CLI session detection first; probing is not implemented yet."
+    }
+  },
+  "lines": [
+    { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
+    { "type": "text", "label": "Session", "scope": "detail" }
+  ]
+}

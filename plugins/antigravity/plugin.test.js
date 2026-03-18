@@ -482,17 +482,46 @@ describe("antigravity plugin", () => {
     let usedPort = null
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
-      if (url.includes("GetUnleashData") && url.includes("99999")) throw new Error("refused")
+      if ((url.includes("GetUserStatus") || url.includes("GetCommandModelConfigs")) && url.includes("99999")) {
+        return { status: 404, bodyText: "" }
+      }
       if (url.includes("GetUserStatus")) {
         usedPort = Number(url.match(/:(\d+)\//)[1])
         return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse()) }
       }
-      return { status: 200, bodyText: "{}" }
+      return { status: 500, bodyText: "" }
     })
 
     const plugin = await loadPlugin()
     plugin.probe(ctx)
 
     expect(usedPort).toBe(42010)
+  })
+
+  it("skips unusable LS ports until one returns quota data", async () => {
+    const ctx = makeCtx()
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery({ ports: [42001, 42002], extensionPort: 42010 }))
+    let usedPort = null
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      const port = Number(url.match(/:(\d+)\//)[1])
+      if (url.includes("GetUserStatus")) {
+        if (port === 42001) return { status: 404, bodyText: "" }
+        usedPort = port
+        return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse()) }
+      }
+      if (url.includes("GetCommandModelConfigs")) {
+        if (port === 42001) return { status: 404, bodyText: "" }
+        return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse({ userStatus: null, clientModelConfigs: [] })) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Pro")
+    expect(usedPort).toBe(42002)
+    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
   })
 })
