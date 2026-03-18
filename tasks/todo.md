@@ -1,3 +1,36 @@
+# Fix settings provider selection isolation
+
+## Acceptance Criteria
+- [x] Selecting a provider inside the Settings window updates only the settings detail pane and does not switch/open the tray bar provider view.
+- [x] The selected provider row keeps its enabled checkbox visually distinct against the light selected background.
+- [x] Focused frontend tests cover the settings-only provider selection behavior.
+- [x] Verification captures the focused test command/result before the task is marked done.
+
+## Plan
+- [x] Patch the settings provider row interaction so selection stays local to the Settings window.
+- [x] Adjust the selected-row checkbox styling so it does not disappear into the selected card background.
+- [x] Add/update focused React tests for the selection behavior, then run targeted verification.
+
+## Verification Notes
+- Verified the settings slice with `npx vitest run src/pages/settings.test.tsx` -> 1 file passed, 8 tests passed.
+
+# Surface missing provider placeholders from the source-evaluation spec
+
+## Acceptance Criteria
+- [x] Every provider listed as missing from `docs/specs/provider-source-evaluation-2026-03-16.md` appears in Settings on Windows.
+- [x] Each new provider is surfaced as a blocked placeholder, so it stays visible in Settings but cannot be enabled or probed yet.
+- [x] Each placeholder provider folder includes a short implementation-plan file describing the intended future source/auth path.
+- [x] Focused frontend verification covers the placeholder provider detail/status behavior before the task is marked done.
+
+## Plan
+- [x] Add placeholder plugin folders/manifests/icons for the missing providers from the spec.
+- [x] Add provider-settings copy so each placeholder detail view explains the planned Windows implementation path.
+- [x] Add/update focused tests for blocked placeholder rendering, then run targeted verification.
+
+## Verification Notes
+- Verified bundled plugin sync with `node ./copy-bundled.cjs` -> bundled plugin count increased to 25 and now includes `augment`, `kilo`, `kimi-k2`, `kiro`, `openrouter`, `synthetic`, `vertex-ai`, and `warp`.
+- Verified placeholder settings/detail behavior with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 11 tests passed.
+
 # Enable Windsurf experimental support on Windows
 
 ## Acceptance Criteria
@@ -35,6 +68,23 @@
 ## Verification Notes
 - Confirmed locally that this Windows machine has `C:\Users\llein\.claude.json` with `oauthAccount` plus `primaryApiKey`, while `C:\Users\llein\.claude\.credentials.json` is absent; the existing plugin would have treated that as logged out unless local ccusage happened to mask it.
 - Verified the Claude slice with `npx vitest run plugins/claude/plugin.test.js` -> 1 file passed, 69 tests passed.
+
+# Move Windows provider secrets to DPAPI-backed local storage
+
+## Acceptance Criteria
+- [x] Windows provider-secret saves no longer depend on Credential Manager persistence.
+- [x] Windows provider-secret reads prefer the DPAPI-backed local store and fall back to older keyring entries for migration.
+- [x] Windows provider-secret deletes remove both the local store entry and any legacy keyring entries.
+- [x] Focused Rust verification covers the new provider-secret store slice.
+
+## Plan
+- [x] Add a Windows-only provider-secret store backed by DPAPI-encrypted local app data.
+- [x] Rewire the Tauri save/delete commands and plugin host read path to use the new store on Windows.
+- [x] Keep old keyring reads/deletes as fallback cleanup during migration.
+- [x] Run focused cargo verification and update the repo notes.
+
+## Verification Notes
+- Verified the Windows provider-secret storage slice with `cargo test --manifest-path src-tauri/Cargo.toml provider_secret_` -> 5 Rust tests passed.
 
 # Switch Windows provider secrets to explicit targets
 
@@ -107,6 +157,22 @@
 - Confirmed locally that `gh auth status --json hosts` reports the active account `Loues000`, `gh auth token` returns a token successfully, and Windows Credential Manager contains `gh:github.com:Loues000`; the break was in OpenUsage's narrower token-read path, not in the user's GH login state.
 - Verified the Copilot plugin slice with `npx vitest run plugins/copilot/plugin.test.js` -> 1 file passed, 36 tests passed.
 - Verified the host API surface with `cargo test --manifest-path src-tauri/Cargo.toml keychain_api_exposes_account_read_and_write` -> 1 Rust test passed.
+
+# Harden Antigravity mixed-port LS selection
+
+## Acceptance Criteria
+- [x] Antigravity keeps trying discovered LS port/scheme candidates until one returns usable usage data instead of committing to the first non-throwing probe.
+- [x] A dead or non-LS extension port no longer blocks a valid direct LS port on Windows.
+- [x] Focused Antigravity plugin coverage includes a mixed-port regression where the first candidate fails and a later candidate succeeds.
+
+## Plan
+- [x] Replace the one-shot probe-port selection with candidate iteration over discovered ports/schemes plus extension-port fallback.
+- [x] Add a focused Antigravity regression test for mixed usable/unusable LS candidates.
+- [x] Run targeted verification and capture the result before marking the slice done.
+
+## Verification Notes
+- Confirmed on this Windows machine that the live Antigravity LS currently exposes mixed candidates at once: `54226` serves the LS over `https`, `54227` serves the LS over `http`, `54234` is unusable, and the extension port `54628` returns `404` for `GetUserStatus`/`GetCommandModelConfigs`; the old plugin could still commit too early to a bad candidate.
+- Verified the hardened Antigravity LS selection with `bun run test -- plugins/antigravity/plugin.test.js` -> 1 file passed, 14 tests passed.
 
 # Fix Antigravity quota source and tray first-open sizing
 
@@ -258,6 +324,37 @@
 - [x] The plan distinguishes between already-working, hidden, blocked, and not-started providers.
 - [x] The plan includes cross-cutting work, provider-specific next steps, and verification criteria.
 - [x] Existing Windows docs link to the new plan or clearly reference it.
+
+# Clarify OpenCode provider setup and naming
+
+## Acceptance Criteria
+- [x] `OpenCode` has a provider doc that explains the current web/cookie flow and links from `README.md`.
+- [x] The docs explain why `OpenCode` and `OpenCode Go` both exist and what each one tracks.
+- [x] OpenCode setup copy tells users where usage is visible on the website today and how to capture the full `Cookie` request header.
+- [x] Focused verification covers the affected provider-settings path before the task is marked done.
+
+## Plan
+- [x] Add the OpenCode clarification slice to the docs with current plugin behavior and setup steps.
+- [x] Update README/setup copy to point at the new doc and explain the provider split.
+- [x] Run focused verification, review the diff, then capture the result in notes.
+
+## Verification Notes
+- Verified the OpenCode setup copy slice with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 10 tests passed.
+
+# Improve OpenCode usage diagnostics
+
+## Acceptance Criteria
+- [x] OpenCode distinguishes "no subscription data" from "response shape missing expected usage windows" with actionable wording.
+- [x] The actionable error tells the user to verify the workspace ID from the billing URL or `/_server` payload when applicable.
+- [x] Focused OpenCode plugin tests cover the improved diagnostic path.
+
+## Plan
+- [x] Tighten the OpenCode plugin parse error handling around missing rolling/weekly fields.
+- [x] Add focused plugin coverage for the clearer diagnostics.
+- [x] Run targeted verification and capture the result.
+
+## Verification Notes
+- Verified the OpenCode diagnostics slice with `npx vitest run plugins/opencode/plugin.test.js` -> 1 file passed, 4 tests passed.
 
 ## Plan
 - [x] Consolidate current Windows support notes and provider audit findings into one rollout outline.
@@ -439,3 +536,20 @@
 
 ## Verification Notes
 - Verified the Amp slice with `bun run test -- plugins/amp/plugin.test.js` -> 1 file passed, 29 tests passed.
+
+# Guard Windows tauri dev against stale openusage.exe locks
+
+## Acceptance Criteria
+- [x] `bun run tauri dev` on Windows preflights and terminates only stale local `src-tauri\\target\\debug\\openusage.exe` processes from this workspace before launching the Tauri CLI.
+- [x] Non-`dev` Tauri commands keep working through the same wrapper without changing their arguments.
+- [x] Verification captures a Windows run showing the stale-process guard and successful Tauri CLI handoff.
+
+## Plan
+- [x] Add a small Node wrapper for the local Tauri CLI and keep it as the package entry point.
+- [x] On Windows `dev`, match running `openusage.exe` processes by exact executable path and stop only those stale local dev instances.
+- [x] Verify the wrapper on this machine, then update lessons/choices/breadcrumbs and mark the slice done.
+
+## Verification Notes
+- Confirmed a stale local debug process was present at `D:\UsageBar\openusage\src-tauri\target\debug\openusage.exe` (PID `22612`) before the fix.
+- Verified `bun run tauri dev` now prints `Stopped stale OpenUsage dev process PID 22612`, starts Vite, recompiles Rust, and reaches `Running target\\debug\\openusage.exe` instead of failing with `failed to remove ... openusage.exe` / `os error 5`.
+- Verified non-dev passthrough with `bun run tauri --version` -> `tauri-cli 2.10.1`.

@@ -1,6 +1,6 @@
 import { Blocks, Settings2 } from "lucide-react"
 import { GeneralSettingsPane } from "@/components/settings/general-settings-pane"
-import { ProvidersSettingsPane, type ProviderSelectionOptions } from "@/components/settings/providers-settings-pane"
+import { ProvidersSettingsPane } from "@/components/settings/providers-settings-pane"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
@@ -17,7 +17,7 @@ import type {
 interface SettingsPageProps {
   providers: SettingsPluginState[]
   selectedProviderId: string | null
-  onSelectedProviderChange: (id: string, options?: ProviderSelectionOptions) => void
+  onSelectedProviderChange: (id: string) => void
   settingsTab: "general" | "providers"
   onSettingsTabChange: (value: "general" | "providers") => void
   onReorder: (orderedIds: string[]) => void

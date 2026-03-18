@@ -171,6 +171,23 @@ describe("SettingsPage", () => {
     expect(screen.getAllByText("Not signed in").length).toBeGreaterThan(0)
   })
 
+  it("keeps provider selection local to the Settings window", async () => {
+    const onSelectedProviderChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        settingsTab="providers"
+        onSettingsTabChange={vi.fn()}
+        selectedProviderId="opencode"
+        onSelectedProviderChange={onSelectedProviderChange}
+      />
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: /codex/i }))
+
+    expect(onSelectedProviderChange.mock.calls).toContainEqual(["codex"])
+  })
+
   it("reorders providers from the Providers tab", async () => {
     const onReorder = vi.fn()
     render(<TestHarness onReorder={onReorder} />)

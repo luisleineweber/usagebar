@@ -23,10 +23,6 @@ import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { ProviderConfig } from "@/lib/provider-settings"
 import { cn } from "@/lib/utils"
 
-export type ProviderSelectionOptions = {
-  revealInTray?: boolean
-}
-
 function ProviderIconMask({ iconUrl, brandColor }: { iconUrl: string; brandColor?: string }) {
   return (
     <span
@@ -128,6 +124,10 @@ function SortableProviderRow({
         key={`${plugin.id}-${plugin.enabled}`}
         checked={plugin.enabled}
         disabled={!plugin.supported}
+        className={cn(
+          selected
+            && "border-foreground/18 bg-foreground/6 data-checked:border-foreground data-checked:bg-foreground data-checked:text-background"
+        )}
         onCheckedChange={(checked) => {
           const nextEnabled = checked === true
           if (nextEnabled === plugin.enabled) return
@@ -142,7 +142,7 @@ function SortableProviderRow({
 type ProvidersSettingsPaneProps = {
   providers: SettingsPluginState[]
   selectedProviderId: string | null
-  onSelectedProviderChange: (id: string, options?: ProviderSelectionOptions) => void
+  onSelectedProviderChange: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
   onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
@@ -219,7 +219,7 @@ export function ProvidersSettingsPane({
                     key={plugin.id}
                     plugin={plugin}
                     selected={plugin.id === selectedProvider?.id}
-                    onSelect={() => onSelectedProviderChange(plugin.id, { revealInTray: true })}
+                    onSelect={() => onSelectedProviderChange(plugin.id)}
                     onToggle={onToggle}
                   />
                 ))}
