@@ -53,7 +53,7 @@ const OPENCODE_SOURCE_OPTIONS: ProviderSettingsOption[] = [
   {
     value: "manual",
     label: "Manual",
-    hint: "Paste a Cookie header from the OpenCode billing page.",
+    hint: "Paste the full Cookie request header from a signed-in opencode.ai workspace billing or _server request.",
   },
   {
     value: "auto",
@@ -61,6 +61,20 @@ const OPENCODE_SOURCE_OPTIONS: ProviderSettingsOption[] = [
     hint: "Browser import is planned, but not wired up on Windows yet.",
   },
 ]
+
+function plannedWindowsProviderDefinition(
+  title: string,
+  summary: string,
+  connectHint: string
+): ProviderSettingsDefinition {
+  return {
+    mode: "automatic",
+    title,
+    summary,
+    statusHint: "Windows placeholder only. Probing stays disabled until the provider implementation lands.",
+    connectHint,
+  }
+}
 
 const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> = {
   ollama: {
@@ -79,20 +93,20 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   opencode: {
     mode: "editable",
     title: "OpenCode Setup",
-    summary: "CodexBar-style source selection with secure manual cookie storage.",
+    summary: "Tracks OpenCode web subscription usage from the signed-in workspace billing session. This is separate from OpenCode Go local CLI spend.",
     statusHint: "Manual mode is the reliable path in this Windows-first build.",
-    connectHint: "Open OpenCode billing, copy the browser Cookie header, paste it here, then retry. Add a workspace override if auto-discovery misses the right team.",
+    connectHint: "Sign in at https://opencode.ai, open the target workspace billing page, then copy the full Cookie request header from DevTools > Network for the billing page or an opencode.ai/_server request. Paste that here, then add a workspace override only if auto-discovery picks the wrong team.",
     sourceOptions: OPENCODE_SOURCE_OPTIONS,
     secretField: {
       key: "cookieHeader",
       label: "Cookie header",
-      description: "Paste the full Cookie header captured from opencode.ai/workspace/.../billing.",
-      placeholder: "auth=...; __Host-auth=...;",
+      description: "Paste the full Cookie request header from a signed-in opencode.ai/workspace/.../billing or opencode.ai/_server request. Do not paste Set-Cookie.",
+      placeholder: "auth=...; __Host-auth=...; other_cookie=...;",
     },
     textField: {
       key: "workspaceId",
       label: "Workspace ID",
-      description: "Optional override when workspace lookup fails.",
+      description: "Optional override when workspace lookup fails or your account has multiple teams. Paste the wrk_... ID from the billing URL or an _server payload.",
       placeholder: "wrk_...",
     },
   },
@@ -194,6 +208,46 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     statusHint: "Manual provider controls are not exposed yet.",
     connectHint: "Sign in to Z.ai locally, then refresh.",
   },
+  augment: plannedWindowsProviderDefinition(
+    "Augment Setup",
+    "Planned Windows implementation: detect local Augment app or CLI session state first, then add a provider-specific local probe before considering any web flow.",
+    "Target plan: reuse local process or CLI auth on Windows instead of browser-cookie scraping."
+  ),
+  kilo: plannedWindowsProviderDefinition(
+    "Kilo Setup",
+    "Planned Windows implementation: read local Kilo config or CLI auth first, with direct API usage once a stable token source is confirmed.",
+    "Target plan: prefer config or CLI-auth detection on Windows; add manual API-key fallback only if the local path is insufficient."
+  ),
+  "kimi-k2": plannedWindowsProviderDefinition(
+    "Kimi K2 Setup",
+    "Planned Windows implementation: ship this as a direct API-key provider backed by app-owned secret storage and Kimi credits endpoints.",
+    "Target plan: add secure API-key storage plus quota/credits fetches; no browser-cookie dependency is planned for v1."
+  ),
+  kiro: plannedWindowsProviderDefinition(
+    "Kiro Setup",
+    "Planned Windows implementation: execute the local Kiro CLI usage command and parse its output instead of building a browser-session path.",
+    "Target plan: rely on CLI detection and parsing on Windows while that command remains available."
+  ),
+  openrouter: plannedWindowsProviderDefinition(
+    "OpenRouter Setup",
+    "Planned Windows implementation: use a stored API key against OpenRouter credits and key-info endpoints.",
+    "Target plan: add app-owned API-key storage and direct API calls; this should not need browser cookies."
+  ),
+  synthetic: plannedWindowsProviderDefinition(
+    "Synthetic Setup",
+    "Planned Windows implementation: use a stored API key against Synthetic quota endpoints as a straightforward token-based provider.",
+    "Target plan: add secure API-key storage and direct usage polling on Windows."
+  ),
+  "vertex-ai": plannedWindowsProviderDefinition(
+    "Vertex AI Setup",
+    "Planned Windows implementation: use Google ADC or gcloud application-default auth plus quota APIs, with optional local-log enrichment later.",
+    "Target plan: prefer official Google auth and quota APIs on Windows, not browser-session scraping."
+  ),
+  warp: plannedWindowsProviderDefinition(
+    "Warp Setup",
+    "Planned Windows implementation: use a stored Warp token against the limits GraphQL/API path as a direct account-token provider.",
+    "Target plan: add secure token storage and direct usage polling on Windows."
+  ),
 }
 
 function sanitizeSecretMetadata(value: unknown): Record<string, ProviderSecretMetadata> {

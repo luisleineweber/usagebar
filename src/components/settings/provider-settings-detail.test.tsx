@@ -27,6 +27,16 @@ const opencodePlugin = {
   primaryCandidates: [],
 }
 
+const openrouterPlaceholderPlugin = {
+  id: "openrouter",
+  name: "OpenRouter",
+  iconUrl: "/openrouter.svg",
+  supportState: "comingSoonOnWindows" as const,
+  supportMessage: "Windows placeholder. Planned path: stored API key plus direct OpenRouter credits and key-info endpoints.",
+  lines: [],
+  primaryCandidates: [],
+}
+
 describe("ProviderSettingsDetail", () => {
   it("shows connection guidance for a disconnected provider", () => {
     render(
@@ -216,5 +226,21 @@ describe("ProviderSettingsDetail", () => {
 
     expect(screen.getByText("This provider currently relies on local auto-detection and does not expose editable settings yet.")).toBeInTheDocument()
     expect(screen.queryByLabelText("Codex source")).not.toBeInTheDocument()
+  })
+
+  it("shows blocked placeholder guidance for planned Windows providers", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={openrouterPlaceholderPlugin}
+        enabled={false}
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText("Planned Windows implementation: use a stored API key against OpenRouter credits and key-info endpoints.")).toBeInTheDocument()
+    expect(screen.getAllByText("Windows placeholder. Planned path: stored API key plus direct OpenRouter credits and key-info endpoints.").length).toBeGreaterThan(0)
+    expect(screen.getByRole("checkbox")).toHaveAttribute("aria-disabled", "true")
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument()
   })
 })
