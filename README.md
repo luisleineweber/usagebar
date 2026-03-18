@@ -28,7 +28,7 @@ Windows-first fork status today:
 
 - Working on Windows: Antigravity, Claude, Codex, Cursor, JetBrains AI Assistant, Ollama
 - Experimental on Windows: Amp, Copilot, Gemini, OpenCode, Windsurf
-- Settings-only placeholders on Windows for now: Factory / Droid, Kimi Code, MiniMax, Perplexity, Z.ai
+- Settings-only placeholders on Windows for now: Augment, Factory / Droid, Kilo, Kimi Code, Kimi K2, Kiro, MiniMax, OpenRouter, Perplexity, Synthetic, Vertex AI, Warp, Z.ai
 
 - [**Amp**](docs/providers/amp.md) / free tier, bonus, credits
 - [**Antigravity**](docs/providers/antigravity.md) / all models
@@ -41,10 +41,12 @@ Windows-first fork status today:
 - [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) / quota, remaining
 - [**Kimi Code**](docs/providers/kimi.md) / session, weekly
 - [**MiniMax**](docs/providers/minimax.md) / coding plan session
-- [**OpenCode**](https://opencode.ai/) / session, weekly
+- [**OpenCode**](docs/providers/opencode.md) / session, weekly web subscription usage
+- [**OpenCode Go**](docs/providers/opencode-go.md) / 5h, weekly, monthly local CLI spend
 - [**Ollama**](docs/providers/ollama.md) / plan, session, weekly
 - [**Windsurf**](docs/providers/windsurf.md) / prompt credits, flex credits
 - [**Z.ai**](docs/providers/zai.md) / session, weekly, web searches
+- Planned Settings placeholders: Augment, Kilo, Kimi K2, Kiro, OpenRouter, Synthetic, Vertex AI, Warp
 
 ### Maybe Soon
 
