@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "warp",
+  "name": "Warp",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "platformSupport": {
+    "windows": {
+      "state": "blocked",
+      "message": "Windows placeholder. Planned path: stored Warp token plus direct limits API polling."
+    }
+  },
+  "lines": [
+    { "type": "progress", "label": "Requests", "scope": "overview", "primaryOrder": 1 },
+    { "type": "badge", "label": "Plan", "scope": "detail" }
+  ]
+}

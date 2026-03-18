@@ -193,7 +193,14 @@
     return null
   }
 
-  function parseSubscription(ctx, text, nowMs) {
+  function summarizeSubscriptionShape(parsed) {
+    if (!parsed || typeof parsed !== "object") return "response was not valid JSON"
+    var keys = Object.keys(parsed).slice(0, 8)
+    if (keys.length === 0) return "response JSON object was empty"
+    return "top-level keys: " + keys.join(", ")
+  }
+
+  function parseSubscription(ctx, text, nowMs, workspaceId) {
     var parsed = ctx.util.tryParseJson(text)
     var rolling = parsed
       ? findWindowUsage(parsed, ["rollingUsage", "rolling", "rolling_usage", "rollingWindow"])
@@ -224,13 +231,32 @@
       weeklyReset = weeklyResetMatch ? Number(weeklyResetMatch[1]) : null
     }
 
-    if (
-      rollingPercent === null ||
-      rollingReset === null ||
-      weeklyPercent === null ||
-      weeklyReset === null
-    ) {
-      throw "OpenCode usage data not found for this workspace."
+    var missing = []
+    if (rollingPercent === null) missing.push("rolling usage percent")
+    if (rollingReset === null) missing.push("rolling reset")
+    if (weeklyPercent === null) missing.push("weekly usage percent")
+    if (weeklyReset === null) missing.push("weekly reset")
+
+    if (missing.length > 0) {
+      var summary = summarizeSubscriptionShape(parsed)
+      if (ctx.host.log && typeof ctx.host.log.warn === "function") {
+        ctx.host.log.warn(
+          "opencode subscription response missing fields for " +
+            workspaceId +
+            ": " +
+            missing.join(", ") +
+            " (" +
+            summary +
+            ")"
+        )
+      }
+      throw (
+        "OpenCode returned billing data for workspace " +
+        workspaceId +
+        ", but it did not include the expected usage fields (" +
+        missing.join(", ") +
+        "). Verify the workspace ID from the billing URL or an opencode.ai/_server payload. If that workspace is correct, OpenCode likely changed the billing response shape."
+      )
     }
 
     return {
@@ -257,7 +283,7 @@
       throw "OpenCode has no subscription usage data for this workspace."
     }
 
-    var usage = parseSubscription(ctx, text, Date.now())
+    var usage = parseSubscription(ctx, text, Date.now(), workspaceId)
     return {
       lines: [
         ctx.line.progress({

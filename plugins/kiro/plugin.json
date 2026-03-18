@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "kiro",
+  "name": "Kiro",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "platformSupport": {
+    "windows": {
+      "state": "blocked",
+      "message": "Windows placeholder. Planned path: local Kiro CLI usage parsing."
+    }
+  },
+  "lines": [
+    { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
+    { "type": "badge", "label": "Plan", "scope": "detail" }
+  ]
+}
