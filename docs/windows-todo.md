@@ -1,13 +1,7 @@
-# Windows TODO
+# Windows TODO (moved)
 
-## Open Issues
+The Windows TODO list is now consolidated into `docs/windows.md`.
 
-- Panel anchoring is still too mac-like: it behaves top-aligned, but on Windows the taskbar is usually at the bottom. The panel should stay bottom-anchored to the taskbar/tray edge and grow upward as its height changes.
-- Antigravity is currently showing `100% left` all the time and needs a Windows-specific fix for real remaining-usage calculation.
-- Logged-out or currently unavailable providers should not be auto-removed from the sidebar. Their availability state should mainly affect how they are shown and toggled in Settings, not whether they disappear from navigation entirely.
+- Canonical Windows doc: `docs/windows.md`
 
-## Follow-Up
-
-- Recheck Cursor behavior across free, trial, and paid accounts on Windows.
-- Continue improving Claude Windows auth/session detection.
-- Finish Windows-specific window polish and tray interaction details.
+This file is kept as a stable pointer to avoid breaking existing links.
