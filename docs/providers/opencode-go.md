@@ -2,6 +2,11 @@
 
 > Uses local OpenCode history from SQLite to track observed OpenCode Go spend on this machine.
 
+This is separate from [OpenCode web usage](./opencode.md):
+
+- `OpenCode Go` reads local CLI history from `opencode.db`
+- `OpenCode` reads signed-in workspace subscription usage from the OpenCode website
+
 ## Overview
 
 - **Source of truth:** `~/.local/share/opencode/opencode.db`
