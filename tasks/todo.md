@@ -1,3 +1,20 @@
+# Improve AGENTS.md repo playbook
+
+## Acceptance Criteria
+- [x] `AGENTS.md` has no broken encoding, blank placeholders, or self-contradictory workflow rules.
+- [x] `AGENTS.md` reflects the current repo reality: UsageBar Windows-first positioning, current stack, current default commands, and current planning/docs workflow.
+- [x] The rewrite preserves the important local guardrails for plugins, Git/GitHub, lessons, choices, and breadcrumbs.
+- [x] Verification captures the `AGENTS.md` diff review before the task is marked done.
+
+## Plan
+- [x] Audit the current `AGENTS.md` against the live repo docs/scripts and note the concrete fixes needed.
+- [x] Rewrite `AGENTS.md` into a cleaner repo-specific operating guide with corrected wording and current commands.
+- [x] Record the rewrite default in `docs/choices.md`, leave a breadcrumb in `docs/breadcrumbs.md`, and review the final diff before marking done.
+
+## Verification Notes
+- Verified the rewrite with `git --no-pager diff -- AGENTS.md tasks/todo.md tasks/lessons.md docs/choices.md docs/breadcrumbs.md`.
+- Verified the final file content with `Get-Content AGENTS.md`.
+
 # Fix settings provider selection isolation
 
 ## Acceptance Criteria
@@ -402,6 +419,21 @@
 - [ ] Harden the already-supported providers by capturing fixture-backed contract tests for Claude, Cursor, Codex, Ollama, and OpenCode, then use community verification only for paid-plan-specific states you cannot self-test.
 - [ ] Defer opaque Windows ports (Factory, Kimi, MiniMax, Z.ai, Windsurf, Perplexity, and likely Amp) until a concrete Windows auth source is documented or a community tester can supply logs.
 
+# Stabilize settings and tray popup window behavior
+
+## Acceptance Criteria
+- [ ] The standalone Settings window opens at a fixed size instead of resizing with content changes.
+- [ ] The tray bar window no longer visibly jumps around while opening, resizing, or switching content.
+- [ ] The tray popup no longer starts at an undersized height before correcting itself on first open.
+- [ ] Opening the popup from Windows `Ausgeblendete Symbole` overflow via the multi-menu path still yields the correct size and position.
+- [ ] Antigravity usage/loading works even when its view has not been opened yet in the current app session.
+
+## Plan
+- [ ] Audit the Tauri window creation and frontend resize/reposition flow for the Settings window and tray popup, including overflow-menu launch behavior.
+- [ ] Set explicit fixed sizing for the Settings window and reduce tray popup/bar reposition jitter during open and content transitions.
+- [ ] Fix first-open popup sizing and the `Ausgeblendete Symbole` multi-menu path so the popup lands at the correct geometry immediately.
+- [ ] Decouple Antigravity startup/loading from the view-open lifecycle, then add focused verification for the window and provider regressions.
+
 # Auto-pop tray panel on provider selection from settings
 
 ## Acceptance Criteria
@@ -553,3 +585,38 @@
 - Confirmed a stale local debug process was present at `D:\UsageBar\openusage\src-tauri\target\debug\openusage.exe` (PID `22612`) before the fix.
 - Verified `bun run tauri dev` now prints `Stopped stale OpenUsage dev process PID 22612`, starts Vite, recompiles Rust, and reaches `Running target\\debug\\openusage.exe` instead of failing with `failed to remove ... openusage.exe` / `os error 5`.
 - Verified non-dev passthrough with `bun run tauri --version` -> `tauri-cli 2.10.1`.
+
+# Refresh provider source evaluation spec
+
+## Acceptance Criteria
+- [x] `docs/specs/provider-source-evaluation-2026-03-16.md` reflects the current repo state instead of the older March 16 assumptions.
+- [x] The spec no longer claims that already-surfaced placeholder providers or `docs/providers/opencode.md` are missing.
+- [x] The spec adds `OpenCode Go` and updates Windsurf to the current cloud-quota/state-DB model.
+- [x] Verification records the diff/text checks used to confirm the refresh before the task is marked done.
+
+## Plan
+- [x] Re-audit the current provider/docs surface in this repo and the sibling `codexbar` source references used by the spec.
+- [x] Update the source-evaluation spec with the corrected provider matrix, findings, and Windows rollout notes.
+- [x] Record the spec-refresh default in `docs/choices.md`, leave a breadcrumb in `docs/breadcrumbs.md`, and verify the resulting diff.
+
+## Verification Notes
+- Verified the refresh diff with `git --no-pager diff -- tasks/todo.md docs/choices.md docs/breadcrumbs.md docs/specs/provider-source-evaluation-2026-03-16.md`.
+- Verified the updated spec text with `rg -n "OpenCode Go|docs/providers/opencode.md|placeholder|Windsurf|missing provider" docs/specs/provider-source-evaluation-2026-03-16.md`.
+
+# Guard Windows tauri dev against moved-repo Cargo/Tauri metadata
+
+## Acceptance Criteria
+- [x] `npm run tauri dev` on Windows detects copied `src-tauri\\target\\debug\\build\\*\\root-output` metadata that still points at another repo path and clears the stale debug metadata before launching Tauri.
+- [x] Current-repo `root-output` metadata stays untouched.
+- [x] Focused regression coverage exists for stale-path detection/cleanup behavior.
+- [x] Verification captures both the focused test command/result and a real `tauri dev` retry passing the previous permission-generation failure point.
+
+## Plan
+- [x] Extract a small wrapper helper that scans `target\\debug\\build` `root-output` files for paths outside this repo's target root.
+- [x] On Windows `dev`, clear only regenerable debug metadata (`target\\debug\\build` and `.fingerprint`) when stale moved-repo paths are found.
+- [x] Add a focused Node regression test for current-path vs stale-path handling.
+- [x] Retry `npm run tauri dev`, confirm the old `failed to read plugin permissions` error is gone, then record the result.
+
+## Verification Notes
+- Verified the wrapper helper with `node --test scripts/tauri/wrapper.test.mjs` -> 2 tests passed.
+- Verified `npm run tauri dev` now prints `Removed stale Cargo/Tauri debug metadata copied from another repo path (D:\UsageBar\openusage\src-tauri\target\debug\build\anyhow-11ad8ede9f4b8b45\out).`, then reaches `Running DevCommand (cargo run --no-default-features --color always --)` and starts recompiling crates instead of failing immediately in the `openusage` custom build step with missing autogenerated permission files.
