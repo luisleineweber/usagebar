@@ -3,6 +3,21 @@ import { CircleHelp, Settings } from "lucide-react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { invoke } from "@tauri-apps/api/core"
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu"
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  type DragEndEvent,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 function GaugeIcon({ className }: { className?: string }) {
   return (
@@ -14,6 +29,7 @@ function GaugeIcon({ className }: { className?: string }) {
 import { cn } from "@/lib/utils"
 import { getRelativeLuminance } from "@/lib/color"
 import { useDarkMode } from "@/hooks/use-dark-mode"
+import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 
 type ActiveView = "home" | string
 
@@ -35,6 +51,7 @@ interface SideNavProps {
   onOpenSettings?: () => void
   onPluginContextAction?: (pluginId: string, action: PluginContextAction) => void
   isPluginRefreshAvailable?: (pluginId: string) => boolean
+  onReorder?: (orderedIds: string[]) => void
 }
 
 interface NavButtonProps {
@@ -73,6 +90,72 @@ function getIconColor(brandColor: string | undefined, isDark: boolean): string {
   return brandColor
 }
 
+interface SortableNavPluginProps {
+  plugin: NavPlugin
+  isActive: boolean
+  isDark: boolean
+  onClick: () => void
+  onContextMenu: (e: React.MouseEvent) => void
+}
+
+function SortableNavPlugin({
+  plugin,
+  isActive,
+  isDark,
+  onClick,
+  onContextMenu,
+}: SortableNavPluginProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: plugin.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : undefined,
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <NavButton
+        isActive={isActive}
+        onClick={onClick}
+        onContextMenu={onContextMenu}
+        aria-label={plugin.name}
+      >
+        <span
+          role="img"
+          aria-label={plugin.name}
+          title={plugin.supportState !== "supported" ? plugin.supportMessage ?? undefined : undefined}
+          className={cn(
+            "size-6 inline-block",
+            plugin.supportState === "comingSoonOnWindows" ? "opacity-45" : ""
+          )}
+          style={{
+            backgroundColor: getIconColor(plugin.brandColor, isDark),
+            WebkitMaskImage: `url(${plugin.iconUrl})`,
+            WebkitMaskSize: "contain",
+            WebkitMaskRepeat: "no-repeat",
+            WebkitMaskPosition: "center",
+            maskImage: `url(${plugin.iconUrl})`,
+            maskSize: "contain",
+            maskRepeat: "no-repeat",
+            maskPosition: "center",
+          }}
+        />
+      </NavButton>
+    </div>
+  )
+}
+
 export function SideNav({
   activeView,
   onViewChange,
@@ -80,8 +163,28 @@ export function SideNav({
   onOpenSettings,
   onPluginContextAction,
   isPluginRefreshAvailable,
+  onReorder,
 }: SideNavProps) {
   const isDark = useDarkMode()
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 300, tolerance: 5 },
+    })
+  )
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      if (!onReorder) return
+      const { active, over } = event
+      if (!over || active.id === over.id) return
+      const oldIndex = plugins.findIndex((plugin) => plugin.id === active.id)
+      const newIndex = plugins.findIndex((plugin) => plugin.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return
+      const next = arrayMove(plugins, oldIndex, newIndex)
+      onReorder(next.map((plugin) => plugin.id))
+    },
+    [onReorder, plugins]
+  )
 
   const handlePluginContextMenu = useCallback(
     (e: React.MouseEvent, pluginId: string) => {
@@ -139,36 +242,24 @@ export function SideNav({
       </NavButton>
 
       {/* Plugin icons */}
-      {plugins.map((plugin) => (
-        <NavButton
-          key={plugin.id}
-          isActive={activeView === plugin.id}
-          onClick={() => onViewChange(plugin.id)}
-          onContextMenu={(e) => handlePluginContextMenu(e, plugin.id)}
-          aria-label={plugin.name}
-        >
-          <span
-            role="img"
-            aria-label={plugin.name}
-            title={plugin.supportState !== "supported" ? plugin.supportMessage ?? undefined : undefined}
-            className={cn(
-              "size-6 inline-block",
-              plugin.supportState === "comingSoonOnWindows" ? "opacity-45" : ""
-            )}
-            style={{
-              backgroundColor: getIconColor(plugin.brandColor, isDark),
-              WebkitMaskImage: `url(${plugin.iconUrl})`,
-              WebkitMaskSize: "contain",
-              WebkitMaskRepeat: "no-repeat",
-              WebkitMaskPosition: "center",
-              maskImage: `url(${plugin.iconUrl})`,
-              maskSize: "contain",
-              maskRepeat: "no-repeat",
-              maskPosition: "center",
-            }}
-          />
-        </NavButton>
-      ))}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={plugins.map((plugin) => plugin.id)} strategy={verticalListSortingStrategy}>
+          {plugins.map((plugin) => (
+            <SortableNavPlugin
+              key={plugin.id}
+              plugin={plugin}
+              isActive={activeView === plugin.id}
+              isDark={isDark}
+              onClick={() => onViewChange(plugin.id)}
+              onContextMenu={(e) => handlePluginContextMenu(e, plugin.id)}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -177,7 +268,7 @@ export function SideNav({
       <NavButton
         isActive={false}
         onClick={() => {
-          openUrl("https://github.com/robinebers/openusage/issues").catch(console.error)
+          openUrl(PROJECT_ISSUES_URL).catch(console.error)
           invoke("hide_panel").catch(console.error)
         }}
         aria-label="Help"

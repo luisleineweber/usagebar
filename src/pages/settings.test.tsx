@@ -185,7 +185,7 @@ describe("SettingsPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /codex/i }))
 
-    expect(onSelectedProviderChange.mock.calls).toContainEqual(["codex"])
+    expect(onSelectedProviderChange.mock.calls).toContainEqual(["codex", { revealInTray: true }])
   })
 
   it("reorders providers from the Providers tab", async () => {

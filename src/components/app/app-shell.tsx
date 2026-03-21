@@ -18,6 +18,7 @@ type AppShellProps = {
   selectedPlugin: DisplayPluginState | null
   onPluginContextAction: (pluginId: string, action: PluginContextAction) => void
   isPluginRefreshAvailable: (pluginId: string) => boolean
+  onNavReorder: (orderedIds: string[]) => void
   appContentProps: AppContentActionProps
 }
 
@@ -30,6 +31,7 @@ export function AppShell({
   selectedPlugin,
   onPluginContextAction,
   isPluginRefreshAvailable,
+  onNavReorder,
   appContentProps,
 }: AppShellProps) {
   const {
@@ -93,6 +95,7 @@ export function AppShell({
             }}
             onPluginContextAction={onPluginContextAction}
             isPluginRefreshAvailable={isPluginRefreshAvailable}
+            onReorder={onNavReorder}
           />
           <div ref={contentColumnRef} className="flex-1 flex flex-col px-3 pt-2 pb-1.5 min-w-0 bg-card dark:bg-muted/50">
             <div className="relative flex-1 min-h-0">

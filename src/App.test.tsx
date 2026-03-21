@@ -254,6 +254,7 @@ vi.mock("@/lib/provider-settings", async () => {
 
 import { App } from "@/App"
 import { SettingsWindowApp } from "@/settings-window-app"
+import { APP_NAME } from "@/lib/project-metadata"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
@@ -745,7 +746,7 @@ describe("App", () => {
     render(<App />)
 
     // Open about via version button in footer
-    await userEvent.click(await screen.findByRole("button", { name: /OpenUsage/i }))
+    await userEvent.click(await screen.findByRole("button", { name: new RegExp(APP_NAME, "i") }))
     await screen.findByText("Built by")
 
     // Close about via ESC key

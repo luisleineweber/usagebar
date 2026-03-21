@@ -142,7 +142,7 @@ function SortableProviderRow({
 type ProvidersSettingsPaneProps = {
   providers: SettingsPluginState[]
   selectedProviderId: string | null
-  onSelectedProviderChange: (id: string) => void
+  onSelectedProviderChange: (id: string, options?: { revealInTray?: boolean }) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
   onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
@@ -219,7 +219,7 @@ export function ProvidersSettingsPane({
                     key={plugin.id}
                     plugin={plugin}
                     selected={plugin.id === selectedProvider?.id}
-                    onSelect={() => onSelectedProviderChange(plugin.id)}
+                    onSelect={() => onSelectedProviderChange(plugin.id, { revealInTray: true })}
                     onToggle={onToggle}
                   />
                 ))}

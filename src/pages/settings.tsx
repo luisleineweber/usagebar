@@ -17,7 +17,7 @@ import type {
 interface SettingsPageProps {
   providers: SettingsPluginState[]
   selectedProviderId: string | null
-  onSelectedProviderChange: (id: string) => void
+  onSelectedProviderChange: (id: string, options?: { revealInTray?: boolean }) => void
   settingsTab: "general" | "providers"
   onSettingsTabChange: (value: "general" | "providers") => void
   onReorder: (orderedIds: string[]) => void
