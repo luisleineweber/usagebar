@@ -162,9 +162,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   windsurf: {
     mode: "automatic",
     title: "Windsurf Setup",
-    summary: "Detected from the local app/session state.",
-    statusHint: "Manual configuration is not required in the current plugin.",
-    connectHint: "Open Windsurf, complete sign-in once on this machine, then refresh.",
+    summary: "Detected from local Windsurf sign-in state and refreshed from the Windsurf cloud quota endpoint.",
+    statusHint: "The current plugin reads the local auth DB automatically; no manual token field is exposed.",
+    connectHint: "Sign in to Windsurf once on this machine, then refresh to fetch the current daily and weekly quota state.",
   },
   kimi: {
     mode: "automatic",
@@ -212,6 +212,11 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     "Augment Setup",
     "Planned Windows implementation: detect local Augment app or CLI session state first, then add a provider-specific local probe before considering any web flow.",
     "Target plan: reuse local process or CLI auth on Windows instead of browser-cookie scraping."
+  ),
+  alibaba: plannedWindowsProviderDefinition(
+    "Alibaba Coding Plan Setup",
+    "Windows placeholder. Planned implementation: start with an app-owned Alibaba session or API-key path for Coding Plan quota, then add provider-specific region handling.",
+    "Target plan: add secure API-key and session support later; probing stays disabled until the Windows implementation lands."
   ),
   kilo: plannedWindowsProviderDefinition(
     "Kilo Setup",

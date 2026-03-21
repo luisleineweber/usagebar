@@ -1,8 +1,10 @@
 # Provider Source Evaluation
 
-Date: 2026-03-16
+Date: 2026-03-21
 
-Scope: compare where `openusage` and `codexbar` get provider usage data today, plus what should be done on Windows.
+Original draft: 2026-03-16
+
+Scope: compare upstream `openusage` and `codexbar` provider source models, then note what the current UsageBar fork has already surfaced or corrected on top of that comparison.
 
 Legend:
 - `web` = provider website/dashboard/settings HTML or internal web endpoints
@@ -12,13 +14,15 @@ Legend:
 - `keychain` = OS credential store
 - `oauth/api` = direct API or OAuth refresh/token exchange
 - `local process` = running local app/CLI/language-server probe
+- `placeholder` = blocked Windows-visible provider stub in the current UsageBar worktree
 
 ## Executive Summary
 
-- `openusage` is mostly direct provider plugins: local auth material + provider HTTP APIs. Browser-cookie automation is limited.
-- `codexbar` is broader and more web-heavy: many providers use automatic browser-cookie import plus provider-specific web/dashboard scraping.
-- Major divergence: `codexbar` supports more provider-specific source modes (`auto`, `manual`, `oauth`, `api`, `cli`, `local`), while `openusage` usually hardcodes one primary path per plugin.
-- Biggest gaps in `openusage` vs `codexbar`: no shipped `kilo`, `kiro`, `vertexai`, `augment`, `kimik2`, `warp`, `openrouter`, `synthetic`; weaker browser-cookie import coverage; several providers still env/manual-only.
+- The high-level split still holds: upstream `openusage` prefers local auth/state plus direct APIs, while `codexbar` still leans much harder on browser-session and dashboard scraping flows.
+- The March 16 "missing provider" gap is now partly closed in this fork. UsageBar already surfaces blocked Windows placeholders for `augment`, `kilo`, `kimi-k2`, `kiro`, `openrouter`, `synthetic`, `vertex-ai`, and `warp`; the current worktree also contains an `alibaba` placeholder.
+- `OpenCode` doc drift is fixed: `docs/providers/opencode.md` now exists, and `OpenCode Go` is a separate provider with a different source model based on local SQLite spend history.
+- Windsurf changed materially after the original draft. The current UsageBar plugin reads the local `state.vscdb` API key and calls Windsurf's cloud quota contract directly; a running local language server is no longer required.
+- The hardest remaining Windows ports are still the session-heavy providers (`Alibaba`, `Augment`, `Ollama`, `OpenCode`, `Perplexity`, maybe `MiniMax`/`Factory` if local auth proves insufficient). The cleanest next implementations remain explicit API or local-file providers.
 
 ## Windows Opinion
 
@@ -28,77 +32,87 @@ Legend:
   2. direct `oauth/api`
   3. app-owned WebView2 session/profile
   4. manual cookie header import
-  5. browser-cookie extraction only as optional import, not core architecture
+  5. external browser-cookie extraction only as an optional import path
 - Reason:
   - Tauri on Windows uses WebView2: [Tauri webview versions](https://v2.tauri.app/reference/webview-versions/), [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
   - WebView2 supports app-owned user-data folders/profiles and cookie management: [user data folder](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder), [cookie manager](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/winrt/microsoft_web_webview2_core/corewebview2cookiemanager)
-  - Windows has native protected secret storage: [Credential management](https://learn.microsoft.com/en-us/windows/win32/secauthn/credentials-management), [DPAPI](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata)
+  - This fork already chose an app-owned DPAPI-backed local secret store for provider secrets on Windows instead of depending on ongoing browser-cookie extraction
 - Practical rule:
   - Reuse `openusage` local-auth implementations where they already fit Windows.
-  - Borrow `codexbar` mostly for source-mode UX.
-  - For dashboard-only providers, use a dedicated WebView2 login/session per provider/account instead of scraping Chrome/Edge cookies continuously.
+  - Borrow `codexbar` mostly for source-mode ideas and provider UX, not for the macOS-specific browser-cookie implementation details.
+  - For dashboard-only providers, prefer a dedicated WebView2 login/session per provider/account over continuous scraping of Chrome/Edge cookies.
 
 ## Provider Matrix
 
-| Provider | `openusage` | `codexbar` | Evaluation | Windows recommendation |
+| Provider | Upstream `openusage` / current UsageBar status | `codexbar` | Evaluation | Windows recommendation |
 | --- | --- | --- | --- | --- |
-| Amp | `json/file` + `oauth/api`: reads `~/.local/share/amp/secrets.json`, uses API key against Amp API/internal usage endpoints. Evidence: `plugins/amp/plugin.js`, `docs/providers/amp.md`. | `web` + `cookies`: settings page scrape at `https://ampcode.com/settings`, automatic/manual cookie source. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Different strategy. `openusage` uses CLI secrets/API; `codexbar` uses web cookies/settings HTML. | Prefer API/CLI-secret route on Windows. Add WebView2 login only if Amp stops exposing stable API-backed auth artifacts. Do not start with browser-cookie extraction. |
-| Antigravity | `sqlite` + `json/file` + `oauth/api` + `local process`: reads `state.vscdb`, cached `pluginDataDir/auth.json`, refreshes Google OAuth token, probes local language server, falls back to Cloud Code HTTP. Evidence: `plugins/antigravity/plugin.js`, `docs/providers/antigravity.md`. | `local process`: local Antigravity language server primary, Cloud Code-style local probe. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same core idea, but `openusage` implementation is more explicit about SQLite token extraction and local cache file. | Best Windows path: keep local SQLite + running language-server probe. Store refreshed tokens in Credential Manager/DPAPI-backed cache if needed. No browser integration needed. |
-| Augment | not present | `local process`: local probe / session keepalive / Auggie CLI fallback. Evidence: `D:/usagebar/codexbar/docs/providers.md`, `Sources/CodexBarCore/Providers/Augment/*`. | CodexBar-only. | If added on Windows, start with local process/CLI detection only. Avoid web/session work until a Windows-native auth source is missing. |
-| Claude | `json/file` + `keychain` + `oauth/api` + local usage logs: reads `~/.claude/.credentials.json` or keychain, refreshes OAuth, calls Anthropic usage API, adds `ccusage` local JSONL cost usage. Evidence: `plugins/claude/plugin.js`, `docs/providers/claude.md`. | `oauth/api` + `cli` + `web` + local usage logs: auto chain is OAuth API, Claude CLI PTY, then Claude web API/cookies. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar has broader fallback stack. OpenUsage is cleaner/direct for OAuth + ccusage. | Use local Claude auth files + OAuth refresh + local logs on Windows. Add optional WebView2-based Claude web extras later, but not as the default path. |
-| Codex | `json/file` + `keychain` + `oauth/api` + local usage logs: reads `CODEX_HOME/auth.json` / `~/.config/codex/auth.json` / `~/.codex/auth.json` or keychain, refreshes OpenAI OAuth, calls `chatgpt.com/backend-api/wham/usage`, adds `ccusage`. Evidence: `plugins/codex/plugin.js`, `docs/providers/codex.md`. | `web` + `cookies` + `cli`: OpenAI/Codex dashboard web scrape plus Codex CLI JSON-RPC/PTy, also local session JSONL cost scanning. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Different emphasis: OpenUsage trusts Codex auth JSON/keychain + official-ish usage endpoint; CodexBar mixes CLI and dashboard extras. | On Windows, keep auth.json/keychain-equivalent + local logs as primary. If dashboard extras matter, use an app-owned WebView2 profile for OpenAI rather than importing Edge/Chrome cookies. |
-| Copilot | `keychain` + `json/file` + `oauth/api`: reads OpenUsage keychain, `gh` keychain, fallback `auth.json`; calls GitHub Copilot API. Evidence: `plugins/copilot/plugin.js`, `docs/providers/copilot.md`. | `oauth/api`: GitHub device flow token + `copilot_internal` API. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same family. OpenUsage leans on existing `gh auth` state; CodexBar models explicit device-flow/API mode. | Best Windows path: integrate with `gh auth` or direct device flow and store token in Credential Manager. Pure API provider; no web/session work needed. |
-| Cursor | `sqlite` + `keychain` + `oauth/api` + `cookies`: reads desktop `state.vscdb` first, keychain fallback, refreshes OAuth, uses bearer APIs and cookie-backed web endpoints like Stripe/enterprise usage. Evidence: `plugins/cursor/plugin.js`, `docs/providers/cursor.md`. | `web` + `cookies`: browser cookies then stored WebKit session for Cursor web API. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Strong divergence. OpenUsage is desktop-auth/state driven; CodexBar is browser-cookie/web-session driven. | Windows should follow the OpenUsage model first: read Cursor local state DB + refresh token. Add WebView2 session fallback only for missing web-only fields. Do not depend on browser-cookie import. |
-| Factory | `json/file` + `keychain` + `oauth/api`: reads `~/.factory/auth.encrypted` / `auth.json` or keychain, refreshes via WorkOS, calls Factory subscription usage API. Evidence: `plugins/factory/plugin.js`, `docs/providers/factory.md`. | `web` + `cookies` + `json/file` + local storage + stored tokens: cookies, stored tokens, local storage, WorkOS cookies. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same auth ecosystem, but CodexBar layers browser/local-storage import on top. | Start with local auth files + token refresh on Windows. If Factory later requires browser-only state, use WebView2 provider session and import localStorage/cookies from your own profile, not from external browsers. |
-| Gemini | `json/file` + `oauth/api`: reads `~/.gemini/settings.json`, `~/.gemini/oauth_creds.json`, Gemini CLI OAuth client info; calls Cloud Code/Google quota APIs. Evidence: `docs/providers/gemini.md`, `plugins/gemini/plugin.js`. | `oauth/api`: Gemini CLI credentials with quota API and OAuth refresh. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Near-aligned. | Keep CLI credential files + OAuth refresh on Windows. This is already a good Windows-native architecture. |
-| JetBrains AI Assistant | `file` only: reads local `AIAssistantQuotaManager2.xml` under IDE config roots. Evidence: `plugins/jetbrains-ai-assistant/plugin.js`, `docs/providers/jetbrains-ai-assistant.md`. | `file` only: reads local XML quota file from JetBrains config dirs. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Fully aligned. | Use local config/XML discovery only. This is one of the cleanest Windows ports. |
-| Kilo | not present | `json/file` + `oauth/api` + `cli`: config/API key first, falls back to local CLI auth/session. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar-only. | If added, use config/API key and local CLI auth first. Good Windows candidate because it does not require browser scraping as the base flow. |
-| Kimi | `json/file` + `oauth/api`: reads `~/.kimi/credentials/kimi-code.json`, refreshes at `auth.kimi.com`, calls Kimi usage API. Evidence: `plugins/kimi/plugin.js`, `docs/providers/kimi.md`. | `api`: token from `kimi-auth` cookie/manual entry or env, then Kimi billing API. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Different auth source: OpenUsage reuses CLI/local credential JSON; CodexBar expects cookie-derived token/API style. | On Windows prefer the local credential JSON / OAuth-refresh model if the Kimi desktop/CLI writes usable files. Manual cookie mode can be a fallback only. |
-| Kimi K2 | not present | `api`: API key from settings/env to credits endpoint. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar-only. | Strong Windows candidate. Implement as direct API-key provider with Credential Manager storage. |
-| Kiro | not present | `cli`: runs `kiro-cli chat --no-interactive "/usage"` and parses output. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar-only. | Windows approach should be CLI execution/parsing only. Avoid any browser work unless Kiro removes the CLI path. |
-| MiniMax | `env` + `oauth/api`: reads `MINIMAX_*` env vars only, calls coding-plan remains API. Evidence: `plugins/minimax/plugin.js`, `docs/providers/minimax.md`. | `cookies` + `web` + local storage, with manual cookie/API hybrids: manual cookie header or browser cookies, local storage access token, coding-plan/remains web flow. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Large divergence. OpenUsage is API-key/env only; CodexBar is browser/manual-cookie centric. | On Windows, use API-key/env if the provider still supports it. If not, move to app-owned WebView2 login session. Do not make external browser cookie scraping the primary design. |
-| Ollama | `web` + `cookies`: manual cookie header from provider secrets, scrape `https://ollama.com/settings`. Evidence: `plugins/ollama/plugin.js`, `docs/providers/ollama.md`. | `web` + `cookies`: browser-cookie settings page scrape, automatic/manual cookie source. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Similar output path. CodexBar has stronger cookie import UX; OpenUsage is manual-secret only. | Best Windows design: provider-specific WebView2 session for Ollama login, then scrape settings with that app-owned profile. Keep manual cookie header as fallback/import. |
-| OpenCode | `web` + `cookies`: manual cookie header from env/provider secret/keychain, calls `https://opencode.ai/_server`, resolves workspace ID, reads subscription usage. Evidence: `plugins/opencode/plugin.js`. | `web` + `cookies`: dashboard cookies from opencode.ai with automatic/manual import. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same web source. OpenUsage currently lacks automatic browser import and provider docs page. | Same as Ollama: use an app-owned WebView2 login/session profile for OpenCode. Manual cookie fallback is fine; external browser import should stay optional. |
-| OpenRouter | not present | `api`: API key from config/env to credits + key info endpoints. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar-only. | Excellent Windows candidate. Implement as direct API-key provider with Credential Manager storage. |
-| Perplexity | `sqlite` + `web/api`: mines Perplexity macOS cache DB for bearer token, user-agent, device ID, then calls private REST APIs for groups, usage analytics, rate limits. Evidence: `plugins/perplexity/plugin.js`, `docs/providers/perplexity.md`. | not present | OpenUsage-only. | The current macOS cache-DB approach does not translate well. On Windows, prefer app-owned WebView2 login/session and then call the same web APIs from that session. |
-| Synthetic | not present | `api`: API key from config/env. Evidence: `D:/usagebar/codexbar/docs/providers.md`, `Sources/CodexBarCore/Providers/Synthetic/*`. | CodexBar-only. | Simple Windows API-key provider. Good early candidate. |
-| Vertex AI | not present | `oauth/api` + local logs: Google ADC OAuth plus Cloud Monitoring quota metrics; token cost scan from local Claude logs. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar-only. | Good Windows candidate. Use ADC / `gcloud auth application-default login` plus API calls; no browser dependency required. |
-| Warp | not present | `api`: API token from settings/env to Warp GraphQL limits. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar-only. | Strong Windows API-key/token provider. Implement directly with Credential Manager storage. |
-| Windsurf | `sqlite` + `local process` + `oauth/api`: reads API key from local `state.vscdb`, probes running language server, falls back to Codeium cloud `GetUserStatus`. Evidence: `plugins/windsurf/plugin.js`, `docs/providers/windsurf.md`. | not present | OpenUsage-only. | Keep the current local SQLite + process probe strategy on Windows. It already matches the Windows-first architecture better than a browser model would. |
-| Z.ai | `env` + `oauth/api`: API key from env, then quota/limit endpoints. Evidence: `plugins/zai/plugin.js`, `docs/providers/zai.md`. | `api`: API token from keychain or env to quota API. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same API class; CodexBar adds keychain/config handling. | Implement as direct API-key/token provider with Credential Manager storage. Good Windows candidate. |
+| Alibaba Coding Plan | Upstream: not present. Current UsageBar worktree: `placeholder` via `plugins/alibaba/plugin.json`. | `web` + `cookies` primary, `api` secondary: Model Studio/Bailian console session baseline with region-aware API fallback. Evidence: `D:/usagebar/codexbar/docs/alibaba-coding-plan.md`. | New CodexBar-only provider. Current UsageBar placeholder intentionally does not copy the macOS browser-first implementation yet. | On Windows, start with app-owned WebView2 session or explicit API-key mode behind region-aware settings. Keep external browser import optional. |
+| Amp | `json/file` + `oauth/api`: reads `~/.local/share/amp/secrets.json`, uses API key against Amp API/internal usage endpoints. Current UsageBar keeps this path and marks Windows experimental. Evidence: `plugins/amp/plugin.js`, `docs/providers/amp.md`, `plugins/amp/plugin.json`. | `web` + `cookies`: settings page scrape at `https://ampcode.com/settings`, automatic/manual cookie source. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same product, different trust boundary. Upstream/fork still prefers CLI-secret/API auth; CodexBar prefers browser session. | Keep the API/CLI-secret route on Windows. Add WebView2 login only if Amp stops exposing stable local/API-backed auth artifacts. |
+| Antigravity | `sqlite` + `json/file` + `oauth/api` + `local process`: reads `state.vscdb`, cached `pluginDataDir/auth.json`, refreshes Google OAuth token, probes the local language server, falls back to Cloud Code HTTP. Current UsageBar also hardened localized Windows LS discovery and mixed-port candidate selection. Evidence: `plugins/antigravity/plugin.js`, `docs/providers/antigravity.md`. | `local process`: local Antigravity language-server probe with Cloud Code-style fallback. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same core strategy. The current fork is more explicit about SQLite token extraction and now has stronger Windows probe hardening than the original draft. | Keep local SQLite plus LS probe first, with Cloud Code fallback. No browser integration needed. |
+| Augment | Upstream: not present. Current UsageBar: `placeholder` via `plugins/augment/plugin.json`. | `web` + `cookies` + keepalive: Augment session cookies, auto/manual import, provider-specific keepalive. Evidence: `D:/usagebar/codexbar/docs/augment.md`. | The March 16 row was stale; current CodexBar docs are cookie/session based, not local-process first. UsageBar has not committed to a Windows auth path yet. | First confirm whether Augment exposes usable local app/CLI state on Windows. If not, use an app-owned WebView2 session instead of making external browser-cookie extraction the core design. |
+| Claude | `json/file` + `keychain` + `oauth/api` + local usage logs: reads `~/.claude/.credentials.json` or keychain, refreshes OAuth, calls Anthropic usage API, adds `ccusage` local JSONL cost usage. Current UsageBar also treats `~/.claude.json` account metadata as a signed-in fallback. Evidence: `plugins/claude/plugin.js`, `docs/providers/claude.md`. | `oauth/api` + `cli` + `web` + local usage logs: OAuth API, Claude CLI PTY, then Claude web API/cookies. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar has broader fallback coverage. Upstream/fork remains cleaner and more Windows-friendly for OAuth plus local logs. | Use local Claude auth files, OAuth refresh, and local logs on Windows. Add optional WebView2-based web/session extras later, not as the default path. |
+| Codex | `json/file` + `keychain` + `oauth/api` + local usage logs: reads `CODEX_HOME/auth.json` / `~/.config/codex/auth.json` / `~/.codex/auth.json` or keychain, refreshes OpenAI OAuth, calls `chatgpt.com/backend-api/wham/usage`, adds `ccusage`. Evidence: `plugins/codex/plugin.js`, `docs/providers/codex.md`. | `web` + `cookies` + `cli`: OpenAI/Codex dashboard web scrape plus Codex CLI JSON-RPC/PTY and local session JSONL scanning. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Different emphasis: upstream/fork trusts auth JSON/keychain plus usage endpoint; CodexBar mixes CLI and dashboard extras. | Keep auth JSON plus local logs as primary on Windows. If dashboard extras matter, use an app-owned WebView2 profile for OpenAI rather than importing Chrome/Edge cookies. |
+| Copilot | `keychain` + `json/file` + `oauth/api`: reads OpenUsage keychain, GitHub CLI keychain/state, fallback `auth.json`; calls GitHub Copilot API. Current UsageBar also falls back to `gh auth token` and follows the active `hosts.yml` account on Windows. Evidence: `plugins/copilot/plugin.js`, `docs/providers/copilot.md`. | `oauth/api`: GitHub device flow token plus `copilot_internal` API. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same provider family. Current fork now handles Windows `gh` state more directly than the original draft. | Integrate with `gh auth` or direct device flow and store the token in the app-owned secret store. No browser/session work needed. |
+| Cursor | `sqlite` + `keychain` + `oauth/api` + `cookies`: reads desktop `state.vscdb` first, keychain fallback, refreshes OAuth, then uses bearer APIs and cookie-backed web endpoints like Stripe/enterprise usage. Evidence: `plugins/cursor/plugin.js`, `docs/providers/cursor.md`. | `web` + `cookies`: browser cookies then stored WebKit session for Cursor web APIs. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Strong divergence. Upstream/fork is desktop-auth/state driven; CodexBar is browser-session driven. | Windows should follow the desktop SQLite/auth model first. Add WebView2 session fallback only for fields that are genuinely web-only. |
+| Factory | `json/file` + `keychain` + `oauth/api`: reads `~/.factory/auth.encrypted` / `auth.json` or keychain, refreshes via WorkOS, calls Factory subscription usage API. Evidence: `plugins/factory/plugin.js`, `docs/providers/factory.md`. | `web` + `cookies` + `json/file` + local storage + stored tokens: cookies, stored tokens, local storage, WorkOS cookies. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same auth ecosystem, but CodexBar layers browser/local-storage import on top. | Start with local auth files plus token refresh on Windows. If Factory later requires browser-only state, use an app-owned WebView2 provider session instead of browser scraping. |
+| Gemini | `json/file` + `oauth/api`: reads `~/.gemini/settings.json`, `~/.gemini/oauth_creds.json`, Gemini CLI OAuth client info; calls Cloud Code/Google quota APIs. Current UsageBar marks Windows experimental and now checks common Windows npm global paths for `oauth2.js`. Evidence: `plugins/gemini/plugin.js`, `docs/providers/gemini.md`, `plugins/gemini/plugin.json`. | `oauth/api`: Gemini CLI credentials with quota API and OAuth refresh. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Near-aligned. | Keep CLI credential files plus OAuth refresh on Windows. This is already a good Windows-native architecture. |
+| JetBrains AI Assistant | `json/file` only: reads local `AIAssistantQuotaManager2.xml` under IDE config roots. Current UsageBar marks Windows supported. Evidence: `plugins/jetbrains-ai-assistant/plugin.js`, `docs/providers/jetbrains-ai-assistant.md`, `plugins/jetbrains-ai-assistant/plugin.json`. | `json/file` only: reads local XML quota file from JetBrains config dirs. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Fully aligned. | Use local config/XML discovery only. This remains one of the cleanest Windows ports. |
+| Kilo | Upstream: not present. Current UsageBar: `placeholder` via `plugins/kilo/plugin.json`. | `json/file` + `oauth/api` + `cli`: config/API key first, local CLI auth/session fallback. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Low-risk CodexBar-only provider. The fork already surfaced it as a blocked Windows placeholder. | Implement as config/API-key plus local CLI auth first. No browser dependency needed. |
+| Kimi | `json/file` + `oauth/api`: reads `~/.kimi/credentials/kimi-code.json`, refreshes at `auth.kimi.com`, calls Kimi usage API. Evidence: `plugins/kimi/plugin.js`, `docs/providers/kimi.md`. | `api`: token from `kimi-auth` cookie/manual entry or env, then Kimi billing API. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Different auth source: upstream reuses local credential JSON; CodexBar expects cookie-derived token/API style. | Prefer the local credential JSON plus OAuth-refresh model on Windows if the Kimi app/CLI writes usable files. Manual cookie mode should stay fallback-only. |
+| Kimi K2 | Upstream: not present. Current UsageBar: `placeholder` via `plugins/kimi-k2/plugin.json`. | `api`: API key from settings/env to credits endpoint. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Strong API-key candidate. The fork already surfaced it as a blocked placeholder. | Implement as a direct API-key provider backed by the app-owned secret store. |
+| Kiro | Upstream: not present. Current UsageBar: `placeholder` via `plugins/kiro/plugin.json`. | `cli`: runs `kiro-cli chat --no-interactive "/usage"` and parses output. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | CodexBar-only and CLI-shaped. | Use CLI execution/parsing only on Windows. Avoid browser work unless Kiro removes the CLI path. |
+| MiniMax | `env` + `oauth/api`: reads `MINIMAX_*` env vars only, calls coding-plan remains API. Evidence: `plugins/minimax/plugin.js`, `docs/providers/minimax.md`. | `cookies` + `web` + local storage, with manual cookie/API hybrids: manual cookie header or browser cookies, local storage access token, coding-plan/remains web flow. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Large divergence. Upstream is API-key/env only; CodexBar is browser/manual-cookie centric. | Use API-key/env if the provider still supports it. If not, move to an app-owned WebView2 login session, not external browser scraping as the primary design. |
+| Ollama | `web` + `cookies`: manual cookie header from provider secrets, scrapes `https://ollama.com/settings`. Evidence: `plugins/ollama/plugin.js`, `docs/providers/ollama.md`. | `web` + `cookies`: browser-cookie settings-page scrape, automatic/manual cookie source. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Similar target data, different setup UX. CodexBar has stronger cookie-import UX; UsageBar is still manual-secret only. | Best Windows design: provider-specific WebView2 login/session for Ollama, with manual cookie-header fallback/import. |
+| OpenCode | `web` + `cookies`: manual cookie header from env/provider secret/app-owned secret store, calls `https://opencode.ai/_server`, resolves workspace ID, reads subscription usage. Provider docs now exist. Evidence: `plugins/opencode/plugin.js`, `docs/providers/opencode.md`. | `web` + `cookies`: dashboard cookies from `opencode.ai` with automatic/manual import. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same web source. The earlier claim that docs were missing is no longer true; the remaining gap is automatic browser/session UX. | Use an app-owned WebView2 login/session profile for OpenCode. Keep manual cookie fallback; external browser import should stay optional. |
+| OpenCode Go | `json/file` + `sqlite`: reads local `~/.local/share/opencode/auth.json` and `opencode.db`, then derives 5h/weekly/monthly usage from local assistant-history cost rows. Evidence: `plugins/opencode-go/plugin.js`, `docs/providers/opencode-go.md`. | not present | Separate provider and trust boundary from OpenCode web subscription usage. The current source is local-history based, not account-truth web usage. | If brought to Windows, port the local data paths first. No browser/session work needed. |
+| OpenRouter | Upstream: not present. Current UsageBar: `placeholder` via `plugins/openrouter/plugin.json`. | `api`: API key from config/env to credits plus key-info endpoints. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Excellent low-risk port candidate. Already surfaced in the fork as a blocked placeholder. | Implement as a direct API-key provider backed by the app-owned secret store. |
+| Perplexity | `sqlite` + `web/api`: mines the Perplexity macOS app cache DB for bearer token, user-agent, and device ID, then calls private REST APIs for groups, usage analytics, and rate limits. Evidence: `plugins/perplexity/plugin.js`, `docs/providers/perplexity.md`. | not present | Upstream-only, but still heavily macOS-app dependent. This remains the least Windows-ready source model in the matrix. | Prefer an app-owned WebView2 login/session on Windows and then call the same web APIs from that session. Do not try to port the macOS cache-DB assumption directly. |
+| Synthetic | Upstream: not present. Current UsageBar: `placeholder` via `plugins/synthetic/plugin.json`. | `api`: API key from config/env. Evidence: `D:/usagebar/codexbar/docs/providers.md`, `D:/usagebar/codexbar/Sources/CodexBarCore/Providers/Synthetic/*`. | Simple API-key provider. Already surfaced in the fork as a blocked placeholder. | Implement as a direct API-key provider backed by the app-owned secret store. |
+| Vertex AI | Upstream: not present. Current UsageBar: `placeholder` via `plugins/vertex-ai/plugin.json`. | `oauth/api` + local usage logs: Google ADC OAuth plus Cloud Monitoring quota metrics, with local Claude-log cost scanning. Evidence: `D:/usagebar/codexbar/docs/providers.md`, `D:/usagebar/codexbar/docs/vertexai.md`. | Good Windows candidate because the core auth path is explicit, not browser-bound. | Use ADC or `gcloud auth application-default login` plus API calls. No browser dependency required. |
+| Warp | Upstream: not present. Current UsageBar: `placeholder` via `plugins/warp/plugin.json`. | `api`: API token from settings/env to Warp GraphQL limits. Evidence: `D:/usagebar/codexbar/docs/warp.md`. | Strong API-token candidate. Already surfaced in the fork as a blocked placeholder. | Implement directly with token storage in the app-owned secret store. |
+| Windsurf | `sqlite` + `oauth/api`: reads the local `state.vscdb` API key and calls Windsurf's cloud `GetUserStatus` contract directly. Current UsageBar uses Windows-aware `state.vscdb` paths and no longer requires a running local language server. Evidence: `plugins/windsurf/plugin.js`, `docs/providers/windsurf.md`, `plugins/windsurf/plugin.json`. | not present | The March 16 LS-heavy description is stale. The current path is cleaner and more Windows-appropriate than before. | Keep the state-DB plus direct cloud-quota path. Reintroduce LS probing only if the cloud endpoint stops exposing the needed quota fields. |
+| Z.ai | `env` + `oauth/api`: API key from env, then quota/limit endpoints. Evidence: `plugins/zai/plugin.js`, `docs/providers/zai.md`. | `api`: API token from keychain or env to quota API. Evidence: `D:/usagebar/codexbar/docs/providers.md`. | Same API class; CodexBar adds stronger stored-token handling. | Implement as a direct API-key/token provider backed by the app-owned secret store. |
+
+## Current UsageBar Status vs March 16 Draft
+
+- The old "missing provider" list is no longer accurate in this fork. `augment`, `kilo`, `kimi-k2`, `kiro`, `openrouter`, `synthetic`, `vertex-ai`, and `warp` are already surfaced as blocked Windows placeholders in `plugins/*/plugin.json`.
+- The current worktree also contains `plugins/alibaba/` as another blocked Windows placeholder; upstream `openusage` still does not ship that provider.
+- `docs/providers/opencode.md` now exists, so the earlier OpenCode doc-gap note is resolved.
+- `OpenCode Go` now exists as a distinct provider/plugin/doc trio and should not be collapsed into the OpenCode web row.
+- Windsurf is no longer accurately described as an LS-first provider in this fork; the state-DB plus cloud-quota path is the current implementation.
 
 ## Findings
 
-1. `codexbar` is much more invested in browser-cookie and dashboard scraping flows.
-   - This is visible for Amp, Cursor, Factory, MiniMax, Ollama, OpenCode, and Codex web extras.
+1. `codexbar` is still much more invested in browser-session and dashboard-scraping flows.
+   - This is most visible for Alibaba, Augment, Cursor, Factory, MiniMax, Ollama, OpenCode, and Codex dashboard extras.
 
-2. `openusage` is stronger where local desktop/client auth already exists.
-   - Claude, Codex, Cursor, Factory, Gemini, JetBrains, Kimi, Perplexity, Windsurf use local files, SQLite, keychain, or local process data directly.
+2. Upstream `openusage` and this fork are stronger where local desktop/client auth already exists.
+   - Claude, Codex, Cursor, Gemini, JetBrains AI Assistant, Kimi, Windsurf, and Antigravity all benefit from local files, SQLite, keychain, or local-process evidence.
 
-3. Same provider often means different trust boundary.
-   - Example: Cursor is desktop SQLite/keychain in `openusage`, but browser cookies/WebKit session in `codexbar`.
-   - Example: Amp is CLI secrets/API in `openusage`, but browser cookies/settings HTML in `codexbar`.
-   - Example: MiniMax is env API key in `openusage`, but browser/manual-cookie/local-storage in `codexbar`.
+3. Several March 16 "missing provider" gaps are now product-surface gaps, not discovery gaps.
+   - UsageBar already exposes placeholders for many CodexBar-only providers.
+   - The remaining work is the actual Windows auth/session implementation, tests, and docs.
 
-4. `codexbar` has the larger provider surface.
-   - Extra providers there: Augment, Kilo, Kimi K2, Kiro, OpenRouter, Synthetic, Vertex AI, Warp.
-   - Extra providers here: Perplexity, Windsurf.
+4. `OpenCode` and `OpenCode Go` must be treated as separate providers.
+   - `OpenCode` is signed-in website subscription usage.
+   - `OpenCode Go` is local observed CLI spend derived from SQLite history.
 
-5. OpenUsage doc/code drift exists in a few places.
-   - `OpenCode` has a real plugin (`plugins/opencode/plugin.js`) but no matching `docs/providers/opencode.md`.
-   - `README.md` provider list does not surface every plugin folder currently present.
-   - `MiniMax` docs focus on API key flow; code matches env/API-key usage, while CodexBar has evolved toward cookie/web flows.
+5. Windsurf moved in the right direction for Windows.
+   - The current state-DB plus cloud-quota contract is substantially easier to support on Windows than the old LS-heavy model.
+
+6. Perplexity remains the clearest platform-hostile outlier.
+   - Its current source assumes a macOS app cache DB and private web API replay, which does not translate cleanly to Windows without a different session strategy.
 
 ## Practical Takeaways For UsageBar
 
-- If the goal is Windows-first parity, the fastest reusable `codexbar` ideas are the provider source models, not the implementation details.
-- Low-risk ports from `codexbar` into this repo are providers that already use explicit APIs or local files: OpenRouter, Warp, Kimi K2, Vertex AI, maybe Kilo.
-- Harder ports are cookie/web-session providers because CodexBar leans on macOS browser-cookie/WebKit infrastructure that does not translate directly.
-- For overlapping providers, keep `openusage` local-auth implementations where they already work on Windows; only borrow `codexbar` browser/manual-cookie UX where local auth is unavailable.
+- If the goal is Windows-first parity, the fastest reusable `codexbar` ideas are still the provider source models, not the implementation details.
+- The highest-confidence next implementations remain explicit API or local-file providers: `openrouter`, `warp`, `kimi-k2`, `synthetic`, `vertex-ai`, maybe `kilo`.
+- The harder ports remain session-heavy providers: `alibaba`, `augment`, `ollama`, `opencode`, and `perplexity`, plus `factory`/`minimax` if their local auth paths are insufficient.
+- For overlapping providers, keep the local-auth implementations where they already work on Windows. Borrow `codexbar` browser/manual-cookie UX only when local auth is unavailable.
 
 ## Windows Rollout Order
 
-1. Ship/keep local-state providers first.
+1. Keep finishing local-state providers first.
    - Claude
    - Codex
    - Cursor
@@ -107,7 +121,7 @@ Legend:
    - Windsurf
    - Antigravity
 
-2. Ship direct API/token providers next.
+2. Implement direct API/token providers next.
    - Copilot
    - Z.ai
    - OpenRouter
@@ -117,13 +131,15 @@ Legend:
    - Synthetic
    - Kilo
 
-3. Then build one generic WebView2 session framework for dashboard-only providers.
+3. Then build one reusable WebView2 session framework for dashboard/session-heavy providers.
+   - Alibaba Coding Plan
+   - Augment
    - Ollama
    - OpenCode
    - Perplexity
    - Factory if local auth proves insufficient
-   - MiniMax if API-key path is insufficient
-   - Amp only if CLI/API path breaks
+   - MiniMax if API-key flow proves insufficient
+   - Amp only if the CLI/API path breaks
 
 4. Keep manual cookie import as fallback UX.
    - good for debugging
@@ -133,7 +149,13 @@ Legend:
 ## Evidence Files Used
 
 - `plugins/*/plugin.js`
+- `plugins/*/plugin.json`
 - `docs/providers/*.md`
+- `docs/windows.md`
 - `README.md`
 - `D:/usagebar/codexbar/docs/providers.md`
+- `D:/usagebar/codexbar/docs/augment.md`
+- `D:/usagebar/codexbar/docs/alibaba-coding-plan.md`
+- `D:/usagebar/codexbar/docs/vertexai.md`
+- `D:/usagebar/codexbar/docs/warp.md`
 - `D:/usagebar/codexbar/Sources/CodexBarCore/Providers/*`

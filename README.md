@@ -43,12 +43,13 @@ UsageBar lives in your Windows tray and shows you how much of your AI coding sub
 - [**OpenCode**](docs/providers/opencode.md) / session, weekly
 - [**OpenCode (Go)**](docs/providers/opencode-go.md) / session, weekly
 - [**Perplexity**](docs/providers/perplexity.md) / groups, usage analytics, rate limits
-- [**Windsurf**](docs/providers/windsurf.md) / prompt credits, flex credits
+- [**Windsurf**](docs/providers/windsurf.md) / daily quota, weekly quota, extra usage balance
 - [**Z.ai**](docs/providers/zai.md) / session, weekly, web searches
 
 ### Additional plugins (docs pending)
 
 - **Augment** (`plugins/augment/`)
+- **Alibaba Coding Plan** (`plugins/alibaba/`)
 - **Kilo** (`plugins/kilo/`)
 - **Kimi K2** (`plugins/kimi-k2/`)
 - **Kiro** (`plugins/kiro/`)
