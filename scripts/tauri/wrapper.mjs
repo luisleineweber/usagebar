@@ -3,9 +3,11 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
+import { cleanupStaleDebugBuildMetadata } from "./wrapper-lib.mjs"
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const repoRoot = path.resolve(__dirname, "..")
+const repoRoot = path.resolve(__dirname, "..", "..")
 const args = process.argv.slice(2)
 
 function quoteForPowerShell(value) {
@@ -49,6 +51,19 @@ Get-CimInstance Win32_Process -Filter "Name = 'openusage.exe'" |
   }
 }
 
+function clearStaleWindowsDebugMetadata() {
+  const result = cleanupStaleDebugBuildMetadata(repoRoot)
+
+  if (!result.removed) {
+    return
+  }
+
+  const [firstEntry] = result.staleEntries
+  console.log(
+    `Removed stale Cargo/Tauri debug metadata copied from another repo path (${firstEntry.outputDir}).`
+  )
+}
+
 function resolveTauriCli() {
   const binDir = path.join(repoRoot, "node_modules", ".bin")
   const localBinary = process.platform === "win32"
@@ -74,6 +89,7 @@ function resolveTauriCli() {
 }
 
 if (process.platform === "win32" && args[0] === "dev") {
+  clearStaleWindowsDebugMetadata()
   stopStaleWindowsDevProcess()
 }
 
