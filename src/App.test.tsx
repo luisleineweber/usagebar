@@ -1220,10 +1220,17 @@ describe("App", () => {
 
     render(<App />)
 
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "sync_panel_geometry",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
 
     const maxHeight = Math.max(
-      ...state.setSizeMock.mock.calls.map(([size]) => (size as { height: number }).height)
+      ...state.invokeMock.mock.calls
+        .filter(([command]) => command === "sync_panel_geometry")
+        .map(([, args]) => (args as { panelHeightPx: number }).panelHeightPx)
     )
 
     expect(maxHeight).toBeLessThanOrEqual(18)
@@ -1265,17 +1272,42 @@ describe("App", () => {
 
     render(<App />)
     await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "sync_panel_geometry",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
 
     const initialHeight = (state.setSizeMock.mock.calls.at(-1)?.[0] as { height: number }).height
     state.setSizeMock.mockClear()
+    state.invokeMock.mockClear()
 
     scrollHeightValue = 320
     window.dispatchEvent(new Event("focus"))
 
     await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "sync_panel_geometry",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
 
     const focusedHeight = (state.setSizeMock.mock.calls.at(-1)?.[0] as { height: number }).height
     expect(focusedHeight).toBeGreaterThan(initialHeight)
+    expect(state.setSizeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("starts a catch-up probe when an enabled provider appears without probe state", async () => {
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    state.startBatchMock.mockClear()
+    useAppPluginStore.getState().setPluginSettings({ order: ["a", "b"], disabled: [] })
+
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
   })
 
   it("logs resize failures", async () => {

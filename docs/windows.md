@@ -110,38 +110,22 @@ Record these fields in the relevant provider doc or rollout note:
 | Windsurf | Experimental | P2 | broader real-account/runtime validation after Windows LS + cloud path port |
 | Perplexity | Not started for Windows | P4 | macOS app-cache dependency |
 
-## Recommended rollout order
+## Rollout Roadmap
 
-### Phase 1: stabilize already-supported providers
+The execution order lives in [windows-provider-rollout-plan.md](./windows-provider-rollout-plan.md).
 
-- Codex
-- Cursor
-- Claude
-- Antigravity
-- Ollama
+This status page keeps:
 
-### Phase 2: resolve product/UI contradictions
+- the definition of what "working on Windows" means
+- the verification checklist
+- the current high-level provider state matrix
 
-- OpenCode
+The roadmap doc carries:
 
-### Phase 3: land lower-risk Windows ports
-
-- Copilot
-- Gemini
-- Amp
-- JetBrains AI Assistant
-- Windsurf
-- Kimi Code
-- MiniMax
-
-### Phase 4: land medium-complexity auth providers
-
-- Factory / Droid
-- Z.ai
-
-### Phase 5: tackle remaining platform-heavy ports
-
-- Perplexity
+- validation mode per provider
+- contract vs entitlement coverage split
+- the first three concrete execution slices
+- the deferred-provider rationale
 
 ## Current Windows TODO (product)
 

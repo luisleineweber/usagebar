@@ -1,4 +1,5 @@
-import { act, renderHook, waitFor } from "@testing-library/react"
+import { act, render, renderHook, waitFor } from "@testing-library/react"
+import { createElement } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const {
@@ -50,8 +51,15 @@ describe("usePanel", () => {
 
     isTauriMock.mockReturnValue(true)
     invokeMock.mockResolvedValue(undefined)
+    listenMock.mockResolvedValue(vi.fn())
     currentMonitorMock.mockResolvedValue(null)
     getCurrentWindowMock.mockReturnValue({ setSize: vi.fn().mockResolvedValue(undefined) })
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        return 160
+      },
+    })
   })
 
   it("handles tray show-about event", async () => {
@@ -187,5 +195,58 @@ describe("usePanel", () => {
   it("keeps a minimum height for the nav icon stack", () => {
     expect(panelMinHeightForNav(0)).toBe(156)
     expect(panelMinHeightForNav(4)).toBe(332)
+  })
+
+  it("syncs the measured panel height back to Rust", async () => {
+    const OriginalResizeObserver = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class ResizeObserverStub {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+
+    function Harness() {
+      const {
+        containerRef,
+        contentColumnRef,
+        scrollRef,
+        contentMeasureRef,
+        footerRef,
+      } = usePanel({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        showAbout: false,
+        setShowAbout: vi.fn(),
+        displayPlugins: [],
+        navPluginCount: 0,
+        onPanelFocus: vi.fn(),
+      })
+
+      return createElement(
+        "div",
+        { ref: containerRef },
+        createElement(
+          "div",
+          { ref: contentColumnRef },
+          createElement(
+            "div",
+            { ref: scrollRef },
+            createElement("div", { ref: contentMeasureRef }, "content")
+          )
+        ),
+        createElement("div", { ref: footerRef }, "footer")
+      )
+    }
+
+    render(createElement(Harness))
+
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        "sync_panel_geometry",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
+
+    globalThis.ResizeObserver = OriginalResizeObserver
   })
 })

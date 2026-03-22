@@ -10,7 +10,7 @@ import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-action
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { track } from "@/lib/analytics"
-import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
+import { getProbeEligiblePluginIds, REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
 import {
   clearProviderSecretMetadata,
   loadProviderConfigs,
@@ -210,6 +210,8 @@ function App() {
     providerConfigsRef.current = providerConfigs
   }, [providerConfigs])
 
+  const catchUpProbeIdsRef = useRef<Set<string>>(new Set())
+
   const persistProviderConfigs = useCallback(async (nextConfigs: typeof providerConfigs) => {
     setProviderConfigs(nextConfigs)
     await saveProviderConfigs(nextConfigs)
@@ -254,14 +256,7 @@ function App() {
 
   const handlePanelFocus = useCallback(() => {
     if (!pluginSettings) return
-
-    const disabledSet = new Set(pluginSettings.disabled)
-    const metaById = new Map(pluginsMeta.map((plugin) => [plugin.id, plugin]))
-    const supportedEnabledIds = pluginSettings.order.filter((id) => {
-      if (disabledSet.has(id)) return false
-      const meta = metaById.get(id)
-      return meta?.supportState !== "comingSoonOnWindows"
-    })
+    const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
 
     const idsToRefresh = activeView !== "home" && activeView !== "settings"
       ? supportedEnabledIds.filter((id) => id === activeView)
@@ -276,6 +271,40 @@ function App() {
       handleRetryPlugin(id)
     }
   }, [activeView, handleRetryPlugin, pluginSettings, pluginStates, pluginsMeta])
+
+  useEffect(() => {
+    if (!pluginSettings) return
+
+    const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
+    const idsToCatchUp = supportedEnabledIds.filter((id) => {
+      if (catchUpProbeIdsRef.current.has(id)) return false
+      const state = pluginStates[id]
+      if (!state) return true
+      return !state.loading && state.data === null && state.error === null && state.lastSuccessAt === null
+    })
+
+    if (idsToCatchUp.length === 0) return
+
+    for (const id of idsToCatchUp) {
+      catchUpProbeIdsRef.current.add(id)
+    }
+
+    setLoadingForPlugins(idsToCatchUp)
+    startBatch(idsToCatchUp)
+      .then((startedIds) => {
+        if (startedIds && startedIds.length > 0) return
+        for (const id of idsToCatchUp) {
+          catchUpProbeIdsRef.current.delete(id)
+        }
+      })
+      .catch((error) => {
+        for (const id of idsToCatchUp) {
+          catchUpProbeIdsRef.current.delete(id)
+        }
+        console.error("Failed to start catch-up probe batch:", error)
+        setErrorForPlugins(idsToCatchUp, "Failed to start probe")
+      })
+  }, [pluginSettings, pluginStates, pluginsMeta, setErrorForPlugins, setLoadingForPlugins, startBatch])
 
   const pluginSettingsRef = useRef(pluginSettings)
   useEffect(() => {

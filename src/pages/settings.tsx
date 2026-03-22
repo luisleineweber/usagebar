@@ -76,18 +76,18 @@ export function SettingsPage({
   return (
     <Tabs
       value={settingsTab}
-      className="gap-5"
+      className="gap-4 sm:gap-5"
       onValueChange={(value) => onSettingsTabChange(value as "general" | "providers")}
     >
-      <div className="shrink-0 rounded-[26px] border border-border/60 bg-card/95 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
+      <div className="shrink-0 rounded-[26px] border border-border/60 bg-card/95 p-4 shadow-[0_18px_60px_rgba(0,0,0,0.16)] sm:p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-2 md:max-w-xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/75 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               <span className="size-2 rounded-full bg-primary" />
               UsageBar
             </div>
             <div>
-              <h1 className="text-2xl font-semibold tracking-[0.01em]">Settings</h1>
+              <h1 className="text-xl font-semibold tracking-[0.01em] sm:text-2xl">Settings</h1>
               <p className="text-sm text-muted-foreground">
                 {isProvidersTab
                   ? "Desktop provider management in a dedicated window."
@@ -96,13 +96,16 @@ export function SettingsPage({
             </div>
           </div>
 
-          <div className="flex min-w-[240px] flex-1 justify-start md:justify-end">
-            <TabsList variant="default" className="h-auto gap-1 rounded-2xl border border-border/70 bg-background/80 p-1.5">
-              <TabsTrigger value="general" className="gap-2 rounded-xl px-4 py-2.5">
+          <div className="flex w-full md:w-auto md:flex-1 md:justify-end">
+            <TabsList
+              variant="default"
+              className="grid h-auto w-full grid-cols-2 gap-1 rounded-2xl border border-border/70 bg-background/80 p-1.5 md:inline-flex md:w-auto"
+            >
+              <TabsTrigger value="general" className="gap-2 rounded-xl px-3 py-2.5 sm:px-4">
                 <Settings2 className="size-4" />
                 General
               </TabsTrigger>
-              <TabsTrigger value="providers" className="gap-2 rounded-xl px-4 py-2.5">
+              <TabsTrigger value="providers" className="gap-2 rounded-xl px-3 py-2.5 sm:px-4">
                 <Blocks className="size-4" />
                 Providers
               </TabsTrigger>
