@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { OverviewPage } from "@/pages/overview"
 import { ProviderDetailPage } from "@/pages/provider-detail"
@@ -6,7 +7,6 @@ import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
 import type { ProviderConfig } from "@/lib/provider-settings"
-import { openSettingsWindow } from "@/lib/settings-window"
 import type {
   AutoUpdateIntervalMinutes,
   DisplayMode,
@@ -19,6 +19,9 @@ import type {
 type AppContentDerivedProps = {
   displayPlugins: DisplayPluginState[]
   selectedPlugin: DisplayPluginState | null
+  resolvedSelectedPlugin: DisplayPluginState | null
+  hasResolvedViews: boolean
+  isPanelResizing?: boolean
 }
 
 export type AppContentActionProps = {
@@ -44,6 +47,9 @@ export type AppContentProps = AppContentDerivedProps & AppContentActionProps
 export function AppContent({
   displayPlugins,
   selectedPlugin,
+  resolvedSelectedPlugin,
+  hasResolvedViews,
+  isPanelResizing = false,
   onRetryPlugin,
   onResetTimerDisplayModeToggle,
 }: AppContentProps) {
@@ -64,9 +70,36 @@ export function AppContent({
       resetTimerDisplayMode: state.resetTimerDisplayMode,
     }))
   )
+  const [transitionKey, setTransitionKey] = useState(activeView)
+  const [isTransitioning, setIsTransitioning] = useState(false)
 
-  if (activeView === "home") {
-    return (
+  useEffect(() => {
+    if (transitionKey === activeView) return
+    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setTransitionKey(activeView)
+      setIsTransitioning(false)
+      return
+    }
+
+    setTransitionKey(activeView)
+    setIsTransitioning(true)
+    const timeoutId = window.setTimeout(() => {
+      setIsTransitioning(false)
+    }, 120)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [activeView, transitionKey])
+
+  const retryPlugin = selectedPlugin ?? resolvedSelectedPlugin
+  const handleRetry = retryPlugin
+    && retryPlugin.meta.supportState !== "comingSoonOnWindows"
+    ? () => onRetryPlugin(retryPlugin.meta.id)
+    : /* v8 ignore next */ undefined
+
+  const content =
+    activeView === "home" ? (
       <OverviewPage
         plugins={displayPlugins}
         onRetryPlugin={onRetryPlugin}
@@ -74,24 +107,26 @@ export function AppContent({
         resetTimerDisplayMode={resetTimerDisplayMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
+    ) : (
+      <ProviderDetailPage
+        plugin={resolvedSelectedPlugin}
+        hasResolvedViews={hasResolvedViews}
+        onRetry={handleRetry}
+        displayMode={displayMode}
+        resetTimerDisplayMode={resetTimerDisplayMode}
+        onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
+      />
     )
-  }
-
-  const handleRetry = selectedPlugin
-    && selectedPlugin.meta.supportState !== "comingSoonOnWindows"
-    ? () => onRetryPlugin(selectedPlugin.meta.id)
-    : /* v8 ignore next */ undefined
 
   return (
-    <ProviderDetailPage
-      plugin={selectedPlugin}
-      onRetry={handleRetry}
-      onOpenProviderSettings={(providerId) => {
-        void openSettingsWindow({ tab: "providers", providerId }).catch(console.error)
-      }}
-      displayMode={displayMode}
-      resetTimerDisplayMode={resetTimerDisplayMode}
-      onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
-    />
+    <div
+      key={transitionKey}
+      className={[
+        "transition-[opacity,transform] duration-120 ease-out motion-reduce:transition-none",
+        isTransitioning || isPanelResizing ? "opacity-95 translate-y-[1px]" : "opacity-100 translate-y-0",
+      ].join(" ")}
+    >
+      {content}
+    </div>
   )
 }

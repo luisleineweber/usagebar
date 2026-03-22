@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import type { ActiveView, NavPlugin } from "@/components/side-nav"
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { PluginSettings } from "@/lib/settings"
@@ -21,6 +21,9 @@ export function useAppPluginViews({
   pluginsMeta,
   pluginStates,
 }: UseAppPluginViewsArgs) {
+  const lastResolvedNavPluginsRef = useRef<NavPlugin[]>([])
+  const lastResolvedSelectedPluginRef = useRef<DisplayPluginState | null>(null)
+
   const enabledSupportedPlugins = useMemo<DisplayPluginState[]>(() => {
     if (!pluginSettings) return []
     const disabledSet = new Set(pluginSettings.disabled)
@@ -36,6 +39,7 @@ export function useAppPluginViews({
         const state =
           pluginStates[id] ?? {
             data: null,
+            lastSettledData: null,
             loading: false,
             error: null,
             lastManualRefreshAt: null,
@@ -71,6 +75,14 @@ export function useAppPluginViews({
     }))
   }, [enabledSupportedPlugins])
 
+  const hasResolvedViews = pluginSettings !== null && pluginsMeta.length > 0
+
+  useEffect(() => {
+    if (navPlugins.length > 0) {
+      lastResolvedNavPluginsRef.current = navPlugins
+    }
+  }, [navPlugins])
+
   useEffect(() => {
     if (activeView === "home") return
     if (!pluginSettings) return
@@ -87,9 +99,36 @@ export function useAppPluginViews({
     return enabledSupportedPlugins.find((plugin) => plugin.meta.id === activeView) ?? null
   }, [activeView, enabledSupportedPlugins])
 
+  useEffect(() => {
+    if (selectedPlugin) {
+      lastResolvedSelectedPluginRef.current = selectedPlugin
+      return
+    }
+    if (activeView === "home") {
+      lastResolvedSelectedPluginRef.current = null
+    }
+  }, [activeView, selectedPlugin])
+
+  const resolvedSelectedPlugin = useMemo(() => {
+    if (selectedPlugin) return selectedPlugin
+    if (activeView === "home") return null
+    const fallback = lastResolvedSelectedPluginRef.current
+    if (!fallback) return null
+    if (fallback.meta.id !== activeView) return null
+    return {
+      ...fallback,
+      data: fallback.data ?? fallback.lastSettledData ?? null,
+      lastSettledData: fallback.lastSettledData ?? fallback.data ?? null,
+      loading: true,
+      error: null,
+    }
+  }, [activeView, selectedPlugin])
+
   return {
     displayPlugins,
-    navPlugins,
+    navPlugins: navPlugins.length > 0 ? navPlugins : lastResolvedNavPluginsRef.current,
+    hasResolvedViews,
     selectedPlugin,
+    resolvedSelectedPlugin,
   }
 }

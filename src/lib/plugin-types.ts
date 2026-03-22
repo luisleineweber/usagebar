@@ -55,6 +55,7 @@ export type PluginMeta = {
 export type PluginDisplayState = {
   meta: PluginMeta
   data: PluginOutput | null
+  lastSettledData?: PluginOutput | null
   loading: boolean
   error: string | null
   lastManualRefreshAt: number | null

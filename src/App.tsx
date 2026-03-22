@@ -21,6 +21,7 @@ import {
 } from "@/lib/provider-settings"
 import { deleteProviderSecret, setProviderSecret } from "@/lib/provider-secrets"
 import { type PluginContextAction } from "@/components/side-nav"
+import type { ActiveView } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
@@ -197,7 +198,7 @@ function App() {
     }
   }, [setProviderConfigs])
 
-  const { displayPlugins, navPlugins, selectedPlugin } = useAppPluginViews({
+  const { displayPlugins, navPlugins, selectedPlugin, resolvedSelectedPlugin, hasResolvedViews } = useAppPluginViews({
     activeView,
     setActiveView,
     pluginSettings,
@@ -254,11 +255,14 @@ function App() {
     }
   }, [persistProviderConfigs])
 
-  const handlePanelFocus = useCallback(() => {
+  const handlePanelFocus = useCallback((targetView?: ActiveView) => {
     if (!pluginSettings) return
     const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
+    const explicitTargetView = targetView?.trim()
 
-    const idsToRefresh = activeView !== "home" && activeView !== "settings"
+    const idsToRefresh = explicitTargetView && explicitTargetView !== "home" && explicitTargetView !== "settings"
+      ? supportedEnabledIds.filter((id) => id === explicitTargetView)
+      : activeView !== "home" && activeView !== "settings"
       ? supportedEnabledIds.filter((id) => id === activeView)
       : supportedEnabledIds.filter((id) => {
           const state = pluginStates[id]
@@ -362,6 +366,8 @@ function App() {
       displayPlugins={displayPlugins}
       autoUpdateNextAt={autoUpdateNextAt}
       selectedPlugin={selectedPlugin}
+      resolvedSelectedPlugin={resolvedSelectedPlugin}
+      hasResolvedViews={hasResolvedViews}
       onPluginContextAction={handlePluginContextAction}
       isPluginRefreshAvailable={isPluginRefreshAvailable}
       onNavReorder={handleReorder}
