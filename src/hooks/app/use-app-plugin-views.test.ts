@@ -202,4 +202,46 @@ describe("useAppPluginViews", () => {
 
     expect(result.current.selectedPlugin?.meta.id).toBe("codex")
   })
+
+  it("reports when view metadata is fully resolved", () => {
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginsMeta: [createPluginMeta("codex", "Codex")],
+        pluginStates: {},
+      })
+    )
+
+    expect(result.current.hasResolvedViews).toBe(true)
+  })
+
+  it("keeps the previous nav snapshot when bootstrap state transiently clears", async () => {
+    const { result, rerender } = renderHook(
+      ({ pluginSettings, pluginsMeta }: { pluginSettings: PluginSettings | null; pluginsMeta: PluginMeta[] }) =>
+        useAppPluginViews({
+          activeView: "home",
+          setActiveView: vi.fn(),
+          pluginSettings,
+          pluginsMeta,
+          pluginStates: {},
+        }),
+      {
+        initialProps: {
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginsMeta: [createPluginMeta("codex", "Codex")],
+        },
+      }
+    )
+
+    await waitFor(() => {
+      expect(result.current.navPlugins.map((plugin) => plugin.id)).toEqual(["codex"])
+    })
+
+    rerender({ pluginSettings: null, pluginsMeta: [] })
+
+    expect(result.current.navPlugins.map((plugin) => plugin.id)).toEqual(["codex"])
+    expect(result.current.hasResolvedViews).toBe(false)
+  })
 })

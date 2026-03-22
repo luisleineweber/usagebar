@@ -1,10 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { overviewPageMock, providerDetailPageMock, openSettingsWindowMock } = vi.hoisted(() => ({
+const { overviewPageMock, providerDetailPageMock } = vi.hoisted(() => ({
   overviewPageMock: vi.fn(),
   providerDetailPageMock: vi.fn(),
-  openSettingsWindowMock: vi.fn(),
 }))
 
 vi.mock("@/pages/overview", () => ({
@@ -15,21 +14,14 @@ vi.mock("@/pages/overview", () => ({
 }))
 
 vi.mock("@/pages/provider-detail", () => ({
-  ProviderDetailPage: (props: { onRetry?: () => void; onOpenProviderSettings?: (providerId: string) => void }) => {
+  ProviderDetailPage: (props: { onRetry?: () => void }) => {
     providerDetailPageMock(props)
     return (
       <div data-testid="provider-detail-page">
         {props.onRetry ? <button onClick={props.onRetry}>retry-provider</button> : null}
-        {props.onOpenProviderSettings ? (
-          <button onClick={() => props.onOpenProviderSettings?.("codex")}>open-provider-settings</button>
-        ) : null}
       </div>
     )
   },
-}))
-
-vi.mock("@/lib/settings-window", () => ({
-  openSettingsWindow: openSettingsWindowMock,
 }))
 
 import { AppContent, type AppContentProps } from "@/components/app/app-content"
@@ -81,8 +73,6 @@ describe("AppContent", () => {
   beforeEach(() => {
     overviewPageMock.mockReset()
     providerDetailPageMock.mockReset()
-    openSettingsWindowMock.mockReset()
-    openSettingsWindowMock.mockResolvedValue(undefined)
     useAppUiStore.getState().resetState()
     useAppPreferencesStore.getState().resetState()
   })
@@ -104,14 +94,5 @@ describe("AppContent", () => {
 
     expect(providerDetailPageMock).toHaveBeenCalledTimes(1)
     expect(props.onRetryPlugin).toHaveBeenCalledWith("codex")
-  })
-
-  it("opens the standalone settings window from provider detail", () => {
-    useAppUiStore.getState().setActiveView("codex")
-    render(<AppContent {...createProps()} />)
-
-    fireEvent.click(screen.getByRole("button", { name: "open-provider-settings" }))
-
-    expect(openSettingsWindowMock).toHaveBeenCalledWith({ tab: "providers", providerId: "codex" })
   })
 })

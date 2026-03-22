@@ -95,6 +95,7 @@ export function ProviderCard({
   resetTimerDisplayMode = "relative",
   onResetTimerDisplayModeToggle,
 }: ProviderCardProps) {
+  const hasRetainedContent = lines.length > 0
   const cooldownRemainingMs = useMemo(() => {
     if (!lastManualRefreshAt) return 0
     const remaining = REFRESH_COOLDOWN_MS - (Date.now() - lastManualRefreshAt)
@@ -242,13 +243,13 @@ export function ProviderCard({
             ))}
           </div>
         )}
-        {error && <PluginError message={error} />}
+        {error && !hasRetainedContent && <PluginError message={error} />}
 
-        {loading && !error && (
+        {loading && !hasRetainedContent && !error && (
           <SkeletonLines lines={filteredSkeletonLines} />
         )}
 
-        {!loading && !error && (
+        {(hasRetainedContent || !loading) && !error && (
           <div className="space-y-4">
             {groupLinesByType(filteredLines).map((group, gi) =>
               group.kind === "text" ? (
@@ -279,6 +280,17 @@ export function ProviderCard({
                 </Fragment>
               )
             )}
+          </div>
+        )}
+        {loading && hasRetainedContent && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            Refreshing usage
+          </div>
+        )}
+        {error && hasRetainedContent && (
+          <div className="mt-3">
+            <PluginError message={error} />
           </div>
         )}
       </div>
