@@ -74,7 +74,7 @@ function SortableProviderRow({
       type="button"
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors",
+        "flex w-full flex-wrap items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-colors sm:flex-nowrap sm:items-center",
         selected
           ? "border-primary/35 bg-primary text-primary-foreground shadow-[0_14px_35px_rgba(37,99,235,0.26)]"
           : "border-transparent bg-card/70 hover:border-border/60 hover:bg-background/85",
@@ -112,7 +112,7 @@ function SortableProviderRow({
         </span>
         <span
           className={cn(
-            "block truncate text-xs",
+            "block text-xs leading-5 break-words",
             selected ? "text-primary-foreground/75" : "text-muted-foreground"
           )}
         >
@@ -125,6 +125,7 @@ function SortableProviderRow({
         checked={plugin.enabled}
         disabled={!plugin.supported}
         className={cn(
+          "self-start sm:self-auto",
           selected
             && "border-foreground/18 bg-foreground/6 data-checked:border-foreground data-checked:bg-foreground data-checked:text-background"
         )}
@@ -200,7 +201,7 @@ export function ProvidersSettingsPane({
         <div className="mb-4 border-b border-border/60 pb-4">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Providers</h3>
           <p className="mt-1 text-sm text-muted-foreground">Reorder your lineup and select a provider to manage.</p>
-          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="rounded-full border border-border/70 bg-background/70 px-2 py-1">
               {providers.filter((provider) => provider.enabled).length} enabled
             </span>

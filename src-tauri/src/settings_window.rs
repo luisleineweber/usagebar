@@ -61,8 +61,9 @@ pub fn open(
         )
         .title("UsageBar Settings")
         .inner_size(960.0, 720.0)
-        .min_inner_size(760.0, 560.0)
-        .resizable(true)
+        .max_inner_size(960.0, 720.0)
+        .min_inner_size(960.0, 720.0)
+        .resizable(false)
         .visible(true)
         .build()
         .map_err(|error| format!("failed to build settings window: {}", error))?;

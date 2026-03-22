@@ -12,9 +12,6 @@ const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.9
 const SIDE_NAV_VERTICAL_PADDING_PX = 24
 const SIDE_NAV_BUTTON_HEIGHT_PX = 44
 const SIDE_NAV_STATIC_BUTTON_COUNT = 3 // Home + Help + Settings
-const PANEL_RESIZE_STEP_MS = 18
-const PANEL_RESIZE_MIN_DELTA_PX = 36
-const PANEL_RESIZE_MAX_STEPS = 3
 
 function getMonitorLogicalHeight(monitor: Awaited<ReturnType<typeof currentMonitor>>): number | null {
   if (!monitor) return null
@@ -38,32 +35,6 @@ export function panelMinHeightForNav(providerCount: number): number {
   const normalizedProviderCount = Math.max(0, Math.floor(providerCount))
   const buttonCount = SIDE_NAV_STATIC_BUTTON_COUNT + normalizedProviderCount
   return SIDE_NAV_VERTICAL_PADDING_PX + buttonCount * SIDE_NAV_BUTTON_HEIGHT_PX
-}
-
-function buildResizeHeights(fromHeight: number, toHeight: number): number[] {
-  const roundedFrom = Math.max(1, Math.round(fromHeight))
-  const roundedTo = Math.max(1, Math.round(toHeight))
-  if (roundedTo <= roundedFrom) return [roundedTo]
-  const delta = Math.abs(roundedTo - roundedFrom)
-  if (delta < PANEL_RESIZE_MIN_DELTA_PX) return [roundedTo]
-
-  const stepCount = Math.min(PANEL_RESIZE_MAX_STEPS, Math.max(2, Math.ceil(delta / 140)))
-  const heights: number[] = []
-  for (let step = 1; step <= stepCount; step += 1) {
-    const progress = step / stepCount
-    const easedProgress = 1 - Math.pow(1 - progress, 2)
-    const nextHeight = Math.max(
-      1,
-      Math.round(roundedFrom + (roundedTo - roundedFrom) * easedProgress)
-    )
-    if (heights[heights.length - 1] !== nextHeight) {
-      heights.push(nextHeight)
-    }
-  }
-  if (heights[heights.length - 1] !== roundedTo) {
-    heights.push(roundedTo)
-  }
-  return heights
 }
 
 type UsePanelArgs = {
@@ -173,50 +144,43 @@ export function usePanel({
 
     const currentWindow = getCurrentWindow()
 
-    const pauseBetweenResizeSteps = () =>
-      new Promise<void>((resolve) => {
-        window.setTimeout(resolve, PANEL_RESIZE_STEP_MS)
-      })
-
     const applyHeight = (factor: number, width: number, logicalHeight: number) => {
       const roundedHeight = Math.max(1, Math.round(logicalHeight))
-      if (targetPanelHeightPxRef.current === roundedHeight) return
-      const previousHeight = currentPanelHeightPxRef.current
-        ?? Math.max(1, Math.round(window.innerHeight || 0))
-      const heights = buildResizeHeights(previousHeight, roundedHeight)
+      if (
+        targetPanelHeightPxRef.current === roundedHeight &&
+        currentPanelHeightPxRef.current === roundedHeight
+      ) {
+        return
+      }
       const sequenceId = resizeSequenceIdRef.current + 1
       resizeSequenceIdRef.current = sequenceId
       targetPanelHeightPxRef.current = roundedHeight
 
       const operation = async () => {
-        let lastHeight = previousHeight
-        for (let index = 0; index < heights.length; index += 1) {
+        if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
+        const previousHeight = currentPanelHeightPxRef.current
+          ?? Math.max(1, Math.round(window.innerHeight || 0))
+        const isGrowing = roundedHeight > previousHeight
+
+        currentPanelHeightPxRef.current = roundedHeight
+        setPanelHeightPx((prev) => (prev === roundedHeight ? prev : roundedHeight))
+
+        await Promise.resolve(invoke("sync_panel_geometry", { panelHeightPx: roundedHeight }))
+        if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
+
+        const resizeWindow = () =>
+          Promise.resolve(currentWindow.setSize(new PhysicalSize(width, Math.ceil(roundedHeight * factor))))
+        const repositionWindow = () =>
+          Promise.resolve(invoke("reposition_panel", { panelHeightPx: roundedHeight }))
+
+        if (isGrowing) {
+          await repositionWindow()
           if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
-          const nextHeight = heights[index]
-          const isGrowing = nextHeight > lastHeight
-
-          currentPanelHeightPxRef.current = nextHeight
-          setPanelHeightPx((prev) => (prev === nextHeight ? prev : nextHeight))
-
-          const resizeWindow = () =>
-            Promise.resolve(currentWindow.setSize(new PhysicalSize(width, Math.ceil(nextHeight * factor))))
-          const repositionWindow = () =>
-            Promise.resolve(invoke("reposition_panel", { panelHeightPx: nextHeight }))
-
-          if (isGrowing) {
-            await repositionWindow()
-            if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
-            await resizeWindow()
-          } else {
-            await resizeWindow()
-            if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
-            await repositionWindow()
-          }
-
-          lastHeight = nextHeight
-          if (index < heights.length - 1) {
-            await pauseBetweenResizeSteps()
-          }
+          await resizeWindow()
+        } else {
+          await resizeWindow()
+          if (isDisposed || resizeSequenceIdRef.current !== sequenceId) return
+          await repositionWindow()
         }
       }
 

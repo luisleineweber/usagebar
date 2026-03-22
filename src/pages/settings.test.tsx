@@ -146,6 +146,29 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("tab", { name: "Providers" })).toBeInTheDocument()
   })
 
+  it("uses responsive layout classes for narrow settings widths", () => {
+    const { container } = render(<TestHarness />)
+
+    expect(container.querySelector(".md\\:flex-row")).toBeTruthy()
+    expect(container.querySelector(".grid-cols-2.lg\\:grid-cols-4")).toBeTruthy()
+    expect(container.querySelector(".sm\\:grid-cols-2")).toBeTruthy()
+    expect(container.querySelector(".sm\\:grid-cols-3")).toBeTruthy()
+  })
+
+  it("keeps provider rows readable on narrower layouts", () => {
+    const { container } = render(
+      <SettingsPage
+        {...defaultProps}
+        settingsTab="providers"
+        onSettingsTabChange={vi.fn()}
+        selectedProviderId="opencode"
+        onSelectedProviderChange={vi.fn()}
+      />
+    )
+
+    expect(container.querySelector(".flex-wrap.items-start.gap-3")).toBeTruthy()
+  })
+
   it("renders global settings on the General tab", () => {
     render(<TestHarness />)
     expect(screen.getByText("Auto Refresh")).toBeInTheDocument()

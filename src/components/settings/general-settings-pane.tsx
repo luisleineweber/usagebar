@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils"
 
 const TRAY_PREVIEW_SIZE_PX = getTrayIconSizePx(1)
 const PREVIEW_BAR_TRACK_PX = 20
+const DENSE_SEGMENTED_GROUP_CLASS = "grid grid-cols-2 gap-1 lg:grid-cols-4"
+const TWO_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-1 sm:grid-cols-2"
+const THREE_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-1 sm:grid-cols-3"
 
 function getPreviewBarLayout(fraction: number): { fillPercent: number; remainderPercent: number } {
   const { fillW, remainderDrawW } = getBarFillLayout(PREVIEW_BAR_TRACK_PX, fraction)
@@ -192,13 +195,13 @@ export function GeneralSettingsPane({
   onStartOnLoginChange,
 }: GeneralSettingsPaneProps) {
   return (
-    <div className="rounded-[26px] border border-border/70 bg-card/92 px-5 py-5 shadow-[0_12px_35px_rgba(0,0,0,0.12)]">
-      <div className="space-y-4">
+    <div className="rounded-[26px] border border-border/70 bg-card/92 px-4 py-4 shadow-[0_12px_35px_rgba(0,0,0,0.12)] sm:px-5 sm:py-5">
+      <div className="space-y-5">
       <section>
         <h3 className="mb-0 text-lg font-semibold">Auto Refresh</h3>
         <p className="mb-2 text-sm text-muted-foreground">How obsessive are you</p>
         <div className="rounded-lg bg-muted/50 p-1">
-          <div className="flex gap-1" role="radiogroup" aria-label="Auto-update interval">
+          <div className={DENSE_SEGMENTED_GROUP_CLASS} role="radiogroup" aria-label="Auto-update interval">
             {AUTO_UPDATE_OPTIONS.map((option) => {
               const isActive = option.value === autoUpdateInterval
               return (
@@ -209,7 +212,7 @@ export function GeneralSettingsPane({
                   aria-checked={isActive}
                   variant={isActive ? "default" : "outline"}
                   size="sm"
-                  className="flex-1"
+                  className="min-h-9 w-full"
                   onClick={() => onAutoUpdateIntervalChange(option.value)}
                 >
                   {option.label}
@@ -224,7 +227,7 @@ export function GeneralSettingsPane({
         <h3 className="mb-0 text-lg font-semibold">Usage Mode</h3>
         <p className="mb-2 text-sm text-muted-foreground">Glass half full or half empty</p>
         <div className="rounded-lg bg-muted/50 p-1">
-          <div className="flex gap-1" role="radiogroup" aria-label="Usage display mode">
+          <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Usage display mode">
             {DISPLAY_MODE_OPTIONS.map((option) => {
               const isActive = option.value === displayMode
               return (
@@ -235,7 +238,7 @@ export function GeneralSettingsPane({
                   aria-checked={isActive}
                   variant={isActive ? "default" : "outline"}
                   size="sm"
-                  className="flex-1"
+                  className="min-h-9 w-full"
                   onClick={() => onDisplayModeChange(option.value)}
                 >
                   {option.label}
@@ -250,7 +253,7 @@ export function GeneralSettingsPane({
         <h3 className="mb-0 text-lg font-semibold">Reset Timers</h3>
         <p className="mb-2 text-sm text-muted-foreground">Countdown or clock time</p>
         <div className="rounded-lg bg-muted/50 p-1">
-          <div className="flex gap-1" role="radiogroup" aria-label="Reset timer display mode">
+          <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Reset timer display mode">
             {RESET_TIMER_DISPLAY_OPTIONS.map((option) => {
               const isActive = option.value === resetTimerDisplayMode
               const absoluteTimeExample = new Intl.DateTimeFormat(undefined, {
@@ -266,7 +269,7 @@ export function GeneralSettingsPane({
                   aria-checked={isActive}
                   variant={isActive ? "default" : "outline"}
                   size="sm"
-                  className="flex h-auto flex-1 flex-col items-center gap-0 py-2"
+                  className="flex h-auto min-h-14 w-full flex-col items-center gap-0 py-2"
                   onClick={() => onResetTimerDisplayModeChange(option.value)}
                 >
                   <span>{option.label}</span>
@@ -284,7 +287,7 @@ export function GeneralSettingsPane({
         <h3 className="mb-0 text-lg font-semibold">Menubar Icon</h3>
         <p className="mb-2 text-sm text-muted-foreground">What shows in the menu bar</p>
         <div className="rounded-lg bg-muted/50 p-1">
-          <div className="flex gap-1" role="radiogroup" aria-label="Menubar icon style">
+          <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Menubar icon style">
             {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
               const isActive = option.value === menubarIconStyle
               return (
@@ -296,7 +299,7 @@ export function GeneralSettingsPane({
                   aria-checked={isActive}
                   variant={isActive ? "default" : "outline"}
                   size="sm"
-                  className="flex h-9 flex-1 items-center justify-center"
+                  className="flex h-10 w-full items-center justify-center"
                   onClick={() => onMenubarIconStyleChange(option.value)}
                 >
                   <MenubarIconStylePreview style={option.value} isActive={isActive} traySettingsPreview={traySettingsPreview} />
@@ -311,7 +314,7 @@ export function GeneralSettingsPane({
         <h3 className="mb-0 text-lg font-semibold">App Theme</h3>
         <p className="mb-2 text-sm text-muted-foreground">How it looks around here</p>
         <div className="rounded-lg bg-muted/50 p-1">
-          <div className="flex gap-1" role="radiogroup" aria-label="Theme mode">
+          <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Theme mode">
             {THEME_OPTIONS.map((option) => {
               const isActive = option.value === themeMode
               return (
@@ -322,7 +325,7 @@ export function GeneralSettingsPane({
                   aria-checked={isActive}
                   variant={isActive ? "default" : "outline"}
                   size="sm"
-                  className="flex-1"
+                  className="min-h-9 w-full"
                   onClick={() => onThemeModeChange(option.value)}
                 >
                   {option.label}
@@ -338,7 +341,7 @@ export function GeneralSettingsPane({
       <section>
         <h3 className="mb-0 text-lg font-semibold">Start on Login</h3>
         <p className="mb-2 text-sm text-muted-foreground">OpenUsage starts when you sign in</p>
-        <label className="flex select-none items-center gap-2 text-sm text-foreground">
+        <label className="flex flex-wrap select-none items-center gap-2 text-sm text-foreground">
           <Checkbox
             key={`start-on-login-${startOnLogin}`}
             checked={startOnLogin}

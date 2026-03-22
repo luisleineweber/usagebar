@@ -1,0 +1,102 @@
+# Windows Provider Rollout Plan
+
+Canonical execution roadmap for Windows provider work in this fork. This document is about delivery order, validation mode, and what can be proven locally before paid-account entitlement coverage exists.
+
+Use [Windows provider verification](./windows-provider-verification.md) for the repeatable validation checklist. Keep [windows.md](./windows.md) as the short status page.
+
+## Validation model
+
+- **Contract Coverage**: fixtures, focused tests, docs, auth-path discovery, and actionable error mapping.
+- **Entitlement Coverage**: real free/trial/paid/team/runtime behavior observed on Windows.
+- **Validation Mode** values:
+  - `self-testable`
+  - `community-needed`
+  - `fixture-only until real account`
+
+## Provider Matrix
+
+| Provider | Current Windows State | Primary Windows Evidence Source | Validation Mode | Contract Coverage | Entitlement Coverage | Recommended Next Slice | Why Now / Why Later |
+|---|---|---|---|---|---|---|---|
+| Copilot | Experimental | `gh auth status`, `gh auth switch`, `hosts.yml`, keychain, `gh auth token` | self-testable | Strong pathing/tests exist; needs multi-account fixture hardening | Real free/paid behavior still partial | Lock active-account flow and add multi-account fixtures | Cheapest official Windows validation path today |
+| Gemini | Experimental | `~/.gemini/settings.json`, `oauth_creds.json`, Windows npm global `oauth2.js` | self-testable | Good Windows path coverage exists; needs auth-mode fixture hardening | Real free/workspace/paid evidence still partial | Harden official OAuth/API-key discovery and free-vs-paid response fixtures | Official local auth files and CLI paths are deterministic |
+| Claude | Partially working | `~/.claude/.credentials.json`, `~/.claude.json`, local `ccusage` | fixture-only until real account | Good token-source/error coverage; needs more fixture-backed contract regressions | Paid/account-tier variance still incomplete | Add focused contract regressions for OAuth/account fallback and failure wording | Mostly implemented already; expensive entitlement permutations remain |
+| Cursor | Partially working | local `state.vscdb`, CLI keychain/session fallbacks | fixture-only until real account | Needs stronger Windows fixture coverage around account-state variants | Free/trial/paid/team variance needs real accounts | Add fixture-backed Windows auth/state regressions before more UI work | Good candidate after the cheapest self-testable slice |
+| Codex | Working | local Codex auth files/keychain and `@ccusage/codex` usage data | fixture-only until real account | Needs fixture-backed contract hardening, not a redesign | Broader plan/runtime evidence still desirable | Add focused regressions for auth-source selection and usage-shape parsing | Local sources are stable, but plan diversity is harder to self-test |
+| Ollama | Working v1 | manually stored Cookie header for `https://ollama.com/settings` | fixture-only until real account | Parser/setup diagnostics are solid; needs more fixture-backed contract cases | Real signed-in cookie/runtime evidence is still limited | Expand HTML-shape and auth-failure fixtures | Manual-cookie flow is deterministic enough for contract work |
+| OpenCode | Experimental | manually stored Cookie header plus workspace id from OpenCode billing flow | fixture-only until real account | Needs broader billing-payload and workspace-selection fixtures | Real workspace plan behavior still gated on signed-in accounts | Add focused workspace/payload contract regressions | Current integration is meaningful, but entitlement proof is expensive |
+| JetBrains AI Assistant | Working on Windows | local IDE quota XML under JetBrains/Google config roots | community-needed | Good Windows parser/path tests already exist | More IDE/account/runtime combinations still need real-world confirmation | Collect local validation notes across more IDE/product variants | Stable local source exists, but coverage breadth is community-driven now |
+| Antigravity | Working but needs more runtime confidence | local `state.vscdb`, local language server process, Windows-localized netstat parsing | community-needed | LS discovery and mixed-port contract coverage is good | Runtime grouped-quota behavior still needs broader real sessions | Gather real Windows validation notes for quota grouping and startup behavior | Local process path is implemented; broader confidence is the bottleneck |
+| Windsurf | Experimental | local `state.vscdb` plus direct cloud quota call | community-needed | Windows state-db/cloud contract is in place | Real-account/runtime coverage still thin | Defer until clearer real-user evidence arrives | More opaque runtime confidence problem than engineering problem |
+| Amp | Experimental | `%USERPROFILE%\\.local\\share\\amp\\secrets.json` | community-needed | Windows path contract is covered | Real signed-in Windows usage still unverified | Defer after higher-signal providers | Needs real signed-in evidence more than code churn |
+| OpenCode Go | Working | local `opencode.db` SQLite history | self-testable | Local DB parsing and window math can be fully fixture-driven | No remote entitlement contract exists; local-history behavior is the product | Add focused history/anchor-window fixtures when touching the provider again | Entirely local provider; cheap to maintain with fixtures |
+| Factory / Droid | Not started for Windows | likely WorkOS session plus app/web auth state | community-needed | Little Windows contract evidence exists | Real auth/session behavior unknown | Defer until a concrete Windows auth source is documented | Opaque Windows session model |
+| Kimi Code | Not started for Windows | local credential/file locations still need Windows confirmation | community-needed | Too little Windows auth evidence | Entitlement/runtime behavior unknown | Defer until Windows auth storage is documented | Discovery cost is still high |
+| MiniMax | Not started for Windows | user-provided API key / CN key env path | fixture-only until real account | API-key contract can be tested, but Windows account reality still sparse | Real plan/runtime evidence still missing | Defer until higher-priority self-testable slices land | Easier than browser/session ports, but still lower priority |
+| Z.ai | Not started for Windows | user-provided API key / token | fixture-only until real account | Direct API contract is testable when prioritized | Real quota/account behavior still unverified | Defer until after the current higher-signal queue | API provider, but not as urgent as Copilot/Gemini |
+| Perplexity | Not started for Windows | currently macOS app-cache dependent | community-needed | Windows contract is not established | Windows entitlement path is effectively blocked | Defer until a viable Windows auth source exists | Platform-hostile source model for this fork |
+
+## Rollout Order
+
+### Phase 1: subscription-light, self-testable first
+
+1. Copilot
+2. Gemini
+3. Claude
+
+### Phase 2: contract hardening on already-meaningful providers
+
+1. Cursor
+2. Codex
+3. Ollama
+4. OpenCode
+
+### Phase 3: low-code, confidence-gathering follow-ups
+
+1. JetBrains AI Assistant
+2. Antigravity
+
+### Deferred until clearer Windows evidence exists
+
+- Factory / Droid
+- Kimi Code
+- MiniMax
+- Z.ai
+- Windsurf
+- Perplexity
+- Amp
+
+## First Three Execution Slices
+
+### Slice 1: Copilot account-state hardening
+
+- Scope:
+  - keep the Windows flow centered on `gh auth status`, `gh auth switch`, active-account resolution, and the existing `gh auth token` fallback
+  - add multi-account fixtures for `hosts.yml`, active-login mismatch, and direct `gh auth token` recovery
+- Success evidence:
+  - `bun run test -- plugins/copilot/plugin.test.js`
+  - `cargo test --manifest-path src-tauri/Cargo.toml keychain_api_exposes_account_read_and_write`
+  - one short Windows validation note that records the active `gh` account shape actually used
+
+### Slice 2: Gemini official-auth hardening
+
+- Scope:
+  - lock the official OAuth file path and Windows npm global `oauth2.js` lookup
+  - add explicit fixture coverage for supported vs unsupported auth modes and free-tier vs paid-tier response shapes
+- Success evidence:
+  - `bun run test -- plugins/gemini/plugin.test.js`
+  - updated provider doc notes for supported and unsupported modes
+
+### Slice 3: supported-provider contract coverage
+
+- Scope:
+  - add or expand fixture-backed contract tests for `Claude`, `Cursor`, `Codex`, `Ollama`, and `OpenCode`
+  - keep real paid/trial/team behavior called out as entitlement work, not as a blocker for parser/auth-path correctness
+- Success evidence:
+  - one focused regression per provider
+  - provider docs updated where error wording or setup expectations changed
+
+## Defaults
+
+- Prefer providers with official local auth/session files, CLI account state, or deterministic fixtures before providers that require paid opaque browser sessions.
+- Keep contract work moving even when entitlement validation requires community testers or paid plans.
+- Do not promote a provider from experimental/partial to fully working on Windows without at least one real Windows entitlement check, even if the fixture contract looks complete.

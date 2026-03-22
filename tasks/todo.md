@@ -1,3 +1,37 @@
+# Improve settings responsiveness for smaller window sizes
+
+## Acceptance Criteria
+- [x] The Settings header and tab switcher reflow cleanly on narrow widths without hard minimum-width squeeze.
+- [x] General settings segmented controls stack or wrap on smaller widths instead of collapsing into cramped horizontal rows.
+- [x] Provider settings rows and summary badges remain readable on narrow widths.
+- [x] Focused frontend verification covers the responsive layout hooks before the task is marked done.
+
+## Plan
+- [x] Patch the settings page header and tab shell to allow earlier stacking and wrapping.
+- [x] Update the general settings option groups to use responsive grid/wrap layouts.
+- [x] Tighten the providers pane row/header layout for narrow widths and add a focused test, then run targeted verification.
+
+## Verification Notes
+- Verified the responsive settings slice with `npx vitest run src/pages/settings.test.tsx` -> 1 file passed, 10 tests passed.
+
+# Add current provider status matrix to README
+
+## Acceptance Criteria
+- [x] `README.md` shows the current Windows status for every provider in the repo.
+- [x] The status labels match the current plugin manifest state (`supported`, `experimental`, `blocked`) or clearly call out providers without Windows metadata.
+- [x] Providers with docs keep README links to their docs; placeholders without docs point at their plugin folders.
+- [x] Verification records the diff/text checks used before the task is marked done.
+
+## Plan
+- [x] Audit the current plugin manifests to extract the provider list and Windows state.
+- [x] Replace the old README provider buckets with a provider-by-provider Windows status matrix.
+- [x] Record the documentation default in `docs/choices.md`, leave a breadcrumb in `docs/breadcrumbs.md`, and verify the final diff/text.
+
+## Verification Notes
+- Verified the README table text with `Get-Content README.md`.
+- Verified the manifest state source with a PowerShell manifest audit over `plugins/*/plugin.json`.
+- Verified the final documentation diff with `git --no-pager diff -- README.md tasks/todo.md docs/choices.md docs/breadcrumbs.md`.
+
 # Improve AGENTS.md repo playbook
 
 ## Acceptance Criteria
@@ -408,31 +442,42 @@
 # Plan subscription-light provider rollout
 
 ## Acceptance Criteria
-- [ ] The next provider order is optimized for providers you can validate with free/trial access or deterministic fixtures instead of paid subscriptions.
-- [ ] The roadmap explicitly separates contract coverage (fixtures/tests/docs) from entitlement coverage (real paid account behavior).
-- [ ] The first three execution slices are concrete, small, and independently verifiable on Windows.
+- [x] `docs/windows-provider-rollout-plan.md` exists and becomes the canonical Windows provider execution roadmap for this fork.
+- [x] The roadmap optimizes the next provider order for free/trial access, official local auth flows, or deterministic fixtures before paid opaque providers.
+- [x] Every provider in the current Windows rollout scope has exactly one validation mode: `self-testable`, `community-needed`, or `fixture-only until real account`.
+- [x] The roadmap separates `Contract Coverage` from `Entitlement Coverage` as distinct columns instead of collapsing them into prose.
+- [x] The first three execution slices are concrete, small, and independently verifiable on Windows.
 
 ## Plan
-- [ ] Add a provider evidence matrix to `docs/windows-provider-rollout-plan.md` with one validation mode per provider: `self-testable`, `community-needed`, or `fixture-only until real account`.
-- [ ] Land the Windows Copilot slice around official `gh` account state (`gh auth status` / `gh auth switch`), plus multi-account fixture coverage before any UI expansion.
-- [ ] Land the Windows Gemini slice around official OAuth/API-key flows, Windows config-path discovery, and focused fixture tests for free-tier and paid-tier response shapes.
-- [ ] Harden the already-supported providers by capturing fixture-backed contract tests for Claude, Cursor, Codex, Ollama, and OpenCode, then use community verification only for paid-plan-specific states you cannot self-test.
-- [ ] Defer opaque Windows ports (Factory, Kimi, MiniMax, Z.ai, Windsurf, Perplexity, and likely Amp) until a concrete Windows auth source is documented or a community tester can supply logs.
+- [x] Create `docs/windows-provider-rollout-plan.md` with a provider matrix covering current Windows state, primary evidence source, validation mode, contract coverage, entitlement coverage, next slice, and rationale.
+- [x] Rewrite the rollout order around subscription-light validation: `Copilot`, `Gemini`, `Claude` first; then `Cursor`, `Codex`, `Ollama`, `OpenCode`; then `JetBrains AI Assistant`, `Antigravity`; defer the remaining opaque providers.
+- [x] Make the first three execution slices explicit and testable: Copilot `gh` account-state hardening, Gemini official OAuth/API-key path hardening, and fixture-backed contract coverage for the already-supported providers.
+- [x] Update `docs/windows.md` to keep the status/checklist material but point its rollout-order guidance at `docs/windows-provider-rollout-plan.md`.
+
+## Verification Notes
+- [x] Verified the roadmap schema and provider rows with `rg -n "Validation Mode|Contract Coverage|Entitlement Coverage|Copilot|Gemini|Claude|Cursor|Codex|Ollama|OpenCode|JetBrains AI Assistant|Antigravity" docs/windows-provider-rollout-plan.md`.
+- [x] Reviewed the docs diff with `git --no-pager diff --color=never -- tasks/todo.md docs/windows.md docs/windows-provider-rollout-plan.md`.
 
 # Stabilize settings and tray popup window behavior
 
 ## Acceptance Criteria
-- [ ] The standalone Settings window opens at a fixed size instead of resizing with content changes.
-- [ ] The tray bar window no longer visibly jumps around while opening, resizing, or switching content.
-- [ ] The tray popup no longer starts at an undersized height before correcting itself on first open.
-- [ ] Opening the popup from Windows `Ausgeblendete Symbole` overflow via the multi-menu path still yields the correct size and position.
-- [ ] Antigravity usage/loading works even when its view has not been opened yet in the current app session.
+- [x] The standalone Settings window opens at a fixed size instead of resizing with content changes.
+- [x] The tray bar window no longer visibly jumps around while opening, resizing, or switching content.
+- [x] The tray popup no longer starts at an undersized height before correcting itself on first open.
+- [x] Opening the popup from Windows `Ausgeblendete Symbole` overflow via the multi-menu path still yields the correct size and position.
+- [x] Antigravity usage/loading works even when its view has not been opened yet in the current app session.
 
 ## Plan
-- [ ] Audit the Tauri window creation and frontend resize/reposition flow for the Settings window and tray popup, including overflow-menu launch behavior.
-- [ ] Set explicit fixed sizing for the Settings window and reduce tray popup/bar reposition jitter during open and content transitions.
-- [ ] Fix first-open popup sizing and the `Ausgeblendete Symbole` multi-menu path so the popup lands at the correct geometry immediately.
-- [ ] Decouple Antigravity startup/loading from the view-open lifecycle, then add focused verification for the window and provider regressions.
+- [x] Fix `src-tauri/src/settings_window.rs` to keep the standalone settings window at a fixed `960x720` size.
+- [x] Add backend-owned panel geometry memory in `src-tauri/src/panel.rs` plus a new `sync_panel_geometry` Tauri command so the tray popup can reuse the last measured logical height.
+- [x] Simplify `src/hooks/app/use-panel.ts` to one resize pass per settled height, sync the measured height back to Rust, and keep focus-time remeasure as fallback only.
+- [x] Fix tray menu opens in `src-tauri/src/tray.rs` so `Show Stats` positions the panel near the current cursor/work area and `Go to Settings` opens the standalone settings window instead of stale tray navigation.
+- [x] Add a generic enabled-provider catch-up probe path so providers like Antigravity do not depend on being the active view before they load.
+
+## Verification Notes
+- [x] Verified the focused frontend regressions with `npx vitest run src/hooks/app/use-panel.test.ts src/App.test.tsx` -> 2 files passed, 86 tests passed.
+- [x] Verified the focused Rust panel tests with `cargo test --manifest-path src-tauri/Cargo.toml panel::` -> 3 Rust tests passed.
+- [x] Reviewed the final slice with `git --no-pager diff --color=never -- tasks/todo.md docs/windows.md docs/windows-provider-rollout-plan.md src-tauri/src/settings_window.rs src-tauri/src/panel.rs src-tauri/src/tray.rs src-tauri/src/lib.rs src/hooks/app/use-panel.ts src/hooks/app/use-panel.test.ts src/App.tsx src/App.test.tsx docs/choices.md docs/breadcrumbs.md tasks/lessons.md`.
 
 # Auto-pop tray panel on provider selection from settings
 

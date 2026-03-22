@@ -5,7 +5,8 @@ use tauri::tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
-use crate::panel::{get_or_init_panel, position_panel_at_tray_icon, show_panel};
+use crate::panel::{get_or_init_panel, position_panel_at_tray_icon, show_panel, show_panel_near_cursor};
+use crate::settings_window;
 
 const LOG_LEVEL_STORE_KEY: &str = "logLevel";
 
@@ -145,15 +146,14 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
             log::debug!("tray menu: {}", event.id.as_ref());
             match event.id.as_ref() {
                 "show_stats" => {
-                    show_panel(app_handle);
+                    show_panel_near_cursor(app_handle);
                     let _ = app_handle.emit("tray:navigate", "home");
                 }
                 "go_to_settings" => {
-                    show_panel(app_handle);
-                    let _ = app_handle.emit("tray:navigate", "settings");
+                    let _ = settings_window::open(app_handle, Some("general".to_string()), None);
                 }
                 "about" => {
-                    show_panel(app_handle);
+                    show_panel_near_cursor(app_handle);
                     let _ = app_handle.emit("tray:show-about", ());
                 }
                 "quit" => {
@@ -197,9 +197,8 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
                     }
                     log::debug!("tray click: showing panel");
 
-                    let _ = window.show();
                     position_panel_at_tray_icon(app_handle, rect.position, rect.size);
-                    let _ = window.set_focus();
+                    show_panel(app_handle);
                 }
             }
         })

@@ -347,6 +347,11 @@ fn reposition_panel(app_handle: tauri::AppHandle, panel_height_px: Option<f64>) 
 }
 
 #[tauri::command]
+fn sync_panel_geometry(panel_height_px: f64) {
+    panel::sync_panel_geometry(panel_height_px);
+}
+
+#[tauri::command]
 fn show_panel_for_view(app_handle: tauri::AppHandle, view: String) -> Result<(), String> {
     let normalized_view = view.trim().to_string();
     if normalized_view.is_empty() {
@@ -881,6 +886,7 @@ pub fn run() {
             init_panel,
             hide_panel,
             reposition_panel,
+            sync_panel_geometry,
             show_panel_for_view,
             open_settings_window,
             open_devtools,
