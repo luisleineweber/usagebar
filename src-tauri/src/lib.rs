@@ -29,6 +29,21 @@ const PROVIDER_SECRET_KEYRING_TARGET: &str = "OpenUsage";
 #[cfg(target_os = "windows")]
 const PROVIDER_SECRET_WINDOWS_USER: &str = "provider-secret";
 
+fn pending_panel_view_slot() -> &'static Mutex<Option<String>> {
+    static SLOT: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    SLOT.get_or_init(|| Mutex::new(None))
+}
+
+fn store_pending_panel_view(view: String) {
+    if let Ok(mut slot) = pending_panel_view_slot().lock() {
+        *slot = Some(view);
+    }
+}
+
+fn take_pending_panel_view_inner() -> Option<String> {
+    pending_panel_view_slot().lock().ok()?.take()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct ProviderSecretEntrySpec<'a> {
     target: Option<&'a str>,
@@ -352,16 +367,27 @@ fn sync_panel_geometry(panel_height_px: f64) {
 }
 
 #[tauri::command]
+fn apply_panel_bounds(app_handle: tauri::AppHandle, panel_height_px: f64) {
+    panel::apply_panel_bounds(&app_handle, panel_height_px);
+}
+
+#[tauri::command]
+fn take_pending_panel_view() -> Option<String> {
+    take_pending_panel_view_inner()
+}
+
+#[tauri::command]
 fn show_panel_for_view(app_handle: tauri::AppHandle, view: String) -> Result<(), String> {
     let normalized_view = view.trim().to_string();
     if normalized_view.is_empty() {
         return Err("view must not be empty".to_string());
     }
 
+    store_pending_panel_view(normalized_view.clone());
     panel::reposition_panel(&app_handle, None);
     panel::show_panel(&app_handle);
     app_handle
-        .emit("tray:navigate", normalized_view)
+        .emit_to("main", "tray:navigate", normalized_view)
         .map_err(|error| format!("failed to navigate tray panel: {}", error))?;
 
     Ok(())
@@ -887,6 +913,8 @@ pub fn run() {
             hide_panel,
             reposition_panel,
             sync_panel_geometry,
+            apply_panel_bounds,
+            take_pending_panel_view,
             show_panel_for_view,
             open_settings_window,
             open_devtools,
@@ -974,8 +1002,8 @@ mod tests {
     use super::{
         app_started_day_key, is_missing_credential_error, plugin_is_probe_supported,
         plugin_support_for_current_platform, provider_secret_entry_spec, provider_secret_label,
-        provider_secret_service, should_track_app_started,
-        verify_provider_secret_write_with_fresh_lookup,
+        provider_secret_service, should_track_app_started, store_pending_panel_view,
+        take_pending_panel_view_inner, verify_provider_secret_write_with_fresh_lookup,
     };
     use crate::plugin_engine::manifest::{
         PlatformSupport, PluginManifest, WindowsSupportConfig, WindowsSupportState,
@@ -1028,6 +1056,16 @@ mod tests {
         assert_ne!(v1_key, v2_key);
         assert!(v1_key.ends_with("0.6.2"));
         assert!(v2_key.ends_with("0.6.3"));
+    }
+
+    #[test]
+    fn pending_panel_view_is_consumed_once() {
+        assert_eq!(take_pending_panel_view_inner(), None);
+
+        store_pending_panel_view("codex".to_string());
+
+        assert_eq!(take_pending_panel_view_inner(), Some("codex".to_string()));
+        assert_eq!(take_pending_panel_view_inner(), None);
     }
 
     #[test]

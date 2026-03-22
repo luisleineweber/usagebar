@@ -1,8 +1,13 @@
 use std::sync::{Mutex, OnceLock};
 
+#[cfg(target_os = "windows")]
+use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size,
-    WebviewWindow,
+    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size, WebviewWindow,
+};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -37,6 +42,14 @@ struct PanelPlacement {
     x: f64,
     y: f64,
     vertical_anchor: VerticalAnchor,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PhysicalWindowBounds {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
 }
 
 fn panel_state_slot() -> &'static Mutex<PanelState> {
@@ -101,35 +114,44 @@ pub fn sync_panel_geometry(panel_height_px: f64) {
     save_panel_height(panel_height_px);
 }
 
-pub fn show_panel(app_handle: &AppHandle) {
-    let Some(window) = get_or_init_panel!(app_handle) else {
+pub fn apply_panel_bounds(app_handle: &AppHandle, panel_height_px: f64) {
+    save_panel_height(panel_height_px);
+
+    let Some(anchor) = stored_tray_anchor() else {
+        if let Some(window) = get_or_init_panel!(app_handle) {
+            apply_window_height(&window, panel_height_px);
+        }
         return;
     };
 
-    if let Some(height) = stored_panel_height() {
-        apply_window_height(&window, height);
-    }
+    position_panel_from_anchor(
+        app_handle,
+        &anchor.icon_position,
+        &anchor.icon_size,
+        Some(panel_height_px),
+        anchor.vertical_anchor.as_ref(),
+    );
+}
 
+pub fn show_panel(app_handle: &AppHandle) {
     if stored_tray_anchor().is_some() {
         reposition_panel(app_handle, stored_panel_height());
     } else {
         let _ = position_panel_near_cursor(app_handle);
     }
 
+    let Some(window) = get_or_init_panel!(app_handle) else {
+        return;
+    };
     let _ = window.show();
     let _ = window.set_focus();
 }
 
 pub fn show_panel_near_cursor(app_handle: &AppHandle) {
+    let _ = position_panel_near_cursor(app_handle);
     let Some(window) = get_or_init_panel!(app_handle) else {
         return;
     };
-
-    if let Some(height) = stored_panel_height() {
-        apply_window_height(&window, height);
-    }
-
-    let _ = position_panel_near_cursor(app_handle);
     let _ = window.show();
     let _ = window.set_focus();
 }
@@ -202,10 +224,118 @@ fn logical_window_size(window: &WebviewWindow) -> (f64, f64) {
 fn apply_window_height(window: &WebviewWindow, logical_height: f64) {
     let rounded_height = logical_height.round().max(1.0);
     let (logical_width, _) = logical_window_size(window);
+    apply_window_bounds(
+        window,
+        0.0,
+        0.0,
+        logical_width,
+        rounded_height,
+        false,
+        false,
+    );
+}
+
+fn physical_window_bounds(
+    logical_x: f64,
+    logical_y: f64,
+    logical_width: f64,
+    logical_height: f64,
+    scale_factor: f64,
+    pin_bottom_edge: bool,
+) -> PhysicalWindowBounds {
+    let width = (logical_width.max(1.0) * scale_factor).ceil() as u32;
+    let height = (logical_height.max(1.0) * scale_factor).ceil() as u32;
+    let x = (logical_x * scale_factor).round() as i32;
+    let y = if pin_bottom_edge {
+        ((logical_y + logical_height) * scale_factor).round() as i32 - height as i32
+    } else {
+        (logical_y * scale_factor).round() as i32
+    };
+
+    PhysicalWindowBounds {
+        x,
+        y,
+        width,
+        height,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn window_hwnd(window: &WebviewWindow) -> Option<windows_sys::Win32::Foundation::HWND> {
+    let handle = window.window_handle().ok()?;
+    match handle.as_raw() {
+        RawWindowHandle::Win32(handle) => Some(handle.hwnd.get() as _),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn apply_window_bounds_windows(
+    window: &WebviewWindow,
+    bounds: PhysicalWindowBounds,
+    apply_position: bool,
+) -> bool {
+    let Some(hwnd) = window_hwnd(window) else {
+        return false;
+    };
+
+    let flags = if apply_position {
+        SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER
+    } else {
+        SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOOWNERZORDER | SWP_NOZORDER
+    };
+    let (x, y) = if apply_position {
+        (bounds.x, bounds.y)
+    } else {
+        (0, 0)
+    };
+    let status = unsafe {
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            x,
+            y,
+            bounds.width as i32,
+            bounds.height as i32,
+            flags,
+        )
+    };
+    status != 0
+}
+
+fn apply_window_bounds(
+    window: &WebviewWindow,
+    logical_x: f64,
+    logical_y: f64,
+    logical_width: f64,
+    logical_height: f64,
+    apply_position: bool,
+    pin_bottom_edge: bool,
+) {
     let scale_factor = window.scale_factor().ok().unwrap_or(1.0);
+    let bounds = physical_window_bounds(
+        logical_x,
+        logical_y,
+        logical_width,
+        logical_height,
+        scale_factor,
+        pin_bottom_edge,
+    );
+
+    #[cfg(target_os = "windows")]
+    if apply_window_bounds_windows(window, bounds, apply_position) {
+        return;
+    }
+
+    if apply_position {
+        let _ = window.set_position(Position::Logical(LogicalPosition::new(
+            logical_x, logical_y,
+        )));
+    }
+
     let _ = window.set_size(Size::Physical(PhysicalSize::new(
-        (logical_width * scale_factor).ceil() as u32,
-        (rounded_height * scale_factor).ceil() as u32,
+        bounds.width,
+        bounds.height,
     )));
 }
 
@@ -254,6 +384,12 @@ fn compute_panel_placement(
     }
 }
 
+fn resolved_panel_height(measured_window_h: f64, panel_height_override: Option<f64>) -> f64 {
+    panel_height_override
+        .filter(|height| height.is_finite() && *height > 0.0)
+        .unwrap_or(measured_window_h)
+}
+
 fn position_panel_from_anchor(
     app_handle: &tauri::AppHandle,
     icon_position: &Position,
@@ -285,6 +421,11 @@ fn position_panel_from_anchor(
         height: work_area.size.height as f64 / scale_factor,
     };
 
+    let target_window_h = resolved_panel_height(
+        measured_window_h,
+        panel_height_px.or_else(stored_panel_height),
+    );
+
     let placement = compute_panel_placement(
         LogicalRect {
             x: icon_x,
@@ -295,14 +436,19 @@ fn position_panel_from_anchor(
         window_w,
         measured_window_h,
         work_area_rect,
-        panel_height_px.or_else(stored_panel_height),
+        Some(target_window_h),
         stored_vertical_anchor,
     );
 
-    let _ = window.set_position(Position::Logical(LogicalPosition::new(
+    apply_window_bounds(
+        &window,
         placement.x,
         placement.y,
-    )));
+        window_w,
+        target_window_h,
+        true,
+        matches!(placement.vertical_anchor, VerticalAnchor::Bottom(_)),
+    );
     Some(placement.vertical_anchor)
 }
 
@@ -355,7 +501,10 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
 
 #[cfg(test)]
 mod tests {
-    use super::{compute_panel_placement, LogicalRect, VerticalAnchor};
+    use super::{
+        LogicalRect, PhysicalWindowBounds, VerticalAnchor, compute_panel_placement,
+        physical_window_bounds,
+    };
 
     #[test]
     fn cursor_style_anchor_stays_within_work_area() {
@@ -450,5 +599,76 @@ mod tests {
         );
         assert_eq!(bottom.y, 8.0);
         assert_eq!(bottom.vertical_anchor, VerticalAnchor::Bottom(372.0));
+    }
+
+    #[test]
+    fn bottom_anchor_recomputes_top_from_final_height() {
+        let short = compute_panel_placement(
+            LogicalRect {
+                x: 100.0,
+                y: 560.0,
+                width: 24.0,
+                height: 24.0,
+            },
+            300.0,
+            320.0,
+            LogicalRect {
+                x: 0.0,
+                y: 0.0,
+                width: 800.0,
+                height: 700.0,
+            },
+            Some(320.0),
+            Some(&VerticalAnchor::Bottom(552.0)),
+        );
+
+        let tall = compute_panel_placement(
+            LogicalRect {
+                x: 100.0,
+                y: 560.0,
+                width: 24.0,
+                height: 24.0,
+            },
+            300.0,
+            520.0,
+            LogicalRect {
+                x: 0.0,
+                y: 0.0,
+                width: 800.0,
+                height: 700.0,
+            },
+            Some(520.0),
+            Some(&VerticalAnchor::Bottom(552.0)),
+        );
+
+        assert_eq!(short.y + 320.0, 552.0);
+        assert_eq!(tall.y + 520.0, 552.0);
+    }
+
+    #[test]
+    fn physical_bottom_anchor_rounding_keeps_bottom_edge_fixed() {
+        let short = physical_window_bounds(48.0, 132.8, 400.0, 320.0, 1.25, true);
+        let tall = physical_window_bounds(48.0, 12.8, 400.0, 440.0, 1.25, true);
+
+        assert_eq!(short.width, 500);
+        assert_eq!(short.height, 400);
+        assert_eq!(tall.height, 550);
+        assert_eq!(short.y + short.height as i32, tall.y + tall.height as i32);
+        assert_eq!(short.y + short.height as i32, 566);
+    }
+
+    #[test]
+    fn physical_top_anchor_rounding_keeps_top_edge_fixed() {
+        let bounds = physical_window_bounds(24.0, 18.4, 400.0, 320.0, 1.25, false);
+
+        assert_eq!(
+            bounds,
+            PhysicalWindowBounds {
+                x: 30,
+                y: 23,
+                width: 500,
+                height: 400,
+            }
+        );
     }
 }

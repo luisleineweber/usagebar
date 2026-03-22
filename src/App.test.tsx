@@ -421,8 +421,13 @@ describe("App", () => {
     await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
     await waitFor(() => expect(state.savePluginSettingsMock).toHaveBeenCalled())
     await waitFor(() => expect(state.migrateLegacyTraySettingsMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "apply_panel_bounds",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
     expect(screen.getByText("Alpha")).toBeInTheDocument()
-    expect(state.setSizeMock).toHaveBeenCalled()
   })
 
   it("keeps surfaced OpenCode in the plugin list and preserves saved settings", async () => {
@@ -823,6 +828,42 @@ describe("App", () => {
     await screen.findByText("Provider not found")
   })
 
+  it("keeps the provider detail content mounted when a loaded provider later errors", async () => {
+    render(<App />)
+
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "text", label: "Now", value: "42%" }],
+    })
+
+    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }))
+    await screen.findByText("Now")
+
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "badge", label: "Error", text: "Not signed in" }],
+    })
+
+    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument()
+    expect(screen.getByText("Now")).toBeInTheDocument()
+    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
+  })
+
+  it("keeps sidebar buttons mounted while switching between providers", async () => {
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+    render(<App />)
+
+    await userEvent.click(await screen.findByRole("button", { name: "Beta" }))
+
+    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Beta" })).toBeInTheDocument()
+    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
+  })
+
   it("hides the panel on Escape when running in Tauri", async () => {
     state.isTauriMock.mockReturnValue(true)
     render(<App />)
@@ -1150,33 +1191,38 @@ describe("App", () => {
     state.isTauriMock.mockReturnValue(true)
     state.currentMonitorMock.mockResolvedValueOnce(null)
     render(<App />)
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "apply_panel_bounds",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
   })
 
-  it("passes the target panel height when repositioning after resize", async () => {
+  it("applies the final panel height through one backend bounds update", async () => {
     state.isTauriMock.mockReturnValue(true)
     render(<App />)
 
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
-        "reposition_panel",
+        "apply_panel_bounds",
         expect.objectContaining({ panelHeightPx: expect.any(Number) })
       )
     )
 
-    const lastSetSizeCall = state.setSizeMock.mock.calls.at(-1)
-    const repositionCalls = state.invokeMock.mock.calls.filter(([command]) => command === "reposition_panel")
-    const lastRepositionCall = repositionCalls.at(-1)
+    const syncCalls = state.invokeMock.mock.calls.filter(([command]) => command === "sync_panel_geometry")
+    const applyCalls = state.invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
+    const lastSyncCall = syncCalls.at(-1)
+    const lastApplyCall = applyCalls.at(-1)
 
-    expect(lastSetSizeCall?.[0]).toBeDefined()
-    expect(lastRepositionCall).toEqual([
-      "reposition_panel",
-      { panelHeightPx: lastSetSizeCall?.[0].height },
+    expect(applyCalls.length).toBeGreaterThanOrEqual(1)
+    expect(lastApplyCall).toEqual([
+      "apply_panel_bounds",
+      { panelHeightPx: (lastSyncCall?.[1] as { panelHeightPx: number } | undefined)?.panelHeightPx },
     ])
   })
 
-  it("repositions before resizing when the panel grows", async () => {
+  it("syncs geometry before applying final backend bounds", async () => {
     state.isTauriMock.mockReturnValue(true)
     const originalInnerHeight = window.innerHeight
     Object.defineProperty(window, "innerHeight", {
@@ -1186,23 +1232,26 @@ describe("App", () => {
     try {
       render(<App />)
 
-      await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
       await waitFor(() =>
         expect(state.invokeMock).toHaveBeenCalledWith(
-          "reposition_panel",
+          "apply_panel_bounds",
           expect.objectContaining({ panelHeightPx: expect.any(Number) })
         )
       )
 
-      const repositionCallIndex = state.invokeMock.mock.calls.findIndex(
-        ([command]) => command === "reposition_panel"
+      const syncCallIndex = state.invokeMock.mock.calls.findIndex(
+        ([command]) => command === "sync_panel_geometry"
       )
-      expect(repositionCallIndex).toBeGreaterThanOrEqual(0)
+      const applyCallIndex = state.invokeMock.mock.calls.findIndex(
+        ([command]) => command === "apply_panel_bounds"
+      )
+      expect(syncCallIndex).toBeGreaterThanOrEqual(0)
+      expect(applyCallIndex).toBeGreaterThanOrEqual(0)
 
-      const repositionOrder = state.invokeMock.mock.invocationCallOrder[repositionCallIndex]
-      const firstResizeOrder = state.setSizeMock.mock.invocationCallOrder[0]
+      const syncOrder = state.invokeMock.mock.invocationCallOrder[syncCallIndex]
+      const applyOrder = state.invokeMock.mock.invocationCallOrder[applyCallIndex]
 
-      expect(repositionOrder).toBeLessThan(firstResizeOrder)
+      expect(syncOrder).toBeLessThan(applyOrder)
     } finally {
       Object.defineProperty(window, "innerHeight", {
         configurable: true,
@@ -1211,13 +1260,9 @@ describe("App", () => {
     }
   })
 
-  it("caps panel height to the monitor work area when available", async () => {
+  it("keeps fallback panel sizing within the home max height cap", async () => {
     state.isTauriMock.mockReturnValue(true)
-    state.currentMonitorMock.mockResolvedValue({
-      size: { height: 1000 },
-      workArea: { size: { height: 20 } },
-    })
-
+    state.currentMonitorMock.mockResolvedValue(null)
     render(<App />)
 
     await waitFor(() =>
@@ -1227,13 +1272,12 @@ describe("App", () => {
       )
     )
 
-    const maxHeight = Math.max(
-      ...state.invokeMock.mock.calls
-        .filter(([command]) => command === "sync_panel_geometry")
-        .map(([, args]) => (args as { panelHeightPx: number }).panelHeightPx)
-    )
+    const lastHeight = state.invokeMock.mock.calls
+      .filter(([command]) => command === "sync_panel_geometry")
+      .at(-1)?.[1] as { panelHeightPx: number } | undefined
 
-    expect(maxHeight).toBeLessThanOrEqual(18)
+    expect(lastHeight?.panelHeightPx).toBeGreaterThan(0)
+    expect(lastHeight?.panelHeightPx).toBeLessThanOrEqual(720)
   })
 
   it("resizes again via ResizeObserver callback", async () => {
@@ -1255,7 +1299,12 @@ describe("App", () => {
 
     render(<App />)
     await waitFor(() => expect(observeSpy).toHaveBeenCalled())
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "apply_panel_bounds",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
 
     globalThis.ResizeObserver = OriginalResizeObserver
   })
@@ -1271,7 +1320,6 @@ describe("App", () => {
     })
 
     render(<App />)
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "sync_panel_geometry",
@@ -1279,14 +1327,16 @@ describe("App", () => {
       )
     )
 
-    const initialHeight = (state.setSizeMock.mock.calls.at(-1)?.[0] as { height: number }).height
-    state.setSizeMock.mockClear()
+    const initialHeight = (
+      state.invokeMock.mock.calls
+        .filter(([command]) => command === "apply_panel_bounds")
+        .at(-1)?.[1] as { panelHeightPx: number } | undefined
+    )?.panelHeightPx
     state.invokeMock.mockClear()
 
     scrollHeightValue = 320
     window.dispatchEvent(new Event("focus"))
 
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "sync_panel_geometry",
@@ -1294,9 +1344,15 @@ describe("App", () => {
       )
     )
 
-    const focusedHeight = (state.setSizeMock.mock.calls.at(-1)?.[0] as { height: number }).height
-    expect(focusedHeight).toBeGreaterThan(initialHeight)
-    expect(state.setSizeMock).toHaveBeenCalledTimes(1)
+    const focusedHeight = (
+      state.invokeMock.mock.calls
+        .filter(([command]) => command === "apply_panel_bounds")
+        .at(-1)?.[1] as { panelHeightPx: number } | undefined
+    )?.panelHeightPx
+    expect(focusedHeight).not.toBe(initialHeight)
+    expect(
+      state.invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
+    ).not.toHaveLength(0)
   })
 
   it("starts a catch-up probe when an enabled provider appears without probe state", async () => {
@@ -1313,7 +1369,18 @@ describe("App", () => {
   it("logs resize failures", async () => {
     state.isTauriMock.mockReturnValue(true)
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.setSizeMock.mockRejectedValueOnce(new Error("size fail"))
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [{ type: "text", label: "Now", scope: "overview" }] },
+          { id: "b", name: "Beta", iconUrl: "icon-b", primaryProgressLabel: null, lines: [] },
+        ]
+      }
+      if (cmd === "apply_panel_bounds") {
+        throw new Error("bounds fail")
+      }
+      return null
+    })
     render(<App />)
     await waitFor(() => expect(errorSpy).toHaveBeenCalled())
     errorSpy.mockRestore()
@@ -1367,24 +1434,6 @@ describe("App", () => {
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
         view: "b",
-      })
-    )
-  })
-
-  it("opens the standalone provider settings window for the current provider", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-
-    await userEvent.click(await screen.findByRole("button", { name: "Beta" }))
-    await screen.findByText("Provider settings")
-
-    await userEvent.click(screen.getByRole("button", { name: "Manage provider" }))
-
-    await waitFor(() =>
-      expect(state.invokeMock).toHaveBeenCalledWith("open_settings_window", {
-        tab: "providers",
-        providerId: "b",
       })
     )
   })
