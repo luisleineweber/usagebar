@@ -24,42 +24,38 @@ UsageBar lives in your Windows tray and shows you how much of your AI coding sub
 - **Lightweight.** Opens instantly, stays out of your way.
 - **Plugin-based.** New providers get added without updating the whole app.
 
-## Supported Providers
+## Providers
 
-### Documented providers
+Current Windows rollout status comes from each provider's `plugin.json` manifest in this fork.
 
-- [**Amp**](docs/providers/amp.md) / free tier, bonus, credits
-- [**Antigravity**](docs/providers/antigravity.md) / all models
-- [**Claude**](docs/providers/claude.md) / session, weekly, extra usage, local token usage (ccusage)
-- [**Codex**](docs/providers/codex.md) / session, weekly, reviews, credits
-- [**Copilot**](docs/providers/copilot.md) / premium, chat, completions
-- [**Cursor**](docs/providers/cursor.md) / credits, total usage, auto usage, API usage, on-demand, CLI auth
-- [**Factory / Droid**](docs/providers/factory.md) / standard, premium tokens
-- [**Gemini**](docs/providers/gemini.md) / pro, flash, workspace/free/paid tier
-- [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) / quota, remaining
-- [**Kimi**](docs/providers/kimi.md) / session, weekly
-- [**MiniMax**](docs/providers/minimax.md) / coding plan session
-- [**Ollama**](docs/providers/ollama.md) / plan, session, weekly
-- [**OpenCode**](docs/providers/opencode.md) / session, weekly
-- [**OpenCode (Go)**](docs/providers/opencode-go.md) / session, weekly
-- [**Perplexity**](docs/providers/perplexity.md) / groups, usage analytics, rate limits
-- [**Windsurf**](docs/providers/windsurf.md) / daily quota, weekly quota, extra usage balance
-- [**Z.ai**](docs/providers/zai.md) / session, weekly, web searches
-
-### Additional plugins (docs pending)
-
-- **Augment** (`plugins/augment/`)
-- **Alibaba Coding Plan** (`plugins/alibaba/`)
-- **Kilo** (`plugins/kilo/`)
-- **Kimi K2** (`plugins/kimi-k2/`)
-- **Kiro** (`plugins/kiro/`)
-- **OpenRouter** (`plugins/openrouter/`)
-- **Synthetic** (`plugins/synthetic/`)
-- **Vertex AI** (`plugins/vertex-ai/`)
-- **Warp** (`plugins/warp/`)
-
-### Maybe Soon
-
+| Provider | Windows status | Scope |
+|---|---|---|
+| [**Alibaba Coding Plan**](plugins/alibaba/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Amp**](docs/providers/amp.md) | Experimental | Free tier, bonus, credits |
+| [**Antigravity**](docs/providers/antigravity.md) | Supported | All models |
+| [**Augment**](plugins/augment/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Claude**](docs/providers/claude.md) | Supported | Session, weekly, extra usage, local token usage (`ccusage`) |
+| [**Codex**](docs/providers/codex.md) | Supported | Session, weekly, reviews, credits |
+| [**Copilot**](docs/providers/copilot.md) | Experimental | Premium, chat, completions |
+| [**Cursor**](docs/providers/cursor.md) | Supported | Credits, total usage, auto usage, API usage, on-demand, CLI auth |
+| [**Factory / Droid**](docs/providers/factory.md) | Blocked | Standard, premium tokens |
+| [**Gemini**](docs/providers/gemini.md) | Experimental | Pro, flash, workspace/free/paid tier |
+| [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
+| [**Kilo**](plugins/kilo/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Kimi**](docs/providers/kimi.md) | Blocked | Session, weekly |
+| [**Kimi K2**](plugins/kimi-k2/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Kiro**](plugins/kiro/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**MiniMax**](docs/providers/minimax.md) | Blocked | Coding plan session |
+| [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
+| [**OpenCode**](docs/providers/opencode.md) | Experimental | Session, weekly |
+| [**OpenCode Go**](docs/providers/opencode-go.md) | Not surfaced on Windows yet | Local 5h, weekly, monthly CLI spend history |
+| [**OpenRouter**](plugins/openrouter/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Perplexity**](docs/providers/perplexity.md) | Blocked | Groups, usage analytics, rate limits |
+| [**Synthetic**](plugins/synthetic/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Vertex AI**](plugins/vertex-ai/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Warp**](plugins/warp/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Windsurf**](docs/providers/windsurf.md) | Experimental | Daily quota, weekly quota, extra usage balance |
+| [**Z.ai**](docs/providers/zai.md) | Blocked | Session, weekly, web searches |
 
 Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/openusage/issues/new)
 
