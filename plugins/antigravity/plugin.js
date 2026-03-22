@@ -153,7 +153,7 @@
         var ts = readFields(inner[4].data)
         if (ts[1] && ts[1].type === 0) expirySeconds = ts[1].value
       }
-      if (!accessToken) return null
+      if (!accessToken && !refreshToken) return null
       return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
     } catch (e) {
       ctx.host.log.warn("failed to read proto tokens from antigravity DB: " + String(e))
@@ -167,8 +167,7 @@
       if (!ctx.host.fs.exists(path)) return null
       var data = ctx.util.tryParseJson(ctx.host.fs.readText(path))
       if (!data || !data.accessToken || !data.expiresAtMs) return null
-      if (data.expiresAtMs <= Date.now()) return null
-      return data.accessToken
+      return { accessToken: data.accessToken, expiresAtMs: data.expiresAtMs }
     } catch (e) {
       ctx.host.log.warn("failed to read cached token: " + String(e))
       return null
@@ -204,11 +203,80 @@
       var body = ctx.util.tryParseJson(resp.bodyText)
       if (!body || !body.access_token) return null
       cacheToken(ctx, body.access_token, typeof body.expires_in === "number" ? body.expires_in : 3600)
-      return body.access_token
+      return {
+        accessToken: body.access_token,
+        expiresInSeconds: typeof body.expires_in === "number" ? body.expires_in : 3600,
+      }
     } catch (e) {
       ctx.host.log.warn("Google OAuth refresh failed: " + String(e))
       return null
     }
+  }
+
+  function isCachedTokenUsable(cached) {
+    return !!(cached && cached.accessToken && cached.expiresAtMs > Date.now())
+  }
+
+  function isProtoAccessTokenUsable(proto) {
+    return !!(
+      proto &&
+      proto.accessToken &&
+      (!proto.expirySeconds || proto.expirySeconds > Math.floor(Date.now() / 1000))
+    )
+  }
+
+  function tryCloudCodeToken(ctx, token, label) {
+    if (!token) return null
+    var data = requestCloudCode(ctx, token)
+    if (data && !data.authFailed) return data
+    if (data && data.authFailed) ctx.host.log.warn(label + " rejected by Cloud Code auth")
+    else ctx.host.log.warn(label + " did not yield usable Cloud Code data")
+    return null
+  }
+
+  function resolveCloudCodeData(ctx, cached, proto, apiKey) {
+    if (cached && cached.accessToken) {
+      if (isCachedTokenUsable(cached)) {
+        var cachedData = tryCloudCodeToken(ctx, cached.accessToken, "cached Antigravity token")
+        if (cachedData) return cachedData
+      } else {
+        ctx.host.log.warn("cached Antigravity token expired; skipping direct Cloud Code attempt")
+      }
+    }
+
+    if (proto && proto.accessToken) {
+      if (isProtoAccessTokenUsable(proto)) {
+        var protoData = tryCloudCodeToken(ctx, proto.accessToken, "proto access token")
+        if (protoData) return protoData
+      } else {
+        ctx.host.log.warn("proto access token expired; skipping direct Cloud Code attempt")
+      }
+    }
+
+    if (proto && proto.refreshToken) {
+      ctx.host.log.warn("attempting Antigravity refresh-token recovery")
+      var refreshed = refreshAccessToken(ctx, proto.refreshToken)
+      if (refreshed && refreshed.accessToken) {
+        var refreshedData = requestCloudCode(ctx, refreshed.accessToken)
+        if (refreshedData && !refreshedData.authFailed) return refreshedData
+        if (refreshedData && refreshedData.authFailed) {
+          ctx.host.log.warn("refresh succeeded but Cloud Code still rejected the refreshed token")
+        } else {
+          ctx.host.log.warn("refresh succeeded but refreshed token did not yield usable Cloud Code data")
+        }
+      } else {
+        ctx.host.log.warn("Antigravity refresh-token recovery failed")
+      }
+    } else {
+      ctx.host.log.warn("no Antigravity refresh token available for offline recovery")
+    }
+
+    if (apiKey) {
+      var apiKeyData = tryCloudCodeToken(ctx, apiKey, "Antigravity apiKey")
+      if (apiKeyData) return apiKeyData
+    }
+
+    return null
   }
 
   function discoverLs(ctx) {
@@ -559,22 +627,8 @@
     var ls = probeLs(ctx, apiKey)
     if (ls && hasUsableQuota(ls.models)) return { plan: ls.plan, lines: buildGroupedLines(ctx, ls.models) }
 
-    var tokens = []
-    if (proto && proto.accessToken && (!proto.expirySeconds || proto.expirySeconds > Math.floor(Date.now() / 1000))) tokens.push(proto.accessToken)
     var cached = loadCachedToken(ctx)
-    if (cached && cached !== (proto && proto.accessToken)) tokens.push(cached)
-    if (apiKey && apiKey !== (proto && proto.accessToken) && apiKey !== cached) tokens.push(apiKey)
-
-    var ccData = null
-    for (var i = 0; i < tokens.length; i++) {
-      ccData = requestCloudCode(ctx, tokens[i])
-      if (ccData && !ccData.authFailed) break
-      ccData = null
-    }
-    if (!ccData && proto && proto.refreshToken) {
-      var refreshed = refreshAccessToken(ctx, proto.refreshToken)
-      if (refreshed) ccData = requestCloudCode(ctx, refreshed)
-    }
+    var ccData = resolveCloudCodeData(ctx, cached, proto, apiKey)
     if (ccData && !ccData.authFailed) {
       var ccModels = parseCloudCodeModels(ccData)
       if (hasUsableQuota(ccModels)) return { plan: ls ? ls.plan : null, lines: buildGroupedLines(ctx, ccModels) }
