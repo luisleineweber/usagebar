@@ -1,3 +1,115 @@
+# Fix Antigravity offline fallback when the IDE is not running
+
+## Acceptance Criteria
+- [x] Antigravity still prefers the live LS path when the IDE is running and quota data is usable.
+- [x] When the IDE is not running, the plugin prefers fresh cached/refreshed Cloud Code access over stale stored bearer tokens.
+- [x] A valid refresh token can recover offline Antigravity usage even when the stored access token and `apiKey` both return `401`.
+- [x] Offline hard-fail paths log which auth stage failed before surfacing `Start Antigravity and try again.`
+- [x] Focused Antigravity plugin verification covers cached-token reuse, refresh recovery, cache-write failure tolerance, and offline hard-fail behavior before the slice is marked done.
+
+## Plan
+- [x] Rework `plugins/antigravity/plugin.js` Cloud Code auth selection around cached-token freshness, protobuf expiry, explicit refresh recovery, and last-resort `apiKey` fallback.
+- [x] Add focused regressions in `plugins/antigravity/plugin.test.js` for the offline no-LS sequences seen on this Windows machine.
+- [x] Run focused verification, then record lessons/choices/breadcrumbs and mark the slice done.
+
+## Verification Notes
+- Verified focused regressions with `bun run test -- plugins/antigravity/plugin.test.js` -> 1 file passed, 19 tests passed.
+- Verified bundled plugin sync with `bun run bundle:plugins` -> copied the updated Antigravity plugin into `src-tauri/resources/bundled_plugins`.
+- Verified the real no-LS offline recovery path on this machine with a one-off Node smoke harness against `%APPDATA%\\Antigravity\\User\\globalStorage\\state.vscdb` -> logs showed `proto access token expired`, `attempting Antigravity refresh-token recovery`, and grouped quota lines returned without the IDE running.
+
+# Strict bottom-pinned tray bounds during provider height changes
+
+## Acceptance Criteria
+- [x] Bottom-edge screen-space Y stays unchanged through provider switches on bottom-taskbar setups.
+- [x] Height changes continue to move only the popup top edge, with no visible bottom wobble from native bounds updates.
+- [x] Windows bounds application uses one final outer-bounds path for anchored tray updates instead of exposing split position/size drift.
+- [x] Focused Rust and frontend verification covers the strict bottom-pin slice before the task is marked done.
+
+## Plan
+- [x] Patch the Windows native panel-bounds application to use one atomic outer-bounds update from the final target size/position.
+- [x] Add a rounding regression for bottom-anchor physical bounds so DPI-scaled transitions keep the bottom edge fixed.
+- [x] Run focused `cargo test`, `vitest`, and build verification, then record lessons/choices/breadcrumbs.
+
+## Verification Notes
+- Verified the strict bottom-pin backend path with `cargo test --manifest-path src-tauri/Cargo.toml panel -- --nocapture` -> 7 tests passed, including the new DPI rounding regressions.
+- Verified tray frontend regressions with `npx vitest run src/hooks/app/use-panel.test.ts src/App.test.tsx` -> 2 files passed, 95 tests passed.
+- Verified compile/build with `bun run build` -> `tsc` passed and the Vite production build completed successfully.
+
+# Smooth bottom-anchored provider switching in the tray popup
+
+## Acceptance Criteria
+- [x] Bottom anchoring remains correct: the edge near the taskbar stays fixed during provider switching.
+- [x] The popup top edge no longer teleports between noticeably different provider heights.
+- [x] Switching between a short provider and a tall provider feels materially smoother than the current build.
+- [x] The shell does not fully resize for every small content difference; more variance is absorbed by the inner scroll region.
+- [x] Sidebar remains stable and is not the main source of perceived motion.
+- [x] Reduced-motion users do not get forced shell/content animation.
+- [x] Focused verification covers height tweening, retargeting, reduced motion, and provider-switch smoothness before the slice is marked done.
+
+## Plan
+- [x] Add stronger home/detail height-band normalization and tweened displayed height updates in `src/hooks/app/use-panel.ts`.
+- [x] Add a more stable detail content region plus subtle content transitions in the tray shell/content components without remounting shell chrome.
+- [x] Add/update focused tests, run verification, then record lessons/choices/breadcrumbs for the smoothing slice.
+
+## Verification Notes
+- Verified smoothing and reduced-motion coverage with `npx vitest run src/hooks/app/use-panel.test.ts src/App.test.tsx` -> 2 files passed, 95 tests passed.
+- Verified compile/build with `bun run build` -> `tsc` passed and the Vite production build completed successfully.
+
+# Stabilize tray shell during provider switching and refresh
+
+## Acceptance Criteria
+- [x] Provider switching does not visibly remove or flash the sidebar.
+- [x] Provider refresh on an already-loaded provider keeps the existing provider card frame/content visible while showing a localized loading state.
+- [x] Tray height changes settle once per real content change and no longer show the panel dropping downward during ordinary provider switching/refresh.
+- [x] `"Provider not found"` does not appear during normal switching/loading of a valid enabled provider.
+- [x] Focused verification covers retained-content loading, stable nav rendering, stable selected-provider resolution, and panel resize coalescing before the slice is marked done.
+
+## Plan
+- [x] Add retained provider-state handling in the probe/view layer so refreshes keep renderable content and stable nav/selection data.
+- [x] Refactor tray content rendering to keep shell chrome mounted and localize loading to provider card content.
+- [x] Tighten panel resize observation/scheduling to measure settled intrinsic content only, then add focused tests and verification notes.
+
+## Verification Notes
+- Verified focused regressions with `npx vitest run src/hooks/app/use-probe-state.test.ts src/hooks/app/use-app-plugin-views.test.ts src/hooks/app/use-panel.test.ts src/App.test.tsx` -> 4 files passed, 102 tests passed.
+- Verified compile/build with `bun run build` -> `tsc` passed and Vite production build completed successfully.
+- Verified the bottom-anchor bounds fix with `npx vitest run src/hooks/app/use-panel.test.ts src/App.test.tsx` -> 2 files passed, 92 tests passed.
+- Verified the Rust anchor math and command path with `cargo test --manifest-path src-tauri/Cargo.toml panel -- --nocapture` -> 5 tests passed.
+
+# Fix settings-to-tray provider sync reliability
+
+## Acceptance Criteria
+- [x] Selecting a provider in the standalone Settings window reliably switches the tray bar to that provider without needing a second manual reopen.
+- [x] If the first live tray-navigation event is missed, reopening or refocusing the tray still applies the last explicit provider target from Settings.
+- [x] Bringing the tray forward after a Settings-driven provider switch refreshes that explicit provider instead of leaving stale detail data onscreen.
+- [x] Focused backend/frontend verification covers the pending-target replay and tray refresh behavior before the task is marked done.
+
+## Plan
+- [x] Add a backend-owned pending tray target view and expose a small consume-once command for the main tray window.
+- [x] Update the tray frontend panel hook to replay pending targets on mount/focus and route explicit provider focus into the refresh path.
+- [x] Add/update focused Rust and Vitest regressions, run targeted verification, then record notes.
+
+## Verification Notes
+- Verified the tray/main-window bridge with `npx vitest run src/hooks/app/use-panel.test.ts src/App.test.tsx` -> 2 files passed, 88 tests passed.
+- Verified the backend pending-target store with `cargo test --manifest-path src-tauri/Cargo.toml pending_panel_view_is_consumed_once` -> 1 Rust test passed.
+
+# Document provider input simulation paths
+
+## Acceptance Criteria
+- [x] Add a repo doc that explains, for every provider in `plugins/`, whether UsageBar can be tested by faking a local file/DB/env/secret input.
+- [x] Each provider entry names the concrete local inputs UsageBar reads today and clearly says when local-file faking is insufficient because remote HTTP/account entitlements still control the output.
+- [x] Placeholder/blocked providers are explicitly called out as not yet having a real input path in this repo.
+- [x] Verification records the local audit commands used to derive the provider matrix before the task is marked done.
+
+## Plan
+- [x] Audit each provider plugin for current local input sources and classify the simulation path.
+- [x] Write one provider-by-provider simulation guide under `docs/` with exact paths, caveats, and safe-testing notes.
+- [x] Review the new doc text against the plugin code/search results and record verification notes.
+
+## Verification Notes
+- Verified the source audit with `rg -n "ctx\\.host\\.(fs|sqlite|keychain|providerSecrets|env|gh|ls|ccusage)\\.|AppData|~\\/|process\\.env|OPENCODE_COOKIE_HEADER|API_KEY|auth\\.json|state\\.vscdb|secrets\\.json|oauth_creds|hosts\\.yml" plugins -S`.
+- Verified every provider has a detail section in `docs/provider-input-simulation.md` with `Get-ChildItem plugins -Directory | Select-Object -ExpandProperty Name` plus a PowerShell coverage check against `### \`<provider>\`` headings.
+- Verified the final doc text with `Get-Content docs\\provider-input-simulation.md`.
+
 # Improve settings responsiveness for smaller window sizes
 
 ## Acceptance Criteria

@@ -4,18 +4,21 @@ import { PanelFooter } from "@/components/panel-footer"
 import { SideNav, type NavPlugin, type PluginContextAction } from "@/components/side-nav"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import { useAppVersion } from "@/hooks/app/use-app-version"
-import { usePanel } from "@/hooks/app/use-panel"
+import { panelPreferredMinHeightForView, usePanel } from "@/hooks/app/use-panel"
 import { useAppUpdate } from "@/hooks/use-app-update"
 import { openSettingsWindow } from "@/lib/settings-window"
 import { useAppUiStore } from "@/stores/app-ui-store"
+import type { ActiveView } from "@/components/side-nav"
 
 type AppShellProps = {
   onRefreshAll: () => void
-  onPanelFocus?: () => void
+  onPanelFocus?: (view?: ActiveView) => void
   navPlugins: NavPlugin[]
   displayPlugins: DisplayPluginState[]
   autoUpdateNextAt: number | null
   selectedPlugin: DisplayPluginState | null
+  resolvedSelectedPlugin: DisplayPluginState | null
+  hasResolvedViews: boolean
   onPluginContextAction: (pluginId: string, action: PluginContextAction) => void
   isPluginRefreshAvailable: (pluginId: string) => boolean
   onNavReorder: (orderedIds: string[]) => void
@@ -29,6 +32,8 @@ export function AppShell({
   displayPlugins,
   autoUpdateNextAt,
   selectedPlugin,
+  resolvedSelectedPlugin,
+  hasResolvedViews,
   onPluginContextAction,
   isPluginRefreshAvailable,
   onNavReorder,
@@ -57,6 +62,7 @@ export function AppShell({
     canScrollDown,
     panelHeightPx,
     maxPanelHeightPx,
+    isPanelResizing,
   } = usePanel({
     activeView,
     setActiveView,
@@ -78,6 +84,7 @@ export function AppShell({
       : maxPanelHeightPx != null
         ? { maxHeight: `${maxPanelHeightPx}px` }
         : undefined
+  const contentMinHeightPx = panelPreferredMinHeightForView(activeView)
 
   return (
     <div ref={containerRef} className="flex flex-col bg-card">
@@ -100,11 +107,18 @@ export function AppShell({
           <div ref={contentColumnRef} className="flex-1 flex flex-col px-3 pt-2 pb-1.5 min-w-0 bg-card dark:bg-muted/50">
             <div className="relative flex-1 min-h-0">
               <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-none">
-                <div ref={contentMeasureRef}>
+                <div
+                  ref={contentMeasureRef}
+                  style={{ minHeight: `${contentMinHeightPx}px` }}
+                  className={isPanelResizing ? "will-change-[height]" : undefined}
+                >
                   <AppContent
                     {...appContentProps}
                     displayPlugins={displayPlugins}
                     selectedPlugin={selectedPlugin}
+                    resolvedSelectedPlugin={resolvedSelectedPlugin}
+                    hasResolvedViews={hasResolvedViews}
+                    isPanelResizing={isPanelResizing}
                   />
                 </div>
               </div>

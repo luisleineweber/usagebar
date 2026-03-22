@@ -5,7 +5,9 @@ use tauri::tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
-use crate::panel::{get_or_init_panel, position_panel_at_tray_icon, show_panel, show_panel_near_cursor};
+use crate::panel::{
+    get_or_init_panel, position_panel_at_tray_icon, show_panel, show_panel_near_cursor,
+};
 use crate::settings_window;
 
 const LOG_LEVEL_STORE_KEY: &str = "logLevel";
