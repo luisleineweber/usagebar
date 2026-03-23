@@ -99,6 +99,7 @@ Record these fields in the relevant provider doc or rollout note:
 | Cursor | Partially working | P0 | account-state variance across free/trial/paid/team/enterprise |
 | Ollama | Working v1 | P0 | only manual cookie mode exists |
 | OpenCode | Experimental | P1 | browser import + real-world cookie/workspace validation |
+| OpenCode Go | Working on Windows | P1 | keep current local auth/history schema coverage aligned with upstream CLI changes |
 | Amp | Experimental | P2 | real signed-in Windows validation |
 | Copilot | Experimental | P2 | real free/paid validation plus broader multi-account runtime evidence |
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |

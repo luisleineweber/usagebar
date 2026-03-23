@@ -1,3 +1,21 @@
+# Surface OpenCode Go on Windows with current local schema
+
+## Acceptance Criteria
+- [x] `OpenCode Go` is surfaced on Windows with manifest metadata instead of staying hidden for lack of `platformSupport.windows`.
+- [x] The plugin detects the current local OpenCode auth/history shape on this machine instead of only the older `opencode-go` identifiers.
+- [x] The provider doc and setup copy explain the current Windows-local auth/history paths and the fact that the source is local observed spend, not web subscription usage.
+- [x] Focused OpenCode Go contract tests and one real local probe pass before the slice is marked done.
+
+## Plan
+- [x] Patch `plugins/opencode-go` to accept the current local auth/history identifiers while preserving the legacy `opencode-go` path.
+- [x] Add Windows support metadata plus settings/doc copy so the provider can actually surface in the app.
+- [x] Run focused plugin/settings verification and a one-off local probe harness against the real `auth.json` and `opencode.db`, then record notes.
+
+## Verification Notes
+- Verified the updated contract with `bun run test -- plugins/opencode-go/plugin.test.js` -> 1 file passed, 13 tests passed.
+- Verified the settings-detail copy with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 12 tests passed.
+- Verified a real local Windows probe with a one-off Node harness against `%USERPROFILE%\\.local\\share\\opencode\\auth.json` and `%USERPROFILE%\\.local\\share\\opencode\\opencode.db` -> returned `plan: "Go"` plus `5h`, `Weekly`, and `Monthly` progress lines after accepting the current `opencode` auth/history identifiers.
+
 # Land Factory / Droid as a Windows-experimental provider
 
 ## Acceptance Criteria

@@ -26,7 +26,7 @@ function setHistoryQuery(ctx, rows, options = {}) {
     if (String(sql).includes("SELECT 1 AS present")) {
       if (options.assertFilters !== false) {
         expect(String(sql)).toContain(
-          "json_extract(data, '$.providerID') = 'opencode-go'",
+          "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')",
         );
         expect(String(sql)).toContain(
           "json_extract(data, '$.role') = 'assistant'",
@@ -40,7 +40,7 @@ function setHistoryQuery(ctx, rows, options = {}) {
 
     if (options.assertFilters !== false) {
       expect(String(sql)).toContain(
-        "json_extract(data, '$.providerID') = 'opencode-go'",
+        "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')",
       );
       expect(String(sql)).toContain(
         "json_extract(data, '$.role') = 'assistant'",
@@ -134,6 +134,42 @@ describe("opencode-go plugin", () => {
 
     expect(result.plan).toBe("Go");
     expect(result.lines[0].used).toBe(25);
+  });
+
+  it("accepts the current opencode auth key entry", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    ctx.host.fs.writeText(
+      AUTH_PATH,
+      JSON.stringify({
+        opencode: { type: "api-key", key: "current-go-key" },
+      }),
+    );
+    setHistoryQuery(ctx, []);
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.plan).toBe("Go");
+    expect(result.lines.map((line) => line.label)).toEqual(["5h", "Weekly", "Monthly"]);
+  });
+
+  it("accepts current opencode history rows as detection evidence", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
+    ]);
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.plan).toBe("Go");
+    expect(result.lines[0].used).toBe(10);
   });
 
   it("uses row timestamp fallback when JSON timestamp is missing", async () => {

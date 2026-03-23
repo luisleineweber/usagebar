@@ -110,6 +110,13 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       placeholder: "wrk_...",
     },
   },
+  "opencode-go": {
+    mode: "automatic",
+    title: "OpenCode Go Setup",
+    summary: "Detected from the local OpenCode auth file and SQLite history on this machine.",
+    statusHint: "No manual setup is required once ~/.local/share/opencode/auth.json or local opencode.db history exists.",
+    connectHint: "Use OpenCode Go on this machine so ~/.local/share/opencode/auth.json or ~/.local/share/opencode/opencode.db exists, then retry.",
+  },
   codex: {
     mode: "detected",
     title: "Codex Setup",
