@@ -169,9 +169,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   kimi: {
     mode: "automatic",
     title: "Kimi Setup",
-    summary: "Detected from local auth state and refreshed automatically.",
-    statusHint: "Manual auth editing can come later if needed.",
-    connectHint: "Sign in to Kimi Code locally, then retry the provider check.",
+    summary: "Detected from the local Kimi Code credential file and refreshed automatically.",
+    statusHint: "Run `kimi login` so ~/.kimi/credentials/kimi-code.json exists before launching UsageBar.",
+    connectHint: "Run `kimi login` on this machine, restart UsageBar if needed, then retry the provider check.",
   },
   minimax: {
     mode: "automatic",

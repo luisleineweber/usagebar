@@ -103,7 +103,7 @@ Record these fields in the relevant provider doc or rollout note:
 | Copilot | Experimental | P2 | real free/paid validation plus broader multi-account runtime evidence |
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |
 | JetBrains AI Assistant | Working on Windows | P1 | broader IDE/account variance beyond current local XML path coverage |
-| Kimi Code | Not started for Windows | P2 | verify Windows credential/file locations |
+| Kimi Code | Experimental | P2 | real Windows credential-file validation plus broader signed-in runtime evidence |
 | MiniMax | Experimental | P2 | real Windows API-key validation plus broader real-plan coverage |
 | Factory / Droid | Not started for Windows | P3 | WorkOS auth storage and refresh behavior on Windows |
 | Z.ai | Experimental | P3 | real Windows API-key validation for the internal quota endpoints |

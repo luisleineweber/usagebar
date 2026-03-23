@@ -42,7 +42,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Gemini**](docs/providers/gemini.md) | Experimental | Pro, flash, workspace/free/paid tier |
 | [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
 | [**Kilo**](plugins/kilo/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
-| [**Kimi**](docs/providers/kimi.md) | Blocked | Session, weekly |
+| [**Kimi**](docs/providers/kimi.md) | Experimental | Session, weekly |
 | [**Kimi K2**](plugins/kimi-k2/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Kiro**](plugins/kiro/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding plan session, region-aware API-key auth |

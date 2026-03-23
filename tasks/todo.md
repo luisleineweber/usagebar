@@ -1,3 +1,21 @@
+# Land Kimi Code as a Windows-experimental provider
+
+## Acceptance Criteria
+- [x] `Kimi Code` is surfaced as a Windows-experimental provider instead of blocked.
+- [x] The provider doc and setup copy describe the Windows path around `~/.kimi/credentials/kimi-code.json` and `kimi login`.
+- [x] The Windows rollout/status docs reflect the experimental state and explicitly note that broader real-account validation is still pending.
+- [x] Focused Kimi plugin verification passes before the slice is marked done.
+
+## Plan
+- [x] Audit the current Kimi plugin/docs state and capture any local path evidence available on this machine.
+- [x] Flip the manifest to Windows-experimental and update the provider/setup/rollout docs with the current Windows-first setup path.
+- [x] Run focused Kimi verification, then record verification notes and the related repo notes updates.
+
+## Verification Notes
+- Checked local path evidence with `Test-Path "$HOME\\.kimi\\credentials\\kimi-code.json"` -> `False` on this machine, so the slice remains explicitly experimental pending real signed-in Windows validation.
+- Verified the Kimi plugin with `bun run test -- plugins/kimi/plugin.test.js` -> 1 file passed, 21 tests passed.
+- Verified the provider-settings detail surface still renders after the Kimi setup-copy changes with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 11 tests passed.
+
 # Land MiniMax and Z.ai as Windows-experimental providers
 
 ## Acceptance Criteria
