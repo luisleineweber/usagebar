@@ -38,7 +38,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Codex**](docs/providers/codex.md) | Supported | Session, weekly, reviews, credits |
 | [**Copilot**](docs/providers/copilot.md) | Experimental | Premium, chat, completions |
 | [**Cursor**](docs/providers/cursor.md) | Supported | Credits, total usage, auto usage, API usage, on-demand, CLI auth |
-| [**Factory / Droid**](docs/providers/factory.md) | Blocked | Standard, premium tokens |
+| [**Factory / Droid**](docs/providers/factory.md) | Experimental | Standard, premium tokens |
 | [**Gemini**](docs/providers/gemini.md) | Experimental | Pro, flash, workspace/free/paid tier |
 | [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
 | [**Kilo**](plugins/kilo/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
