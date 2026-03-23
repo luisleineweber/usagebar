@@ -230,11 +230,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     "Planned Windows implementation: read local Kilo config or CLI auth first, with direct API usage once a stable token source is confirmed.",
     "Target plan: prefer config or CLI-auth detection on Windows; add manual API-key fallback only if the local path is insufficient."
   ),
-  "kimi-k2": plannedWindowsProviderDefinition(
-    "Kimi K2 Setup",
-    "Planned Windows implementation: ship this as a direct API-key provider backed by app-owned secret storage and Kimi credits endpoints.",
-    "Target plan: add secure API-key storage plus quota/credits fetches; no browser-cookie dependency is planned for v1."
-  ),
+  "kimi-k2": {
+    mode: "editable",
+    title: "Kimi K2 Setup",
+    summary: "Fetches Kimi K2 credits from a stored API key or KIMI_K2_API_KEY-compatible env vars.",
+    statusHint: "Save a Kimi K2 API key here or set KIMI_K2_API_KEY, KIMI_API_KEY, or KIMI_KEY before launching UsageBar.",
+    connectHint: "Create a Kimi K2 API key, save it here or set KIMI_K2_API_KEY, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste a Kimi K2 API key. UsageBar stores it in the app credential vault and uses it for the credits endpoint.",
+      placeholder: "kimi_...",
+    },
+  },
   kiro: plannedWindowsProviderDefinition(
     "Kiro Setup",
     "Planned Windows implementation: execute the local Kiro CLI usage command and parse its output instead of building a browser-session path.",
@@ -263,11 +271,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     "Planned Windows implementation: use Google ADC or gcloud application-default auth plus quota APIs, with optional local-log enrichment later.",
     "Target plan: prefer official Google auth and quota APIs on Windows, not browser-session scraping."
   ),
-  warp: plannedWindowsProviderDefinition(
-    "Warp Setup",
-    "Planned Windows implementation: use a stored Warp token against the limits GraphQL/API path as a direct account-token provider.",
-    "Target plan: add secure token storage and direct usage polling on Windows."
-  ),
+  warp: {
+    mode: "editable",
+    title: "Warp Setup",
+    summary: "Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars.",
+    statusHint: "Save a Warp token here or set WARP_API_KEY / WARP_TOKEN before launching UsageBar.",
+    connectHint: "Create a Warp API key in Warp Settings -> Platform -> API Keys, save it here or set WARP_API_KEY, then retry.",
+    secretField: {
+      key: "token",
+      label: "Token",
+      description: "Paste a Warp API key. UsageBar stores it in the app credential vault and uses it for the request-limit GraphQL endpoint.",
+      placeholder: "wk-...",
+    },
+  },
 }
 
 function sanitizeSecretMetadata(value: unknown): Record<string, ProviderSecretMetadata> {

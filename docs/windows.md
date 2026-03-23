@@ -100,12 +100,15 @@ Record these fields in the relevant provider doc or rollout note:
 | Ollama | Working v1 | P0 | only manual cookie mode exists |
 | OpenCode | Experimental | P1 | browser import + real-world cookie/workspace validation |
 | OpenCode Go | Working on Windows | P1 | keep current local auth/history schema coverage aligned with upstream CLI changes |
+| OpenRouter | Experimental | P2 | real Windows API-key validation plus broader live key-quota evidence |
 | Amp | Experimental | P2 | real signed-in Windows validation |
 | Copilot | Experimental | P2 | real free/paid validation plus broader multi-account runtime evidence |
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |
 | JetBrains AI Assistant | Working on Windows | P1 | broader IDE/account variance beyond current local XML path coverage |
 | Kimi Code | Experimental | P2 | real Windows credential-file validation plus broader signed-in runtime evidence |
+| Kimi K2 | Experimental | P2 | real Windows API-key validation plus broader live credits-shape evidence |
 | MiniMax | Experimental | P2 | real Windows API-key validation plus broader real-plan coverage |
+| Warp | Experimental | P2 | real Windows token validation plus broader live plan variance evidence |
 | Factory / Droid | Experimental | P3 | real Windows auth-store validation plus signed-in runtime evidence |
 | Z.ai | Experimental | P3 | real Windows API-key validation for the internal quota endpoints |
 | Windsurf | Experimental | P2 | broader real-account/runtime validation after Windows LS + cloud path port |

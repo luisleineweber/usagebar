@@ -5,10 +5,11 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "brandColor": "#111111",
   "platformSupport": {
     "windows": {
-      "state": "blocked",
-      "message": "Windows placeholder. Planned path: stored Warp token plus direct limits API polling."
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored Warp token or WARP_API_KEY / WARP_TOKEN to fetch request limits."
     }
   },
   "lines": [

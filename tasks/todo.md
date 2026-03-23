@@ -1,3 +1,60 @@
+# Implement Warp as a Windows-experimental token provider
+
+## Acceptance Criteria
+- [x] `Warp` no longer throws as a Windows placeholder and instead probes the request-limit GraphQL endpoint from a stored token or supported env var.
+- [x] The provider is surfaced as Windows-experimental with setup copy that explains the app-secret and env-var path on Windows.
+- [x] The provider docs, rollout/status docs, and input-simulation matrix all match the new implementation state.
+- [x] Focused Warp plugin tests, provider-settings detail tests, and the env allowlist Rust test pass before the slice is marked done.
+
+## Plan
+- [x] Replace the placeholder `plugins/warp` implementation with a direct token probe plus focused regressions.
+- [x] Update `provider-settings.ts`, README/provider docs, Windows rollout docs, and simulation docs to reflect the real Windows setup path and experimental state.
+- [x] Run focused JS/Vitest/Rust verification, then record notes plus repo-note updates.
+
+## Verification Notes
+- Verified the Warp plugin contract with `bun run test -- plugins/warp/plugin.test.js` -> 1 file passed, 10 tests passed.
+- Verified the settings-detail copy and placeholder coverage with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 15 tests passed.
+- Verified the plugin-host env exposure with `cargo test --manifest-path src-tauri/Cargo.toml env_api_respects_allowlist_in_host_and_js` -> 1 Rust test passed.
+- Checked local live-token evidence with `if ($env:WARP_API_KEY -or $env:WARP_TOKEN) { 'WARP_TOKEN=set' } else { 'WARP_TOKEN=missing' }` -> `WARP_TOKEN=missing` on this machine, so the provider remains explicitly `experimental` pending real Windows token validation.
+
+# Implement Kimi K2 as a Windows-experimental API-key provider
+
+## Acceptance Criteria
+- [x] `Kimi K2` no longer throws as a Windows placeholder and instead probes the real credits endpoint from a stored API key or supported env var.
+- [x] The provider is surfaced as Windows-experimental with setup copy that explains the app-secret and env-var path on Windows.
+- [x] The provider docs, rollout/status docs, and input-simulation matrix all match the new implementation state.
+- [x] Focused Kimi K2 plugin tests, provider-settings detail tests, and the env allowlist Rust test pass before the slice is marked done.
+
+## Plan
+- [x] Replace the placeholder `plugins/kimi-k2` implementation with a direct API-key probe plus focused regressions.
+- [x] Update `provider-settings.ts`, README/provider docs, Windows rollout docs, and simulation docs to reflect the real Windows setup path and experimental state.
+- [x] Run focused JS/Vitest/Rust verification, then record notes plus repo-note updates.
+
+## Verification Notes
+- Verified the Kimi K2 plugin contract with `bun run test -- plugins/kimi-k2/plugin.test.js` -> 1 file passed, 10 tests passed.
+- Verified the settings-detail copy and placeholder coverage with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 14 tests passed.
+- Verified the plugin-host env exposure with `cargo test --manifest-path src-tauri/Cargo.toml env_api_respects_allowlist_in_host_and_js` -> 1 Rust test passed.
+- Checked local live-key evidence with `if ($env:KIMI_K2_API_KEY -or $env:KIMI_API_KEY -or $env:KIMI_KEY) { 'KIMI_K2_KEY=set' } else { 'KIMI_K2_KEY=missing' }` -> `KIMI_K2_KEY=missing` on this machine, so the provider remains explicitly `experimental` pending real Windows API-key validation.
+
+# Implement OpenRouter as a Windows-experimental API-key provider
+
+## Acceptance Criteria
+- [x] `OpenRouter` no longer throws as a Windows placeholder and instead probes the real credits and key-info endpoints from a stored API key or `OPENROUTER_API_KEY`.
+- [x] The provider is surfaced as Windows-experimental with setup copy that explains the app-secret and env-var path on Windows.
+- [x] The provider docs, rollout/status docs, and input-simulation matrix all match the new implementation state.
+- [x] Focused OpenRouter plugin tests, provider-settings detail tests, and the env allowlist Rust test pass before the slice is marked done.
+
+## Plan
+- [x] Replace the placeholder `plugins/openrouter` implementation with a direct API-key probe plus focused regressions.
+- [x] Update `provider-settings.ts`, README/provider docs, Windows rollout docs, and simulation docs to reflect the real Windows setup path and experimental state.
+- [x] Run focused JS/Vitest/Rust verification, then record notes plus any lessons/choices/breadcrumbs updates.
+
+## Verification Notes
+- Verified the OpenRouter plugin contract with `bun run test -- plugins/openrouter/plugin.test.js` -> 1 file passed, 11 tests passed.
+- Verified the settings-detail copy and placeholder coverage with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 13 tests passed.
+- Verified the plugin-host env exposure with `cargo test --manifest-path src-tauri/Cargo.toml env_api_respects_allowlist_in_host_and_js` -> 1 Rust test passed.
+- Checked local live-key evidence with `if ($env:OPENROUTER_API_KEY) { 'OPENROUTER_API_KEY=set' } else { 'OPENROUTER_API_KEY=missing' }` -> `OPENROUTER_API_KEY=missing` on this machine, so the provider remains explicitly `experimental` pending real Windows API-key validation.
+
 # Surface OpenCode Go on Windows with current local schema
 
 ## Acceptance Criteria

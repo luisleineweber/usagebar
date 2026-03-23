@@ -10,9 +10,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 11] = [
+const WHITELISTED_ENV_VARS: [&str; 16] = [
     "CODEX_HOME",
     "GH_CONFIG_DIR",
+    "KIMI_K2_API_KEY",
+    "KIMI_API_KEY",
+    "KIMI_KEY",
     "ZAI_API_KEY",
     "GLM_API_KEY",
     "MINIMAX_API_KEY",
@@ -22,6 +25,8 @@ const WHITELISTED_ENV_VARS: [&str; 11] = [
     "OPENROUTER_API_URL",
     "OPENCODE_COOKIE_HEADER",
     "OPENCODE_WORKSPACE_ID",
+    "WARP_API_KEY",
+    "WARP_TOKEN",
 ];
 const KEYRING_TARGET: &str = "OpenUsage";
 #[cfg(target_os = "windows")]

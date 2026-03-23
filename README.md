@@ -43,7 +43,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
 | [**Kilo**](plugins/kilo/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Kimi**](docs/providers/kimi.md) | Experimental | Session, weekly |
-| [**Kimi K2**](plugins/kimi-k2/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Kimi K2**](docs/providers/kimi-k2.md) | Experimental | Credits, remaining, average tokens |
 | [**Kiro**](plugins/kiro/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding plan session, region-aware API-key auth |
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
@@ -53,7 +53,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Perplexity**](docs/providers/perplexity.md) | Blocked | Groups, usage analytics, rate limits |
 | [**Synthetic**](plugins/synthetic/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Vertex AI**](plugins/vertex-ai/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
-| [**Warp**](plugins/warp/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Warp**](docs/providers/warp.md) | Experimental | Request limits, plan badge |
 | [**Windsurf**](docs/providers/windsurf.md) | Experimental | Daily quota, weekly quota, extra usage balance |
 | [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches |
 

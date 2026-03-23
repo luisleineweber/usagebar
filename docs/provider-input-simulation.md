@@ -31,18 +31,18 @@ Safety:
 | `jetbrains-ai-assistant` | IDE quota XML under `~/AppData/Roaming/JetBrains/.../options/AIAssistantQuotaManager2.xml` or `~/AppData/Roaming/Google/...` | Works fully | This plugin is local-file driven. Replaying the XML is the main test path. |
 | `kilo` | None | No current path | Placeholder plugin only. |
 | `kimi` | `~/.kimi/credentials/kimi-code.json` | Works partially | Local credential replay can fake login; usage still comes from HTTP. |
-| `kimi-k2` | None | No current path | Placeholder plugin only. |
+| `kimi-k2` | stored provider secret `apiKey`, `KIMI_K2_API_KEY`, `KIMI_API_KEY`, `KIMI_KEY` | Works partially | Secret/env replay can fake auth setup, but credits still come from Kimi K2 HTTP. |
 | `kiro` | None | No current path | Placeholder plugin only. |
 | `minimax` | `MINIMAX_API_KEY`, `MINIMAX_API_TOKEN`, `MINIMAX_CN_API_KEY` env vars | Works partially | No file path today; you can only fake env-based auth locally. Usage still comes from HTTP. |
 | `mock` | None | Works fully | Built-in self-test provider. Data is hardcoded in the plugin. |
 | `ollama` | Stored provider secret `cookieHeader` | Works partially | Manual secret can fake signed-in session, but usage still comes from Ollama web HTTP. |
 | `opencode` | Stored provider secret `cookieHeader`, `OPENCODE_COOKIE_HEADER`, keychain fallback | Works partially | Cookie replay can fake the web session, but billing data still comes from OpenCode HTTP. |
 | `opencode-go` | `~/.local/share/opencode/auth.json`, `~/.local/share/opencode/opencode.db` | Works fully | Main output is derived from local auth + SQLite history. |
-| `openrouter` | None | No current path | Placeholder plugin only. |
+| `openrouter` | stored provider secret `apiKey`, `OPENROUTER_API_KEY`, `OPENROUTER_API_URL` | Works partially | Secret/env replay can fake auth setup, but credits and key data still come from OpenRouter HTTP. |
 | `perplexity` | macOS cache DB paths only: `~/Library/Containers/.../Cache.db` and `~/Library/Caches/.../Cache.db` | Works partially | Local cache replay can fake session discovery, but billing/rate-limit data still comes from HTTP. |
 | `synthetic` | None | No current path | Placeholder plugin only. |
 | `vertex-ai` | None | No current path | Placeholder plugin only. |
-| `warp` | None | No current path | Placeholder plugin only. |
+| `warp` | stored provider secret `token`, `WARP_API_KEY`, `WARP_TOKEN` | Works partially | Secret/env replay can fake auth setup, but request limits still come from Warp HTTP. |
 | `windsurf` | `~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb`, `~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb` | Works partially | SQLite replay can fake account discovery; quota still comes from Windsurf HTTP. |
 | `zai` | `ZAI_API_KEY`, `GLM_API_KEY` env vars | Works partially | No file path today; auth is env-only and usage comes from HTTP. |
 
@@ -162,8 +162,16 @@ Safety:
 - Limitation: actual usage still comes from HTTP.
 
 ### `kimi-k2`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
+- Local inputs read:
+- provider secret `apiKey`
+- `KIMI_K2_API_KEY`
+- `KIMI_API_KEY`
+- `KIMI_KEY`
+- What to fake:
+- Save an API key through the app settings or expose one of the supported env vars before launching UsageBar.
+- Limitation:
+- The provider still fetches credits over HTTP.
+- Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `kiro`
 - Current implementation: placeholder that always throws.
@@ -213,8 +221,16 @@ Safety:
 - Limitation: this is one of the best fully local replay targets in the repo.
 
 ### `openrouter`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
+- Local inputs read:
+- provider secret `apiKey`
+- `OPENROUTER_API_KEY`
+- optional `OPENROUTER_API_URL`
+- What to fake:
+- Save an API key through the app settings or expose `OPENROUTER_API_KEY` before launching UsageBar.
+- Set `OPENROUTER_API_URL` only if you want to redirect the probe to a stub server.
+- Limitation:
+- The provider still fetches credits and key-rate data over HTTP.
+- Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `perplexity`
 - Local inputs read:
@@ -235,8 +251,15 @@ Safety:
 - Local replay path: none.
 
 ### `warp`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
+- Local inputs read:
+- provider secret `token`
+- `WARP_API_KEY`
+- `WARP_TOKEN`
+- What to fake:
+- Save a Warp token through the app settings or expose `WARP_API_KEY` / `WARP_TOKEN` before launching UsageBar.
+- Limitation:
+- The provider still fetches request limits over HTTP.
+- Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `windsurf`
 - Local inputs read:

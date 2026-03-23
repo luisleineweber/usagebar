@@ -35,12 +35,36 @@ const opencodeGoPlugin = {
   primaryCandidates: [],
 }
 
-const openrouterPlaceholderPlugin = {
+const openrouterPlugin = {
   id: "openrouter",
   name: "OpenRouter",
   iconUrl: "/openrouter.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const kimiK2Plugin = {
+  id: "kimi-k2",
+  name: "Kimi K2",
+  iconUrl: "/kimi-k2.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const warpPlugin = {
+  id: "warp",
+  name: "Warp",
+  iconUrl: "/warp.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const syntheticPlaceholderPlugin = {
+  id: "synthetic",
+  name: "Synthetic",
+  iconUrl: "/synthetic.svg",
   supportState: "comingSoonOnWindows" as const,
-  supportMessage: "Windows placeholder. Planned path: stored API key plus direct OpenRouter credits and key-info endpoints.",
+  supportMessage: "Windows placeholder. Planned path: stored API key plus direct Synthetic quota polling.",
   lines: [],
   primaryCandidates: [],
 }
@@ -237,6 +261,51 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/Use OpenCode Go on this machine so ~\/\.local\/share\/opencode\/auth\.json or ~\/\.local\/share\/opencode\/opencode\.db exists, then retry\./)).toBeInTheDocument()
   })
 
+  it("shows explicit OpenRouter API-key guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={openrouterPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches OpenRouter credits and key-rate data from a stored API key or OPENROUTER_API_KEY\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create an API key at https:\/\/openrouter.ai\/settings\/keys/i)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the credits and key endpoints\./)).toBeInTheDocument()
+  })
+
+  it("shows explicit Kimi K2 API-key guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={kimiK2Plugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches Kimi K2 credits from a stored API key or KIMI_K2_API_KEY-compatible env vars\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Kimi K2 API key, save it here or set KIMI_K2_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the credits endpoint\./)).toBeInTheDocument()
+  })
+
+  it("shows explicit Warp token guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={warpPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Warp API key in Warp Settings -> Platform -> API Keys, save it here or set WARP_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the request-limit GraphQL endpoint\./)).toBeInTheDocument()
+  })
+
   it("shows no editable inputs for auto-detected providers", () => {
     render(
       <ProviderSettingsDetail
@@ -254,15 +323,15 @@ describe("ProviderSettingsDetail", () => {
   it("shows blocked placeholder guidance for planned Windows providers", () => {
     render(
       <ProviderSettingsDetail
-        plugin={openrouterPlaceholderPlugin}
+        plugin={syntheticPlaceholderPlugin}
         enabled={false}
         state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText("Planned Windows implementation: use a stored API key against OpenRouter credits and key-info endpoints.")).toBeInTheDocument()
-    expect(screen.getAllByText("Windows placeholder. Planned path: stored API key plus direct OpenRouter credits and key-info endpoints.").length).toBeGreaterThan(0)
+    expect(screen.getByText("Planned Windows implementation: use a stored API key against Synthetic quota endpoints as a straightforward token-based provider.")).toBeInTheDocument()
+    expect(screen.getAllByText("Windows placeholder. Planned path: stored API key plus direct Synthetic quota polling.").length).toBeGreaterThan(0)
     expect(screen.getByRole("checkbox")).toHaveAttribute("aria-disabled", "true")
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument()
   })
