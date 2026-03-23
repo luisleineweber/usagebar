@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 9] = [
+const WHITELISTED_ENV_VARS: [&str; 11] = [
     "CODEX_HOME",
     "GH_CONFIG_DIR",
     "ZAI_API_KEY",
@@ -18,6 +18,8 @@ const WHITELISTED_ENV_VARS: [&str; 9] = [
     "MINIMAX_API_KEY",
     "MINIMAX_API_TOKEN",
     "MINIMAX_CN_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_API_URL",
     "OPENCODE_COOKIE_HEADER",
     "OPENCODE_WORKSPACE_ID",
 ];

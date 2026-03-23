@@ -240,11 +240,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     "Planned Windows implementation: execute the local Kiro CLI usage command and parse its output instead of building a browser-session path.",
     "Target plan: rely on CLI detection and parsing on Windows while that command remains available."
   ),
-  openrouter: plannedWindowsProviderDefinition(
-    "OpenRouter Setup",
-    "Planned Windows implementation: use a stored API key against OpenRouter credits and key-info endpoints.",
-    "Target plan: add app-owned API-key storage and direct API calls; this should not need browser cookies."
-  ),
+  openrouter: {
+    mode: "editable",
+    title: "OpenRouter Setup",
+    summary: "Fetches OpenRouter credits and key-rate data from a stored API key or OPENROUTER_API_KEY.",
+    statusHint: "Save an OpenRouter API key here or set OPENROUTER_API_KEY before launching UsageBar.",
+    connectHint: "Create an API key at https://openrouter.ai/settings/keys, save it here or set OPENROUTER_API_KEY, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste an OpenRouter API key. UsageBar stores it in the app credential vault and uses it for the credits and key endpoints.",
+      placeholder: "sk-or-v1-...",
+    },
+  },
   synthetic: plannedWindowsProviderDefinition(
     "Synthetic Setup",
     "Planned Windows implementation: use a stored API key against Synthetic quota endpoints as a straightforward token-based provider.",

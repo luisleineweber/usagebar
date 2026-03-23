@@ -49,7 +49,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
 | [**OpenCode**](docs/providers/opencode.md) | Experimental | Session, weekly |
 | [**OpenCode Go**](docs/providers/opencode-go.md) | Supported | Local 5h, weekly, monthly CLI spend history |
-| [**OpenRouter**](plugins/openrouter/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**OpenRouter**](docs/providers/openrouter.md) | Experimental | Credits, balance, request-rate detail |
 | [**Perplexity**](docs/providers/perplexity.md) | Blocked | Groups, usage analytics, rate limits |
 | [**Synthetic**](plugins/synthetic/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Vertex AI**](plugins/vertex-ai/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |

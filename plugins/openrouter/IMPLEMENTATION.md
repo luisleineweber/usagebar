@@ -1,8 +1,12 @@
-# OpenRouter Windows Placeholder
+# OpenRouter Windows Notes
 
-Status: visible in Settings, blocked from probing on Windows.
+Status: implemented as a Windows-experimental provider.
 
-Planned implementation:
-- Save an OpenRouter API key in the app-owned secret store.
-- Poll credits and key-info endpoints directly.
-- Keep the first Windows version as a pure API-key provider.
+Current implementation:
+- Reads `apiKey` from the app-owned provider secret store first.
+- Falls back to `OPENROUTER_API_KEY`.
+- Uses `OPENROUTER_API_URL` only as an optional base-URL override.
+- Calls `/credits` for account totals and `/key` for optional key-rate enrichment.
+
+Remaining gap:
+- Real signed-in Windows validation with a live OpenRouter API key.
