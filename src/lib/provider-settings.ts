@@ -176,9 +176,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   minimax: {
     mode: "automatic",
     title: "MiniMax Setup",
-    summary: "Detected from local API/cookie sources used by the plugin.",
-    statusHint: "No extra controls are exposed yet.",
-    connectHint: "Sign in to MiniMax on this machine so the local session can be detected.",
+    summary: "Detected from MiniMax API keys exposed as user environment variables.",
+    statusHint: "Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY before launching UsageBar.",
+    connectHint: "Create a persistent MINIMAX_API_KEY or MINIMAX_CN_API_KEY user environment variable, restart UsageBar, then refresh.",
   },
   antigravity: {
     mode: "automatic",
@@ -204,9 +204,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   zai: {
     mode: "automatic",
     title: "Z.ai Setup",
-    summary: "Detected from available local/session credentials.",
-    statusHint: "Manual provider controls are not exposed yet.",
-    connectHint: "Sign in to Z.ai locally, then refresh.",
+    summary: "Detected from Z.ai API keys exposed as user environment variables.",
+    statusHint: "Set ZAI_API_KEY or GLM_API_KEY before launching UsageBar.",
+    connectHint: "Create a persistent ZAI_API_KEY or GLM_API_KEY user environment variable, restart UsageBar, then refresh.",
   },
   augment: plannedWindowsProviderDefinition(
     "Augment Setup",

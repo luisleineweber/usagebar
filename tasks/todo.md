@@ -1,3 +1,21 @@
+# Land MiniMax and Z.ai as Windows-experimental providers
+
+## Acceptance Criteria
+- [x] `MiniMax` and `Z.ai` are surfaced as Windows-experimental providers instead of blocked placeholders.
+- [x] Their provider docs describe Windows-usable setup paths for this fork without macOS-only launcher instructions.
+- [x] The Windows rollout/status docs reflect the new experimental state and keep the remaining gap limited to real-account entitlement validation.
+- [x] Focused `MiniMax` and `Z.ai` plugin verification passes before the slice is marked done.
+
+## Plan
+- [x] Audit the current `MiniMax` and `Z.ai` plugin/docs state against the rollout plan and README status matrix.
+- [x] Flip both manifests to Windows-experimental and update the provider/rollout docs with Windows-first setup wording.
+- [x] Run focused plugin tests, then record verification notes plus the related choices/breadcrumbs updates.
+
+## Verification Notes
+- Verified the MiniMax plugin with `bun run test -- plugins/minimax/plugin.test.js` -> 1 file passed, 42 tests passed.
+- Verified the Z.ai plugin with `bun run test -- plugins/zai/plugin.test.js` -> 1 file passed, 24 tests passed.
+- Verified the provider-settings detail surface still renders after the setup-copy changes with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 11 tests passed.
+
 # Fix Antigravity offline fallback when the IDE is not running
 
 ## Acceptance Criteria

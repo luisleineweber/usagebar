@@ -8,7 +8,8 @@
   "brandColor": "#F5433C",
   "platformSupport": {
     "windows": {
-      "state": "blocked"
+      "state": "experimental",
+      "message": "Experimental on Windows. Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY before launching UsageBar."
     }
   },
   "lines": [

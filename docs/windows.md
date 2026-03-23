@@ -104,9 +104,9 @@ Record these fields in the relevant provider doc or rollout note:
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |
 | JetBrains AI Assistant | Working on Windows | P1 | broader IDE/account variance beyond current local XML path coverage |
 | Kimi Code | Not started for Windows | P2 | verify Windows credential/file locations |
-| MiniMax | Not started for Windows | P2 | verify Windows session source and auth refresh path |
+| MiniMax | Experimental | P2 | real Windows API-key validation plus broader real-plan coverage |
 | Factory / Droid | Not started for Windows | P3 | WorkOS auth storage and refresh behavior on Windows |
-| Z.ai | Not started for Windows | P3 | Windows credential/session source unknown |
+| Z.ai | Experimental | P3 | real Windows API-key validation for the internal quota endpoints |
 | Windsurf | Experimental | P2 | broader real-account/runtime validation after Windows LS + cloud path port |
 | Perplexity | Not started for Windows | P4 | macOS app-cache dependency |
 

@@ -45,7 +45,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Kimi**](docs/providers/kimi.md) | Blocked | Session, weekly |
 | [**Kimi K2**](plugins/kimi-k2/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Kiro**](plugins/kiro/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
-| [**MiniMax**](docs/providers/minimax.md) | Blocked | Coding plan session |
+| [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding plan session, region-aware API-key auth |
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
 | [**OpenCode**](docs/providers/opencode.md) | Experimental | Session, weekly |
 | [**OpenCode Go**](docs/providers/opencode-go.md) | Not surfaced on Windows yet | Local 5h, weekly, monthly CLI spend history |
@@ -55,7 +55,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Vertex AI**](plugins/vertex-ai/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Warp**](plugins/warp/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Windsurf**](docs/providers/windsurf.md) | Experimental | Daily quota, weekly quota, extra usage balance |
-| [**Z.ai**](docs/providers/zai.md) | Blocked | Session, weekly, web searches |
+| [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches |
 
 Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/openusage/issues/new)
 

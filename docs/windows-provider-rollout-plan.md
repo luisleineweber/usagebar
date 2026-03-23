@@ -31,8 +31,8 @@ Use [Windows provider verification](./windows-provider-verification.md) for the 
 | OpenCode Go | Working | local `opencode.db` SQLite history | self-testable | Local DB parsing and window math can be fully fixture-driven | No remote entitlement contract exists; local-history behavior is the product | Add focused history/anchor-window fixtures when touching the provider again | Entirely local provider; cheap to maintain with fixtures |
 | Factory / Droid | Not started for Windows | likely WorkOS session plus app/web auth state | community-needed | Little Windows contract evidence exists | Real auth/session behavior unknown | Defer until a concrete Windows auth source is documented | Opaque Windows session model |
 | Kimi Code | Not started for Windows | local credential/file locations still need Windows confirmation | community-needed | Too little Windows auth evidence | Entitlement/runtime behavior unknown | Defer until Windows auth storage is documented | Discovery cost is still high |
-| MiniMax | Not started for Windows | user-provided API key / CN key env path | fixture-only until real account | API-key contract can be tested, but Windows account reality still sparse | Real plan/runtime evidence still missing | Defer until higher-priority self-testable slices land | Easier than browser/session ports, but still lower priority |
-| Z.ai | Not started for Windows | user-provided API key / token | fixture-only until real account | Direct API contract is testable when prioritized | Real quota/account behavior still unverified | Defer until after the current higher-signal queue | API provider, but not as urgent as Copilot/Gemini |
+| MiniMax | Experimental | user-provided API key / CN key env path | fixture-only until real account | API-key contract and region fallback are covered by focused tests | Real plan/runtime evidence still missing | Collect one real Windows API-key validation note and broaden payload fixtures only when the API changes | Cheap Windows rollout because auth is just persistent env vars plus direct HTTP |
+| Z.ai | Experimental | user-provided API key / token | fixture-only until real account | Direct API contract is covered by focused tests and deterministic env-key lookup | Real quota/account behavior still unverified | Collect one real Windows API-key validation note and keep the internal-endpoint contract under test | API provider with a simple Windows setup path once env vars are documented clearly |
 | Perplexity | Not started for Windows | currently macOS app-cache dependent | community-needed | Windows contract is not established | Windows entitlement path is effectively blocked | Defer until a viable Windows auth source exists | Platform-hostile source model for this fork |
 
 ## Rollout Order
@@ -59,8 +59,6 @@ Use [Windows provider verification](./windows-provider-verification.md) for the 
 
 - Factory / Droid
 - Kimi Code
-- MiniMax
-- Z.ai
 - Windsurf
 - Perplexity
 - Amp

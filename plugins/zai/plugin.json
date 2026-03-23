@@ -8,7 +8,8 @@
   "brandColor": "#2D2D2D",
   "platformSupport": {
     "windows": {
-      "state": "blocked"
+      "state": "experimental",
+      "message": "Experimental on Windows. Set ZAI_API_KEY or GLM_API_KEY before launching UsageBar."
     }
   },
   "lines": [
