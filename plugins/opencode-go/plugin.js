@@ -2,6 +2,11 @@
   const PROVIDER_ID = "opencode-go";
   const AUTH_PATH = "~/.local/share/opencode/auth.json";
   const DB_PATH = "~/.local/share/opencode/opencode.db";
+  const AUTH_ENTRY_KEYS = ["opencode-go", "opencode"];
+  const HISTORY_PROVIDER_IDS = ["opencode-go", "opencode"];
+  const HISTORY_PROVIDER_SQL = HISTORY_PROVIDER_IDS.map((providerId) =>
+    "'" + providerId.replace(/'/g, "''") + "'"
+  ).join(", ");
   const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const LIMITS = {
@@ -14,7 +19,7 @@
     SELECT 1 AS present
     FROM message
     WHERE json_valid(data)
-      AND json_extract(data, '$.providerID') = 'opencode-go'
+      AND json_extract(data, '$.providerID') IN (${HISTORY_PROVIDER_SQL})
       AND json_extract(data, '$.role') = 'assistant'
       AND json_type(data, '$.cost') IN ('integer', 'real')
     LIMIT 1
@@ -26,7 +31,7 @@
       CAST(json_extract(data, '$.cost') AS REAL) AS cost
     FROM message
     WHERE json_valid(data)
-      AND json_extract(data, '$.providerID') = 'opencode-go'
+      AND json_extract(data, '$.providerID') IN (${HISTORY_PROVIDER_SQL})
       AND json_extract(data, '$.role') = 'assistant'
       AND json_type(data, '$.cost') IN ('integer', 'real')
   `;
@@ -169,10 +174,13 @@
         ctx.host.log.warn("opencode auth file is not valid json");
         return null;
       }
-      const entry = parsed[PROVIDER_ID];
-      if (!entry || typeof entry !== "object") return null;
-      const key = typeof entry.key === "string" ? entry.key.trim() : "";
-      return key || null;
+      for (let i = 0; i < AUTH_ENTRY_KEYS.length; i += 1) {
+        const entry = parsed[AUTH_ENTRY_KEYS[i]];
+        if (!entry || typeof entry !== "object") continue;
+        const key = typeof entry.key === "string" ? entry.key.trim() : "";
+        if (key) return key;
+      }
+      return null;
     } catch (e) {
       ctx.host.log.warn("opencode auth read failed: " + String(e));
       return null;

@@ -48,7 +48,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding plan session, region-aware API-key auth |
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
 | [**OpenCode**](docs/providers/opencode.md) | Experimental | Session, weekly |
-| [**OpenCode Go**](docs/providers/opencode-go.md) | Not surfaced on Windows yet | Local 5h, weekly, monthly CLI spend history |
+| [**OpenCode Go**](docs/providers/opencode-go.md) | Supported | Local 5h, weekly, monthly CLI spend history |
 | [**OpenRouter**](plugins/openrouter/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Perplexity**](docs/providers/perplexity.md) | Blocked | Groups, usage analytics, rate limits |
 | [**Synthetic**](plugins/synthetic/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |

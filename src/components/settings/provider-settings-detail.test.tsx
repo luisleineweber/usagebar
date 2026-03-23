@@ -27,6 +27,14 @@ const opencodePlugin = {
   primaryCandidates: [],
 }
 
+const opencodeGoPlugin = {
+  id: "opencode-go",
+  name: "OpenCode Go",
+  iconUrl: "/opencode-go.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const openrouterPlaceholderPlugin = {
   id: "openrouter",
   name: "OpenRouter",
@@ -212,6 +220,21 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/copy the full Cookie request header/i)).toBeInTheDocument()
     expect(screen.getByText(/This is separate from OpenCode Go local CLI spend\./)).toBeInTheDocument()
     expect(screen.getByText(/Do not paste Set-Cookie\./)).toBeInTheDocument()
+  })
+
+  it("shows explicit OpenCode Go local-history guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={opencodeGoPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText("OpenCode Go")).toBeInTheDocument()
+    expect(screen.getByText(/Detected from the local OpenCode auth file and SQLite history on this machine\./)).toBeInTheDocument()
+    expect(screen.getByText(/Use OpenCode Go on this machine so ~\/\.local\/share\/opencode\/auth\.json or ~\/\.local\/share\/opencode\/opencode\.db exists, then retry\./)).toBeInTheDocument()
   })
 
   it("shows no editable inputs for auto-detected providers", () => {
