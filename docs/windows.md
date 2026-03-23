@@ -105,7 +105,7 @@ Record these fields in the relevant provider doc or rollout note:
 | JetBrains AI Assistant | Working on Windows | P1 | broader IDE/account variance beyond current local XML path coverage |
 | Kimi Code | Experimental | P2 | real Windows credential-file validation plus broader signed-in runtime evidence |
 | MiniMax | Experimental | P2 | real Windows API-key validation plus broader real-plan coverage |
-| Factory / Droid | Not started for Windows | P3 | WorkOS auth storage and refresh behavior on Windows |
+| Factory / Droid | Experimental | P3 | real Windows auth-store validation plus signed-in runtime evidence |
 | Z.ai | Experimental | P3 | real Windows API-key validation for the internal quota endpoints |
 | Windsurf | Experimental | P2 | broader real-account/runtime validation after Windows LS + cloud path port |
 | Perplexity | Not started for Windows | P4 | macOS app-cache dependency |

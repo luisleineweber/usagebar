@@ -134,9 +134,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   factory: {
     mode: "detected",
     title: "Factory Setup",
-    summary: "Current plugin reads WorkOS-backed auth from file or keychain and refreshes it.",
-    statusHint: "Setup is read-only for now so the refresh lifecycle stays consistent.",
-    connectHint: "Sign in to Factory or Droid locally so the plugin can detect the stored WorkOS credentials.",
+    summary: "Current plugin reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it.",
+    statusHint: "Run `droid` so ~/.factory/auth.encrypted or ~/.factory/auth.json exists before launching UsageBar.",
+    connectHint: "Run `droid` on this machine, restart UsageBar if needed, then retry the provider check.",
   },
   gemini: {
     mode: "automatic",

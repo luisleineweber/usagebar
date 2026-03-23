@@ -1,3 +1,21 @@
+# Land Factory / Droid as a Windows-experimental provider
+
+## Acceptance Criteria
+- [x] `Factory / Droid` is surfaced as a Windows-experimental provider instead of blocked.
+- [x] The provider doc and setup copy describe the current Windows path around `droid` login plus the `~/.factory/auth.encrypted` / `~/.factory/auth.json` auth stores.
+- [x] The Windows rollout/status docs reflect the experimental state and explicitly call out that real signed-in Windows runtime evidence is still pending.
+- [x] Focused Factory plugin verification passes before the slice is marked done.
+
+## Plan
+- [x] Audit the current Factory plugin/docs state and capture any local auth-file evidence available on this machine.
+- [x] Flip the manifest to Windows-experimental and update the provider/setup/rollout docs with the current Windows-first auth path.
+- [x] Run focused Factory verification, then record verification notes and the related repo notes updates.
+
+## Verification Notes
+- Checked local auth-file evidence with `Test-Path "$HOME\\.factory\\auth.encrypted"; Test-Path "$HOME\\.factory\\auth.json"` -> both returned `False` on this machine, so the slice remains explicitly experimental pending real signed-in Windows validation.
+- Verified the Factory plugin with `bun run test -- plugins/factory/plugin.test.js` -> 1 file passed, 32 tests passed.
+- Verified the provider-settings detail surface still renders after the Factory setup-copy changes with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 11 tests passed.
+
 # Land Kimi Code as a Windows-experimental provider
 
 ## Acceptance Criteria

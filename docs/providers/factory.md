@@ -83,7 +83,7 @@ Premium tokens (`premium.totalAllowance > 0`) are only available on Max/Enterpri
 
 - `~/.factory/auth.json` (legacy droid auth file)
 - `~/.factory/auth.encrypted` (current droid auth file)
-- macOS keychain entry (when droid uses keyring-backed storage)
+- OS keychain entry (when droid uses keyring-backed storage)
 
 ```jsonc
 {
@@ -141,3 +141,12 @@ droid
 ```
 
 This creates auth data in the droid auth store (file and/or keychain, depending on droid version/configuration).
+
+## Windows setup
+
+1. Install the `droid` CLI and complete sign-in once with `droid`.
+2. Confirm that either `~/.factory/auth.encrypted` or `~/.factory/auth.json` now exists.
+3. Restart `UsageBar` if it was already open.
+4. Enable the Factory provider in Settings and refresh.
+
+Current local evidence on this machine: neither `~/.factory/auth.encrypted` nor `~/.factory/auth.json` is present yet, so this rollout stays `experimental` until a real signed-in Windows validation pass is captured.

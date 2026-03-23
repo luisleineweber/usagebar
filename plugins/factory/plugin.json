@@ -8,7 +8,8 @@
   "brandColor": "#020202",
   "platformSupport": {
     "windows": {
-      "state": "blocked"
+      "state": "experimental",
+      "message": "Experimental on Windows. Run `droid` so ~/.factory/auth.encrypted or ~/.factory/auth.json exists before launching UsageBar."
     }
   },
   "lines": [

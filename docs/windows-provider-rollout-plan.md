@@ -29,7 +29,7 @@ Use [Windows provider verification](./windows-provider-verification.md) for the 
 | Windsurf | Experimental | local `state.vscdb` plus direct cloud quota call | community-needed | Windows state-db/cloud contract is in place | Real-account/runtime coverage still thin | Defer until clearer real-user evidence arrives | More opaque runtime confidence problem than engineering problem |
 | Amp | Experimental | `%USERPROFILE%\\.local\\share\\amp\\secrets.json` | community-needed | Windows path contract is covered | Real signed-in Windows usage still unverified | Defer after higher-signal providers | Needs real signed-in evidence more than code churn |
 | OpenCode Go | Working | local `opencode.db` SQLite history | self-testable | Local DB parsing and window math can be fully fixture-driven | No remote entitlement contract exists; local-history behavior is the product | Add focused history/anchor-window fixtures when touching the provider again | Entirely local provider; cheap to maintain with fixtures |
-| Factory / Droid | Not started for Windows | likely WorkOS session plus app/web auth state | community-needed | Little Windows contract evidence exists | Real auth/session behavior unknown | Defer until a concrete Windows auth source is documented | Opaque Windows session model |
+| Factory / Droid | Experimental | `~/.factory/auth.encrypted`, `~/.factory/auth.json`, optional keychain WorkOS payload | community-needed | Auth-file, keychain, refresh, and usage-shape coverage are already in focused tests | Real auth/session behavior on Windows is still pending | Collect one real Windows validation note once a local `droid` sign-in is available and keep the WorkOS auth contract under test | The plugin already has concrete auth sources; the gap is runtime evidence, not missing integration code |
 | Kimi Code | Experimental | `~/.kimi/credentials/kimi-code.json` plus OAuth refresh | community-needed | Credential-file path, token refresh, and quota parsing are covered by focused tests | Real Windows entitlement/runtime behavior is still pending | Collect one real Windows validation note once a local Kimi sign-in is available and keep the auth-file contract under test | The plugin shape is already meaningful; the main gap is local runtime evidence, not missing code |
 | MiniMax | Experimental | user-provided API key / CN key env path | fixture-only until real account | API-key contract and region fallback are covered by focused tests | Real plan/runtime evidence still missing | Collect one real Windows API-key validation note and broaden payload fixtures only when the API changes | Cheap Windows rollout because auth is just persistent env vars plus direct HTTP |
 | Z.ai | Experimental | user-provided API key / token | fixture-only until real account | Direct API contract is covered by focused tests and deterministic env-key lookup | Real quota/account behavior still unverified | Collect one real Windows API-key validation note and keep the internal-endpoint contract under test | API provider with a simple Windows setup path once env vars are documented clearly |
@@ -57,7 +57,6 @@ Use [Windows provider verification](./windows-provider-verification.md) for the 
 
 ### Deferred until clearer Windows evidence exists
 
-- Factory / Droid
 - Windsurf
 - Perplexity
 - Amp
