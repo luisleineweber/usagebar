@@ -5,14 +5,15 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "brandColor": "#000000",
   "platformSupport": {
     "windows": {
-      "state": "blocked",
-      "message": "Windows placeholder. Planned path: direct API-key storage plus Kimi K2 credits polling."
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored Kimi K2 API key or supported env var to fetch credits."
     }
   },
   "lines": [
     { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Requests", "scope": "detail" }
+    { "type": "text", "label": "Average tokens", "scope": "detail" }
   ]
 }

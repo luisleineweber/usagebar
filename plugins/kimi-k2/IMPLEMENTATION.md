@@ -1,8 +1,12 @@
-# Kimi K2 Windows Placeholder
+# Kimi K2 Windows Notes
 
-Status: visible in Settings, blocked from probing on Windows.
+Status: implemented as a Windows-experimental provider.
 
-Planned implementation:
-- Store a Kimi K2 API key in the app-owned secret store.
-- Call the provider credits or quota endpoints directly.
-- Keep the first Windows version API-key based instead of cookie based.
+Current implementation:
+- Reads `apiKey` from the app-owned provider secret store first.
+- Falls back to `KIMI_K2_API_KEY`, `KIMI_API_KEY`, then `KIMI_KEY`.
+- Calls `GET https://kimi-k2.ai/api/user/credits`.
+- Parses consumed and remaining credits plus optional average-token metadata from common response shapes.
+
+Remaining gap:
+- Real signed-in Windows validation with a live Kimi K2 API key.
