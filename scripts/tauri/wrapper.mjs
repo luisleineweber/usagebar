@@ -54,6 +54,14 @@ function clearStaleWindowsDebugMetadata() {
 }
 
 function resolveTauriCli() {
+  const packagedCli = path.join(repoRoot, "node_modules", "@tauri-apps", "cli", "tauri.js")
+  if (existsSync(packagedCli)) {
+    return {
+      command: process.execPath,
+      args: [packagedCli, ...args],
+    }
+  }
+
   const binDir = path.join(repoRoot, "node_modules", ".bin")
   const localBinary = process.platform === "win32"
     ? path.join(binDir, "tauri.cmd")
@@ -73,17 +81,10 @@ function resolveTauriCli() {
     return { command: localBinary, args }
   }
 
-  if (process.platform === "win32") {
-    return {
-      command: "npx",
-      args: ["tauri", ...args],
-      spawnOptions: {
-        shell: true,
-      },
-    }
+  return {
+    command: process.platform === "win32" ? "npx.cmd" : "npx",
+    args: ["@tauri-apps/cli", ...args],
   }
-
-  return { command: "npx", args: ["tauri", ...args] }
 }
 
 if (process.platform === "win32" && args[0] === "dev") {
