@@ -7,7 +7,7 @@ This repo treats a release as a tagged, reproducible build with matching version
 Before cutting a tag:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-beta.1 --require-clean
+bun run release:check -- --release-tag v0.1.0-beta.2 --require-clean
 ```
 
 The preflight currently verifies:
@@ -34,7 +34,7 @@ The publish workflow lives in [.github/workflows/publish.yml](../.github/workflo
 
 You can publish in two ways:
 
-1. Push a `v*` tag, for example `v0.1.0-beta.1`
+1. Push a `v*` tag, for example `v0.1.0-beta.2`
 2. Trigger `Publish` manually with `workflow_dispatch` and provide `release_tag`
 
 The workflow runs the same release preflight, builds platform artifacts, and verifies that the GitHub release contains:

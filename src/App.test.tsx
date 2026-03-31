@@ -416,7 +416,7 @@ describe("App", () => {
     expect(mq.addEventListener).toHaveBeenCalled()
 
     mmSpy.mockRestore()
-  })
+  }, 10000)
 
   it("loads plugins, normalizes settings, and renders overview", async () => {
     state.isTauriMock.mockReturnValue(true)

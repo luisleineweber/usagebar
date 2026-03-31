@@ -1,6 +1,6 @@
 [package]
 name = "openusage"
-version = "0.1.0-beta.1"
+version = "0.1.0-beta.2"
 description = "UsageBar is a Windows-first desktop tracker for AI coding subscription usage"
 authors = ["Robin Ebers"]
 edition = "2024"

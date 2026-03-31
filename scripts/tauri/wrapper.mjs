@@ -14,17 +14,6 @@ function quoteForPowerShell(value) {
   return `'${String(value).replace(/'/g, "''")}'`
 }
 
-function quoteForCmd(value) {
-  const stringValue = String(value)
-  if (!/[\s"]/u.test(stringValue)) {
-    return stringValue
-  }
-
-  return `"${stringValue
-    .replace(/(\\*)"/g, "$1$1\\\"")
-    .replace(/(\\+)$/g, "$1$1")}"`
-}
-
 function stopStaleWindowsDevProcess() {
   const exePath = path.join(repoRoot, "src-tauri", "target", "debug", "openusage.exe")
   const command = `
@@ -72,20 +61,29 @@ function resolveTauriCli() {
 
   if (existsSync(localBinary)) {
     if (process.platform === "win32" && localBinary.endsWith(".cmd")) {
-      const cmdLine = [quoteForCmd(localBinary), ...args.map(quoteForCmd)].join(" ")
       return {
-        command: process.env.comspec ?? "cmd.exe",
-        args: ["/d", "/s", "/c", cmdLine],
+        command: localBinary,
+        args,
+        spawnOptions: {
+          shell: true,
+        },
       }
     }
 
     return { command: localBinary, args }
   }
 
-  return {
-    command: process.platform === "win32" ? "npx.cmd" : "npx",
-    args: ["tauri", ...args],
+  if (process.platform === "win32") {
+    return {
+      command: "npx",
+      args: ["tauri", ...args],
+      spawnOptions: {
+        shell: true,
+      },
+    }
   }
+
+  return { command: "npx", args: ["tauri", ...args] }
 }
 
 if (process.platform === "win32" && args[0] === "dev") {
@@ -97,6 +95,7 @@ const tauriCli = resolveTauriCli()
 const child = spawn(tauriCli.command, tauriCli.args, {
   cwd: repoRoot,
   stdio: "inherit",
+  ...(tauriCli.spawnOptions ?? {}),
 })
 
 child.on("exit", (code, signal) => {
