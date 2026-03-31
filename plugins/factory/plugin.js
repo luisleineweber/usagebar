@@ -1,4 +1,6 @@
 (function () {
+  const AUTH_V2_FILE = "~/.factory/auth.v2.file"
+  const AUTH_V2_KEY = "~/.factory/auth.v2.key"
   const AUTH_PATHS = ["~/.factory/auth.encrypted", "~/.factory/auth.json"]
   const KEYCHAIN_SERVICES = ["Factory Token", "Factory token", "Factory Auth", "Droid Auth"]
   const WORKOS_CLIENT_ID = "client_01HNM792M5G5G1A2THWPXKFMXB"
@@ -92,6 +94,33 @@
   }
 
   function loadAuthFromFiles(ctx) {
+    if (
+      ctx.host.crypto &&
+      typeof ctx.host.crypto.decryptAes256Gcm === "function" &&
+      ctx.host.fs.exists(AUTH_V2_FILE) &&
+      ctx.host.fs.exists(AUTH_V2_KEY)
+    ) {
+      try {
+        const envelope = ctx.host.fs.readText(AUTH_V2_FILE)
+        const keyB64 = String(ctx.host.fs.readText(AUTH_V2_KEY) || "").trim()
+        const decrypted = ctx.host.crypto.decryptAes256Gcm(envelope, keyB64)
+        const auth = parseAuthPayload(ctx, decrypted, { allowPartial: true })
+        if (auth) {
+          ctx.host.log.info("auth loaded from file: " + AUTH_V2_FILE)
+          return {
+            auth,
+            source: "file-v2",
+            authPath: AUTH_V2_FILE,
+            authKeyPath: AUTH_V2_KEY,
+            keychainService: null,
+          }
+        }
+        ctx.host.log.warn("auth file exists but has no valid auth payload: " + AUTH_V2_FILE)
+      } catch (e) {
+        ctx.host.log.warn("auth v2 file read failed: " + String(e))
+      }
+    }
+
     for (const authPath of AUTH_PATHS) {
       if (!ctx.host.fs.exists(authPath)) continue
 
@@ -145,6 +174,10 @@
     const keychainAuth = loadAuthFromKeychain(ctx)
     if (keychainAuth) return keychainAuth
 
+    if (!ctx.host.fs.exists(AUTH_V2_FILE)) {
+      ctx.host.log.warn("auth file not found: " + AUTH_V2_FILE)
+    }
+
     for (const authPath of AUTH_PATHS) {
       if (!ctx.host.fs.exists(authPath)) {
         ctx.host.log.warn("auth file not found: " + authPath)
@@ -159,6 +192,18 @@
     if (!auth) return false
 
     try {
+      if (authState.source === "file-v2" && authState.authPath && authState.authKeyPath) {
+        if (!ctx.host.crypto || typeof ctx.host.crypto.encryptAes256Gcm !== "function") {
+          ctx.host.log.warn("auth v2 persistence skipped: crypto host API unavailable")
+          return false
+        }
+        const keyB64 = String(ctx.host.fs.readText(authState.authKeyPath) || "").trim()
+        const envelope = ctx.host.crypto.encryptAes256Gcm(JSON.stringify(auth, null, 2), keyB64)
+        ctx.host.fs.writeText(authState.authPath, envelope)
+        ctx.host.log.info("auth file updated: " + authState.authPath)
+        return true
+      }
+
       if (authState.source === "file" && authState.authPath) {
         ctx.host.fs.writeText(authState.authPath, JSON.stringify(auth, null, 2))
         ctx.host.log.info("auth file updated: " + authState.authPath)

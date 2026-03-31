@@ -51,6 +51,16 @@ const kimiK2Plugin = {
   primaryCandidates: [],
 }
 
+const kiloPlugin = {
+  id: "kilo",
+  name: "Kilo",
+  iconUrl: "/kilo.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Windows experimental. Use a stored Kilo API key or KILO_API_KEY to fetch usage. CLI fallback is not wired yet.",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const warpPlugin = {
   id: "warp",
   name: "Warp",
@@ -59,12 +69,20 @@ const warpPlugin = {
   primaryCandidates: [],
 }
 
-const syntheticPlaceholderPlugin = {
+const syntheticPlugin = {
   id: "synthetic",
   name: "Synthetic",
   iconUrl: "/synthetic.svg",
-  supportState: "comingSoonOnWindows" as const,
-  supportMessage: "Windows placeholder. Planned path: stored API key plus direct Synthetic quota polling.",
+  supportState: "experimental" as const,
+  supportMessage: "Windows experimental. Use a stored Synthetic API key or SYNTHETIC_API_KEY to fetch quota data.",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const antigravityPlugin = {
+  id: "antigravity",
+  name: "Antigravity",
+  iconUrl: "/antigravity.svg",
   lines: [],
   primaryCandidates: [],
 }
@@ -81,7 +99,11 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText("How to connect")).toBeInTheDocument()
-    expect(screen.getByText("Install Codex CLI, sign in on this machine, then retry the provider check.")).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "Install Codex CLI, sign in on this machine, then import the detected login into a managed profile if you want account pinning."
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows loading state while refreshing", () => {
@@ -291,6 +313,22 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the credits endpoint\./)).toBeInTheDocument()
   })
 
+  it("shows explicit Kilo API-key guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={kiloPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches Kilo usage from a stored API key or KILO_API_KEY\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Kilo API key, save it here or set KILO_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/CLI-session fallback is still deferred/i)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Kilo tRPC usage endpoint\./)).toBeInTheDocument()
+  })
+
   it("shows explicit Warp token guidance", () => {
     render(
       <ProviderSettingsDetail
@@ -320,19 +358,32 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.queryByLabelText("Codex source")).not.toBeInTheDocument()
   })
 
-  it("shows blocked placeholder guidance for planned Windows providers", () => {
+  it("shows explicit Synthetic API-key guidance", () => {
     render(
       <ProviderSettingsDetail
-        plugin={syntheticPlaceholderPlugin}
-        enabled={false}
+        plugin={syntheticPlugin}
+        enabled
         state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText("Planned Windows implementation: use a stored API key against Synthetic quota endpoints as a straightforward token-based provider.")).toBeInTheDocument()
-    expect(screen.getAllByText("Windows placeholder. Planned path: stored API key plus direct Synthetic quota polling.").length).toBeGreaterThan(0)
-    expect(screen.getByRole("checkbox")).toHaveAttribute("aria-disabled", "true")
-    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument()
+    expect(screen.getByText(/Fetches Synthetic quota data from a stored API key or SYNTHETIC_API_KEY\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Synthetic API key, save it here or set SYNTHETIC_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the quotas endpoint\./)).toBeInTheDocument()
+  })
+
+  it("shows explicit Antigravity offline guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={antigravityPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Stored credentials keep working after a one-time sign-in/i)).toBeInTheDocument()
+    expect(screen.getByText(/Open Antigravity locally once to sign in, then UsageBar can keep reading the stored credentials even after the IDE closes\./i)).toBeInTheDocument()
   })
 })

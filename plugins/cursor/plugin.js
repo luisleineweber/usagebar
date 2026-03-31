@@ -538,7 +538,7 @@
     const isTeamAccount = (
       normalizedPlanName === "team" ||
       (su && su.limitType === "team") ||
-      (su && typeof su.pooledLimit === "number")
+      (su && typeof su.pooledLimit === "number" && su.pooledLimit > 0)
     )
     const hasFiniteLimit = typeof pu.limit === "number" && Number.isFinite(pu.limit)
     const hasFinitePercent = Number.isFinite(pu.totalPercentUsed)

@@ -1,4 +1,6 @@
 use crate::provider_secret_store;
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Nonce};
 use base64::Engine;
 use keyring::Entry;
 use rquickjs::{Ctx, Exception, Function, Object};
@@ -6,13 +8,16 @@ use rusqlite::{Connection, OpenFlags, types::ValueRef};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 16] = [
+const WHITELISTED_ENV_VARS: [&str; 21] = [
     "CODEX_HOME",
     "GH_CONFIG_DIR",
+    "KILO_API_KEY",
     "KIMI_K2_API_KEY",
     "KIMI_API_KEY",
     "KIMI_KEY",
@@ -25,12 +30,18 @@ const WHITELISTED_ENV_VARS: [&str; 16] = [
     "OPENROUTER_API_URL",
     "OPENCODE_COOKIE_HEADER",
     "OPENCODE_WORKSPACE_ID",
+    "PERPLEXITY_COOKIE_HEADER",
+    "PERPLEXITY_COOKIE",
+    "PERPLEXITY_SESSION_TOKEN",
+    "SYNTHETIC_API_KEY",
     "WARP_API_KEY",
     "WARP_TOKEN",
 ];
 const KEYRING_TARGET: &str = "OpenUsage";
 #[cfg(target_os = "windows")]
 const PROVIDER_SECRET_WINDOWS_USER: &str = "provider-secret";
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Clone, Copy)]
 struct ProviderSecretEntrySpec<'a> {
@@ -108,6 +119,13 @@ fn last_non_empty_trimmed_line(text: &str) -> Option<String> {
         .map(|line| line.to_string())
 }
 
+fn configure_background_command(command: &mut Command) {
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
 fn read_env_from_process(name: &str) -> Option<String> {
     let value = std::env::var(name).ok()?;
     let trimmed = value.trim();
@@ -119,7 +137,9 @@ fn read_env_from_process(name: &str) -> Option<String> {
 }
 
 fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(program).args(args).output().ok()?;
+    let mut command = Command::new(program);
+    configure_background_command(&mut command);
+    let output = command.args(args).output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -197,6 +217,67 @@ fn resolve_env_value(name: &str) -> Option<String> {
         cache.insert(name.to_string(), resolved.clone());
     }
     resolved
+}
+
+fn decrypt_aes256_gcm_internal(envelope: &str, key_b64: &str) -> Result<String, String> {
+    let key = base64::engine::general_purpose::STANDARD
+        .decode(key_b64.trim())
+        .map_err(|error| format!("invalid base64 key: {}", error))?;
+    if key.len() != 32 {
+        return Err("AES-256-GCM key must decode to 32 bytes".to_string());
+    }
+
+    let envelope_json: JsonValue = serde_json::from_str(envelope.trim())
+        .map_err(|error| format!("invalid crypto envelope: {}", error))?;
+    let nonce_b64 = envelope_json
+        .get("nonce")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| "crypto envelope missing nonce".to_string())?;
+    let ciphertext_b64 = envelope_json
+        .get("ciphertext")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| "crypto envelope missing ciphertext".to_string())?;
+
+    let nonce_bytes = base64::engine::general_purpose::STANDARD
+        .decode(nonce_b64.trim())
+        .map_err(|error| format!("invalid nonce encoding: {}", error))?;
+    if nonce_bytes.len() != 12 {
+        return Err("AES-256-GCM nonce must decode to 12 bytes".to_string());
+    }
+
+    let ciphertext = base64::engine::general_purpose::STANDARD
+        .decode(ciphertext_b64.trim())
+        .map_err(|error| format!("invalid ciphertext encoding: {}", error))?;
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|error| format!("invalid AES-256-GCM key: {}", error))?;
+    let plaintext = cipher
+        .decrypt(Nonce::from_slice(&nonce_bytes), ciphertext.as_ref())
+        .map_err(|_| "AES-256-GCM decrypt failed".to_string())?;
+
+    String::from_utf8(plaintext).map_err(|error| format!("decrypted text was not UTF-8: {}", error))
+}
+
+fn encrypt_aes256_gcm_internal(plaintext: &str, key_b64: &str) -> Result<String, String> {
+    let key = base64::engine::general_purpose::STANDARD
+        .decode(key_b64.trim())
+        .map_err(|error| format!("invalid base64 key: {}", error))?;
+    if key.len() != 32 {
+        return Err("AES-256-GCM key must decode to 32 bytes".to_string());
+    }
+
+    let nonce_uuid = uuid::Uuid::new_v4();
+    let nonce_bytes = &nonce_uuid.as_bytes()[..12];
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|error| format!("invalid AES-256-GCM key: {}", error))?;
+    let ciphertext = cipher
+        .encrypt(Nonce::from_slice(nonce_bytes), plaintext.as_bytes())
+        .map_err(|_| "AES-256-GCM encrypt failed".to_string())?;
+
+    serde_json::to_string(&serde_json::json!({
+        "nonce": base64::engine::general_purpose::STANDARD.encode(nonce_bytes),
+        "ciphertext": base64::engine::general_purpose::STANDARD.encode(ciphertext),
+    }))
+    .map_err(|error| format!("failed to encode crypto envelope: {}", error))
 }
 
 /// Redact sensitive value to first4...last4 format (UTF-8 safe)
@@ -389,6 +470,7 @@ pub fn inject_host_api<'js>(
     let host = Object::new(ctx.clone())?;
     inject_log(ctx, &host, plugin_id)?;
     inject_fs(ctx, &host)?;
+    inject_crypto(ctx, &host)?;
     inject_env(ctx, &host, plugin_id)?;
     inject_provider_config(ctx, &host, plugin_id, app_data_dir)?;
     inject_http(ctx, &host, plugin_id)?;
@@ -402,6 +484,35 @@ pub fn inject_host_api<'js>(
     probe_ctx.set("host", host)?;
     globals.set("__openusage_ctx", probe_ctx)?;
 
+    Ok(())
+}
+
+fn inject_crypto<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
+    let crypto_obj = Object::new(ctx.clone())?;
+
+    crypto_obj.set(
+        "decryptAes256Gcm",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, envelope: String, key_b64: String| -> rquickjs::Result<String> {
+                decrypt_aes256_gcm_internal(&envelope, &key_b64)
+                    .map_err(|error| Exception::throw_message(&ctx_inner, &error))
+            },
+        )?,
+    )?;
+
+    crypto_obj.set(
+        "encryptAes256Gcm",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, plaintext: String, key_b64: String| -> rquickjs::Result<String> {
+                encrypt_aes256_gcm_internal(&plaintext, &key_b64)
+                    .map_err(|error| Exception::throw_message(&ctx_inner, &error))
+            },
+        )?,
+    )?;
+
+    host.set("crypto", crypto_obj)?;
     Ok(())
 }
 
@@ -1074,7 +1185,9 @@ struct WindowsProcessEntry {
 fn ls_list_processes() -> std::io::Result<Vec<(i32, String)>> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("powershell")
+        let mut command = Command::new("powershell");
+        configure_background_command(&mut command);
+        let output = command
             .args([
                 "-NoProfile",
                 "-Command",
@@ -1156,9 +1269,9 @@ fn ls_list_processes() -> std::io::Result<Vec<(i32, String)>> {
 fn ls_listening_ports(process_pid: i32) -> std::io::Result<Vec<i32>> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("netstat")
-            .args(["-ano", "-p", "tcp"])
-            .output()?;
+        let mut command = Command::new("netstat");
+        configure_background_command(&mut command);
+        let output = command.args(["-ano", "-p", "tcp"]).output()?;
         if !output.status.success() {
             return Ok(Vec::new());
         }
@@ -1506,7 +1619,7 @@ fn ccusage_runner_order() -> [CcusageRunnerKind; 5] {
 
 fn ccusage_runner_label(kind: CcusageRunnerKind) -> &'static str {
     match kind {
-        CcusageRunnerKind::Bunx => "bunx",
+        CcusageRunnerKind::Bunx => "bun x",
         CcusageRunnerKind::PnpmDlx => "pnpm dlx",
         CcusageRunnerKind::YarnDlx => "yarn dlx",
         CcusageRunnerKind::NpmExec => "npm exec",
@@ -1588,14 +1701,25 @@ fn ccusage_runner_candidates(kind: CcusageRunnerKind) -> Vec<String> {
     let mut candidates: Vec<String> = Vec::new();
     match kind {
         CcusageRunnerKind::Bunx => {
-            if let Some(home) = dirs::home_dir() {
-                candidates.push(home.join(".bun/bin/bunx").to_string_lossy().to_string());
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(home) = dirs::home_dir() {
+                    candidates.push(home.join(".bun/bin/bun.exe").to_string_lossy().to_string());
+                }
+                candidates.push("bun".to_string());
             }
-            candidates.extend(
-                ["/opt/homebrew/bin/bunx", "/usr/local/bin/bunx", "bunx"]
-                    .into_iter()
-                    .map(str::to_string),
-            );
+
+            #[cfg(not(target_os = "windows"))]
+            {
+                if let Some(home) = dirs::home_dir() {
+                    candidates.push(home.join(".bun/bin/bunx").to_string_lossy().to_string());
+                }
+                candidates.extend(
+                    ["/opt/homebrew/bin/bunx", "/usr/local/bin/bunx", "bunx"]
+                        .into_iter()
+                        .map(str::to_string),
+                );
+            }
         }
         CcusageRunnerKind::PnpmDlx => {
             candidates.extend(
@@ -1687,6 +1811,7 @@ fn ccusage_enriched_path() -> Option<OsString> {
 
 fn ccusage_runner_available(candidate: &str, enriched_path: Option<&OsStr>) -> bool {
     let mut command = std::process::Command::new(candidate);
+    configure_background_command(&mut command);
     command.arg("--version");
     if let Some(path) = enriched_path {
         command.env("PATH", path);
@@ -1703,11 +1828,13 @@ fn configure_ccusage_command(
     args: &[String],
     enriched_path: Option<&OsStr>,
 ) {
+    configure_background_command(command);
     command.args(args);
     if let Some(path) = enriched_path {
         command.env("PATH", path);
     }
     command
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 }
@@ -1737,6 +1864,48 @@ where
 
 fn collect_ccusage_runners() -> Vec<(CcusageRunnerKind, String)> {
     collect_ccusage_runners_with(resolve_ccusage_runner_binary)
+}
+
+fn ccusage_runner_cache() -> &'static Mutex<Option<Vec<(CcusageRunnerKind, String)>>> {
+    static CACHE: OnceLock<Mutex<Option<Vec<(CcusageRunnerKind, String)>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn read_ccusage_runner_cache() -> Option<Vec<(CcusageRunnerKind, String)>> {
+    ccusage_runner_cache().lock().ok()?.clone()
+}
+
+fn write_ccusage_runner_cache(runners: &[(CcusageRunnerKind, String)]) {
+    if runners.is_empty() {
+        return;
+    }
+
+    if let Ok(mut cache) = ccusage_runner_cache().lock() {
+        *cache = Some(runners.to_vec());
+    }
+}
+
+fn invalidate_ccusage_runner_cache() {
+    if let Ok(mut cache) = ccusage_runner_cache().lock() {
+        *cache = None;
+    }
+}
+
+fn collect_ccusage_runners_cached_with<F>(mut resolver: F) -> Vec<(CcusageRunnerKind, String)>
+where
+    F: FnMut() -> Vec<(CcusageRunnerKind, String)>,
+{
+    if let Some(runners) = read_ccusage_runner_cache() {
+        return runners;
+    }
+
+    let runners = resolver();
+    write_ccusage_runner_cache(&runners);
+    runners
+}
+
+fn collect_ccusage_runners_cached() -> Vec<(CcusageRunnerKind, String)> {
+    collect_ccusage_runners_cached_with(collect_ccusage_runners)
 }
 
 fn append_ccusage_common_args(args: &mut Vec<String>, opts: &CcusageQueryOpts) {
@@ -1776,7 +1945,17 @@ fn ccusage_runner_args(
     let config = ccusage_provider_config(provider);
     let package_spec = ccusage_package_spec(provider);
     let mut args: Vec<String> = match kind {
-        CcusageRunnerKind::Bunx => vec!["--silent".to_string(), package_spec.clone()],
+        CcusageRunnerKind::Bunx => {
+            #[cfg(target_os = "windows")]
+            {
+                vec!["x".to_string(), "--silent".to_string(), package_spec.clone()]
+            }
+
+            #[cfg(not(target_os = "windows"))]
+            {
+                vec!["--silent".to_string(), package_spec.clone()]
+            }
+        }
         CcusageRunnerKind::PnpmDlx => {
             vec!["-s".to_string(), "dlx".to_string(), package_spec.clone()]
         }
@@ -1843,13 +2022,20 @@ fn normalize_ccusage_output(stdout: &str) -> Option<String> {
     serde_json::to_string(&normalized).ok()
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum CcusageRunStatus {
+    Success,
+    Failed,
+    SpawnFailed,
+}
+
 fn run_ccusage_with_runner(
     kind: CcusageRunnerKind,
     program: &str,
     opts: &CcusageQueryOpts,
     provider: CcusageProvider,
     plugin_id: &str,
-) -> Option<String> {
+) -> (CcusageRunStatus, Option<String>) {
     let args = ccusage_runner_args(kind, opts, provider);
     let enriched_path = ccusage_enriched_path();
     let mut command = std::process::Command::new(program);
@@ -1876,7 +2062,7 @@ fn run_ccusage_with_runner(
                 ccusage_runner_label(kind),
                 e
             );
-            return None;
+            return (CcusageRunStatus::SpawnFailed, None);
         }
     };
 
@@ -1914,14 +2100,14 @@ fn run_ccusage_with_runner(
                 if status.success() {
                     let out = String::from_utf8_lossy(&stdout);
                     if let Some(normalized_json) = normalize_ccusage_output(&out) {
-                        return Some(normalized_json);
+                        return (CcusageRunStatus::Success, Some(normalized_json));
                     }
                     log::warn!(
                         "[plugin:{}] ccusage output parse failed for {}",
                         plugin_id,
                         ccusage_runner_label(kind)
                     );
-                    return None;
+                    return (CcusageRunStatus::Failed, None);
                 }
 
                 let err = String::from_utf8_lossy(&stderr);
@@ -1931,7 +2117,7 @@ fn run_ccusage_with_runner(
                     ccusage_runner_label(kind),
                     err.trim()
                 );
-                return None;
+                return (CcusageRunStatus::Failed, None);
             }
             Ok(None) => {
                 if start.elapsed() > timeout {
@@ -1945,7 +2131,7 @@ fn run_ccusage_with_runner(
                         CCUSAGE_TIMEOUT_SECS,
                         ccusage_runner_label(kind)
                     );
-                    return None;
+                    return (CcusageRunStatus::Failed, None);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(CCUSAGE_POLL_INTERVAL_MS));
             }
@@ -1956,10 +2142,89 @@ fn run_ccusage_with_runner(
                     ccusage_runner_label(kind),
                     e
                 );
-                return None;
+                return (CcusageRunStatus::Failed, None);
             }
         }
     }
+}
+
+fn run_ccusage_with_runner_list(
+    runners: &[(CcusageRunnerKind, String)],
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    plugin_id: &str,
+) -> (bool, Option<String>) {
+    for (kind, program) in runners {
+        let (status, result) = run_ccusage_with_runner(*kind, program, opts, provider, plugin_id);
+        if let Some(result) = result {
+            return (false, Some(result));
+        }
+
+        if status == CcusageRunStatus::SpawnFailed {
+            return (true, None);
+        }
+    }
+
+    (false, None)
+}
+
+fn run_ccusage_query_with<FCached, FInvalidate, FRun>(
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    plugin_id: &str,
+    mut collect_runners: FCached,
+    mut invalidate_cache: FInvalidate,
+    mut run_runners: FRun,
+) -> Result<String, &'static str>
+where
+    FCached: FnMut() -> Vec<(CcusageRunnerKind, String)>,
+    FInvalidate: FnMut(),
+    FRun: FnMut(&[(CcusageRunnerKind, String)], &CcusageQueryOpts, CcusageProvider, &str) -> (bool, Option<String>),
+{
+    let cached_runners = collect_runners();
+    if cached_runners.is_empty() {
+        log::warn!("[plugin:{}] no package runner found for ccusage query", plugin_id);
+        return Err("no_runner");
+    }
+
+    let (cache_stale, result) = run_runners(&cached_runners, opts, provider, plugin_id);
+    if let Some(result) = result {
+        return Ok(result);
+    }
+
+    if cache_stale {
+        invalidate_cache();
+        let refreshed_runners = collect_runners();
+        if refreshed_runners.is_empty() {
+            log::warn!(
+                "[plugin:{}] no package runner found for ccusage query after cache refresh",
+                plugin_id
+            );
+            return Err("no_runner");
+        }
+
+        let (_, refreshed_result) = run_runners(&refreshed_runners, opts, provider, plugin_id);
+        if let Some(result) = refreshed_result {
+            return Ok(result);
+        }
+    }
+
+    Err("runner_failed")
+}
+
+fn run_ccusage_query(
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    plugin_id: &str,
+) -> Result<String, &'static str> {
+    run_ccusage_query_with(
+        opts,
+        provider,
+        plugin_id,
+        collect_ccusage_runners_cached,
+        invalidate_ccusage_runner_cache,
+        run_ccusage_with_runner_list,
+    )
 }
 
 fn inject_ccusage<'js>(
@@ -1983,16 +2248,8 @@ fn inject_ccusage<'js>(
                     }
                 };
                 let provider = resolve_ccusage_provider(&opts, &pid);
-                let runners = collect_ccusage_runners();
-                if runners.is_empty() {
-                    log::warn!("[plugin:{}] no package runner found for ccusage query", pid);
-                    return Ok(serde_json::json!({ "status": "no_runner" }).to_string());
-                }
-
-                for (kind, program) in runners {
-                    if let Some(result) =
-                        run_ccusage_with_runner(kind, &program, &opts, provider, &pid)
-                    {
+                match run_ccusage_query(&opts, provider, &pid) {
+                    Ok(result) => {
                         let data: serde_json::Value = match serde_json::from_str(&result) {
                             Ok(v) => v,
                             Err(e) => {
@@ -2001,18 +2258,23 @@ fn inject_ccusage<'js>(
                                     pid,
                                     e
                                 );
-                                continue;
+                                return Ok(
+                                    serde_json::json!({ "status": "runner_failed" }).to_string()
+                                );
                             }
                         };
-                        return Ok(serde_json::json!({ "status": "ok", "data": data }).to_string());
+                        Ok(serde_json::json!({ "status": "ok", "data": data }).to_string())
+                    }
+                    Err(status) => {
+                        if status == "runner_failed" {
+                            log::warn!(
+                                "[plugin:{}] ccusage query failed with all available runners",
+                                pid
+                            );
+                        }
+                        Ok(serde_json::json!({ "status": status }).to_string())
                     }
                 }
-
-                log::warn!(
-                    "[plugin:{}] ccusage query failed with all available runners",
-                    pid
-                );
-                Ok(serde_json::json!({ "status": "runner_failed" }).to_string())
             },
         )?,
     )?;
@@ -2136,6 +2398,7 @@ fn inject_gh<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
             ctx.clone(),
             move |hostname: Option<String>, user: Option<String>| -> Option<String> {
                 let mut command = Command::new("gh");
+                configure_background_command(&mut command);
                 command.args(["auth", "token"]);
 
                 if let Some(hostname) = hostname.as_deref() {
@@ -2233,6 +2496,65 @@ fn inject_provider_secrets<'js>(
                     &ctx_inner,
                     "provider secret not found",
                 ))
+            },
+        )?,
+    )?;
+
+    let pid = plugin_id.to_string();
+    let data_dir = app_data_dir.clone();
+    provider_secrets_obj.set(
+        "write",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, secret_key: String, value: String| -> rquickjs::Result<()> {
+                let trimmed_key = secret_key.trim();
+                let trimmed_value = value.trim();
+                if trimmed_key.is_empty() {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "provider secret key is required",
+                    ));
+                }
+                if trimmed_value.is_empty() {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "provider secret value cannot be empty",
+                    ));
+                }
+
+                #[cfg(target_os = "windows")]
+                provider_secret_store::save_provider_secret(
+                    &data_dir,
+                    &pid,
+                    trimmed_key,
+                    trimmed_value,
+                )
+                .map_err(|error| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("provider secret store write failed: {}", error),
+                    )
+                })?;
+
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let service = provider_secret_service(&pid, trimmed_key);
+                    let entry = open_provider_secret_entry(provider_secret_entry_spec(&service))
+                        .map_err(|error| {
+                            Exception::throw_message(
+                                &ctx_inner,
+                                &format!("credential store unavailable: {}", error),
+                            )
+                        })?;
+                    entry.set_password(trimmed_value).map_err(|error| {
+                        Exception::throw_message(
+                            &ctx_inner,
+                            &format!("credential write failed: {}", error),
+                        )
+                    })?;
+                }
+
+                Ok(())
             },
         )?,
     )?;
@@ -2422,6 +2744,51 @@ mod tests {
 
             let gh: Object = host.get("gh").expect("gh");
             let _read_auth_token: Function = gh.get("readAuthToken").expect("readAuthToken");
+        });
+    }
+
+    #[test]
+    fn crypto_api_exposes_encrypt_and_decrypt() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            let globals = ctx.globals();
+            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let host: Object = probe_ctx.get("host").expect("host");
+            let crypto: Object = host.get("crypto").expect("crypto");
+            let encrypt: Function = crypto.get("encryptAes256Gcm").expect("encryptAes256Gcm");
+            let decrypt: Function = crypto.get("decryptAes256Gcm").expect("decryptAes256Gcm");
+
+            let key_b64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+            let plaintext = "{\"hello\":\"world\"}";
+            let envelope: String = encrypt
+                .call((plaintext.to_string(), key_b64.to_string()))
+                .expect("encrypt");
+            assert!(envelope.contains("\"nonce\""));
+            assert!(envelope.contains("\"ciphertext\""));
+
+            let roundtrip: String = decrypt
+                .call((envelope, key_b64.to_string()))
+                .expect("decrypt");
+            assert_eq!(roundtrip, plaintext);
+        });
+    }
+
+    #[test]
+    fn provider_secrets_api_exposes_read_and_write() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            let globals = ctx.globals();
+            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let host: Object = probe_ctx.get("host").expect("host");
+            let provider_secrets: Object = host.get("providerSecrets").expect("providerSecrets");
+            let _read: Function = provider_secrets.get("read").expect("read");
+            let _write: Function = provider_secrets.get("write").expect("write");
         });
     }
 
@@ -2749,23 +3116,36 @@ mod tests {
         };
         let expected_claude_package = ccusage_package_spec(CcusageProvider::Claude);
         let expected_npm_exec_package = format!("--package={expected_claude_package}");
+        #[cfg(target_os = "windows")]
+        let expected_bunx = vec![
+            "x",
+            "--silent",
+            expected_claude_package.as_str(),
+            "daily",
+            "--json",
+            "--order",
+            "desc",
+            "--since",
+            "20260101",
+            "--until",
+            "20260131",
+        ];
+        #[cfg(not(target_os = "windows"))]
+        let expected_bunx = vec![
+            "--silent",
+            expected_claude_package.as_str(),
+            "daily",
+            "--json",
+            "--order",
+            "desc",
+            "--since",
+            "20260101",
+            "--until",
+            "20260131",
+        ];
 
         let bunx = ccusage_runner_args(CcusageRunnerKind::Bunx, &opts, CcusageProvider::Claude);
-        assert_eq!(
-            bunx,
-            vec![
-                "--silent",
-                expected_claude_package.as_str(),
-                "daily",
-                "--json",
-                "--order",
-                "desc",
-                "--since",
-                "20260101",
-                "--until",
-                "20260131"
-            ]
-        );
+        assert_eq!(bunx, expected_bunx);
 
         let pnpm = ccusage_runner_args(CcusageRunnerKind::PnpmDlx, &opts, CcusageProvider::Claude);
         assert_eq!(
@@ -3139,5 +3519,115 @@ Saved lockfile
     fn collect_ccusage_runners_returns_empty_when_none_available() {
         let runners = collect_ccusage_runners_with(|_| None);
         assert!(runners.is_empty());
+    }
+
+    #[test]
+    fn collect_ccusage_runners_cached_resolves_once_for_successful_result() {
+        invalidate_ccusage_runner_cache();
+        let calls = std::cell::Cell::new(0);
+        let expected = vec![(CcusageRunnerKind::Bunx, "bunx".to_string())];
+
+        let first = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            expected.clone()
+        });
+        let second = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            vec![(CcusageRunnerKind::Npx, "npx".to_string())]
+        });
+
+        assert_eq!(calls.get(), 1);
+        assert_eq!(first, expected);
+        assert_eq!(second, expected);
+        invalidate_ccusage_runner_cache();
+    }
+
+    #[test]
+    fn collect_ccusage_runners_cached_does_not_cache_empty_result() {
+        invalidate_ccusage_runner_cache();
+        let calls = std::cell::Cell::new(0);
+
+        let first = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            Vec::new()
+        });
+        let second = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            vec![(CcusageRunnerKind::Npx, "npx".to_string())]
+        });
+
+        assert!(first.is_empty());
+        assert_eq!(second, vec![(CcusageRunnerKind::Npx, "npx".to_string())]);
+        assert_eq!(calls.get(), 2);
+        invalidate_ccusage_runner_cache();
+    }
+
+    #[test]
+    fn invalidate_ccusage_runner_cache_forces_re_resolution() {
+        invalidate_ccusage_runner_cache();
+        let calls = std::cell::Cell::new(0);
+
+        let first = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            vec![(CcusageRunnerKind::PnpmDlx, "pnpm".to_string())]
+        });
+        invalidate_ccusage_runner_cache();
+        let second = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            vec![(CcusageRunnerKind::YarnDlx, "yarn".to_string())]
+        });
+
+        assert_eq!(calls.get(), 2);
+        assert_eq!(first, vec![(CcusageRunnerKind::PnpmDlx, "pnpm".to_string())]);
+        assert_eq!(second, vec![(CcusageRunnerKind::YarnDlx, "yarn".to_string())]);
+        invalidate_ccusage_runner_cache();
+    }
+
+    #[test]
+    fn ccusage_query_retries_after_stale_cached_spawn_failure() {
+        invalidate_ccusage_runner_cache();
+        let collect_calls = std::cell::Cell::new(0);
+        let invalidate_calls = std::cell::Cell::new(0);
+        let run_calls = std::cell::Cell::new(0);
+        let opts = CcusageQueryOpts::default();
+
+        let result = run_ccusage_query_with(
+            &opts,
+            CcusageProvider::Claude,
+            "claude",
+            || {
+                collect_calls.set(collect_calls.get() + 1);
+                match collect_calls.get() {
+                    1 => vec![(CcusageRunnerKind::Bunx, "cached-bunx".to_string())],
+                    _ => vec![(CcusageRunnerKind::Npx, "fresh-npx".to_string())],
+                }
+            },
+            || invalidate_calls.set(invalidate_calls.get() + 1),
+            |runners, _, _, _| {
+                run_calls.set(run_calls.get() + 1);
+                match run_calls.get() {
+                    1 => {
+                        assert_eq!(
+                            runners,
+                            &[(CcusageRunnerKind::Bunx, "cached-bunx".to_string())]
+                        );
+                        (true, None)
+                    }
+                    2 => {
+                        assert_eq!(
+                            runners,
+                            &[(CcusageRunnerKind::Npx, "fresh-npx".to_string())]
+                        );
+                        (false, Some(r#"{"daily":[]}"#.to_string()))
+                    }
+                    _ => panic!("unexpected extra run"),
+                }
+            },
+        );
+
+        assert_eq!(result, Ok(r#"{"daily":[]}"#.to_string()));
+        assert_eq!(collect_calls.get(), 2);
+        assert_eq!(invalidate_calls.get(), 1);
+        assert_eq!(run_calls.get(), 2);
     }
 }

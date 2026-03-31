@@ -8,11 +8,17 @@ UsageBar is a fork of [OpenUsage](https://github.com/robinebers/openusage), redi
 
 ## Download
 
-There is **no release yet** for this fork.
+The first public Windows beta is prepared as a GitHub prerelease.
 
-For now:
-- Build from source (see “Build from source” below).
+Release plan:
+- Windows: GitHub prerelease with a NSIS setup `.exe`
+- macOS: still secondary while the Windows fork stabilizes
+
+Until the beta tag is published:
+- Build from source (see "Build from source" below).
 - Or follow the upstream project releases if you just want something stable: [OpenUsage releases](https://github.com/robinebers/openusage/releases).
+
+Release process and preflight checks live in [docs/releasing.md](docs/releasing.md).
 
 ## What It Does
 
@@ -35,13 +41,13 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Antigravity**](docs/providers/antigravity.md) | Supported | All models |
 | [**Augment**](plugins/augment/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Claude**](docs/providers/claude.md) | Supported | Session, weekly, extra usage, local token usage (`ccusage`) |
-| [**Codex**](docs/providers/codex.md) | Supported | Session, weekly, reviews, credits |
+| [**Codex**](docs/providers/codex.md) | Supported | Session, weekly, reviews, credits, managed multi-account selection |
 | [**Copilot**](docs/providers/copilot.md) | Experimental | Premium, chat, completions |
 | [**Cursor**](docs/providers/cursor.md) | Supported | Credits, total usage, auto usage, API usage, on-demand, CLI auth |
 | [**Factory / Droid**](docs/providers/factory.md) | Experimental | Standard, premium tokens |
 | [**Gemini**](docs/providers/gemini.md) | Experimental | Pro, flash, workspace/free/paid tier |
 | [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
-| [**Kilo**](plugins/kilo/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Kilo**](docs/providers/kilo.md) | Experimental | Direct API-key usage endpoint |
 | [**Kimi**](docs/providers/kimi.md) | Experimental | Session, weekly |
 | [**Kimi K2**](docs/providers/kimi-k2.md) | Experimental | Credits, remaining, average tokens |
 | [**Kiro**](plugins/kiro/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
@@ -50,14 +56,14 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**OpenCode**](docs/providers/opencode.md) | Experimental | Session, weekly |
 | [**OpenCode Go**](docs/providers/opencode-go.md) | Supported | Local 5h, weekly, monthly CLI spend history |
 | [**OpenRouter**](docs/providers/openrouter.md) | Experimental | Credits, balance, request-rate detail |
-| [**Perplexity**](docs/providers/perplexity.md) | Blocked | Groups, usage analytics, rate limits |
-| [**Synthetic**](plugins/synthetic/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Perplexity**](docs/providers/perplexity.md) | Experimental | Recurring, purchased, and bonus credits via manual cookie/env auth |
+| [**Synthetic**](docs/providers/synthetic.md) | Experimental | Direct API-key quota endpoint |
 | [**Vertex AI**](plugins/vertex-ai/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Warp**](docs/providers/warp.md) | Experimental | Request limits, plan badge |
 | [**Windsurf**](docs/providers/windsurf.md) | Experimental | Daily quota, weekly quota, extra usage balance |
 | [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches |
 
-Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/openusage/issues/new)
+Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/usagebar/issues/new)
 
 ## Fork Direction
 
@@ -71,7 +77,7 @@ Upstream lineage stays visible and upstream fixes can still be pulled in through
 
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
 - **Fix a bug.** Keep the change small, focused, and verified.
-- **Request a feature.** [Open an issue.](https://github.com/Loues000/openusage/issues/new) Include the provider, auth source, and Windows-specific constraints.
+- **Request a feature.** [Open an issue.](https://github.com/Loues000/usagebar/issues/new) Include the provider, auth source, and Windows-specific constraints.
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 
@@ -104,5 +110,18 @@ Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](http
 - Tailwind CSS v4
 - Zustand
 - Vitest
+
+### Local release build
+
+For a Windows beta-style build on this machine:
+
+```bash
+bun run release:check -- --release-tag v0.1.0-beta.1
+bun run build:release -- --bundles nsis
+```
+
+If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` for an unsigned local build. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
+
+Before pushing a release tag, run the same preflight with `--require-clean` so the tag is cut from a clean worktree.
 
 </details>

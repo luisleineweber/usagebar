@@ -20,16 +20,16 @@ Safety:
 | --- | --- | --- | --- |
 | `alibaba` | None | No current path | Placeholder plugin only. |
 | `amp` | `~/.local/share/amp/secrets.json` | Works partially | Local file can fake signed-in state, but usage still comes from Amp HTTP. |
-| `antigravity` | `~/AppData/Roaming/Antigravity/User/globalStorage/state.vscdb` on Windows, `pluginDataDir/auth.json`, local LS discovery | Works partially | You can fake auth DB/state file, but live LS/HTTP still drives real usage. |
+| `antigravity` | `~/AppData/Roaming/Antigravity/User/globalStorage/state.vscdb` on Windows, `pluginDataDir/auth.json`, local LS discovery | Works partially | Fake auth DB/state can exercise the offline Cloud Code path; live LS only affects process-backed fractions. |
 | `augment` | None | No current path | Placeholder plugin only. |
 | `claude` | `~/.claude/.credentials.json`, `~/.claude.json`, keychain, local `ccusage` runner | Works partially | File replay can fake signed-in state; remote OAuth usage and `ccusage` still matter for realistic output. |
-| `codex` | `$CODEX_HOME/auth.json`, `~/.config/codex/auth.json`, `~/.codex/auth.json`, keychain, local `ccusage` runner | Works partially | File replay can fake auth/account shape; realistic usage usually depends on `ccusage`. |
+| `codex` | `$CODEX_HOME/auth.json`, `~/.config/codex/auth.json`, `~/.codex/auth.json`, keychain, imported provider secret `account:<profileId>:authJson`, local `ccusage` runner | Works partially | File replay can fake auth/account shape; imported managed profiles let you pin a specific account; realistic usage still often depends on `ccusage`. |
 | `copilot` | `~/AppData/Roaming/GitHub CLI/hosts.yml`, `GH_CONFIG_DIR/hosts.yml`, keychain, `pluginDataDir/auth.json`, `gh auth token` | Works partially | You can fake the host file and cached token file, but final usage comes from GitHub HTTP. |
 | `cursor` | `~/AppData/Roaming/Cursor/User/globalStorage/state.vscdb`, keychain | Works partially | SQLite/keychain replay can fake session discovery, but billing/usage still comes from Cursor HTTP. |
-| `factory` | `~/.factory/auth.encrypted`, `~/.factory/auth.json`, keychain | Works partially | File replay can fake login and refresh state; real usage still comes from HTTP. |
+| `factory` | `~/.factory/auth.v2.file` + `~/.factory/auth.v2.key`, `~/.factory/auth.encrypted`, `~/.factory/auth.json`, keychain | Works partially | v2 encrypted store is now the primary path; local replay can fake login and refresh state, but real usage still comes from HTTP. |
 | `gemini` | `~/.gemini/settings.json`, `~/.gemini/oauth_creds.json`, Gemini CLI `oauth2.js` install path | Works partially | Local files can fake OAuth setup, but quota/plan still come from Google HTTP. |
 | `jetbrains-ai-assistant` | IDE quota XML under `~/AppData/Roaming/JetBrains/.../options/AIAssistantQuotaManager2.xml` or `~/AppData/Roaming/Google/...` | Works fully | This plugin is local-file driven. Replaying the XML is the main test path. |
-| `kilo` | None | No current path | Placeholder plugin only. |
+| `kilo` | stored provider secret `apiKey`, `KILO_API_KEY` | Works partially | Secret/env replay can fake auth setup, but usage still comes from the Kilo HTTP API. CLI auth fallback is not wired yet. |
 | `kimi` | `~/.kimi/credentials/kimi-code.json` | Works partially | Local credential replay can fake login; usage still comes from HTTP. |
 | `kimi-k2` | stored provider secret `apiKey`, `KIMI_K2_API_KEY`, `KIMI_API_KEY`, `KIMI_KEY` | Works partially | Secret/env replay can fake auth setup, but credits still come from Kimi K2 HTTP. |
 | `kiro` | None | No current path | Placeholder plugin only. |
@@ -39,8 +39,8 @@ Safety:
 | `opencode` | Stored provider secret `cookieHeader`, `OPENCODE_COOKIE_HEADER`, keychain fallback | Works partially | Cookie replay can fake the web session, but billing data still comes from OpenCode HTTP. |
 | `opencode-go` | `~/.local/share/opencode/auth.json`, `~/.local/share/opencode/opencode.db` | Works fully | Main output is derived from local auth + SQLite history. |
 | `openrouter` | stored provider secret `apiKey`, `OPENROUTER_API_KEY`, `OPENROUTER_API_URL` | Works partially | Secret/env replay can fake auth setup, but credits and key data still come from OpenRouter HTTP. |
-| `perplexity` | macOS cache DB paths only: `~/Library/Containers/.../Cache.db` and `~/Library/Caches/.../Cache.db` | Works partially | Local cache replay can fake session discovery, but billing/rate-limit data still comes from HTTP. |
-| `synthetic` | None | No current path | Placeholder plugin only. |
+| `perplexity` | stored provider secret `cookieHeader`, `PERPLEXITY_COOKIE_HEADER`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN` | Works partially | Cookie/env replay can fake signed-in billing auth, but credit data still comes from Perplexity HTTP. |
+| `synthetic` | stored provider secret `apiKey`, `SYNTHETIC_API_KEY` | Works partially | Secret/env replay can fake auth setup, but quota data still comes from Synthetic HTTP. |
 | `vertex-ai` | None | No current path | Placeholder plugin only. |
 | `warp` | stored provider secret `token`, `WARP_API_KEY`, `WARP_TOKEN` | Works partially | Secret/env replay can fake auth setup, but request limits still come from Warp HTTP. |
 | `windsurf` | `~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb`, `~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb` | Works partially | SQLite replay can fake account discovery; quota still comes from Windsurf HTTP. |
@@ -91,9 +91,11 @@ Safety:
 - `~/.config/codex/auth.json`
 - `~/.codex/auth.json`
 - keychain fallback
+- imported provider secret `account:<profileId>:authJson` when Settings selects a managed Codex account
 - local `ccusage` query
 - What to fake:
 - An auth file with the expected token/account structure.
+- Or an imported managed secret payload if you want to test account pinning.
 - Optional `CODEX_HOME` if you want to redirect the read path without editing your real home folder.
 - Limitation: realistic usage often depends on `ccusage`, not only the auth file.
 
@@ -119,11 +121,13 @@ Safety:
 
 ### `factory`
 - Local inputs read:
+- `~/.factory/auth.v2.file`
+- `~/.factory/auth.v2.key`
 - `~/.factory/auth.encrypted`
 - `~/.factory/auth.json`
 - keychain fallback
 - What to fake:
-- Either auth file with access/refresh token payloads.
+- The v2 encrypted file/key pair, or either legacy auth file with access/refresh token payloads.
 - Limitation: real usage still comes from HTTP after auth is loaded.
 
 ### `gemini`
@@ -151,8 +155,15 @@ Safety:
 - Limitation: none for the main quota parsing path. This provider is intentionally local-data driven.
 
 ### `kilo`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
+- Local inputs read:
+- provider secret `apiKey`
+- `KILO_API_KEY`
+- What to fake:
+- Save a Kilo API key through the app settings or expose `KILO_API_KEY` before launching UsageBar.
+- Limitation:
+- The provider still fetches usage over HTTP from Kilo.
+- Local secret/env replay only covers auth configuration, not live account usage.
+- The documented `~/.local/share/kilo/auth.json` CLI-session fallback is intentionally deferred in the current Windows build.
 
 ### `kimi`
 - Local inputs read:
@@ -234,17 +245,25 @@ Safety:
 
 ### `perplexity`
 - Local inputs read:
-- `~/Library/Containers/ai.perplexity.mac/Data/Library/Caches/ai.perplexity.mac/Cache.db`
-- `~/Library/Caches/ai.perplexity.mac/Cache.db`
+- provider secret `cookieHeader`
+- `PERPLEXITY_COOKIE_HEADER`
+- `PERPLEXITY_COOKIE`
+- `PERPLEXITY_SESSION_TOKEN`
 - What to fake:
-- A macOS cache DB row containing the cached `/api/user` request bytes.
+- A full `Cookie` request header from a signed-in Perplexity billing request, saved in Settings or injected through env vars.
 - Limitation:
-- This path is macOS-only in the current repo.
-- Even with a fake cache DB, actual balance/rate-limit values still come from HTTP.
+- This path is HTTP-backed and cookie-session based.
+- Even with a fake cookie/env input, actual credit pools still come from HTTP.
 
 ### `synthetic`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
+- Local inputs read:
+- provider secret `apiKey`
+- `SYNTHETIC_API_KEY`
+- What to fake:
+- Save a Synthetic API key through the app settings or expose `SYNTHETIC_API_KEY` before launching UsageBar.
+- Limitation:
+- The provider still fetches quota data over HTTP.
+- Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `vertex-ai`
 - Current implementation: placeholder that always throws.

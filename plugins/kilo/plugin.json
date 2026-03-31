@@ -5,10 +5,11 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "brandColor": "#F27027",
   "platformSupport": {
     "windows": {
-      "state": "blocked",
-      "message": "Windows placeholder. Planned path: local Kilo config or CLI auth first, then direct API usage."
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored Kilo API key or KILO_API_KEY to fetch usage. CLI fallback is not wired yet."
     }
   },
   "lines": [

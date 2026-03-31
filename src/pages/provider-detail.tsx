@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button"
 import { ProviderCard } from "@/components/provider-card"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import type { DisplayMode, ResetTimerDisplayMode } from "@/lib/settings"
@@ -6,6 +7,7 @@ interface ProviderDetailPageProps {
   plugin: DisplayPluginState | null
   hasResolvedViews?: boolean
   onRetry?: () => void
+  onOpenProviderSettings?: (providerId: string) => void
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
   onResetTimerDisplayModeToggle?: () => void
@@ -15,6 +17,7 @@ export function ProviderDetailPage({
   plugin,
   hasResolvedViews = true,
   onRetry,
+  onOpenProviderSettings,
   displayMode,
   resetTimerDisplayMode,
   onResetTimerDisplayModeToggle,
@@ -45,8 +48,28 @@ export function ProviderDetailPage({
     )
   }
 
+  const hasRuntimeData = Boolean(plugin.data || plugin.lastSettledData)
+
   return (
     <div className="space-y-3 py-3">
+      {!hasRuntimeData && onOpenProviderSettings && (
+        <section className="rounded-lg border border-border/80 bg-muted/40 px-3 py-3">
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium">Provider settings</h3>
+            <p className="text-sm text-muted-foreground">
+              Manage connection details and setup in the standalone Settings window.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenProviderSettings(plugin.meta.id)}
+            >
+              Manage provider
+            </Button>
+          </div>
+        </section>
+      )}
       <ProviderCard
         name={plugin.meta.name}
         plan={plugin.data?.plan ?? plugin.lastSettledData?.plan}

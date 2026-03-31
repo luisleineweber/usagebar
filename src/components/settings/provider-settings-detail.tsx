@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, KeyRound, RefreshCw, ShieldCheck } from "luc
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { CodexAccountsSection } from "@/components/settings/codex-accounts-section"
 import type { PluginState } from "@/hooks/app/types"
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { ProviderConfig } from "@/lib/provider-settings"
@@ -349,6 +350,10 @@ export function ProviderSettingsDetail({
 
             {!hasEditableSettings && (
               <p className="text-sm text-muted-foreground">This provider currently relies on local auto-detection and does not expose editable settings yet.</p>
+            )}
+
+            {plugin.id === "codex" && (
+              <CodexAccountsSection config={config} onConfigChange={onConfigChange} />
             )}
 
             {saveMessage && <p className="text-xs text-primary">{saveMessage}</p>}

@@ -1,8 +1,8 @@
-# Kilo Windows Placeholder
+# Kilo
 
-Status: visible in Settings, blocked from probing on Windows.
+Status: implemented as a Windows-experimental provider.
 
-Planned implementation:
-- Look for Kilo config or CLI-auth artifacts on disk first.
-- Reuse direct API usage if the local auth source exposes a stable token.
-- Add a manual API-key fallback only if the local route is not sufficient.
+Current Windows path:
+- Use app-owned API-key storage or `KILO_API_KEY`.
+- Query the documented Kilo tRPC batch endpoint at `https://app.kilo.ai/api/trpc`.
+- Keep CLI-session fallback deferred until a later slice; this rollout is intentionally API-key only.
