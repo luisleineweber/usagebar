@@ -69,6 +69,19 @@ describe("amp plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Amp not installed")
   })
 
+  it("uses the same home-relative secrets path on windows", async () => {
+    var ctx = makeCtx()
+    ctx.app.platform = "windows"
+    writeSecrets(ctx, "windows-api-key")
+    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText()))
+
+    var plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    var call = ctx.host.http.request.mock.calls[0][0]
+    expect(call.headers.Authorization).toBe("Bearer windows-api-key")
+  })
+
   // --- API request ---
 
   it("sends POST with Bearer auth to api/internal", async () => {

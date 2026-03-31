@@ -2,6 +2,11 @@
 
 > Uses local OpenCode history from SQLite to track observed OpenCode Go spend on this machine.
 
+This is separate from [OpenCode web usage](./opencode.md):
+
+- `OpenCode Go` reads local CLI history from `opencode.db`
+- `OpenCode` reads signed-in workspace subscription usage from the OpenCode website
+
 ## Overview
 
 - **Source of truth:** `~/.local/share/opencode/opencode.db`
@@ -13,8 +18,8 @@
 
 The plugin enables when either condition is true:
 
-- `~/.local/share/opencode/auth.json` contains an `opencode-go` entry with a non-empty `key`
-- local OpenCode history already contains `opencode-go` assistant messages with numeric `cost`
+- `~/.local/share/opencode/auth.json` contains an `opencode-go` or current `opencode` entry with a non-empty `key`
+- local OpenCode history already contains `opencode-go` or current `opencode` assistant messages with numeric `cost`
 
 If neither signal exists, the plugin stays hidden.
 
@@ -28,7 +33,7 @@ SELECT
   CAST(json_extract(data, '$.cost') AS REAL) AS cost
 FROM message
 WHERE json_valid(data)
-  AND json_extract(data, '$.providerID') = 'opencode-go'
+  AND json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')
   AND json_extract(data, '$.role') = 'assistant'
   AND json_type(data, '$.cost') IN ('integer', 'real')
 ```
@@ -56,6 +61,14 @@ Monthly usage is inferred from local history, not read from OpenCode’s account
 ## Failure Behavior
 
 If auth or prior history already indicates OpenCode Go is in use, but SQLite becomes unreadable or malformed, the provider stays visible and shows a grey `Status: No usage data` badge instead of failing hard.
+
+## Windows setup
+
+1. Use OpenCode Go on this machine or sign in so `~/.local/share/opencode/auth.json` exists.
+2. Confirm that `~/.local/share/opencode/opencode.db` exists once local history has been created.
+3. Enable the OpenCode Go provider in Settings and refresh.
+
+Current local evidence on this machine: both files exist, the current auth file uses the newer `opencode` entry name rather than only `opencode-go`, and a real local probe returned the expected `5h`, `Weekly`, and `Monthly` lines on Windows.
 
 ## Future Compatibility
 

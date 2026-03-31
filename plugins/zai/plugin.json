@@ -6,6 +6,12 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#2D2D2D",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Experimental on Windows. Set ZAI_API_KEY or GLM_API_KEY before launching UsageBar."
+    }
+  },
   "lines": [
     { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "Weekly", "scope": "overview" },

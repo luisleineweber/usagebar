@@ -1,9 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { overviewPageMock, providerDetailPageMock, settingsPageMock } = vi.hoisted(() => ({
+const { overviewPageMock, providerDetailPageMock } = vi.hoisted(() => ({
   overviewPageMock: vi.fn(),
-  settingsPageMock: vi.fn(),
   providerDetailPageMock: vi.fn(),
 }))
 
@@ -11,13 +10,6 @@ vi.mock("@/pages/overview", () => ({
   OverviewPage: (props: unknown) => {
     overviewPageMock(props)
     return <div data-testid="overview-page" />
-  },
-}))
-
-vi.mock("@/pages/settings", () => ({
-  SettingsPage: (props: unknown) => {
-    settingsPageMock(props)
-    return <div data-testid="settings-page" />
   },
 }))
 
@@ -39,7 +31,6 @@ import { useAppUiStore } from "@/stores/app-ui-store"
 function createProps(): AppContentProps {
   return {
     displayPlugins: [],
-    settingsPlugins: [],
     selectedPlugin: {
       meta: {
         id: "codex",
@@ -53,15 +44,26 @@ function createProps(): AppContentProps {
       loading: false,
       error: null,
       lastManualRefreshAt: null,
+      lastSuccessAt: null,
     },
     onRetryPlugin: vi.fn(),
     onReorder: vi.fn(),
     onToggle: vi.fn(),
+    onProviderConfigChange: vi.fn(async () => undefined),
+    onProviderSecretSave: vi.fn(async () => undefined),
+    onProviderSecretDelete: vi.fn(async () => undefined),
     onAutoUpdateIntervalChange: vi.fn(),
     onThemeModeChange: vi.fn(),
     onDisplayModeChange: vi.fn(),
     onResetTimerDisplayModeChange: vi.fn(),
     onResetTimerDisplayModeToggle: vi.fn(),
+    onMenubarIconStyleChange: vi.fn(),
+    traySettingsPreview: {
+      bars: [],
+      providerBars: [],
+      providerIconUrl: "",
+      providerPercentText: "--%",
+    },
     onGlobalShortcutChange: vi.fn(),
     onStartOnLoginChange: vi.fn(),
   }
@@ -70,7 +72,6 @@ function createProps(): AppContentProps {
 describe("AppContent", () => {
   beforeEach(() => {
     overviewPageMock.mockReset()
-    settingsPageMock.mockReset()
     providerDetailPageMock.mockReset()
     useAppUiStore.getState().resetState()
     useAppPreferencesStore.getState().resetState()
@@ -82,14 +83,6 @@ describe("AppContent", () => {
 
     expect(screen.getByTestId("overview-page")).toBeInTheDocument()
     expect(overviewPageMock).toHaveBeenCalledTimes(1)
-  })
-
-  it("renders settings page for settings view", () => {
-    useAppUiStore.getState().setActiveView("settings")
-    render(<AppContent {...createProps()} />)
-
-    expect(screen.getByTestId("settings-page")).toBeInTheDocument()
-    expect(settingsPageMock).toHaveBeenCalledTimes(1)
   })
 
   it("passes retry callback for provider detail view", () => {

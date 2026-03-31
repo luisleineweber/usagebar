@@ -1,19 +1,18 @@
 import { useCallback } from "react"
-import { CircleHelp, Settings } from "lucide-react"
-import { openUrl } from "@tauri-apps/plugin-opener"
+import { Settings } from "lucide-react"
 import { invoke } from "@tauri-apps/api/core"
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu"
 import {
   DndContext,
-  closestCenter,
   PointerSensor,
+  closestCenter,
+  type DragEndEvent,
   useSensor,
   useSensors,
-  type DragEndEvent,
 } from "@dnd-kit/core"
 import {
-  arrayMove,
   SortableContext,
+  arrayMove,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
@@ -30,7 +29,7 @@ import { cn } from "@/lib/utils"
 import { getRelativeLuminance } from "@/lib/color"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 
-type ActiveView = "home" | "settings" | string
+type ActiveView = "home" | string
 
 type PluginContextAction = "reload" | "remove"
 
@@ -39,12 +38,15 @@ interface NavPlugin {
   name: string
   iconUrl: string
   brandColor?: string
+  supportState?: "supported" | "experimental" | "comingSoonOnWindows"
+  supportMessage?: string | null
 }
 
 interface SideNavProps {
   activeView: ActiveView
   onViewChange: (view: ActiveView) => void
   plugins: NavPlugin[]
+  onOpenSettings?: () => void
   onPluginContextAction?: (pluginId: string, action: PluginContextAction) => void
   isPluginRefreshAvailable?: (pluginId: string) => boolean
   onReorder?: (orderedIds: string[]) => void
@@ -94,7 +96,13 @@ interface SortableNavPluginProps {
   onContextMenu: (e: React.MouseEvent) => void
 }
 
-function SortableNavPlugin({ plugin, isActive, isDark, onClick, onContextMenu }: SortableNavPluginProps) {
+function SortableNavPlugin({
+  plugin,
+  isActive,
+  isDark,
+  onClick,
+  onContextMenu,
+}: SortableNavPluginProps) {
   const {
     attributes,
     listeners,
@@ -104,14 +112,17 @@ function SortableNavPlugin({ plugin, isActive, isDark, onClick, onContextMenu }:
     isDragging,
   } = useSortable({ id: plugin.id })
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : undefined,
-  }
-
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} role="presentation">
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : undefined,
+      }}
+      {...attributes}
+      {...listeners}
+    >
       <NavButton
         isActive={isActive}
         onClick={onClick}
@@ -121,7 +132,11 @@ function SortableNavPlugin({ plugin, isActive, isDark, onClick, onContextMenu }:
         <span
           role="img"
           aria-label={plugin.name}
-          className="size-6 inline-block"
+          title={plugin.supportState !== "supported" ? plugin.supportMessage ?? undefined : undefined}
+          className={cn(
+            "size-6 inline-block",
+            plugin.supportState === "comingSoonOnWindows" ? "opacity-45" : ""
+          )}
           style={{
             backgroundColor: getIconColor(plugin.brandColor, isDark),
             WebkitMaskImage: `url(${plugin.iconUrl})`,
@@ -143,12 +158,12 @@ export function SideNav({
   activeView,
   onViewChange,
   plugins,
+  onOpenSettings,
   onPluginContextAction,
   isPluginRefreshAvailable,
   onReorder,
 }: SideNavProps) {
   const isDark = useDarkMode()
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { delay: 300, tolerance: 5 },
@@ -159,13 +174,12 @@ export function SideNav({
     (event: DragEndEvent) => {
       if (!onReorder) return
       const { active, over } = event
-      if (over && active.id !== over.id) {
-        const oldIndex = plugins.findIndex((p) => p.id === active.id)
-        const newIndex = plugins.findIndex((p) => p.id === over.id)
-        if (oldIndex === -1 || newIndex === -1) return
-        const next = arrayMove(plugins, oldIndex, newIndex)
-        onReorder(next.map((p) => p.id))
-      }
+      if (!over || active.id === over.id) return
+      const oldIndex = plugins.findIndex((plugin) => plugin.id === active.id)
+      const newIndex = plugins.findIndex((plugin) => plugin.id === over.id)
+      if (oldIndex === -1 || newIndex === -1) return
+      const next = arrayMove(plugins, oldIndex, newIndex)
+      onReorder(next.map((plugin) => plugin.id))
     },
     [onReorder, plugins]
   )
@@ -231,10 +245,7 @@ export function SideNav({
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext
-          items={plugins.map((p) => p.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={plugins.map((plugin) => plugin.id)} strategy={verticalListSortingStrategy}>
           {plugins.map((plugin) => (
             <SortableNavPlugin
               key={plugin.id}
@@ -251,22 +262,10 @@ export function SideNav({
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Help */}
-      <NavButton
-        isActive={false}
-        onClick={() => {
-          openUrl("https://github.com/robinebers/openusage/issues").catch(console.error)
-          invoke("hide_panel").catch(console.error)
-        }}
-        aria-label="Help"
-      >
-        <CircleHelp className="size-6" />
-      </NavButton>
-
       {/* Settings */}
       <NavButton
-        isActive={activeView === "settings"}
-        onClick={() => onViewChange("settings")}
+        isActive={false}
+        onClick={() => onOpenSettings?.()}
         aria-label="Settings"
       >
         <Settings className="size-6" />

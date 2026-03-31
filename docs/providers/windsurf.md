@@ -1,208 +1,120 @@
 # Windsurf
 
-> Reverse-engineered from app bundle, extension.js, and language server binary. May change without notice.
+> Reverse-engineered from the local Windsurf state DB and the current cloud quota response. May change without notice.
 
-Windsurf and [Antigravity](antigravity.md) share the same Codeium language server binary and Connect-RPC protocol. The discovery, port probing, and RPC endpoints are virtually identical — the key differences are authentication (Windsurf requires an API key) and the usage model (credits vs fractions).
+The current UsageBar Windsurf plugin follows upstream OpenUsage's newer quota contract, but keeps this fork's Windows-aware auth discovery. It reads the saved Windsurf API key from the local `state.vscdb` file, then calls Windsurf's cloud quota endpoint directly. A running local language server is no longer required.
 
 ## Variants
 
-The plugin supports two Windsurf variants, probed in this order:
+The plugin probes these variants in order:
 
-| Variant | App | Bundle ID | `--ide_name` | App Support dir |
-|---|---|---|---|---|
-| **Windsurf** | `Windsurf.app` | `com.exafunction.windsurf` | `windsurf` | `~/Library/Application Support/Windsurf/` |
-| **Windsurf Next** | `Windsurf - Next.app` | `com.exafunction.windsurfNext` | `windsurf-next` | `~/Library/Application Support/Windsurf - Next/` |
+| Variant | Metadata name | macOS state DB | Windows state DB |
+|---|---|---|---|
+| Windsurf | `windsurf` | `~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb` | `~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb` |
+| Windsurf Next | `windsurf-next` | `~/Library/Application Support/Windsurf - Next/User/globalStorage/state.vscdb` | `~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb` |
 
-Both use the same Codeium language server binary (`language_server_macos_arm`), same Connect-RPC service, same CSRF auth, and same `GetUserStatus` RPC. They differ only in:
+The first variant with a usable local API key and a valid quota response wins.
 
-- **Process marker**: `windsurf` vs `windsurf-next` (matched via `--ide_name` exact value)
-- **SQLite path**: `Windsurf/User/globalStorage/state.vscdb` vs `Windsurf - Next/User/globalStorage/state.vscdb`
-- **ideName in metadata**: `windsurf` vs `windsurf-next`
+## Auth source
 
-## Overview
+The plugin reads this SQLite key:
 
-- **Vendor:** Codeium (Windsurf)
-- **Protocol:** Connect RPC v1 (JSON over HTTP) on local language server
-- **Service:** `exa.language_server_pb.LanguageServerService`
-- **Auth:** API key (`sk-ws-01-...`) from SQLite + CSRF token from process args
-- **Usage model:** credit-based (prompt + flex credits, stored in hundredths)
-- **Billing cycle:** monthly (`planStart` / `planEnd`)
-- **Timestamps:** ISO 8601
-- **Requires:** Windsurf IDE running (language server is a child process), or signed-in credentials in SQLite (cloud fallback)
-
-## Discovery
-
-Same process as [Antigravity](antigravity.md) — same binary, same flags. The distinguishing marker is the `--ide_name` flag value in the process args.
-
-```bash
-# 1. Find process and extract CSRF token + version
-ps -ax -o pid=,command= | grep 'language_server_macos'
-# Windsurf:      --ide_name windsurf
-# Windsurf Next: --ide_name windsurf-next
-# Extract: --csrf_token <token>
-# Extract: --windsurf_version <version>
-# Extract: --extension_server_port <port>  (HTTP fallback)
-
-# 2. Find listening ports
-lsof -nP -iTCP -sTCP:LISTEN -a -p <pid>
-
-# 3. Probe each port to find the Connect-RPC endpoint
-POST https://127.0.0.1:<port>/.../GetUnleashData  → any response wins
-
-# 4. Get API key from SQLite (path depends on variant)
-# Windsurf:
-sqlite3 ~/Library/Application\ Support/Windsurf/User/globalStorage/state.vscdb \
-  "SELECT value FROM ItemTable WHERE key = 'windsurfAuthStatus'"
-# Windsurf Next:
-sqlite3 ~/Library/Application\ Support/Windsurf\ -\ Next/User/globalStorage/state.vscdb \
-  "SELECT value FROM ItemTable WHERE key = 'windsurfAuthStatus'"
-# → JSON: { apiKey: "sk-ws-01-...", ... }
+```sql
+SELECT value FROM ItemTable WHERE key = 'windsurfAuthStatus' LIMIT 1
 ```
 
-Port and CSRF token change on every IDE restart. The LS may use HTTPS with a self-signed cert.
+Expected payload shape:
 
-## Headers (all local requests)
-
-| Header | Required | Value |
-|---|---|---|
-| Content-Type | yes | `application/json` |
-| Connect-Protocol-Version | yes | `1` |
-| x-codeium-csrf-token | yes | `<csrf_token>` (from process args) |
-
-## Endpoints
-
-### GetUserStatus (primary)
-
-Returns plan info with credit-based usage for the current billing cycle. Same RPC as [Antigravity](antigravity.md), but requires `metadata.apiKey`.
-
-```
-POST http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetUserStatus
+```json
+{
+  "apiKey": "sk-ws-01-..."
+}
 ```
 
-#### Request
+If no usable API key is present in either variant DB, the plugin returns:
+
+```text
+Start Windsurf or sign in and try again.
+```
+
+## Cloud request
+
+Endpoint:
+
+```text
+POST https://server.self-serve.windsurf.com/exa.seat_management_pb.SeatManagementService/GetUserStatus
+```
+
+Headers:
+
+| Header | Value |
+|---|---|
+| `Content-Type` | `application/json` |
+| `Connect-Protocol-Version` | `1` |
+
+Request body:
 
 ```json
 {
   "metadata": {
     "apiKey": "sk-ws-01-...",
     "ideName": "windsurf",
-    "ideVersion": "<version>",
+    "ideVersion": "1.108.2",
     "extensionName": "windsurf",
-    "extensionVersion": "<version>",
+    "extensionVersion": "1.108.2",
     "locale": "en"
   }
 }
 ```
 
-For Windsurf Next, use `"ideName": "windsurf-next"` and `"extensionName": "windsurf-next"`.
+Notes:
 
-Unlike [Antigravity](antigravity.md), Windsurf **requires** `metadata.apiKey`. The LS uses it to authenticate with the cloud backend internally. Antigravity authenticates via the Google OAuth session instead.
+- The plugin currently sends the compatibility version `1.108.2` for both `ideVersion` and `extensionVersion`, matching the newer upstream quota flow.
+- `windsurf-next` uses `windsurf-next` for both `ideName` and `extensionName`.
+- HTTP `401` / `403` is treated as a login/auth failure and surfaces the normal sign-in hint.
 
-#### Response (~167KB, mostly model configs)
+## Response mapping
+
+The plugin expects the newer quota payload:
 
 ```jsonc
 {
   "userStatus": {
     "planStatus": {
       "planInfo": {
-        "planName": "Teams",                    // "Free" | "Pro" | "Teams" | "Free Trial"
-        "monthlyPromptCredits": 50000,
-        "monthlyFlexCreditPurchaseAmount": 100000
+        "planName": "Teams"
       },
-      "planStart": "2026-01-18T09:07:17Z",
-      "planEnd": "2026-02-18T09:07:17Z",
-      "availablePromptCredits": 50000,          // total pool (in hundredths)
-      "usedPromptCredits": 4700,                // consumed (omitted when 0)
-      "availableFlexCredits": 2679300,
-      "usedFlexCredits": 175550
+      "dailyQuotaRemainingPercent": 100,
+      "weeklyQuotaRemainingPercent": 100,
+      "overageBalanceMicros": "964220000",
+      "dailyQuotaResetAtUnix": "1774080000",
+      "weeklyQuotaResetAtUnix": "1774166400"
     }
   }
 }
 ```
 
-#### Field mapping
+UsageBar renders:
 
-| Response field | Display | Notes |
+| Response field | UI line | Mapping |
 |---|---|---|
-| `availablePromptCredits` | Total credit pool | Divide by 100 for display (50000 → 500) |
-| `usedPromptCredits` | Credits consumed | Divide by 100 |
-| `planStart` / `planEnd` | Billing cycle | ISO 8601, used for pacing |
-| negative `available*` | Unlimited | Skip that credit line |
+| `dailyQuotaRemainingPercent` | `Daily quota` | `used = 100 - remaining`, clamped to `0..100` |
+| `weeklyQuotaRemainingPercent` | `Weekly quota` | `used = 100 - remaining`, clamped to `0..100` |
+| `overageBalanceMicros` | `Extra usage balance` | micros -> dollars with 2 decimals |
+| `dailyQuotaResetAtUnix` | reset time for `Daily quota` | unix seconds -> ISO |
+| `weeklyQuotaResetAtUnix` | reset time for `Weekly quota` | unix seconds -> ISO |
+| `planInfo.planName` | plan label | blank or missing becomes `Unknown` |
 
-## Differences from Antigravity
+If the payload falls back to the older credit-based shape or omits any required quota fields, the plugin returns:
 
-| | Windsurf | Antigravity |
-|---|---|---|
-| **Auth** | API key (`sk-ws-01-`) required in metadata | No API key needed (CSRF only) |
-| **Usage model** | Credit-based (prompt + flex) | Fraction-based per model (0.0–1.0) |
-| **Credit units** | Stored in hundredths (÷100 for display) | N/A |
-| **Billing cycle** | Monthly (`planStart`/`planEnd`) | 5-hour rolling windows per model |
-| **Version flag** | `--windsurf_version` | N/A |
-| **Token location** | SQLite `windsurfAuthStatus` → `apiKey` | Not needed |
-| **Models shown** | Not used (credits are the metric) | Per-model quota bars |
-
-Both use the same Codeium language server binary, same Connect-RPC service, same CSRF auth, same discovery process (ps + lsof + port probe), and same `GetUserStatus` RPC.
-
-## Token Location
-
-SQLite database — path depends on variant:
-
-| Variant | Path |
-|---|---|
-| Windsurf | `~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb` |
-| Windsurf Next | `~/Library/Application Support/Windsurf - Next/User/globalStorage/state.vscdb` |
-
-| Key | Value |
-|---|---|
-| `windsurfAuthStatus` | JSON: `{ apiKey: "sk-ws-01-...", ... }` |
-
-## Cloud API (fallback)
-
-When the language server is not running, the plugin falls back to Codeium's cloud API using the API key from SQLite.
-
-### GetUserStatus (cloud)
-
-```
-POST https://server.codeium.com/exa.seat_management_pb.SeatManagementService/GetUserStatus
+```text
+Windsurf quota data unavailable. Try again later.
 ```
 
-#### Headers
+## Behavior summary
 
-| Header | Required | Value |
-|---|---|---|
-| Content-Type | yes | `application/json` |
-| Connect-Protocol-Version | yes | `1` |
-
-#### Request
-
-```json
-{
-  "metadata": {
-    "apiKey": "sk-ws-01-...",
-    "ideName": "windsurf",
-    "ideVersion": "0.0.0",
-    "extensionName": "windsurf",
-    "extensionVersion": "0.0.0",
-    "locale": "en"
-  }
-}
-```
-
-Same metadata shape as the local LS endpoint. Required fields: `apiKey`, `ideName`, `ideVersion`, `extensionName`, and `extensionVersion`. Use semver versions (for example `"0.0.0"`). No CSRF token is required for cloud requests.
-
-#### Response
-
-Same `userStatus.planStatus` shape as the local LS response — credit fields in hundredths.
-
-Cloud fallback uses the same API key from SQLite (`windsurfAuthStatus`).
-
-## Plugin Strategy
-
-1. Try each variant in order: Windsurf → Windsurf Next
-2. Discover LS process via `ctx.host.ls.discover()` (ps + lsof) with variant-specific marker
-3. Read API key from SQLite (`windsurfAuthStatus`) at variant-specific path
-4. Probe ports with `GetUnleashData` to find the Connect-RPC endpoint
-5. Call local `GetUserStatus` with `apiKey` and variant-specific `ideName` in metadata
-6. Build prompt + flex credit lines with billing cycle pacing (÷100 for display)
-7. If LS probe fails for all variants, call cloud `GetUserStatus` at `server.codeium.com` with API key in metadata
-8. If both local and cloud paths fail: error "Start Windsurf or sign in and try again."
+1. Read `windsurfAuthStatus` from the Windsurf DB, then Windsurf Next DB.
+2. Call the Windsurf cloud quota endpoint for the first usable variant.
+3. Render daily quota, weekly quota, and extra usage balance.
+4. If the first variant returns no usable quota data, try the next variant.
+5. If auth is invalid, show the login hint. If auth exists but quota data is unusable, show the quota hint.

@@ -15,7 +15,7 @@ import {
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
   DEFAULT_THEME_MODE,
-  getEnabledPluginIds,
+  getProbeEligiblePluginIds,
   loadAutoUpdateInterval,
   loadDisplayMode,
   loadGlobalShortcut,
@@ -84,11 +84,12 @@ export function useSettingsBootstrap({
     const loadSettings = async () => {
       try {
         const availablePlugins = await invoke<PluginMeta[]>("list_plugins")
+        const surfacedPlugins = availablePlugins.filter((plugin) => plugin.isSurfaced !== false)
         if (!isMounted) return
-        setPluginsMeta(availablePlugins)
+        setPluginsMeta(surfacedPlugins)
 
         const storedSettings = await loadPluginSettings()
-        const normalized = normalizePluginSettings(storedSettings, availablePlugins)
+        const normalized = normalizePluginSettings(storedSettings, surfacedPlugins)
         if (!arePluginSettingsEqual(storedSettings, normalized)) {
           await savePluginSettings(normalized)
         }
@@ -163,7 +164,7 @@ export function useSettingsBootstrap({
           setStartOnLogin(storedStartOnLogin)
           setMenubarIconStyle(storedMenubarIconStyle)
 
-          const enabledIds = getEnabledPluginIds(normalized)
+          const enabledIds = getProbeEligiblePluginIds(normalized, surfacedPlugins)
           setLoadingForPlugins(enabledIds)
           try {
             await startBatch(enabledIds)

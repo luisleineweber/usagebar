@@ -2,29 +2,38 @@
 
 Tracks GitHub Copilot usage quotas for both paid and free tier users.
 
+## Windows status
+
+- Status: Experimental in this Windows-first fork.
+- Shared checklist: use [Windows provider verification](../windows-provider-verification.md) before calling Copilot fully validated on Windows.
+
 ## Authentication
 
 The plugin looks for a GitHub token in this order:
 
-1. **OpenUsage Keychain** (`OpenUsage-copilot`) — Token previously cached by the plugin
-2. **GitHub CLI Keychain** (`gh:github.com`) — Token from `gh auth login`
-3. **State File** (`auth.json`) — Fallback file-based storage
+1. **OpenUsage Keychain** (`OpenUsage-copilot`) - Token previously cached by the plugin, but only reused when its stored login still matches the active `gh` account
+2. **GitHub CLI Active Account** (`hosts.yml` + `gh:github.com:<login>`) - Token for the active `gh` login selected by `gh auth status` / `gh auth switch`
+3. **GitHub CLI Legacy Keychain** (`gh:github.com`) - Fallback when no active-account entry can be resolved
+4. **GitHub CLI Command** (`gh auth token`) - Fallback when the local `gh` session is healthy but the direct credential-store read still misses
+5. **State File** (`auth.json`) - Fallback file-based storage
 
 ### Setup
 
 Install and authenticate with the GitHub CLI:
 
 ```bash
-# Install gh CLI (macOS)
-brew install gh
-
-# Authenticate
 gh auth login
 ```
 
-Choose "GitHub.com" and follow the prompts. The plugin will automatically read the token from the gh CLI keychain.
+If you use multiple GitHub accounts, switch the intended Copilot account first:
 
-Once authenticated via gh CLI, the plugin caches the token in the OpenUsage keychain for faster access on subsequent probes.
+```bash
+gh auth status
+gh auth switch
+```
+
+Once authenticated via gh CLI, the plugin caches the token in the OpenUsage keychain together with the active login so later probes stay aligned with the selected `gh` account.
+If Windows Credential Manager lookup misses even though `gh` is already logged in, OpenUsage now falls back to the CLI's own `gh auth token` command before reporting a logged-out state.
 
 ## API
 
@@ -90,8 +99,8 @@ X-Github-Api-Version: 2025-04-01
 | Completions  | Free | Code completions remaining               |
 
 All progress lines include:
-- `resetsAt` — ISO timestamp of next quota reset
-- `periodDurationMs` — 30-day period (2592000000ms)
+- `resetsAt` - ISO timestamp of next quota reset
+- `periodDurationMs` - 30-day period (`2592000000ms`)
 
 ## Errors
 

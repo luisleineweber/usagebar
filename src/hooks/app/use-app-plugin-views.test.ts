@@ -39,6 +39,7 @@ describe("useAppPluginViews", () => {
             loading: true,
             error: null,
             lastManualRefreshAt: null,
+            lastSuccessAt: null,
           },
         },
       })
@@ -55,6 +56,73 @@ describe("useAppPluginViews", () => {
         brandColor: "#000000",
       },
     ])
+  })
+
+  it("does not treat settings as a special active view anymore", () => {
+    const pluginSettings: PluginSettings = {
+      order: ["codex"],
+      disabled: [],
+    }
+
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "settings",
+        setActiveView: vi.fn(),
+        pluginSettings,
+        pluginsMeta: [createPluginMeta("codex", "Codex")],
+        pluginStates: {
+          codex: {
+            data: { providerId: "codex", displayName: "Codex", lines: [], iconUrl: "/codex.svg" },
+            loading: false,
+            error: null,
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          },
+        },
+      })
+    )
+
+    expect(result.current.selectedPlugin).toBeNull()
+  })
+
+  it("keeps errored providers visible in home and nav", () => {
+    const pluginSettings: PluginSettings = {
+      order: ["codex", "cursor"],
+      disabled: [],
+    }
+
+    const pluginsMeta = [
+      createPluginMeta("codex", "Codex"),
+      createPluginMeta("cursor", "Cursor"),
+    ]
+
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        pluginSettings,
+        pluginsMeta,
+        pluginStates: {
+          codex: {
+            data: { providerId: "codex", displayName: "Codex", lines: [], iconUrl: "/codex.svg" },
+            loading: false,
+            error: null,
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          },
+          cursor: {
+            data: null,
+            loading: false,
+            error: "Not logged in",
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          },
+        },
+      })
+    )
+
+    expect(result.current.displayPlugins.map((plugin) => plugin.meta.id)).toEqual(["codex", "cursor"])
+    expect(result.current.navPlugins.map((plugin) => plugin.id)).toEqual(["codex", "cursor"])
   })
 
   it("falls back to home when active provider becomes disabled", async () => {
@@ -120,10 +188,60 @@ describe("useAppPluginViews", () => {
         setActiveView: vi.fn(),
         pluginSettings,
         pluginsMeta: [createPluginMeta("codex", "Codex")],
-        pluginStates: {},
+        pluginStates: {
+          codex: {
+            data: { providerId: "codex", displayName: "Codex", lines: [], iconUrl: "/codex.svg" },
+            loading: false,
+            error: null,
+            lastManualRefreshAt: null,
+            lastSuccessAt: null,
+          },
+        },
       })
     )
 
     expect(result.current.selectedPlugin?.meta.id).toBe("codex")
+  })
+
+  it("reports when view metadata is fully resolved", () => {
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginsMeta: [createPluginMeta("codex", "Codex")],
+        pluginStates: {},
+      })
+    )
+
+    expect(result.current.hasResolvedViews).toBe(true)
+  })
+
+  it("keeps the previous nav snapshot when bootstrap state transiently clears", async () => {
+    const { result, rerender } = renderHook(
+      ({ pluginSettings, pluginsMeta }: { pluginSettings: PluginSettings | null; pluginsMeta: PluginMeta[] }) =>
+        useAppPluginViews({
+          activeView: "home",
+          setActiveView: vi.fn(),
+          pluginSettings,
+          pluginsMeta,
+          pluginStates: {},
+        }),
+      {
+        initialProps: {
+          pluginSettings: { order: ["codex"], disabled: [] },
+          pluginsMeta: [createPluginMeta("codex", "Codex")],
+        },
+      }
+    )
+
+    await waitFor(() => {
+      expect(result.current.navPlugins.map((plugin) => plugin.id)).toEqual(["codex"])
+    })
+
+    rerender({ pluginSettings: null, pluginsMeta: [] })
+
+    expect(result.current.navPlugins.map((plugin) => plugin.id)).toEqual(["codex"])
+    expect(result.current.hasResolvedViews).toBe(false)
   })
 })

@@ -1,18 +1,115 @@
+use crate::provider_secret_store;
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Nonce};
+use base64::Engine;
+use keyring::Entry;
 use rquickjs::{Ctx, Exception, Function, Object};
+use rusqlite::{Connection, OpenFlags, types::ValueRef};
+use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 
-const WHITELISTED_ENV_VARS: [&str; 6] = [
+const WHITELISTED_ENV_VARS: [&str; 21] = [
     "CODEX_HOME",
+    "GH_CONFIG_DIR",
+    "KILO_API_KEY",
+    "KIMI_K2_API_KEY",
+    "KIMI_API_KEY",
+    "KIMI_KEY",
     "ZAI_API_KEY",
     "GLM_API_KEY",
     "MINIMAX_API_KEY",
     "MINIMAX_API_TOKEN",
     "MINIMAX_CN_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_API_URL",
+    "OPENCODE_COOKIE_HEADER",
+    "OPENCODE_WORKSPACE_ID",
+    "PERPLEXITY_COOKIE_HEADER",
+    "PERPLEXITY_COOKIE",
+    "PERPLEXITY_SESSION_TOKEN",
+    "SYNTHETIC_API_KEY",
+    "WARP_API_KEY",
+    "WARP_TOKEN",
 ];
+const KEYRING_TARGET: &str = "OpenUsage";
+#[cfg(target_os = "windows")]
+const PROVIDER_SECRET_WINDOWS_USER: &str = "provider-secret";
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[derive(Clone, Copy)]
+struct ProviderSecretEntrySpec<'a> {
+    target: Option<&'a str>,
+    service: &'a str,
+    user: &'a str,
+}
+
+fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
+    format!("OpenUsage Provider Secret {} {}", provider_id, secret_key)
+}
+
+fn provider_secret_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
+    #[cfg(target_os = "windows")]
+    {
+        return ProviderSecretEntrySpec {
+            target: Some(service),
+            service: KEYRING_TARGET,
+            user: PROVIDER_SECRET_WINDOWS_USER,
+        };
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        ProviderSecretEntrySpec {
+            target: None,
+            service: KEYRING_TARGET,
+            user: service,
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn provider_secret_legacy_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
+    ProviderSecretEntrySpec {
+        target: None,
+        service: KEYRING_TARGET,
+        user: service,
+    }
+}
+
+fn open_provider_secret_entry(spec: ProviderSecretEntrySpec<'_>) -> Result<Entry, keyring::Error> {
+    match spec.target {
+        Some(target) => Entry::new_with_target(target, spec.service, spec.user),
+        None => Entry::new(spec.service, spec.user),
+    }
+}
+
+fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<String> {
+    match (provider_id, secret_key) {
+        ("opencode", "cookieHeader") => vec!["OpenCode Cookie Header".to_string()],
+        _ => Vec::new(),
+    }
+}
+
+fn is_missing_credential_error(message: &str) -> bool {
+    let normalized = message.to_lowercase();
+
+    normalized.contains("no entry")
+        || normalized.contains("no matching entry found")
+        || normalized.contains("not found")
+        || normalized.contains("cannot find")
+        || normalized.contains("element not found")
+        || normalized.contains("credential not found")
+        || normalized.contains("specified file could not be found")
+        || normalized.contains("system cannot find the file specified")
+        || normalized.contains("os error 1168")
+}
 
 fn last_non_empty_trimmed_line(text: &str) -> Option<String> {
     text.lines()
@@ -20,6 +117,13 @@ fn last_non_empty_trimmed_line(text: &str) -> Option<String> {
         .rev()
         .find(|line| !line.is_empty())
         .map(|line| line.to_string())
+}
+
+fn configure_background_command(command: &mut Command) {
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
 }
 
 fn read_env_from_process(name: &str) -> Option<String> {
@@ -33,7 +137,9 @@ fn read_env_from_process(name: &str) -> Option<String> {
 }
 
 fn read_env_value_via_command(program: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(program).args(args).output().ok()?;
+    let mut command = Command::new(program);
+    configure_background_command(&mut command);
+    let output = command.args(args).output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -111,6 +217,67 @@ fn resolve_env_value(name: &str) -> Option<String> {
         cache.insert(name.to_string(), resolved.clone());
     }
     resolved
+}
+
+fn decrypt_aes256_gcm_internal(envelope: &str, key_b64: &str) -> Result<String, String> {
+    let key = base64::engine::general_purpose::STANDARD
+        .decode(key_b64.trim())
+        .map_err(|error| format!("invalid base64 key: {}", error))?;
+    if key.len() != 32 {
+        return Err("AES-256-GCM key must decode to 32 bytes".to_string());
+    }
+
+    let envelope_json: JsonValue = serde_json::from_str(envelope.trim())
+        .map_err(|error| format!("invalid crypto envelope: {}", error))?;
+    let nonce_b64 = envelope_json
+        .get("nonce")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| "crypto envelope missing nonce".to_string())?;
+    let ciphertext_b64 = envelope_json
+        .get("ciphertext")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| "crypto envelope missing ciphertext".to_string())?;
+
+    let nonce_bytes = base64::engine::general_purpose::STANDARD
+        .decode(nonce_b64.trim())
+        .map_err(|error| format!("invalid nonce encoding: {}", error))?;
+    if nonce_bytes.len() != 12 {
+        return Err("AES-256-GCM nonce must decode to 12 bytes".to_string());
+    }
+
+    let ciphertext = base64::engine::general_purpose::STANDARD
+        .decode(ciphertext_b64.trim())
+        .map_err(|error| format!("invalid ciphertext encoding: {}", error))?;
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|error| format!("invalid AES-256-GCM key: {}", error))?;
+    let plaintext = cipher
+        .decrypt(Nonce::from_slice(&nonce_bytes), ciphertext.as_ref())
+        .map_err(|_| "AES-256-GCM decrypt failed".to_string())?;
+
+    String::from_utf8(plaintext).map_err(|error| format!("decrypted text was not UTF-8: {}", error))
+}
+
+fn encrypt_aes256_gcm_internal(plaintext: &str, key_b64: &str) -> Result<String, String> {
+    let key = base64::engine::general_purpose::STANDARD
+        .decode(key_b64.trim())
+        .map_err(|error| format!("invalid base64 key: {}", error))?;
+    if key.len() != 32 {
+        return Err("AES-256-GCM key must decode to 32 bytes".to_string());
+    }
+
+    let nonce_uuid = uuid::Uuid::new_v4();
+    let nonce_bytes = &nonce_uuid.as_bytes()[..12];
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|error| format!("invalid AES-256-GCM key: {}", error))?;
+    let ciphertext = cipher
+        .encrypt(Nonce::from_slice(nonce_bytes), plaintext.as_bytes())
+        .map_err(|_| "AES-256-GCM encrypt failed".to_string())?;
+
+    serde_json::to_string(&serde_json::json!({
+        "nonce": base64::engine::general_purpose::STANDARD.encode(nonce_bytes),
+        "ciphertext": base64::engine::general_purpose::STANDARD.encode(ciphertext),
+    }))
+    .map_err(|error| format!("failed to encode crypto envelope: {}", error))
 }
 
 /// Redact sensitive value to first4...last4 format (UTF-8 safe)
@@ -303,9 +470,13 @@ pub fn inject_host_api<'js>(
     let host = Object::new(ctx.clone())?;
     inject_log(ctx, &host, plugin_id)?;
     inject_fs(ctx, &host)?;
+    inject_crypto(ctx, &host)?;
     inject_env(ctx, &host, plugin_id)?;
+    inject_provider_config(ctx, &host, plugin_id, app_data_dir)?;
     inject_http(ctx, &host, plugin_id)?;
     inject_keychain(ctx, &host)?;
+    inject_gh(ctx, &host)?;
+    inject_provider_secrets(ctx, &host, plugin_id, app_data_dir)?;
     inject_sqlite(ctx, &host)?;
     inject_ls(ctx, &host, plugin_id)?;
     inject_ccusage(ctx, &host, plugin_id)?;
@@ -313,6 +484,35 @@ pub fn inject_host_api<'js>(
     probe_ctx.set("host", host)?;
     globals.set("__openusage_ctx", probe_ctx)?;
 
+    Ok(())
+}
+
+fn inject_crypto<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
+    let crypto_obj = Object::new(ctx.clone())?;
+
+    crypto_obj.set(
+        "decryptAes256Gcm",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, envelope: String, key_b64: String| -> rquickjs::Result<String> {
+                decrypt_aes256_gcm_internal(&envelope, &key_b64)
+                    .map_err(|error| Exception::throw_message(&ctx_inner, &error))
+            },
+        )?,
+    )?;
+
+    crypto_obj.set(
+        "encryptAes256Gcm",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, plaintext: String, key_b64: String| -> rquickjs::Result<String> {
+                encrypt_aes256_gcm_internal(&plaintext, &key_b64)
+                    .map_err(|error| Exception::throw_message(&ctx_inner, &error))
+            },
+        )?,
+    )?;
+
+    host.set("crypto", crypto_obj)?;
     Ok(())
 }
 
@@ -426,6 +626,74 @@ fn inject_env<'js>(ctx: &Ctx<'js>, host: &Object<'js>, _plugin_id: &str) -> rqui
         })?,
     )?;
     host.set("env", env_obj)?;
+    Ok(())
+}
+
+fn provider_settings_paths(app_data_dir: &Path) -> [PathBuf; 2] {
+    [
+        app_data_dir.join("settings.json"),
+        app_data_dir.join(".store").join("settings.json"),
+    ]
+}
+
+fn load_provider_config_map(app_data_dir: &Path) -> HashMap<String, JsonValue> {
+    for path in provider_settings_paths(app_data_dir) {
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(_) => continue,
+        };
+        let json: JsonValue = match serde_json::from_str(&text) {
+            Ok(json) => json,
+            Err(_) => continue,
+        };
+        let configs = match json.get("providerConfigs").and_then(JsonValue::as_object) {
+            Some(configs) => configs,
+            None => continue,
+        };
+        return configs
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+    }
+
+    HashMap::new()
+}
+
+fn inject_provider_config<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+    app_data_dir: &PathBuf,
+) -> rquickjs::Result<()> {
+    let provider_config_obj = Object::new(ctx.clone())?;
+    let pid = plugin_id.to_string();
+    let data_dir = app_data_dir.clone();
+
+    provider_config_obj.set(
+        "get",
+        Function::new(ctx.clone(), move |key: String| -> Option<String> {
+            let configs = load_provider_config_map(&data_dir);
+            let entry = configs.get(&pid)?;
+            let object = entry.as_object()?;
+            let value = object.get(&key)?;
+            value.as_str().map(str::to_string)
+        })?,
+    )?;
+
+    let pid = plugin_id.to_string();
+    let data_dir = app_data_dir.clone();
+    provider_config_obj.set(
+        "getAll",
+        Function::new(ctx.clone(), move || -> String {
+            let configs = load_provider_config_map(&data_dir);
+            configs
+                .get(&pid)
+                .and_then(|value| serde_json::to_string(value).ok())
+                .unwrap_or_else(|| "{}".to_string())
+        })?,
+    )?;
+
+    host.set("providerConfig", provider_config_obj)?;
     Ok(())
 }
 
@@ -907,6 +1175,145 @@ struct LsDiscoverResult {
     extension_port: Option<i32>,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct WindowsProcessEntry {
+    process_id: i32,
+    command_line: Option<String>,
+}
+
+fn ls_list_processes() -> std::io::Result<Vec<(i32, String)>> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut command = Command::new("powershell");
+        configure_background_command(&mut command);
+        let output = command
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress",
+            ])
+            .output()?;
+
+        if !output.status.success() {
+            return Ok(Vec::new());
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let trimmed = stdout.trim();
+        if trimmed.is_empty() || trimmed == "null" {
+            return Ok(Vec::new());
+        }
+
+        let mut out = Vec::new();
+        if trimmed.starts_with('[') {
+            let rows: Vec<WindowsProcessEntry> = serde_json::from_str(trimmed).unwrap_or_default();
+            for row in rows {
+                if let Some(command) = row.command_line {
+                    let command = command.trim();
+                    if !command.is_empty() {
+                        out.push((row.process_id, command.to_string()));
+                    }
+                }
+            }
+        } else if trimmed.starts_with('{') {
+            if let Ok(row) = serde_json::from_str::<WindowsProcessEntry>(trimmed) {
+                if let Some(command) = row.command_line {
+                    let command = command.trim();
+                    if !command.is_empty() {
+                        out.push((row.process_id, command.to_string()));
+                    }
+                }
+            }
+        }
+
+        return Ok(out);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let ps_output = Command::new("/bin/ps")
+            .args(["-ax", "-o", "pid=,command="])
+            .output()?;
+
+        if !ps_output.status.success() {
+            return Ok(Vec::new());
+        }
+
+        let ps_stdout = String::from_utf8_lossy(&ps_output.stdout);
+        let mut out = Vec::new();
+        for line in ps_stdout.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let mut parts = trimmed.splitn(2, char::is_whitespace);
+            let pid_str = match parts.next() {
+                Some(s) => s.trim(),
+                None => continue,
+            };
+            let command = match parts.next() {
+                Some(s) => s.trim(),
+                None => continue,
+            };
+
+            if let Ok(pid) = pid_str.parse::<i32>() {
+                out.push((pid, command.to_string()));
+            }
+        }
+        Ok(out)
+    }
+}
+
+fn ls_listening_ports(process_pid: i32) -> std::io::Result<Vec<i32>> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut command = Command::new("netstat");
+        configure_background_command(&mut command);
+        let output = command.args(["-ano", "-p", "tcp"]).output()?;
+        if !output.status.success() {
+            return Ok(Vec::new());
+        }
+        return Ok(ls_parse_netstat_ports(
+            &String::from_utf8_lossy(&output.stdout),
+            process_pid,
+        ));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let lsof_path = ["/usr/sbin/lsof", "/usr/bin/lsof"]
+            .iter()
+            .find(|p| std::path::Path::new(p).exists())
+            .copied();
+
+        if let Some(lsof) = lsof_path {
+            match Command::new(lsof)
+                .args([
+                    "-nP",
+                    "-iTCP",
+                    "-sTCP:LISTEN",
+                    "-a",
+                    "-p",
+                    &process_pid.to_string(),
+                ])
+                .output()
+            {
+                Ok(o) if o.status.success() => {
+                    return Ok(ls_parse_listening_ports(&String::from_utf8_lossy(
+                        &o.stdout,
+                    )));
+                }
+                Ok(_) => return Ok(Vec::new()),
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(Vec::new())
+    }
+}
+
 fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquickjs::Result<()> {
     let ls_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
@@ -927,23 +1334,19 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                     opts.markers
                 );
 
-                let ps_output = match std::process::Command::new("/bin/ps")
-                    .args(["-ax", "-o", "pid=,command="])
-                    .output()
-                {
-                    Ok(o) => o,
+                let process_rows = match ls_list_processes() {
+                    Ok(rows) => rows,
                     Err(e) => {
-                        log::warn!("[plugin:{}] ps failed: {}", pid, e);
+                        log::warn!("[plugin:{}] process listing failed: {}", pid, e);
                         return Ok("null".to_string());
                     }
                 };
 
-                if !ps_output.status.success() {
-                    log::warn!("[plugin:{}] ps returned non-zero", pid);
+                if process_rows.is_empty() {
+                    log::warn!("[plugin:{}] process listing returned no rows", pid);
                     return Ok("null".to_string());
                 }
 
-                let ps_stdout = String::from_utf8_lossy(&ps_output.stdout);
                 let process_name_lower = opts.process_name.to_lowercase();
                 let markers_lower: Vec<String> =
                     opts.markers.iter().map(|m| m.to_lowercase()).collect();
@@ -952,24 +1355,14 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                 // Matching priority:
                 //   1. Exact --ide_name / --app_data_dir flag value (prevents
                 //      "windsurf" matching "windsurf-next")
-                //   2. Path substring (/<marker>/) as fallback when no flags found
+                //   2. Path substring as fallback when no flags found
                 let mut found: Option<(i32, String)> = None;
 
-                for line in ps_stdout.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.is_empty() {
+                for (row_pid, command) in process_rows.iter() {
+                    let command = command.trim();
+                    if command.is_empty() {
                         continue;
                     }
-
-                    let mut parts = trimmed.splitn(2, char::is_whitespace);
-                    let pid_str = match parts.next() {
-                        Some(s) => s.trim(),
-                        None => continue,
-                    };
-                    let command = match parts.next() {
-                        Some(s) => s.trim(),
-                        None => continue,
-                    };
 
                     let command_lower = command.to_lowercase();
 
@@ -990,17 +1383,18 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                         if let Some(ref dir) = app_data {
                             return *dir == *m;
                         }
-                        // Fallback: path substring
-                        command_lower.contains(&format!("/{}/", m))
+                        let slash = format!("/{}/", m);
+                        let backslash = format!("\\{}\\", m);
+                        command_lower.contains(&slash)
+                            || command_lower.contains(&backslash)
+                            || command_lower.contains(m)
                     });
                     if !has_marker {
                         continue;
                     }
 
-                    if let Ok(p) = pid_str.parse::<i32>() {
-                        found = Some((p, command.to_string()));
-                        break;
-                    }
+                    found = Some((*row_pid, command.to_string()));
+                    break;
                 }
 
                 let (process_pid, command) = match found {
@@ -1037,39 +1431,17 @@ fn inject_ls<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquick
                     }
                 }
 
-                // Find lsof binary
-                let lsof_path = ["/usr/sbin/lsof", "/usr/bin/lsof"]
-                    .iter()
-                    .find(|p| std::path::Path::new(p).exists())
-                    .copied();
-
-                let ports = if let Some(lsof) = lsof_path {
-                    match std::process::Command::new(lsof)
-                        .args([
-                            "-nP",
-                            "-iTCP",
-                            "-sTCP:LISTEN",
-                            "-a",
-                            "-p",
-                            &process_pid.to_string(),
-                        ])
-                        .output()
-                    {
-                        Ok(o) if o.status.success() => {
-                            ls_parse_listening_ports(&String::from_utf8_lossy(&o.stdout))
-                        }
-                        Ok(_) => {
-                            log::warn!("[plugin:{}] lsof returned non-zero", pid);
-                            Vec::new()
-                        }
-                        Err(e) => {
-                            log::warn!("[plugin:{}] lsof failed: {}", pid, e);
-                            Vec::new()
-                        }
+                let ports = match ls_listening_ports(process_pid) {
+                    Ok(ports) => ports,
+                    Err(e) => {
+                        log::warn!(
+                            "[plugin:{}] failed to enumerate listening ports for pid {}: {}",
+                            pid,
+                            process_pid,
+                            e
+                        );
+                        Vec::new()
                     }
-                } else {
-                    log::warn!("[plugin:{}] lsof not found", pid);
-                    Vec::new()
                 };
 
                 if ports.is_empty() && extension_port.is_none() {
@@ -1143,6 +1515,7 @@ fn ls_extract_flag(command: &str, flag: &str) -> Option<String> {
 }
 
 /// Parse listening port numbers from `lsof -nP -iTCP -sTCP:LISTEN` output.
+#[cfg(not(target_os = "windows"))]
 fn ls_parse_listening_ports(output: &str) -> Vec<i32> {
     let mut ports = std::collections::BTreeSet::new();
     for line in output.lines() {
@@ -1163,6 +1536,43 @@ fn ls_parse_listening_ports(output: &str) -> Vec<i32> {
             }
         }
     }
+    ports.into_iter().collect()
+}
+
+fn ls_parse_netstat_ports(output: &str, process_pid: i32) -> Vec<i32> {
+    let mut ports = std::collections::BTreeSet::new();
+    let pid_text = process_pid.to_string();
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || !trimmed.starts_with("TCP") {
+            continue;
+        }
+
+        let cols: Vec<&str> = trimmed.split_whitespace().collect();
+        if cols.len() < 5 {
+            continue;
+        }
+
+        let state_idx = cols.len() - 2;
+        let pid_idx = cols.len() - 1;
+        let foreign_addr = cols[2];
+        let is_listen_row = cols[state_idx] == "LISTENING"
+            || foreign_addr == "0.0.0.0:0"
+            || foreign_addr == "[::]:0";
+        if cols[pid_idx] != pid_text || !is_listen_row {
+            continue;
+        }
+
+        if let Some(port_str) = cols[1].rsplit(':').next() {
+            if let Ok(port) = port_str.trim().parse::<i32>() {
+                if port > 0 && port < 65536 {
+                    ports.insert(port);
+                }
+            }
+        }
+    }
+
     ports.into_iter().collect()
 }
 
@@ -1209,7 +1619,7 @@ fn ccusage_runner_order() -> [CcusageRunnerKind; 5] {
 
 fn ccusage_runner_label(kind: CcusageRunnerKind) -> &'static str {
     match kind {
-        CcusageRunnerKind::Bunx => "bunx",
+        CcusageRunnerKind::Bunx => "bun x",
         CcusageRunnerKind::PnpmDlx => "pnpm dlx",
         CcusageRunnerKind::YarnDlx => "yarn dlx",
         CcusageRunnerKind::NpmExec => "npm exec",
@@ -1291,14 +1701,25 @@ fn ccusage_runner_candidates(kind: CcusageRunnerKind) -> Vec<String> {
     let mut candidates: Vec<String> = Vec::new();
     match kind {
         CcusageRunnerKind::Bunx => {
-            if let Some(home) = dirs::home_dir() {
-                candidates.push(home.join(".bun/bin/bunx").to_string_lossy().to_string());
+            #[cfg(target_os = "windows")]
+            {
+                if let Some(home) = dirs::home_dir() {
+                    candidates.push(home.join(".bun/bin/bun.exe").to_string_lossy().to_string());
+                }
+                candidates.push("bun".to_string());
             }
-            candidates.extend(
-                ["/opt/homebrew/bin/bunx", "/usr/local/bin/bunx", "bunx"]
-                    .into_iter()
-                    .map(str::to_string),
-            );
+
+            #[cfg(not(target_os = "windows"))]
+            {
+                if let Some(home) = dirs::home_dir() {
+                    candidates.push(home.join(".bun/bin/bunx").to_string_lossy().to_string());
+                }
+                candidates.extend(
+                    ["/opt/homebrew/bin/bunx", "/usr/local/bin/bunx", "bunx"]
+                        .into_iter()
+                        .map(str::to_string),
+                );
+            }
         }
         CcusageRunnerKind::PnpmDlx => {
             candidates.extend(
@@ -1390,6 +1811,7 @@ fn ccusage_enriched_path() -> Option<OsString> {
 
 fn ccusage_runner_available(candidate: &str, enriched_path: Option<&OsStr>) -> bool {
     let mut command = std::process::Command::new(candidate);
+    configure_background_command(&mut command);
     command.arg("--version");
     if let Some(path) = enriched_path {
         command.env("PATH", path);
@@ -1406,11 +1828,13 @@ fn configure_ccusage_command(
     args: &[String],
     enriched_path: Option<&OsStr>,
 ) {
+    configure_background_command(command);
     command.args(args);
     if let Some(path) = enriched_path {
         command.env("PATH", path);
     }
     command
+        .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
 }
@@ -1440,6 +1864,48 @@ where
 
 fn collect_ccusage_runners() -> Vec<(CcusageRunnerKind, String)> {
     collect_ccusage_runners_with(resolve_ccusage_runner_binary)
+}
+
+fn ccusage_runner_cache() -> &'static Mutex<Option<Vec<(CcusageRunnerKind, String)>>> {
+    static CACHE: OnceLock<Mutex<Option<Vec<(CcusageRunnerKind, String)>>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn read_ccusage_runner_cache() -> Option<Vec<(CcusageRunnerKind, String)>> {
+    ccusage_runner_cache().lock().ok()?.clone()
+}
+
+fn write_ccusage_runner_cache(runners: &[(CcusageRunnerKind, String)]) {
+    if runners.is_empty() {
+        return;
+    }
+
+    if let Ok(mut cache) = ccusage_runner_cache().lock() {
+        *cache = Some(runners.to_vec());
+    }
+}
+
+fn invalidate_ccusage_runner_cache() {
+    if let Ok(mut cache) = ccusage_runner_cache().lock() {
+        *cache = None;
+    }
+}
+
+fn collect_ccusage_runners_cached_with<F>(mut resolver: F) -> Vec<(CcusageRunnerKind, String)>
+where
+    F: FnMut() -> Vec<(CcusageRunnerKind, String)>,
+{
+    if let Some(runners) = read_ccusage_runner_cache() {
+        return runners;
+    }
+
+    let runners = resolver();
+    write_ccusage_runner_cache(&runners);
+    runners
+}
+
+fn collect_ccusage_runners_cached() -> Vec<(CcusageRunnerKind, String)> {
+    collect_ccusage_runners_cached_with(collect_ccusage_runners)
 }
 
 fn append_ccusage_common_args(args: &mut Vec<String>, opts: &CcusageQueryOpts) {
@@ -1479,17 +1945,23 @@ fn ccusage_runner_args(
     let config = ccusage_provider_config(provider);
     let package_spec = ccusage_package_spec(provider);
     let mut args: Vec<String> = match kind {
-        CcusageRunnerKind::Bunx => vec!["--silent".to_string(), package_spec.clone()],
-        CcusageRunnerKind::PnpmDlx => vec![
-            "-s".to_string(),
-            "dlx".to_string(),
-            package_spec.clone(),
-        ],
-        CcusageRunnerKind::YarnDlx => vec![
-            "dlx".to_string(),
-            "-q".to_string(),
-            package_spec.clone(),
-        ],
+        CcusageRunnerKind::Bunx => {
+            #[cfg(target_os = "windows")]
+            {
+                vec!["x".to_string(), "--silent".to_string(), package_spec.clone()]
+            }
+
+            #[cfg(not(target_os = "windows"))]
+            {
+                vec!["--silent".to_string(), package_spec.clone()]
+            }
+        }
+        CcusageRunnerKind::PnpmDlx => {
+            vec!["-s".to_string(), "dlx".to_string(), package_spec.clone()]
+        }
+        CcusageRunnerKind::YarnDlx => {
+            vec!["dlx".to_string(), "-q".to_string(), package_spec.clone()]
+        }
         CcusageRunnerKind::NpmExec => vec![
             "exec".to_string(),
             "--yes".to_string(),
@@ -1550,13 +2022,20 @@ fn normalize_ccusage_output(stdout: &str) -> Option<String> {
     serde_json::to_string(&normalized).ok()
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum CcusageRunStatus {
+    Success,
+    Failed,
+    SpawnFailed,
+}
+
 fn run_ccusage_with_runner(
     kind: CcusageRunnerKind,
     program: &str,
     opts: &CcusageQueryOpts,
     provider: CcusageProvider,
     plugin_id: &str,
-) -> Option<String> {
+) -> (CcusageRunStatus, Option<String>) {
     let args = ccusage_runner_args(kind, opts, provider);
     let enriched_path = ccusage_enriched_path();
     let mut command = std::process::Command::new(program);
@@ -1583,7 +2062,7 @@ fn run_ccusage_with_runner(
                 ccusage_runner_label(kind),
                 e
             );
-            return None;
+            return (CcusageRunStatus::SpawnFailed, None);
         }
     };
 
@@ -1621,14 +2100,14 @@ fn run_ccusage_with_runner(
                 if status.success() {
                     let out = String::from_utf8_lossy(&stdout);
                     if let Some(normalized_json) = normalize_ccusage_output(&out) {
-                        return Some(normalized_json);
+                        return (CcusageRunStatus::Success, Some(normalized_json));
                     }
                     log::warn!(
                         "[plugin:{}] ccusage output parse failed for {}",
                         plugin_id,
                         ccusage_runner_label(kind)
                     );
-                    return None;
+                    return (CcusageRunStatus::Failed, None);
                 }
 
                 let err = String::from_utf8_lossy(&stderr);
@@ -1638,7 +2117,7 @@ fn run_ccusage_with_runner(
                     ccusage_runner_label(kind),
                     err.trim()
                 );
-                return None;
+                return (CcusageRunStatus::Failed, None);
             }
             Ok(None) => {
                 if start.elapsed() > timeout {
@@ -1652,7 +2131,7 @@ fn run_ccusage_with_runner(
                         CCUSAGE_TIMEOUT_SECS,
                         ccusage_runner_label(kind)
                     );
-                    return None;
+                    return (CcusageRunStatus::Failed, None);
                 }
                 std::thread::sleep(std::time::Duration::from_millis(CCUSAGE_POLL_INTERVAL_MS));
             }
@@ -1663,10 +2142,89 @@ fn run_ccusage_with_runner(
                     ccusage_runner_label(kind),
                     e
                 );
-                return None;
+                return (CcusageRunStatus::Failed, None);
             }
         }
     }
+}
+
+fn run_ccusage_with_runner_list(
+    runners: &[(CcusageRunnerKind, String)],
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    plugin_id: &str,
+) -> (bool, Option<String>) {
+    for (kind, program) in runners {
+        let (status, result) = run_ccusage_with_runner(*kind, program, opts, provider, plugin_id);
+        if let Some(result) = result {
+            return (false, Some(result));
+        }
+
+        if status == CcusageRunStatus::SpawnFailed {
+            return (true, None);
+        }
+    }
+
+    (false, None)
+}
+
+fn run_ccusage_query_with<FCached, FInvalidate, FRun>(
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    plugin_id: &str,
+    mut collect_runners: FCached,
+    mut invalidate_cache: FInvalidate,
+    mut run_runners: FRun,
+) -> Result<String, &'static str>
+where
+    FCached: FnMut() -> Vec<(CcusageRunnerKind, String)>,
+    FInvalidate: FnMut(),
+    FRun: FnMut(&[(CcusageRunnerKind, String)], &CcusageQueryOpts, CcusageProvider, &str) -> (bool, Option<String>),
+{
+    let cached_runners = collect_runners();
+    if cached_runners.is_empty() {
+        log::warn!("[plugin:{}] no package runner found for ccusage query", plugin_id);
+        return Err("no_runner");
+    }
+
+    let (cache_stale, result) = run_runners(&cached_runners, opts, provider, plugin_id);
+    if let Some(result) = result {
+        return Ok(result);
+    }
+
+    if cache_stale {
+        invalidate_cache();
+        let refreshed_runners = collect_runners();
+        if refreshed_runners.is_empty() {
+            log::warn!(
+                "[plugin:{}] no package runner found for ccusage query after cache refresh",
+                plugin_id
+            );
+            return Err("no_runner");
+        }
+
+        let (_, refreshed_result) = run_runners(&refreshed_runners, opts, provider, plugin_id);
+        if let Some(result) = refreshed_result {
+            return Ok(result);
+        }
+    }
+
+    Err("runner_failed")
+}
+
+fn run_ccusage_query(
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    plugin_id: &str,
+) -> Result<String, &'static str> {
+    run_ccusage_query_with(
+        opts,
+        provider,
+        plugin_id,
+        collect_ccusage_runners_cached,
+        invalidate_ccusage_runner_cache,
+        run_ccusage_with_runner_list,
+    )
 }
 
 fn inject_ccusage<'js>(
@@ -1690,16 +2248,8 @@ fn inject_ccusage<'js>(
                     }
                 };
                 let provider = resolve_ccusage_provider(&opts, &pid);
-                let runners = collect_ccusage_runners();
-                if runners.is_empty() {
-                    log::warn!("[plugin:{}] no package runner found for ccusage query", pid);
-                    return Ok(serde_json::json!({ "status": "no_runner" }).to_string());
-                }
-
-                for (kind, program) in runners {
-                    if let Some(result) =
-                        run_ccusage_with_runner(kind, &program, &opts, provider, &pid)
-                    {
+                match run_ccusage_query(&opts, provider, &pid) {
+                    Ok(result) => {
                         let data: serde_json::Value = match serde_json::from_str(&result) {
                             Ok(v) => v,
                             Err(e) => {
@@ -1708,18 +2258,23 @@ fn inject_ccusage<'js>(
                                     pid,
                                     e
                                 );
-                                continue;
+                                return Ok(
+                                    serde_json::json!({ "status": "runner_failed" }).to_string()
+                                );
                             }
                         };
-                        return Ok(serde_json::json!({ "status": "ok", "data": data }).to_string());
+                        Ok(serde_json::json!({ "status": "ok", "data": data }).to_string())
+                    }
+                    Err(status) => {
+                        if status == "runner_failed" {
+                            log::warn!(
+                                "[plugin:{}] ccusage query failed with all available runners",
+                                pid
+                            );
+                        }
+                        Ok(serde_json::json!({ "status": status }).to_string())
                     }
                 }
-
-                log::warn!(
-                    "[plugin:{}] ccusage query failed with all available runners",
-                    pid
-                );
-                Ok(serde_json::json!({ "status": "runner_failed" }).to_string())
             },
         )?,
     )?;
@@ -1757,32 +2312,15 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, service: String| -> rquickjs::Result<String> {
-                if !cfg!(target_os = "macos") {
-                    return Err(Exception::throw_message(
+                let entry = Entry::new(KEYRING_TARGET, &service).map_err(|e| {
+                    Exception::throw_message(
                         &ctx_inner,
-                        "keychain API is only supported on macOS",
-                    ));
-                }
-                let output = std::process::Command::new("security")
-                    .args(["find-generic-password", "-s", &service, "-w"])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("keychain read failed: {}", e),
-                        )
-                    })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let first_line = stderr.lines().next().unwrap_or("").trim();
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        &format!("keychain item not found: {}", first_line),
-                    ));
-                }
-
-                Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+                        &format!("credential store unavailable: {}", e),
+                    )
+                })?;
+                entry.get_password().map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("credential read failed: {}", e))
+                })
             },
         )?,
     )?;
@@ -1792,65 +2330,228 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, service: String, value: String| -> rquickjs::Result<()> {
-                if !cfg!(target_os = "macos") {
-                    return Err(Exception::throw_message(
+                let entry = Entry::new(KEYRING_TARGET, &service).map_err(|e| {
+                    Exception::throw_message(
                         &ctx_inner,
-                        "keychain API is only supported on macOS",
-                    ));
+                        &format!("credential store unavailable: {}", e),
+                    )
+                })?;
+                entry.set_password(&value).map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("credential write failed: {}", e))
+                })
+            },
+        )?,
+    )?;
+
+    keychain_obj.set(
+        "readGenericPasswordForAccount",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>,
+                  service: String,
+                  account: String|
+                  -> rquickjs::Result<String> {
+                let entry = Entry::new(&service, &account).map_err(|e| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("credential store unavailable: {}", e),
+                    )
+                })?;
+                entry.get_password().map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("credential read failed: {}", e))
+                })
+            },
+        )?,
+    )?;
+
+    keychain_obj.set(
+        "deleteGenericPassword",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, service: String| -> rquickjs::Result<()> {
+                let entry = Entry::new(KEYRING_TARGET, &service).map_err(|e| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("credential store unavailable: {}", e),
+                    )
+                })?;
+                entry.delete_credential().map_err(|e| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("credential delete failed: {}", e),
+                    )
+                })
+            },
+        )?,
+    )?;
+
+    host.set("keychain", keychain_obj)?;
+    Ok(())
+}
+
+fn inject_gh<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
+    let gh_obj = Object::new(ctx.clone())?;
+
+    gh_obj.set(
+        "readAuthToken",
+        Function::new(
+            ctx.clone(),
+            move |hostname: Option<String>, user: Option<String>| -> Option<String> {
+                let mut command = Command::new("gh");
+                configure_background_command(&mut command);
+                command.args(["auth", "token"]);
+
+                if let Some(hostname) = hostname.as_deref() {
+                    let trimmed = hostname.trim();
+                    if !trimmed.is_empty() {
+                        command.args(["--hostname", trimmed]);
+                    }
                 }
 
-                // First, try to find existing entry and extract its account
-                let mut account_arg: Option<String> = None;
-                let find_output = std::process::Command::new("security")
-                    .args(["find-generic-password", "-s", &service])
-                    .output();
+                if let Some(user) = user.as_deref() {
+                    let trimmed = user.trim();
+                    if !trimmed.is_empty() {
+                        command.args(["--user", trimmed]);
+                    }
+                }
 
-                if let Ok(output) = find_output {
-                    if output.status.success() {
-                        // Parse account from output: "acct"<blob>="value"
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        for line in stdout.lines() {
-                            if let Some(start) = line.find("\"acct\"<blob>=\"") {
-                                let rest = &line[start + 14..];
-                                if let Some(end) = rest.find('"') {
-                                    account_arg = Some(rest[..end].to_string());
-                                    break;
+                let output = command.output().ok()?;
+                if !output.status.success() {
+                    return None;
+                }
+
+                last_non_empty_trimmed_line(&String::from_utf8_lossy(&output.stdout))
+            },
+        )?,
+    )?;
+
+    host.set("gh", gh_obj)?;
+    Ok(())
+}
+
+fn inject_provider_secrets<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+    app_data_dir: &PathBuf,
+) -> rquickjs::Result<()> {
+    let provider_secrets_obj = Object::new(ctx.clone())?;
+    let pid = plugin_id.to_string();
+    let data_dir = app_data_dir.clone();
+
+    provider_secrets_obj.set(
+        "read",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, secret_key: String| -> rquickjs::Result<String> {
+                #[cfg(target_os = "windows")]
+                {
+                    match provider_secret_store::read_provider_secret(&data_dir, &pid, &secret_key)
+                    {
+                        Ok(Some(secret)) => return Ok(secret),
+                        Ok(None) => {}
+                        Err(error) => {
+                            return Err(Exception::throw_message(
+                                &ctx_inner,
+                                &format!("provider secret store read failed: {}", error),
+                            ));
+                        }
+                    }
+                }
+
+                let mut services = vec![provider_secret_service(&pid, &secret_key)];
+                services.extend(provider_secret_legacy_services(&pid, &secret_key));
+
+                for service in services {
+                    let mut specs = vec![provider_secret_entry_spec(&service)];
+                    #[cfg(target_os = "windows")]
+                    {
+                        specs.push(provider_secret_legacy_entry_spec(&service));
+                    }
+
+                    for spec in specs {
+                        let entry = open_provider_secret_entry(spec).map_err(|e| {
+                            Exception::throw_message(
+                                &ctx_inner,
+                                &format!("credential store unavailable: {}", e),
+                            )
+                        })?;
+                        match entry.get_password() {
+                            Ok(password) => return Ok(password),
+                            Err(error) => {
+                                let message = error.to_string();
+                                if is_missing_credential_error(&message) {
+                                    continue;
                                 }
+                                return Err(Exception::throw_message(
+                                    &ctx_inner,
+                                    &format!("credential read failed: {}", error),
+                                ));
                             }
                         }
                     }
                 }
 
-                // Build command with account if found
-                let output = if let Some(ref acct) = account_arg {
-                    std::process::Command::new("security")
-                        .args([
-                            "add-generic-password",
-                            "-s",
-                            &service,
-                            "-a",
-                            acct,
-                            "-w",
-                            &value,
-                            "-U",
-                        ])
-                        .output()
-                } else {
-                    std::process::Command::new("security")
-                        .args(["add-generic-password", "-s", &service, "-w", &value, "-U"])
-                        .output()
-                }
-                .map_err(|e| {
-                    Exception::throw_message(&ctx_inner, &format!("keychain write failed: {}", e))
-                })?;
+                Err(Exception::throw_message(
+                    &ctx_inner,
+                    "provider secret not found",
+                ))
+            },
+        )?,
+    )?;
 
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let first_line = stderr.lines().next().unwrap_or("").trim();
+    let pid = plugin_id.to_string();
+    let data_dir = app_data_dir.clone();
+    provider_secrets_obj.set(
+        "write",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, secret_key: String, value: String| -> rquickjs::Result<()> {
+                let trimmed_key = secret_key.trim();
+                let trimmed_value = value.trim();
+                if trimmed_key.is_empty() {
                     return Err(Exception::throw_message(
                         &ctx_inner,
-                        &format!("keychain write failed: {}", first_line),
+                        "provider secret key is required",
                     ));
+                }
+                if trimmed_value.is_empty() {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "provider secret value cannot be empty",
+                    ));
+                }
+
+                #[cfg(target_os = "windows")]
+                provider_secret_store::save_provider_secret(
+                    &data_dir,
+                    &pid,
+                    trimmed_key,
+                    trimmed_value,
+                )
+                .map_err(|error| {
+                    Exception::throw_message(
+                        &ctx_inner,
+                        &format!("provider secret store write failed: {}", error),
+                    )
+                })?;
+
+                #[cfg(not(target_os = "windows"))]
+                {
+                    let service = provider_secret_service(&pid, trimmed_key);
+                    let entry = open_provider_secret_entry(provider_secret_entry_spec(&service))
+                        .map_err(|error| {
+                            Exception::throw_message(
+                                &ctx_inner,
+                                &format!("credential store unavailable: {}", error),
+                            )
+                        })?;
+                    entry.set_password(trimmed_value).map_err(|error| {
+                        Exception::throw_message(
+                            &ctx_inner,
+                            &format!("credential write failed: {}", error),
+                        )
+                    })?;
                 }
 
                 Ok(())
@@ -1858,8 +2559,18 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
         )?,
     )?;
 
-    host.set("keychain", keychain_obj)?;
+    host.set("providerSecrets", provider_secrets_obj)?;
     Ok(())
+}
+
+fn sqlite_json_value(value: ValueRef<'_>) -> JsonValue {
+    match value {
+        ValueRef::Null => JsonValue::Null,
+        ValueRef::Integer(v) => JsonValue::from(v),
+        ValueRef::Real(v) => JsonValue::from(v),
+        ValueRef::Text(v) => JsonValue::String(String::from_utf8_lossy(v).to_string()),
+        ValueRef::Blob(v) => JsonValue::String(base64::engine::general_purpose::STANDARD.encode(v)),
+    }
 }
 
 fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
@@ -1877,48 +2588,46 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
                     ));
                 }
                 let expanded = expand_path(&db_path);
-
-                // Prefer a normal read-only open so WAL contents are visible (common for app state DBs).
-                // Fall back to immutable=1 to bypass WAL/SHM lock issues after macOS sleep.
-                let primary = std::process::Command::new("sqlite3")
-                    .args(["-readonly", "-json", &expanded, &sql])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(&ctx_inner, &format!("sqlite3 exec failed: {}", e))
-                    })?;
-
-                if primary.status.success() {
-                    return Ok(String::from_utf8_lossy(&primary.stdout).to_string());
+                let conn = Connection::open_with_flags(
+                    &expanded,
+                    OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
+                )
+                .map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite open failed: {}", e))
+                })?;
+                let mut stmt = conn.prepare(&sql).map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite prepare failed: {}", e))
+                })?;
+                let column_names: Vec<String> = stmt
+                    .column_names()
+                    .iter()
+                    .map(|name| (*name).to_string())
+                    .collect();
+                let mut rows = stmt.query([]).map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite query failed: {}", e))
+                })?;
+                let mut out = Vec::new();
+                while let Some(row) = rows.next().map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite row read failed: {}", e))
+                })? {
+                    let mut obj = JsonMap::new();
+                    for (index, column_name) in column_names.iter().enumerate() {
+                        let value = row.get_ref(index).map_err(|e| {
+                            Exception::throw_message(
+                                &ctx_inner,
+                                &format!("sqlite column read failed: {}", e),
+                            )
+                        })?;
+                        obj.insert(column_name.clone(), sqlite_json_value(value));
+                    }
+                    out.push(JsonValue::Object(obj));
                 }
-
-                // Percent-encode special chars for valid URI (% must be first!)
-                let encoded = expanded
-                    .replace('%', "%25")
-                    .replace(' ', "%20")
-                    .replace('#', "%23")
-                    .replace('?', "%3F");
-                let uri_path = format!("file:{}?immutable=1", encoded);
-                let fallback = std::process::Command::new("sqlite3")
-                    .args(["-readonly", "-json", &uri_path, &sql])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(&ctx_inner, &format!("sqlite3 exec failed: {}", e))
-                    })?;
-
-                if !fallback.status.success() {
-                    let stderr_primary = String::from_utf8_lossy(&primary.stderr);
-                    let stderr_fallback = String::from_utf8_lossy(&fallback.stderr);
-                    return Err(Exception::throw_message(
+                serde_json::to_string(&out).map_err(|e| {
+                    Exception::throw_message(
                         &ctx_inner,
-                        &format!(
-                            "sqlite3 error: {} (fallback: {})",
-                            stderr_primary.trim(),
-                            stderr_fallback.trim()
-                        ),
-                    ));
-                }
-
-                Ok(String::from_utf8_lossy(&fallback.stdout).to_string())
+                        &format!("sqlite result serialization failed: {}", e),
+                    )
+                })
             },
         )?,
     )?;
@@ -1935,22 +2644,18 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
                     ));
                 }
                 let expanded = expand_path(&db_path);
-                let output = std::process::Command::new("sqlite3")
-                    .args([&expanded, &sql])
-                    .output()
-                    .map_err(|e| {
-                        Exception::throw_message(&ctx_inner, &format!("sqlite3 exec failed: {}", e))
-                    })?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    return Err(Exception::throw_message(
-                        &ctx_inner,
-                        &format!("sqlite3 error: {}", stderr.trim()),
-                    ));
-                }
-
-                Ok(())
+                let conn = Connection::open_with_flags(
+                    &expanded,
+                    OpenFlags::SQLITE_OPEN_READ_WRITE
+                        | OpenFlags::SQLITE_OPEN_URI
+                        | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+                )
+                .map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite open failed: {}", e))
+                })?;
+                conn.execute_batch(&sql).map_err(|e| {
+                    Exception::throw_message(&ctx_inner, &format!("sqlite exec failed: {}", e))
+                })
             },
         )?,
     )?;
@@ -2002,7 +2707,22 @@ mod tests {
     }
 
     #[test]
-    fn keychain_api_exposes_write() {
+    fn ls_parse_netstat_ports_accepts_localized_windows_listen_rows() {
+        let output = "\
+  TCP    127.0.0.1:58393        127.0.0.1:9222         HERGESTELLT     9984\n\
+  TCP    127.0.0.1:63347        0.0.0.0:0              ABH\u{00D6}REN         9984\n\
+  TCP    127.0.0.1:63348        0.0.0.0:0              ABH\u{00D6}REN         9984\n\
+  TCP    127.0.0.1:63354        0.0.0.0:0              ABH\u{00D6}REN         9984\n\
+  TCP    127.0.0.1:64000        0.0.0.0:0              ABH\u{00D6}REN         1234\n";
+
+        assert_eq!(
+            ls_parse_netstat_ports(output, 9984),
+            vec![63347, 63348, 63354]
+        );
+    }
+
+    #[test]
+    fn keychain_api_exposes_account_read_and_write() {
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
@@ -2018,7 +2738,74 @@ mod tests {
             let _write: Function = keychain
                 .get("writeGenericPassword")
                 .expect("writeGenericPassword");
+            let _read_for_account: Function = keychain
+                .get("readGenericPasswordForAccount")
+                .expect("readGenericPasswordForAccount");
+
+            let gh: Object = host.get("gh").expect("gh");
+            let _read_auth_token: Function = gh.get("readAuthToken").expect("readAuthToken");
         });
+    }
+
+    #[test]
+    fn crypto_api_exposes_encrypt_and_decrypt() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            let globals = ctx.globals();
+            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let host: Object = probe_ctx.get("host").expect("host");
+            let crypto: Object = host.get("crypto").expect("crypto");
+            let encrypt: Function = crypto.get("encryptAes256Gcm").expect("encryptAes256Gcm");
+            let decrypt: Function = crypto.get("decryptAes256Gcm").expect("decryptAes256Gcm");
+
+            let key_b64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+            let plaintext = "{\"hello\":\"world\"}";
+            let envelope: String = encrypt
+                .call((plaintext.to_string(), key_b64.to_string()))
+                .expect("encrypt");
+            assert!(envelope.contains("\"nonce\""));
+            assert!(envelope.contains("\"ciphertext\""));
+
+            let roundtrip: String = decrypt
+                .call((envelope, key_b64.to_string()))
+                .expect("decrypt");
+            assert_eq!(roundtrip, plaintext);
+        });
+    }
+
+    #[test]
+    fn provider_secrets_api_exposes_read_and_write() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            let globals = ctx.globals();
+            let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
+            let host: Object = probe_ctx.get("host").expect("host");
+            let provider_secrets: Object = host.get("providerSecrets").expect("providerSecrets");
+            let _read: Function = provider_secrets.get("read").expect("read");
+            let _write: Function = provider_secrets.get("write").expect("write");
+        });
+    }
+
+    #[test]
+    fn missing_credential_error_variants_are_tolerated_for_provider_secret_reads() {
+        assert!(is_missing_credential_error("No entry found"));
+        assert!(is_missing_credential_error(
+            "No matching entry found in secure storage"
+        ));
+        assert!(is_missing_credential_error("Element not found"));
+        assert!(is_missing_credential_error(
+            "The system cannot find the file specified. (os error 1168)"
+        ));
+        assert!(is_missing_credential_error("credential not found"));
+        assert!(!is_missing_credential_error(
+            "Access is denied. (os error 5)"
+        ));
     }
 
     #[test]
@@ -2329,23 +3116,36 @@ mod tests {
         };
         let expected_claude_package = ccusage_package_spec(CcusageProvider::Claude);
         let expected_npm_exec_package = format!("--package={expected_claude_package}");
+        #[cfg(target_os = "windows")]
+        let expected_bunx = vec![
+            "x",
+            "--silent",
+            expected_claude_package.as_str(),
+            "daily",
+            "--json",
+            "--order",
+            "desc",
+            "--since",
+            "20260101",
+            "--until",
+            "20260131",
+        ];
+        #[cfg(not(target_os = "windows"))]
+        let expected_bunx = vec![
+            "--silent",
+            expected_claude_package.as_str(),
+            "daily",
+            "--json",
+            "--order",
+            "desc",
+            "--since",
+            "20260101",
+            "--until",
+            "20260131",
+        ];
 
         let bunx = ccusage_runner_args(CcusageRunnerKind::Bunx, &opts, CcusageProvider::Claude);
-        assert_eq!(
-            bunx,
-            vec![
-                "--silent",
-                expected_claude_package.as_str(),
-                "daily",
-                "--json",
-                "--order",
-                "desc",
-                "--since",
-                "20260101",
-                "--until",
-                "20260131"
-            ]
-        );
+        assert_eq!(bunx, expected_bunx);
 
         let pnpm = ccusage_runner_args(CcusageRunnerKind::PnpmDlx, &opts, CcusageProvider::Claude);
         assert_eq!(
@@ -2719,5 +3519,115 @@ Saved lockfile
     fn collect_ccusage_runners_returns_empty_when_none_available() {
         let runners = collect_ccusage_runners_with(|_| None);
         assert!(runners.is_empty());
+    }
+
+    #[test]
+    fn collect_ccusage_runners_cached_resolves_once_for_successful_result() {
+        invalidate_ccusage_runner_cache();
+        let calls = std::cell::Cell::new(0);
+        let expected = vec![(CcusageRunnerKind::Bunx, "bunx".to_string())];
+
+        let first = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            expected.clone()
+        });
+        let second = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            vec![(CcusageRunnerKind::Npx, "npx".to_string())]
+        });
+
+        assert_eq!(calls.get(), 1);
+        assert_eq!(first, expected);
+        assert_eq!(second, expected);
+        invalidate_ccusage_runner_cache();
+    }
+
+    #[test]
+    fn collect_ccusage_runners_cached_does_not_cache_empty_result() {
+        invalidate_ccusage_runner_cache();
+        let calls = std::cell::Cell::new(0);
+
+        let first = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            Vec::new()
+        });
+        let second = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            vec![(CcusageRunnerKind::Npx, "npx".to_string())]
+        });
+
+        assert!(first.is_empty());
+        assert_eq!(second, vec![(CcusageRunnerKind::Npx, "npx".to_string())]);
+        assert_eq!(calls.get(), 2);
+        invalidate_ccusage_runner_cache();
+    }
+
+    #[test]
+    fn invalidate_ccusage_runner_cache_forces_re_resolution() {
+        invalidate_ccusage_runner_cache();
+        let calls = std::cell::Cell::new(0);
+
+        let first = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            vec![(CcusageRunnerKind::PnpmDlx, "pnpm".to_string())]
+        });
+        invalidate_ccusage_runner_cache();
+        let second = collect_ccusage_runners_cached_with(|| {
+            calls.set(calls.get() + 1);
+            vec![(CcusageRunnerKind::YarnDlx, "yarn".to_string())]
+        });
+
+        assert_eq!(calls.get(), 2);
+        assert_eq!(first, vec![(CcusageRunnerKind::PnpmDlx, "pnpm".to_string())]);
+        assert_eq!(second, vec![(CcusageRunnerKind::YarnDlx, "yarn".to_string())]);
+        invalidate_ccusage_runner_cache();
+    }
+
+    #[test]
+    fn ccusage_query_retries_after_stale_cached_spawn_failure() {
+        invalidate_ccusage_runner_cache();
+        let collect_calls = std::cell::Cell::new(0);
+        let invalidate_calls = std::cell::Cell::new(0);
+        let run_calls = std::cell::Cell::new(0);
+        let opts = CcusageQueryOpts::default();
+
+        let result = run_ccusage_query_with(
+            &opts,
+            CcusageProvider::Claude,
+            "claude",
+            || {
+                collect_calls.set(collect_calls.get() + 1);
+                match collect_calls.get() {
+                    1 => vec![(CcusageRunnerKind::Bunx, "cached-bunx".to_string())],
+                    _ => vec![(CcusageRunnerKind::Npx, "fresh-npx".to_string())],
+                }
+            },
+            || invalidate_calls.set(invalidate_calls.get() + 1),
+            |runners, _, _, _| {
+                run_calls.set(run_calls.get() + 1);
+                match run_calls.get() {
+                    1 => {
+                        assert_eq!(
+                            runners,
+                            &[(CcusageRunnerKind::Bunx, "cached-bunx".to_string())]
+                        );
+                        (true, None)
+                    }
+                    2 => {
+                        assert_eq!(
+                            runners,
+                            &[(CcusageRunnerKind::Npx, "fresh-npx".to_string())]
+                        );
+                        (false, Some(r#"{"daily":[]}"#.to_string()))
+                    }
+                    _ => panic!("unexpected extra run"),
+                }
+            },
+        );
+
+        assert_eq!(result, Ok(r#"{"daily":[]}"#.to_string()));
+        assert_eq!(collect_calls.get(), 2);
+        assert_eq!(invalidate_calls.get(), 1);
+        assert_eq!(run_calls.get(), 2);
     }
 }

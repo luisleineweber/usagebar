@@ -3,6 +3,13 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 import { AboutDialog } from "@/components/about-dialog"
+import { APP_NAME, PROJECT_REPO_URL } from "@/lib/project-metadata"
+
+const changelogState = vi.hoisted(() => ({
+  releases: [] as import("@/hooks/use-changelog").Release[],
+  loading: false,
+  error: null as string | null,
+}))
 
 const openerState = vi.hoisted(() => ({
   openUrlMock: vi.fn(() => Promise.resolve()),
@@ -12,12 +19,17 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: openerState.openUrlMock,
 }))
 
+vi.mock("@/hooks/use-changelog", () => ({
+  useChangelog: () => changelogState,
+}))
+
 describe("AboutDialog", () => {
   it("renders version, links, and maintainers", () => {
     render(<AboutDialog version="1.2.3" onClose={() => {}} />)
-    expect(screen.getByText("OpenUsage")).toBeInTheDocument()
+    expect(screen.getByText(APP_NAME)).toBeInTheDocument()
     expect(screen.getByText("v1.2.3")).toBeInTheDocument()
     expect(screen.getByText("GitHub")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "View Changelog" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "validatedev" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "davidarny" })).toBeInTheDocument()
   })
@@ -40,6 +52,17 @@ describe("AboutDialog", () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it("goes back to about view on Escape when showing changelog", async () => {
+    const onClose = vi.fn()
+    render(<AboutDialog version="1.2.3" onClose={onClose} />)
+
+    await userEvent.click(screen.getByRole("button", { name: "View Changelog" }))
+    await userEvent.keyboard("{Escape}")
+
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByText(APP_NAME)).toBeInTheDocument()
+  })
+
   it("does not close on other keys", async () => {
     const onClose = vi.fn()
     render(<AboutDialog version="1.2.3" onClose={onClose} />)
@@ -56,7 +79,7 @@ describe("AboutDialog", () => {
 
     // Clicking inside the dialog should not close.
     onClose.mockClear()
-    await userEvent.click(screen.getByText("OpenUsage"))
+    await userEvent.click(screen.getByText(APP_NAME))
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -101,6 +124,12 @@ describe("AboutDialog", () => {
     if (original) {
       Object.defineProperty(document, "hidden", original)
     }
+  })
+
+  it("uses the fork repository link", async () => {
+    render(<AboutDialog version="1.2.3" onClose={() => {}} />)
+    await userEvent.click(screen.getByRole("button", { name: "GitHub" }))
+    expect(openerState.openUrlMock).toHaveBeenCalledWith(PROJECT_REPO_URL)
   })
 })
 

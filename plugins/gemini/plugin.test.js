@@ -4,6 +4,7 @@ import { makeCtx } from "../test-helpers.js"
 const SETTINGS_PATH = "~/.gemini/settings.json"
 const CREDS_PATH = "~/.gemini/oauth_creds.json"
 const OAUTH2_PATH = "~/.bun/install/global/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js"
+const WINDOWS_NPM_OAUTH2_PATH = "~/AppData/Roaming/npm/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js"
 
 const LOAD_CODE_ASSIST_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
 const QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
@@ -107,6 +108,57 @@ describe("gemini plugin", () => {
 
     const persisted = JSON.parse(ctx.host.fs.readText(CREDS_PATH))
     expect(persisted.access_token).toBe("new-token")
+  })
+
+  it("refreshes token from the Windows npm global oauth2.js path", async () => {
+    const ctx = makeCtx()
+    const nowMs = 1_700_000_000_000
+    ctx.app.platform = "windows"
+    vi.spyOn(Date, "now").mockReturnValue(nowMs)
+
+    ctx.host.fs.writeText(
+      CREDS_PATH,
+      JSON.stringify({
+        access_token: "old-token",
+        refresh_token: "refresh-token",
+        id_token: makeJwt({ email: "windows@example.com" }),
+        expiry_date: nowMs - 1000,
+      })
+    )
+    ctx.host.fs.writeText(
+      WINDOWS_NPM_OAUTH2_PATH,
+      "const OAUTH_CLIENT_ID='windows-client'; const OAUTH_CLIENT_SECRET='windows-secret';"
+    )
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url === TOKEN_URL) {
+        expect(String(opts.bodyText)).toContain("client_id=windows-client")
+        expect(String(opts.bodyText)).toContain("client_secret=windows-secret")
+        return { status: 200, bodyText: JSON.stringify({ access_token: "windows-token", expires_in: 3600 }) }
+      }
+      if (url === LOAD_CODE_ASSIST_URL) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ tier: "standard-tier", cloudaicompanionProject: "gen-lang-client-999" }),
+        }
+      }
+      if (url === QUOTA_URL) {
+        expect(opts.headers.Authorization).toBe("Bearer windows-token")
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            quotaBuckets: [{ modelId: "gemini-2.5-pro", remainingFraction: 0.4, resetTime: "2099-01-01T00:00:00Z" }],
+          }),
+        }
+      }
+      throw new Error("unexpected url: " + url)
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.plan).toBe("Paid")
+    expect(result.lines.find((line) => line.label === "Pro")).toBeTruthy()
   })
 
   it("uses project fallback and maps workspace tier", async () => {

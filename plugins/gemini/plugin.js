@@ -1,12 +1,16 @@
 (function () {
   const SETTINGS_PATH = "~/.gemini/settings.json"
   const CREDS_PATH = "~/.gemini/oauth_creds.json"
-  const OAUTH2_JS_PATHS = [
+  const SHARED_OAUTH2_JS_PATHS = [
     "~/.bun/install/global/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
     "~/.npm-global/lib/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
     "~/.nvm/versions/node/current/lib/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
     "/opt/homebrew/opt/gemini-cli/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
     "/usr/local/opt/gemini-cli/libexec/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
+  ]
+  const WINDOWS_OAUTH2_JS_PATHS = [
+    "~/AppData/Roaming/npm/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
+    "~/AppData/Roaming/npm/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
   ]
 
   const LOAD_CODE_ASSIST_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
@@ -76,9 +80,25 @@
     return { clientId: idMatch[1], clientSecret: secretMatch[1] }
   }
 
+  function getOauth2JsPaths(ctx) {
+    const candidates = ctx.app.platform === "windows"
+      ? WINDOWS_OAUTH2_JS_PATHS.concat(SHARED_OAUTH2_JS_PATHS)
+      : SHARED_OAUTH2_JS_PATHS
+    const seen = new Set()
+    const out = []
+    for (let i = 0; i < candidates.length; i += 1) {
+      const path = candidates[i]
+      if (seen.has(path)) continue
+      seen.add(path)
+      out.push(path)
+    }
+    return out
+  }
+
   function loadOauthClientCreds(ctx) {
-    for (let i = 0; i < OAUTH2_JS_PATHS.length; i += 1) {
-      const path = OAUTH2_JS_PATHS[i]
+    const paths = getOauth2JsPaths(ctx)
+    for (let i = 0; i < paths.length; i += 1) {
+      const path = paths[i]
       if (!ctx.host.fs.exists(path)) continue
       try {
         const parsed = parseOauthClientCreds(ctx.host.fs.readText(path))

@@ -85,6 +85,54 @@
     return false
   }
 
+  function readSelectedAccountProfileId(ctx) {
+    if (!ctx.host.providerConfig || typeof ctx.host.providerConfig.get !== "function") {
+      return null
+    }
+
+    try {
+      const value = ctx.host.providerConfig.get("selectedAccountProfileId")
+      if (typeof value !== "string") return null
+      const trimmed = value.trim()
+      return trimmed || null
+    } catch (e) {
+      ctx.host.log.warn("selectedAccountProfileId read failed: " + String(e))
+      return null
+    }
+  }
+
+  function loadManagedProfileAuth(ctx, profileId) {
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") {
+      throw "Selected Codex account is unavailable. The secret store is not accessible."
+    }
+
+    const secretKey = "account:" + profileId + ":authJson"
+    let value = null
+    try {
+      value = ctx.host.providerSecrets.read(secretKey)
+    } catch (e) {
+      const message = String(e)
+      if (/not found/i.test(message)) {
+        throw "Selected Codex account is unavailable. Re-import or choose another account."
+      }
+      throw "Selected Codex account could not be read. Try again."
+    }
+
+    const auth = tryParseAuthJson(ctx, value)
+    if (!hasTokenLikeAuth(auth)) {
+      throw "Selected Codex account is invalid. Re-import or choose another account."
+    }
+
+    ctx.host.log.info("auth loaded from managed profile: " + profileId)
+    return {
+      auth,
+      authPath: null,
+      source: "managed-profile",
+      profileId,
+      secretKey,
+    }
+  }
+
   function loadAuthFromKeychain(ctx) {
     if (!ctx.host.keychain || typeof ctx.host.keychain.readGenericPassword !== "function") {
       return null
@@ -110,6 +158,15 @@
     const auth = authState && authState.auth ? authState.auth : null
     if (!auth) return false
 
+    if (authState.source === "managed-profile") {
+      if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.write !== "function") {
+        ctx.host.log.warn("managed Codex profile persistence unsupported in this host")
+        return false
+      }
+      ctx.host.providerSecrets.write(authState.secretKey, JSON.stringify(auth))
+      return true
+    }
+
     if (authState.source === "file" && authState.authPath) {
       ctx.host.fs.writeText(authState.authPath, JSON.stringify(auth, null, 2))
       return true
@@ -129,6 +186,11 @@
   }
 
   function loadAuth(ctx) {
+    const selectedProfileId = readSelectedAccountProfileId(ctx)
+    if (selectedProfileId) {
+      return loadManagedProfileAuth(ctx, selectedProfileId)
+    }
+
     const authPaths = resolveAuthPaths(ctx)
     for (const authPath of authPaths) {
       if (!ctx.host.fs.exists(authPath)) continue

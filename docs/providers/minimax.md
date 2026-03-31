@@ -1,6 +1,6 @@
 # MiniMax
 
-> Uses MiniMax Coding Plan remains API with a user-provided API key.
+> Uses the MiniMax Coding Plan remains API with a user-provided API key.
 
 ## Overview
 
@@ -18,12 +18,26 @@ The plugin supports automatic region detection and reads API keys based on the s
 - If `MINIMAX_CN_API_KEY` is not set: tries `GLOBAL` first, then `CN`
 
 **Key lookup by region:**
-- **CN region**: `MINIMAX_CN_API_KEY` → `MINIMAX_API_KEY` → `MINIMAX_API_TOKEN`
-- **GLOBAL region**: `MINIMAX_API_KEY` → `MINIMAX_API_TOKEN`
+- **CN region**: `MINIMAX_CN_API_KEY` -> `MINIMAX_API_KEY` -> `MINIMAX_API_TOKEN`
+- **GLOBAL region**: `MINIMAX_API_KEY` -> `MINIMAX_API_TOKEN`
 
 If no key is found after attempting both regions, it throws:
 
 - `MiniMax API key missing. Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY.`
+
+## Windows setup
+
+1. Create a persistent user environment variable for either `MINIMAX_API_KEY` or `MINIMAX_CN_API_KEY`.
+2. Restart `UsageBar` so the desktop app can read the updated environment.
+3. Enable the MiniMax provider in Settings and refresh.
+
+PowerShell example:
+
+```powershell
+[Environment]::SetEnvironmentVariable("MINIMAX_API_KEY", "YOUR_API_KEY", "User")
+```
+
+Use `MINIMAX_CN_API_KEY` instead when your account should prefer the CN endpoint first. A one-off `$env:MINIMAX_API_KEY=...` only affects the current shell and will not be visible to a normally launched desktop app.
 
 ## Data Source
 

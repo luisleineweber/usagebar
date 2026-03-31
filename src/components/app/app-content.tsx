@@ -1,12 +1,12 @@
+import { useEffect, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { OverviewPage } from "@/pages/overview"
 import { ProviderDetailPage } from "@/pages/provider-detail"
-import { SettingsPage } from "@/pages/settings"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
-import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
+import type { ProviderConfig } from "@/lib/provider-settings"
 import type {
   AutoUpdateIntervalMinutes,
   DisplayMode,
@@ -18,14 +18,19 @@ import type {
 
 type AppContentDerivedProps = {
   displayPlugins: DisplayPluginState[]
-  settingsPlugins: SettingsPluginState[]
   selectedPlugin: DisplayPluginState | null
+  resolvedSelectedPlugin: DisplayPluginState | null
+  hasResolvedViews: boolean
+  isPanelResizing?: boolean
 }
 
 export type AppContentActionProps = {
   onRetryPlugin: (id: string) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
+  onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
+  onProviderSecretSave: (providerId: string, secretKey: string, value: string) => Promise<void>
+  onProviderSecretDelete: (providerId: string, secretKey: string) => Promise<void>
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   onThemeModeChange: (mode: ThemeMode) => void
   onDisplayModeChange: (mode: DisplayMode) => void
@@ -38,25 +43,23 @@ export type AppContentActionProps = {
 }
 
 export type AppContentProps = AppContentDerivedProps & AppContentActionProps
+  & {
+    onOpenProviderSettings?: (providerId: string) => void
+  }
 
 export function AppContent({
   displayPlugins,
-  settingsPlugins,
   selectedPlugin,
+  resolvedSelectedPlugin,
+  hasResolvedViews,
+  isPanelResizing = false,
   onRetryPlugin,
-  onReorder,
-  onToggle,
-  onAutoUpdateIntervalChange,
-  onThemeModeChange,
-  onDisplayModeChange,
-  onResetTimerDisplayModeChange,
   onResetTimerDisplayModeToggle,
-  onMenubarIconStyleChange,
-  traySettingsPreview,
-  onGlobalShortcutChange,
-  onStartOnLoginChange,
+  onOpenProviderSettings,
 }: AppContentProps) {
-  const { activeView } = useAppUiStore(
+  const {
+    activeView,
+  } = useAppUiStore(
     useShallow((state) => ({
       activeView: state.activeView,
     }))
@@ -65,25 +68,42 @@ export function AppContent({
   const {
     displayMode,
     resetTimerDisplayMode,
-    menubarIconStyle,
-    autoUpdateInterval,
-    globalShortcut,
-    themeMode,
-    startOnLogin,
   } = useAppPreferencesStore(
     useShallow((state) => ({
       displayMode: state.displayMode,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
-      menubarIconStyle: state.menubarIconStyle,
-      autoUpdateInterval: state.autoUpdateInterval,
-      globalShortcut: state.globalShortcut,
-      themeMode: state.themeMode,
-      startOnLogin: state.startOnLogin,
     }))
   )
+  const [transitionKey, setTransitionKey] = useState(activeView)
+  const [isTransitioning, setIsTransitioning] = useState(false)
 
-  if (activeView === "home") {
-    return (
+  useEffect(() => {
+    if (transitionKey === activeView) return
+    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setTransitionKey(activeView)
+      setIsTransitioning(false)
+      return
+    }
+
+    setTransitionKey(activeView)
+    setIsTransitioning(true)
+    const timeoutId = window.setTimeout(() => {
+      setIsTransitioning(false)
+    }, 120)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [activeView, transitionKey])
+
+  const retryPlugin = selectedPlugin ?? resolvedSelectedPlugin
+  const handleRetry = retryPlugin
+    && retryPlugin.meta.supportState !== "comingSoonOnWindows"
+    ? () => onRetryPlugin(retryPlugin.meta.id)
+    : /* v8 ignore next */ undefined
+
+  const content =
+    activeView === "home" ? (
       <OverviewPage
         plugins={displayPlugins}
         onRetryPlugin={onRetryPlugin}
@@ -91,45 +111,27 @@ export function AppContent({
         resetTimerDisplayMode={resetTimerDisplayMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
-    )
-  }
-
-  if (activeView === "settings") {
-    return (
-      <SettingsPage
-        plugins={settingsPlugins}
-        onReorder={onReorder}
-        onToggle={onToggle}
-        autoUpdateInterval={autoUpdateInterval}
-        onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
-        themeMode={themeMode}
-        onThemeModeChange={onThemeModeChange}
+    ) : (
+      <ProviderDetailPage
+        plugin={resolvedSelectedPlugin}
+        hasResolvedViews={hasResolvedViews}
+        onRetry={handleRetry}
+        onOpenProviderSettings={onOpenProviderSettings}
         displayMode={displayMode}
-        onDisplayModeChange={onDisplayModeChange}
         resetTimerDisplayMode={resetTimerDisplayMode}
-        onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
-        menubarIconStyle={menubarIconStyle}
-        onMenubarIconStyleChange={onMenubarIconStyleChange}
-        traySettingsPreview={traySettingsPreview}
-        globalShortcut={globalShortcut}
-        onGlobalShortcutChange={onGlobalShortcutChange}
-        startOnLogin={startOnLogin}
-        onStartOnLoginChange={onStartOnLoginChange}
+        onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
     )
-  }
-
-  const handleRetry = selectedPlugin
-    ? () => onRetryPlugin(selectedPlugin.meta.id)
-    : /* v8 ignore next */ undefined
 
   return (
-    <ProviderDetailPage
-      plugin={selectedPlugin}
-      onRetry={handleRetry}
-      displayMode={displayMode}
-      resetTimerDisplayMode={resetTimerDisplayMode}
-      onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
-    />
+    <div
+      key={transitionKey}
+      className={[
+        "transition-[opacity,transform] duration-120 ease-out motion-reduce:transition-none",
+        isTransitioning || isPanelResizing ? "opacity-95 translate-y-[1px]" : "opacity-100 translate-y-0",
+      ].join(" ")}
+    >
+      {content}
+    </div>
   )
 }

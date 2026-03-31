@@ -37,13 +37,34 @@ export const makeCtx = () => {
           return Array.from(out).sort()
         },
       },
+      crypto: {
+        encryptAes256Gcm: vi.fn((plaintext, keyB64) =>
+          JSON.stringify({
+            nonce: "test-nonce",
+            ciphertext: ctx.base64.encode(`${String(keyB64)}::${String(plaintext)}`),
+          })
+        ),
+        decryptAes256Gcm: vi.fn((envelope, keyB64) => {
+          const parsed = JSON.parse(String(envelope))
+          const decoded = ctx.base64.decode(String(parsed.ciphertext || ""))
+          const prefix = `${String(keyB64)}::`
+          if (!decoded.startsWith(prefix)) {
+            throw new Error("AES-256-GCM decrypt failed")
+          }
+          return decoded.slice(prefix.length)
+        }),
+      },
       env: {
         get: vi.fn(() => null),
       },
       keychain: {
         readGenericPassword: vi.fn(),
+        readGenericPasswordForAccount: vi.fn(),
         writeGenericPassword: vi.fn(),
         deleteGenericPassword: vi.fn(),
+      },
+      gh: {
+        readAuthToken: vi.fn(() => null),
       },
       sqlite: {
         query: vi.fn(() => "[]"),
@@ -51,6 +72,10 @@ export const makeCtx = () => {
       },
       http: {
         request: vi.fn(),
+      },
+      providerSecrets: {
+        read: vi.fn(() => null),
+        write: vi.fn(),
       },
       ls: {
         discover: vi.fn(() => null),

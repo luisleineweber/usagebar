@@ -4,32 +4,50 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to publish (for example v0.1.0-beta.1)
+        required: true
+        type: string
+      ref:
+        description: Git ref, branch, or SHA to build. Defaults to the current ref.
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   publish:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
         include:
+          - platform: windows-latest
+            args: "--bundles nsis"
           - platform: macos-latest
             args: "--target aarch64-apple-darwin"
           - platform: macos-latest
             args: "--target x86_64-apple-darwin"
     runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        shell: bash
     env:
-      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ github.event.inputs.ref || github.ref }}
 
       - uses: dtolnay/rust-toolchain@stable
+        if: runner.os == 'macOS'
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os == 'Windows'
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
@@ -48,39 +66,11 @@ jobs:
             exit 1
           fi
 
-      - name: Validate release tag
-        run: |
-          if [[ -z "$RELEASE_TAG" ]]; then
-            echo "Missing RELEASE_TAG (push a v* tag)."
-            exit 1
-          fi
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid RELEASE_TAG: $RELEASE_TAG (expected vMAJOR.MINOR.PATCH)"
-            exit 1
-          fi
-
-      - name: Validate app version matches tag
-        run: |
-          TAG_VERSION="${RELEASE_TAG#v}"
-
-          TAURI_CONF_VERSION=$(node -p 'require("./src-tauri/tauri.conf.json").version')
-          CARGO_VERSION=$(awk -F'"' '/^version =/ { print $2; exit }' ./src-tauri/Cargo.toml)
-          PKG_VERSION=$(node -p 'require("./package.json").version')
-
-          if [[ "$TAURI_CONF_VERSION" != "$TAG_VERSION" ]]; then
-            echo "src-tauri/tauri.conf.json version ($TAURI_CONF_VERSION) != tag version ($TAG_VERSION)"
-            exit 1
-          fi
-          if [[ "$CARGO_VERSION" != "$TAG_VERSION" ]]; then
-            echo "src-tauri/Cargo.toml version ($CARGO_VERSION) != tag version ($TAG_VERSION)"
-            exit 1
-          fi
-          if [[ "$PKG_VERSION" != "$TAG_VERSION" ]]; then
-            echo "package.json version ($PKG_VERSION) != tag version ($TAG_VERSION)"
-            exit 1
-          fi
+      - name: Release preflight
+        run: node ./scripts/release-preflight.mjs --release-tag "$RELEASE_TAG"
 
       - name: Import Apple Developer Certificate
+        if: runner.os == 'macOS'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -113,7 +103,7 @@ jobs:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: ${{ env.RELEASE_TAG }}
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           includeUpdaterJson: true
           args: ${{ matrix.args }}
 
@@ -125,3 +115,6 @@ jobs:
 
           printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
           printf '%s\n' "$ASSETS" | grep -Eq '\.sig$' || { echo "Missing updater signatures (.sig)"; exit 1; }
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            printf '%s\n' "$ASSETS" | grep -Eq 'setup\.exe$' || { echo "Missing Windows setup executable"; exit 1; }
+          fi

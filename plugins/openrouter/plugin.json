@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "openrouter",
+  "name": "OpenRouter",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#6F42C1",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored OpenRouter API key or OPENROUTER_API_KEY to fetch credits and key-rate data."
+    }
+  },
+  "lines": [
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
+    { "type": "text", "label": "Requests", "scope": "detail" }
+  ]
+}

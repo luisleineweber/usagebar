@@ -6,6 +6,12 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#020202",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Experimental on Windows. Run `droid` so ~/.factory/auth.v2.file and ~/.factory/auth.v2.key exist before launching UsageBar. Legacy auth.encrypted and auth.json still work."
+    }
+  },
   "lines": [
     { "type": "progress", "label": "Standard", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "Premium", "scope": "detail" }

@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose::STANDARD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -21,6 +21,46 @@ pub struct PluginLink {
     pub url: String,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowsSupportState {
+    Supported,
+    Experimental,
+    #[default]
+    Blocked,
+}
+
+fn default_surfaced() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowsSupportConfig {
+    #[serde(default)]
+    pub state: WindowsSupportState,
+    #[serde(default = "default_surfaced")]
+    pub surfaced: bool,
+    pub message: Option<String>,
+}
+
+impl Default for WindowsSupportConfig {
+    fn default() -> Self {
+        Self {
+            state: WindowsSupportState::Blocked,
+            surfaced: true,
+            message: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformSupport {
+    #[serde(default)]
+    pub windows: WindowsSupportConfig,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
@@ -34,6 +74,8 @@ pub struct PluginManifest {
     pub lines: Vec<ManifestLine>,
     #[serde(default)]
     pub links: Vec<PluginLink>,
+    #[serde(default)]
+    pub platform_support: PlatformSupport,
 }
 
 #[derive(Debug, Clone)]
@@ -128,7 +170,10 @@ fn sanitize_plugin_links(plugin_id: &str, links: Vec<PluginLink>) -> Vec<PluginL
             let url = link.url.trim().to_string();
 
             if label.is_empty() || url.is_empty() {
-                log::warn!("plugin {} has link with empty label/url; skipping", plugin_id);
+                log::warn!(
+                    "plugin {} has link with empty label/url; skipping",
+                    plugin_id
+                );
                 return None;
             }
             if !(url.starts_with("https://") || url.starts_with("http://")) {
@@ -263,6 +308,70 @@ mod tests {
         assert_eq!(manifest.links.len(), 2);
         assert_eq!(manifest.links[0].label, "Status");
         assert_eq!(manifest.links[1].url, "https://example.com/billing");
+    }
+
+    #[test]
+    fn windows_support_defaults_to_blocked_and_surfaced() {
+        let manifest = parse_manifest(
+            r#"
+            {
+              "schemaVersion": 1,
+              "id": "x",
+              "name": "X",
+              "version": "0.0.1",
+              "entry": "plugin.js",
+              "icon": "icon.svg",
+              "brandColor": null,
+              "lines": [
+                { "type": "progress", "label": "A", "scope": "overview", "primaryOrder": 1 }
+              ]
+            }
+            "#,
+        );
+
+        assert_eq!(
+            manifest.platform_support.windows.state,
+            WindowsSupportState::Blocked
+        );
+        assert!(manifest.platform_support.windows.surfaced);
+        assert!(manifest.platform_support.windows.message.is_none());
+    }
+
+    #[test]
+    fn windows_support_is_parsed_when_present() {
+        let manifest = parse_manifest(
+            r#"
+            {
+              "schemaVersion": 1,
+              "id": "x",
+              "name": "X",
+              "version": "0.0.1",
+              "entry": "plugin.js",
+              "icon": "icon.svg",
+              "brandColor": null,
+              "platformSupport": {
+                "windows": {
+                  "state": "experimental",
+                  "surfaced": false,
+                  "message": "Experimental on Windows."
+                }
+              },
+              "lines": [
+                { "type": "progress", "label": "A", "scope": "overview", "primaryOrder": 1 }
+              ]
+            }
+            "#,
+        );
+
+        assert_eq!(
+            manifest.platform_support.windows.state,
+            WindowsSupportState::Experimental
+        );
+        assert!(!manifest.platform_support.windows.surfaced);
+        assert_eq!(
+            manifest.platform_support.windows.message.as_deref(),
+            Some("Experimental on Windows.")
+        );
     }
 
     #[test]

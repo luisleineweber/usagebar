@@ -10,6 +10,7 @@
     "CLion",
     "DataGrip",
     "DataSpell",
+    "Fleet",
     "GoLand",
     "IdeaIC",
     "IntelliJIdea",
@@ -26,18 +27,32 @@
 
   function platformBaseDirs(platform) {
     if (platform === "macos") {
-      return ["~/Library/Application Support/JetBrains"]
+      return [
+        "~/Library/Application Support/JetBrains",
+        "~/Library/Application Support/Google",
+      ]
     }
     if (platform === "linux") {
-      return ["~/.config/JetBrains"]
+      return [
+        "~/.config/JetBrains",
+        "~/.local/share/JetBrains",
+        "~/.config/Google",
+      ]
     }
     if (platform === "windows") {
-      return ["~/AppData/Roaming/JetBrains"]
+      return [
+        "~/AppData/Roaming/JetBrains",
+        "~/AppData/Roaming/Google",
+      ]
     }
     return [
       "~/Library/Application Support/JetBrains",
+      "~/Library/Application Support/Google",
       "~/.config/JetBrains",
+      "~/.local/share/JetBrains",
+      "~/.config/Google",
       "~/AppData/Roaming/JetBrains",
+      "~/AppData/Roaming/Google",
     ]
   }
 
@@ -45,9 +60,10 @@
     if (typeof name !== "string") return false
     var trimmed = name.trim()
     if (!trimmed) return false
+    var lowered = trimmed.toLowerCase()
     var hasPrefix = false
     for (var i = 0; i < PRODUCT_PREFIXES.length; i += 1) {
-      if (trimmed.indexOf(PRODUCT_PREFIXES[i]) === 0) {
+      if (lowered.indexOf(PRODUCT_PREFIXES[i].toLowerCase()) === 0) {
         hasPrefix = true
         break
       }

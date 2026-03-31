@@ -6,13 +6,22 @@ import { useProbe } from "@/hooks/app/use-probe"
 import { useSettingsBootstrap } from "@/hooks/app/use-settings-bootstrap"
 import { useSettingsDisplayActions } from "@/hooks/app/use-settings-display-actions"
 import { useSettingsPluginActions } from "@/hooks/app/use-settings-plugin-actions"
-import { useSettingsPluginList } from "@/hooks/app/use-settings-plugin-list"
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { track } from "@/lib/analytics"
-import { REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
+import { getProbeEligiblePluginIds, REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
+import {
+  clearProviderSecretMetadata,
+  loadProviderConfigs,
+  saveProviderConfigs,
+  setProviderSecretMetadata,
+  updateProviderConfig,
+  type ProviderConfig,
+} from "@/lib/provider-settings"
+import { deleteProviderSecret, setProviderSecret } from "@/lib/provider-secrets"
 import { type PluginContextAction } from "@/components/side-nav"
+import type { ActiveView } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
@@ -36,12 +45,16 @@ function App() {
     setPluginsMeta,
     pluginSettings,
     setPluginSettings,
+    providerConfigs,
+    setProviderConfigs,
   } = useAppPluginStore(
     useShallow((state) => ({
       pluginsMeta: state.pluginsMeta,
       setPluginsMeta: state.setPluginsMeta,
       pluginSettings: state.pluginSettings,
       setPluginSettings: state.setPluginSettings,
+      providerConfigs: state.providerConfigs,
+      setProviderConfigs: state.setProviderConfigs,
     }))
   )
 
@@ -167,18 +180,135 @@ function App() {
     scheduleTrayIconUpdate,
   })
 
-  const settingsPlugins = useSettingsPluginList({
-    pluginSettings,
-    pluginsMeta,
-  })
+  useEffect(() => {
+    let cancelled = false
 
-  const { displayPlugins, navPlugins, selectedPlugin } = useAppPluginViews({
+    loadProviderConfigs()
+      .then((configs) => {
+        if (!cancelled) {
+          setProviderConfigs(configs)
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load provider configs:", error)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [setProviderConfigs])
+
+  const { displayPlugins, navPlugins, selectedPlugin, resolvedSelectedPlugin, hasResolvedViews } = useAppPluginViews({
     activeView,
     setActiveView,
     pluginSettings,
     pluginsMeta,
     pluginStates,
   })
+
+  const providerConfigsRef = useRef(providerConfigs)
+  useEffect(() => {
+    providerConfigsRef.current = providerConfigs
+  }, [providerConfigs])
+
+  const catchUpProbeIdsRef = useRef<Set<string>>(new Set())
+
+  const persistProviderConfigs = useCallback(async (nextConfigs: typeof providerConfigs) => {
+    setProviderConfigs(nextConfigs)
+    await saveProviderConfigs(nextConfigs)
+  }, [setProviderConfigs])
+
+  const handleProviderConfigChange = useCallback(async (
+    providerId: string,
+    patch: Partial<ProviderConfig>
+  ) => {
+    const nextConfigs = updateProviderConfig(providerConfigsRef.current, providerId, patch)
+    await persistProviderConfigs(nextConfigs)
+  }, [persistProviderConfigs])
+
+  const handleProviderSecretSave = useCallback(async (
+    providerId: string,
+    secretKey: string,
+    value: string
+  ) => {
+    try {
+      await setProviderSecret(providerId, secretKey, value)
+      const nextConfigs = setProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
+      await persistProviderConfigs(nextConfigs)
+    } catch (error) {
+      console.error("Failed to save provider secret:", error)
+      throw error
+    }
+  }, [persistProviderConfigs])
+
+  const handleProviderSecretDelete = useCallback(async (
+    providerId: string,
+    secretKey: string
+  ) => {
+    try {
+      await deleteProviderSecret(providerId, secretKey)
+      const nextConfigs = clearProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
+      await persistProviderConfigs(nextConfigs)
+    } catch (error) {
+      console.error("Failed to delete provider secret:", error)
+      throw error
+    }
+  }, [persistProviderConfigs])
+
+  const handlePanelFocus = useCallback((targetView?: ActiveView) => {
+    if (!pluginSettings) return
+    const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
+    const explicitTargetView = targetView?.trim()
+
+    const idsToRefresh = explicitTargetView && explicitTargetView !== "home" && explicitTargetView !== "settings"
+      ? supportedEnabledIds.filter((id) => id === explicitTargetView)
+      : activeView !== "home" && activeView !== "settings"
+      ? supportedEnabledIds.filter((id) => id === activeView)
+      : supportedEnabledIds.filter((id) => {
+          const state = pluginStates[id]
+          if (!state) return true
+          if (state.loading) return false
+          return state.error !== null || state.data === null
+        })
+
+    for (const id of idsToRefresh) {
+      handleRetryPlugin(id)
+    }
+  }, [activeView, handleRetryPlugin, pluginSettings, pluginStates, pluginsMeta])
+
+  useEffect(() => {
+    if (!pluginSettings) return
+
+    const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
+    const idsToCatchUp = supportedEnabledIds.filter((id) => {
+      if (catchUpProbeIdsRef.current.has(id)) return false
+      const state = pluginStates[id]
+      if (!state) return true
+      return !state.loading && state.data === null && state.error === null && state.lastSuccessAt === null
+    })
+
+    if (idsToCatchUp.length === 0) return
+
+    for (const id of idsToCatchUp) {
+      catchUpProbeIdsRef.current.add(id)
+    }
+
+    setLoadingForPlugins(idsToCatchUp)
+    startBatch(idsToCatchUp)
+      .then((startedIds) => {
+        if (startedIds && startedIds.length > 0) return
+        for (const id of idsToCatchUp) {
+          catchUpProbeIdsRef.current.delete(id)
+        }
+      })
+      .catch((error) => {
+        for (const id of idsToCatchUp) {
+          catchUpProbeIdsRef.current.delete(id)
+        }
+        console.error("Failed to start catch-up probe batch:", error)
+        setErrorForPlugins(idsToCatchUp, "Failed to start probe")
+      })
+  }, [pluginSettings, pluginStates, pluginsMeta, setErrorForPlugins, setLoadingForPlugins, startBatch])
 
   const pluginSettingsRef = useRef(pluginSettings)
   useEffect(() => {
@@ -217,23 +347,27 @@ function App() {
 
   const isPluginRefreshAvailable = useCallback(
     (pluginId: string) => {
+      const pluginMeta = pluginsMeta.find((plugin) => plugin.id === pluginId)
+      if (pluginMeta?.supportState === "comingSoonOnWindows") return false
       const pluginState = pluginStates[pluginId]
       if (!pluginState) return true
       if (pluginState.loading) return false
       if (!pluginState.lastManualRefreshAt) return true
       return Date.now() - pluginState.lastManualRefreshAt >= REFRESH_COOLDOWN_MS
     },
-    [pluginStates]
+    [pluginStates, pluginsMeta]
   )
 
   return (
     <AppShell
       onRefreshAll={handleRefreshAll}
+      onPanelFocus={handlePanelFocus}
       navPlugins={navPlugins}
       displayPlugins={displayPlugins}
-      settingsPlugins={settingsPlugins}
       autoUpdateNextAt={autoUpdateNextAt}
       selectedPlugin={selectedPlugin}
+      resolvedSelectedPlugin={resolvedSelectedPlugin}
+      hasResolvedViews={hasResolvedViews}
       onPluginContextAction={handlePluginContextAction}
       isPluginRefreshAvailable={isPluginRefreshAvailable}
       onNavReorder={handleReorder}
@@ -241,6 +375,9 @@ function App() {
         onRetryPlugin: handleRetryPlugin,
         onReorder: handleReorder,
         onToggle: handleToggle,
+        onProviderConfigChange: handleProviderConfigChange,
+        onProviderSecretSave: handleProviderSecretSave,
+        onProviderSecretDelete: handleProviderSecretDelete,
         onAutoUpdateIntervalChange: handleAutoUpdateIntervalChange,
         onThemeModeChange: handleThemeModeChange,
         onDisplayModeChange: handleDisplayModeChange,

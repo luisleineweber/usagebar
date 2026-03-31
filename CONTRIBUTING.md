@@ -1,10 +1,10 @@
-# Contributing to OpenUsage
+# Contributing to UsageBar
 
-OpenUsage accepts contributions, but has a high quality bar. Read this entire document before opening a PR.
+UsageBar accepts contributions, but the bar is intentionally high. Read this document before opening a PR.
 
 ## Philosophy
 
-OpenUsage is highly opinionated. It focuses on clean design, fast performance, and a great user experience. The feature set is intentionally limited to core functionality: tracking AI coding subscription usage, nothing more. Contributions that try to expand that scope, add unnecessary complexity, or compromise the UX will be closed.
+UsageBar is highly opinionated. It focuses on a fast Windows tray experience for AI coding subscription usage tracking. Contributions that expand the scope, add avoidable complexity, or compromise the UX will be closed.
 
 If you're unsure whether your idea fits, open an issue first.
 
@@ -15,7 +15,7 @@ If you're unsure whether your idea fits, open an issue first.
 - Test your changes. If it touches UI, include before/after screenshots.
 - Keep it simple. Don't over-engineer.
 - One PR per concern. Don't bundle unrelated changes.
-- Match the existing design language. OpenUsage has a specific look and feel.
+- Match the existing design language. UsageBar has a specific look and feel.
 
 ## License Agreement
 
@@ -29,7 +29,8 @@ By submitting a pull request, you agree that your contribution is licensed under
 2. Create a branch (`feat/my-change`, `fix/some-bug`, etc.)
 3. Make your changes
 4. Run `bun run build` and `bun run test` to verify nothing is broken
-5. Open a PR against `main`
+5. Run `bun run release:check` if you touched release-facing metadata, packaging, or updater paths
+6. Open a PR against `main`
 
 ### Add a provider plugin
 
@@ -41,7 +42,7 @@ Each provider is a plugin. See the [Plugin API docs](docs/plugins/api.md) for th
 4. Test it locally with `bun tauri dev`
 5. Open a PR with screenshots showing it working
 
-You can also [open an issue](https://github.com/robinebers/openusage/issues/new?template=new_provider.yml) to request a provider without building it yourself.
+You can also [open an issue](https://github.com/Loues000/usagebar/issues/new?template=new_provider.yml) to request a provider without building it yourself.
 
 ### Fix a bug
 
@@ -52,7 +53,7 @@ You can also [open an issue](https://github.com/robinebers/openusage/issues/new?
 
 ### Request a feature
 
-Don't open a PR for large features without discussing first. [Open an issue](https://github.com/robinebers/openusage/issues/new?template=feature_request.yml) and make your case.
+Don't open a PR for large features without discussing first. [Open an issue](https://github.com/Loues000/usagebar/issues/new?template=feature_request.yml) and make your case.
 
 ## What Gets Accepted
 
@@ -77,15 +78,13 @@ Don't open a PR for large features without discussing first. [Open an issue](htt
 - Follow existing patterns in the codebase
 - No new dependencies without justification
 
-## Maintainers
+## Releases
 
-- [@robinebers](https://github.com/robinebers) (lead)
-- [@validatedev](https://github.com/validatedev)
-- [@davidarny](https://github.com/davidarny)
-
-All PRs require approval from at least 2 maintainers before merging.
-Release tags (`v*`) are owner-managed and can only be created by [@robinebers](https://github.com/robinebers).
+- Release tags (`v*`) are maintainer-managed.
+- Before creating a release tag, run `bun run release:check -- --release-tag vX.Y.Z --require-clean`.
+- If you change packaging, updater, or version metadata, also run `bun run build:release -- --bundles nsis` on Windows.
+- The release workflow publishes from `.github/workflows/publish.yml`; the manual steps and expectations are documented in [docs/releasing.md](docs/releasing.md).
 
 ## Questions?
 
-Open a [bug report](https://github.com/robinebers/openusage/issues/new?template=bug_report.yml) or [feature request](https://github.com/robinebers/openusage/issues/new?template=feature_request.yml) using the issue templates.
+Open a [bug report](https://github.com/Loues000/usagebar/issues/new?template=bug_report.yml) or [feature request](https://github.com/Loues000/usagebar/issues/new?template=feature_request.yml) using the issue templates.

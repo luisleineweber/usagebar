@@ -31,7 +31,6 @@ tmpcov-gem
 # Agent working files
 docs/choices.md
 docs/breadcrumbs.md
-docs/specs/*
 plans/*
 package-lock.json
 

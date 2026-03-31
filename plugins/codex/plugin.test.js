@@ -18,6 +18,41 @@ describe("codex plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("uses selected managed profile auth when configured", async () => {
+    const ctx = makeCtx()
+    ctx.host.providerConfig = {
+      get: vi.fn((key) => (key === "selectedAccountProfileId" ? "profile-1" : null)),
+    }
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "account:profile-1:authJson"
+        ? JSON.stringify({
+            tokens: { access_token: "managed-token" },
+            last_refresh: new Date().toISOString(),
+          })
+        : null
+    )
+    ctx.host.http.request.mockImplementation((opts) => {
+      expect(opts.headers.Authorization).toBe("Bearer managed-token")
+      return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+  })
+
+  it("throws explicit error when selected managed profile is missing", async () => {
+    const ctx = makeCtx()
+    ctx.host.providerConfig = {
+      get: vi.fn((key) => (key === "selectedAccountProfileId" ? "missing-profile" : null)),
+    }
+    ctx.host.providerSecrets.read.mockImplementation(() => {
+      throw new Error("provider secret not found")
+    })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Selected Codex account is unavailable")
+  })
+
   it("loads auth from keychain when auth file is missing", async () => {
     const ctx = makeCtx()
     ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify({
@@ -192,6 +227,34 @@ describe("codex plugin", () => {
     const [service, payload] = ctx.host.keychain.writeGenericPassword.mock.calls[0]
     expect(service).toBe("Codex Auth")
     expect(String(payload)).toContain("\"access_token\":\"new\"")
+  })
+
+  it("refreshes managed profile auth and writes back to provider secret storage", async () => {
+    const ctx = makeCtx()
+    ctx.host.providerConfig = {
+      get: vi.fn((key) => (key === "selectedAccountProfileId" ? "profile-1" : null)),
+    }
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "account:profile-1:authJson"
+        ? JSON.stringify({
+            tokens: { access_token: "old", refresh_token: "refresh", account_id: "acc" },
+            last_refresh: "2000-01-01T00:00:00.000Z",
+          })
+        : null
+    )
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("oauth/token")) {
+        return { status: 200, bodyText: JSON.stringify({ access_token: "new" }) }
+      }
+      return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(ctx.host.providerSecrets.write).toHaveBeenCalledTimes(1)
+    expect(ctx.host.providerSecrets.write.mock.calls[0][0]).toBe("account:profile-1:authJson")
+    expect(String(ctx.host.providerSecrets.write.mock.calls[0][1])).toContain("\"access_token\":\"new\"")
   })
 
   it("omits token lines when ccusage reports no_runner", async () => {

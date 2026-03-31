@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   isTauriMock: vi.fn(() => false),
   trackMock: vi.fn(),
   setSizeMock: vi.fn(),
+  hideWindowMock: vi.fn(),
   currentMonitorMock: vi.fn(),
   startBatchMock: vi.fn(),
   savePluginSettingsMock: vi.fn(),
@@ -27,6 +28,8 @@ const state = vi.hoisted(() => ({
   saveGlobalShortcutMock: vi.fn(),
   loadStartOnLoginMock: vi.fn(),
   saveStartOnLoginMock: vi.fn(),
+  loadProviderConfigsMock: vi.fn(),
+  saveProviderConfigsMock: vi.fn(),
   autostartEnableMock: vi.fn(),
   autostartDisableMock: vi.fn(),
   autostartIsEnabledMock: vi.fn(),
@@ -171,7 +174,7 @@ vi.mock("@tauri-apps/api/path", () => ({
 }))
 
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ setSize: state.setSizeMock }),
+  getCurrentWindow: () => ({ setSize: state.setSizeMock, hide: state.hideWindowMock }),
   PhysicalSize: class {
     width: number
     height: number
@@ -241,7 +244,18 @@ vi.mock("@/lib/settings", async () => {
   }
 })
 
+vi.mock("@/lib/provider-settings", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/provider-settings")>("@/lib/provider-settings")
+  return {
+    ...actual,
+    loadProviderConfigs: state.loadProviderConfigsMock,
+    saveProviderConfigs: state.saveProviderConfigsMock,
+  }
+})
+
 import { App } from "@/App"
+import { SettingsWindowApp } from "@/settings-window-app"
+import { APP_NAME } from "@/lib/project-metadata"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
@@ -258,6 +272,7 @@ describe("App", () => {
     state.isTauriMock.mockReturnValue(false)
     state.trackMock.mockReset()
     state.setSizeMock.mockReset()
+    state.hideWindowMock.mockReset()
     state.currentMonitorMock.mockReset()
     state.startBatchMock.mockReset()
     state.savePluginSettingsMock.mockReset()
@@ -277,6 +292,8 @@ describe("App", () => {
     state.saveGlobalShortcutMock.mockReset()
     state.loadStartOnLoginMock.mockReset()
     state.saveStartOnLoginMock.mockReset()
+    state.loadProviderConfigsMock.mockReset()
+    state.saveProviderConfigsMock.mockReset()
     state.autostartEnableMock.mockReset()
     state.autostartDisableMock.mockReset()
     state.autostartIsEnabledMock.mockReset()
@@ -314,6 +331,8 @@ describe("App", () => {
     state.saveGlobalShortcutMock.mockResolvedValue(undefined)
     state.loadStartOnLoginMock.mockResolvedValue(false)
     state.saveStartOnLoginMock.mockResolvedValue(undefined)
+    state.loadProviderConfigsMock.mockResolvedValue({})
+    state.saveProviderConfigsMock.mockResolvedValue(undefined)
     state.autostartEnableMock.mockResolvedValue(undefined)
     state.autostartDisableMock.mockResolvedValue(undefined)
     state.autostartIsEnabledMock.mockResolvedValue(false)
@@ -324,6 +343,7 @@ describe("App", () => {
         return 100
       },
     })
+    state.hideWindowMock.mockResolvedValue(undefined)
     state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 } })
     state.startBatchMock.mockResolvedValue(["a"])
     state.trayGetByIdMock.mockResolvedValue({
@@ -366,6 +386,13 @@ describe("App", () => {
     return contextAction as () => void
   }
 
+  const openSettings = async () => {
+    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
+    await userEvent.click(settingsButtons[0])
+  }
+
+  const renderSettingsWindow = () => render(<SettingsWindowApp />)
+
   it("applies theme mode changes to document", async () => {
     const mq = {
       matches: false,
@@ -374,9 +401,7 @@ describe("App", () => {
     } as unknown as MediaQueryList
     const mmSpy = vi.spyOn(window, "matchMedia").mockReturnValue(mq)
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     // Dark
     await userEvent.click(await screen.findByRole("radio", { name: "Dark" }))
@@ -399,8 +424,66 @@ describe("App", () => {
     await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
     await waitFor(() => expect(state.savePluginSettingsMock).toHaveBeenCalled())
     await waitFor(() => expect(state.migrateLegacyTraySettingsMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "apply_panel_bounds",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
     expect(screen.getByText("Alpha")).toBeInTheDocument()
-    expect(state.setSizeMock).toHaveBeenCalled()
+  })
+
+  it("keeps surfaced OpenCode in the plugin list and preserves saved settings", async () => {
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          { id: "codex", name: "Codex", iconUrl: "icon-codex", primaryCandidates: [], lines: [] },
+          {
+            id: "opencode",
+            name: "OpenCode",
+            iconUrl: "icon-opencode",
+            supportState: "experimental",
+            supportMessage: "Experimental on Windows.",
+            isSurfaced: true,
+            primaryCandidates: [],
+            lines: [],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["opencode", "codex"], disabled: [] })
+
+    render(<App />)
+
+    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
+    expect(state.savePluginSettingsMock).not.toHaveBeenCalledWith({ order: ["codex"], disabled: [] })
+  })
+
+  it("filters hidden providers from surfaced plugins and rewrites saved settings", async () => {
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          { id: "codex", name: "Codex", iconUrl: "icon-codex", primaryCandidates: [], lines: [] },
+          {
+            id: "factory",
+            name: "Factory",
+            iconUrl: "icon-factory",
+            isSurfaced: false,
+            primaryCandidates: [],
+            lines: [],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["factory", "codex"], disabled: [] })
+
+    render(<App />)
+
+    await waitFor(() =>
+      expect(state.savePluginSettingsMock).toHaveBeenCalledWith({ order: ["codex"], disabled: [] })
+    )
   })
 
   it("calls migrateLegacyTraySettings before loadMenubarIconStyle during bootstrap", async () => {
@@ -671,7 +754,7 @@ describe("App", () => {
     render(<App />)
 
     // Open about via version button in footer
-    await userEvent.click(await screen.findByRole("button", { name: /OpenUsage/i }))
+    await userEvent.click(await screen.findByRole("button", { name: new RegExp(APP_NAME, "i") }))
     await screen.findByText("Built by")
 
     // Close about via ESC key
@@ -682,18 +765,14 @@ describe("App", () => {
   })
 
   it("updates display mode in settings", async () => {
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     await userEvent.click(await screen.findByRole("radio", { name: "Used" }))
     expect(state.saveDisplayModeMock).toHaveBeenCalledWith("used")
   })
 
   it("settings UI persists menubar icon style change", async () => {
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     expect(screen.getByText("Menubar Icon")).toBeVisible()
     const barsRadio = await screen.findByRole("radio", { name: "Bars" })
@@ -708,9 +787,7 @@ describe("App", () => {
   })
 
   it("settings UI persists donut menubar icon style change", async () => {
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     expect(screen.getByText("Menubar Icon")).toBeVisible()
     const donutRadio = await screen.findByRole("radio", { name: "Donut" })
@@ -728,9 +805,7 @@ describe("App", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     state.saveDisplayModeMock.mockRejectedValueOnce(new Error("save display mode"))
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     await userEvent.click(await screen.findByRole("radio", { name: "Used" }))
     await waitFor(() => expect(errorSpy).toHaveBeenCalled())
@@ -739,9 +814,7 @@ describe("App", () => {
   })
 
   it("does not render legacy bar icon controls in settings", async () => {
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
     expect(screen.queryByText("Bar Icon")).not.toBeInTheDocument()
     expect(screen.queryByText("Show percentage")).not.toBeInTheDocument()
   })
@@ -758,6 +831,42 @@ describe("App", () => {
     await screen.findByText("Provider not found")
   })
 
+  it("keeps the provider detail content mounted when a loaded provider later errors", async () => {
+    render(<App />)
+
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "text", label: "Now", value: "42%" }],
+    })
+
+    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }))
+    await screen.findByText("Now")
+
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [{ type: "badge", label: "Error", text: "Not signed in" }],
+    })
+
+    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument()
+    expect(screen.getByText("Now")).toBeInTheDocument()
+    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
+  })
+
+  it("keeps sidebar buttons mounted while switching between providers", async () => {
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+    render(<App />)
+
+    await userEvent.click(await screen.findByRole("button", { name: "Beta" }))
+
+    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Beta" })).toBeInTheDocument()
+    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
+  })
+
   it("hides the panel on Escape when running in Tauri", async () => {
     state.isTauriMock.mockReturnValue(true)
     render(<App />)
@@ -767,45 +876,6 @@ describe("App", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
 
     await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("hide_panel"))
-  })
-
-  it("toggles plugins in settings", async () => {
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    const checkboxes = await screen.findAllByRole("checkbox")
-    const pluginCheckbox = checkboxes[checkboxes.length - 1]
-    await userEvent.click(pluginCheckbox)
-    expect(state.savePluginSettingsMock).toHaveBeenCalled()
-    await userEvent.click(pluginCheckbox)
-    expect(state.savePluginSettingsMock).toHaveBeenCalledTimes(2)
-  })
-
-  it("updates auto-update interval in settings", async () => {
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    await userEvent.click(await screen.findByRole("radio", { name: "30 min" }))
-    expect(state.saveAutoUpdateIntervalMock).toHaveBeenCalledWith(30)
-  })
-
-  it("logs when saving auto-update interval fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.saveAutoUpdateIntervalMock.mockRejectedValueOnce(new Error("save interval"))
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    await userEvent.click(await screen.findByRole("radio", { name: "30 min" }))
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
-    errorSpy.mockRestore()
-  })
-
-  it("updates start on login in settings", async () => {
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    await userEvent.click(await screen.findByText("Start on login"))
-    expect(state.saveStartOnLoginMock).toHaveBeenCalledWith(true)
   })
 
   it("applies start on login state on startup in tauri", async () => {
@@ -824,9 +894,7 @@ describe("App", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     state.saveStartOnLoginMock.mockRejectedValueOnce(new Error("save start on login failed"))
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
     await userEvent.click(await screen.findByText("Start on login"))
 
     await waitFor(() =>
@@ -857,9 +925,7 @@ describe("App", () => {
       .mockResolvedValueOnce(false)
       .mockRejectedValueOnce(new Error("toggle failed"))
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
     await userEvent.click(await screen.findByText("Start on login"))
 
     await waitFor(() =>
@@ -906,9 +972,7 @@ describe("App", () => {
   it("logs when saving theme mode fails", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     state.saveThemeModeMock.mockRejectedValueOnce(new Error("save theme"))
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
     await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
     await waitFor(() => expect(errorSpy).toHaveBeenCalled())
     errorSpy.mockRestore()
@@ -918,9 +982,7 @@ describe("App", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     state.saveMenubarIconStyleMock.mockRejectedValueOnce(new Error("save menubar icon style failed"))
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
     await userEvent.click(await screen.findByRole("radio", { name: "Bars" }))
 
     await waitFor(() =>
@@ -1094,14 +1156,14 @@ describe("App", () => {
         expect.objectContaining({ disabled: expect.arrayContaining(["a"]) })
       )
     )
-    await screen.findByText("No providers enabled")
+    await screen.findByText("No active providers")
     expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
   })
 
   it("shows empty state when all plugins disabled", async () => {
     state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: ["a", "b"] })
     render(<App />)
-    await screen.findByText("No providers enabled")
+    await screen.findByText("No active providers")
     expect(screen.getByText("Paused")).toBeInTheDocument()
   })
 
@@ -1128,40 +1190,97 @@ describe("App", () => {
   })
 
 
-  it("handles enable toggle failures", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: ["b"] })
-    state.startBatchMock
-      .mockResolvedValueOnce(["a"])
-      .mockRejectedValueOnce(new Error("enable fail"))
-    state.savePluginSettingsMock.mockRejectedValueOnce(new Error("save fail"))
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    const checkboxes = await screen.findAllByRole("checkbox")
-    const targetCheckbox = checkboxes[checkboxes.length - 1]
-    await userEvent.click(targetCheckbox)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    expect(errorSpy).toHaveBeenCalled()
-    errorSpy.mockRestore()
-  })
-
-  it("enables disabled plugin and starts batch", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: ["b"] })
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    const checkboxes = await screen.findAllByRole("checkbox")
-    const targetCheckbox = checkboxes[checkboxes.length - 1]
-    await userEvent.click(targetCheckbox)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
-  })
-
   it("uses fallback monitor sizing when monitor missing", async () => {
     state.isTauriMock.mockReturnValue(true)
     state.currentMonitorMock.mockResolvedValueOnce(null)
     render(<App />)
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "apply_panel_bounds",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
+  })
+
+  it("applies the final panel height through one backend bounds update", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    render(<App />)
+
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "apply_panel_bounds",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
+
+    const syncCalls = state.invokeMock.mock.calls.filter(([command]) => command === "sync_panel_geometry")
+    const applyCalls = state.invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
+    const lastSyncCall = syncCalls.at(-1)
+    const lastApplyCall = applyCalls.at(-1)
+
+    expect(applyCalls.length).toBeGreaterThanOrEqual(1)
+    expect(lastApplyCall).toEqual([
+      "apply_panel_bounds",
+      { panelHeightPx: (lastSyncCall?.[1] as { panelHeightPx: number } | undefined)?.panelHeightPx },
+    ])
+  })
+
+  it("syncs geometry before applying final backend bounds", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    const originalInnerHeight = window.innerHeight
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 120,
+    })
+    try {
+      render(<App />)
+
+      await waitFor(() =>
+        expect(state.invokeMock).toHaveBeenCalledWith(
+          "apply_panel_bounds",
+          expect.objectContaining({ panelHeightPx: expect.any(Number) })
+        )
+      )
+
+      const syncCallIndex = state.invokeMock.mock.calls.findIndex(
+        ([command]) => command === "sync_panel_geometry"
+      )
+      const applyCallIndex = state.invokeMock.mock.calls.findIndex(
+        ([command]) => command === "apply_panel_bounds"
+      )
+      expect(syncCallIndex).toBeGreaterThanOrEqual(0)
+      expect(applyCallIndex).toBeGreaterThanOrEqual(0)
+
+      const syncOrder = state.invokeMock.mock.invocationCallOrder[syncCallIndex]
+      const applyOrder = state.invokeMock.mock.invocationCallOrder[applyCallIndex]
+
+      expect(syncOrder).toBeLessThan(applyOrder)
+    } finally {
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        value: originalInnerHeight,
+      })
+    }
+  })
+
+  it("keeps fallback panel sizing within the home max height cap", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    state.currentMonitorMock.mockResolvedValue(null)
+    render(<App />)
+
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "sync_panel_geometry",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
+
+    const lastHeight = state.invokeMock.mock.calls
+      .filter(([command]) => command === "sync_panel_geometry")
+      .at(-1)?.[1] as { panelHeightPx: number } | undefined
+
+    expect(lastHeight?.panelHeightPx).toBeGreaterThan(0)
+    expect(lastHeight?.panelHeightPx).toBeLessThanOrEqual(720)
   })
 
   it("resizes again via ResizeObserver callback", async () => {
@@ -1183,38 +1302,91 @@ describe("App", () => {
 
     render(<App />)
     await waitFor(() => expect(observeSpy).toHaveBeenCalled())
-    await waitFor(() => expect(state.setSizeMock).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "apply_panel_bounds",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
 
     globalThis.ResizeObserver = OriginalResizeObserver
+  })
+
+  it("remeasures the panel when the popup gains focus", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    let scrollHeightValue = 80
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        return scrollHeightValue
+      },
+    })
+
+    render(<App />)
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "sync_panel_geometry",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
+
+    const initialHeight = (
+      state.invokeMock.mock.calls
+        .filter(([command]) => command === "apply_panel_bounds")
+        .at(-1)?.[1] as { panelHeightPx: number } | undefined
+    )?.panelHeightPx
+    state.invokeMock.mockClear()
+
+    scrollHeightValue = 320
+    window.dispatchEvent(new Event("focus"))
+
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "sync_panel_geometry",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+    )
+
+    const focusedHeight = (
+      state.invokeMock.mock.calls
+        .filter(([command]) => command === "apply_panel_bounds")
+        .at(-1)?.[1] as { panelHeightPx: number } | undefined
+    )?.panelHeightPx
+    expect(focusedHeight).not.toBe(initialHeight)
+    expect(
+      state.invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
+    ).not.toHaveLength(0)
+  })
+
+  it("starts a catch-up probe when an enabled provider appears without probe state", async () => {
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    state.startBatchMock.mockClear()
+    useAppPluginStore.getState().setPluginSettings({ order: ["a", "b"], disabled: [] })
+
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
   })
 
   it("logs resize failures", async () => {
     state.isTauriMock.mockReturnValue(true)
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.setSizeMock.mockRejectedValueOnce(new Error("size fail"))
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [{ type: "text", label: "Now", scope: "overview" }] },
+          { id: "b", name: "Beta", iconUrl: "icon-b", primaryProgressLabel: null, lines: [] },
+        ]
+      }
+      if (cmd === "apply_panel_bounds") {
+        throw new Error("bounds fail")
+      }
+      return null
+    })
     render(<App />)
     await waitFor(() => expect(errorSpy).toHaveBeenCalled())
     errorSpy.mockRestore()
-  })
-
-  it("logs when saving plugin order fails", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    state.savePluginSettingsMock.mockRejectedValueOnce(new Error("save order"))
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    dndState.latestOnDragEnd?.({ active: { id: "a" }, over: { id: "b" } })
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
-    errorSpy.mockRestore()
-  })
-
-  it("handles reordering plugins", async () => {
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    dndState.latestOnDragEnd?.({ active: { id: "a" }, over: { id: "b" } })
-    expect(state.savePluginSettingsMock).toHaveBeenCalled()
   })
 
   it("switches to provider detail view when selecting a plugin", async () => {
@@ -1236,19 +1408,38 @@ describe("App", () => {
     await screen.findByText("Now")
   })
 
-  it("coalesces pending tray icon timers on multiple settings changes", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+  it("opens the standalone settings window on the general tab by default", async () => {
     render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
 
-    // Toggle then reorder quickly (within debounce window) to force timer replacement.
-    const checkboxes = await screen.findAllByRole("checkbox")
-    const pluginCheckbox = checkboxes[checkboxes.length - 1]
-    await userEvent.click(pluginCheckbox)
-    dndState.latestOnDragEnd?.({ active: { id: "a" }, over: { id: "b" } })
+    await openSettings()
 
-    expect(state.savePluginSettingsMock).toHaveBeenCalled()
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("open_settings_window", {
+        tab: "general",
+        providerId: null,
+      })
+    )
+  })
+
+  it("reveals the tray panel for an explicitly selected provider in the settings window", async () => {
+    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
+    renderSettingsWindow()
+
+    await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
+
+    const revealCallsBeforeClick = state.invokeMock.mock.calls.filter(
+      ([command]) => command === "show_panel_for_view"
+    )
+    expect(revealCallsBeforeClick).toHaveLength(0)
+
+    await userEvent.click(await screen.findByRole("button", { name: /beta/i }))
+
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
+        view: "b",
+      })
+    )
+    expect(state.hideWindowMock).toHaveBeenCalledTimes(1)
   })
 
   it("logs when tray handle cannot be loaded", async () => {
@@ -1295,11 +1486,7 @@ describe("App", () => {
   it("sets next update to null when changing interval with all plugins disabled", async () => {
     // All plugins disabled
     state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: ["a", "b"] })
-    render(<App />)
-
-    // Go to settings
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     // Change interval - this triggers the else branch (enabledIds.length === 0)
     await userEvent.click(await screen.findByRole("radio", { name: "30 min" }))
@@ -1311,10 +1498,7 @@ describe("App", () => {
     // This test ensures the interval change logic is exercised with enabled plugins
     // to cover the if branch (enabledIds.length > 0 sets nextAt)
     state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     // Change interval - this triggers the if branch (enabledIds.length > 0)
     await userEvent.click(await screen.findByRole("radio", { name: "1 hour" }))
@@ -1579,9 +1763,7 @@ describe("App", () => {
     // Start with shortcut enabled
     state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+U")
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     // The shortcut should be displayed
     await screen.findByText(/Cmd \+ Shift \+ U/i)
@@ -1602,9 +1784,7 @@ describe("App", () => {
   it("loads global shortcut from settings on startup", async () => {
     state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+O")
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     // The shortcut should be displayed (formatted version)
     await screen.findByText(/Cmd \+ Shift \+ O/i)
@@ -1613,9 +1793,7 @@ describe("App", () => {
   it("shows placeholder when no shortcut is set", async () => {
     state.loadGlobalShortcutMock.mockResolvedValueOnce(null)
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     // Should show the placeholder text (appears twice: as main text and as hint)
     const placeholders = await screen.findAllByText(/Click to set/i)
@@ -1640,9 +1818,7 @@ describe("App", () => {
     state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+U")
     state.saveGlobalShortcutMock.mockRejectedValueOnce(new Error("save shortcut failed"))
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     // Clear the shortcut to trigger save
     const clearButton = await screen.findByRole("button", { name: /clear shortcut/i })
@@ -1671,9 +1847,7 @@ describe("App", () => {
       return null
     })
 
-    render(<App />)
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    renderSettingsWindow()
 
     // Clear the shortcut to trigger invoke
     const clearButton = await screen.findByRole("button", { name: /clear shortcut/i })

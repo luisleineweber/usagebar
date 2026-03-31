@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "warp",
+  "name": "Warp",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#111111",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored Warp token or WARP_API_KEY / WARP_TOKEN to fetch request limits."
+    }
+  },
+  "lines": [
+    { "type": "progress", "label": "Requests", "scope": "overview", "primaryOrder": 1 },
+    { "type": "badge", "label": "Plan", "scope": "detail" }
+  ]
+}

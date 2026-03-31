@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic",
+  "name": "Synthetic",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#141414",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored Synthetic API key or SYNTHETIC_API_KEY to fetch quota data."
+    }
+  },
+  "lines": [
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
+    { "type": "badge", "label": "Tier", "scope": "detail" }
+  ]
+}

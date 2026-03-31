@@ -1,422 +1,253 @@
 (function () {
-  const LOCAL_USER_ENDPOINT = "https://www.perplexity.ai/api/user"
-  const REST_API_BASE = "https://www.perplexity.ai/rest/pplx-api/v2"
-  const REST_GROUPS_ENDPOINT = REST_API_BASE + "/groups"
-  const RATE_LIMIT_ENDPOINT = "https://www.perplexity.ai/rest/rate-limit/all"
+  const CREDITS_URL = "https://www.perplexity.ai/rest/billing/credits"
 
-  const LOCAL_CACHE_DB_PATHS = [
-    "~/Library/Containers/ai.perplexity.mac/Data/Library/Caches/ai.perplexity.mac/Cache.db",
-    "~/Library/Caches/ai.perplexity.mac/Cache.db",
-  ]
+  function readString(value) {
+    if (typeof value !== "string") return null
+    const trimmed = value.trim()
+    return trimmed || null
+  }
 
-  // Only need request_object; receiver body is optional and can be malformed.
-  const LOCAL_SESSION_SQL =
-    "SELECT hex(b.request_object) AS requestHex " +
-    "FROM cfurl_cache_response r " +
-    "JOIN cfurl_cache_blob_data b ON b.entry_ID = r.entry_ID " +
-    "WHERE r.request_key = '" + LOCAL_USER_ENDPOINT + "' " +
-    "ORDER BY r.entry_ID DESC LIMIT 1;"
-
-  const BEARER_HEX_PREFIX = "42656172657220" // "Bearer "
-  const ASK_UA_HEX_PREFIX = "41736B2F" // Ask/
-  const MACOS_DEVICE_ID_HEX_PREFIX = "6D61636F733A" // macos:
-  const MAX_REQUEST_FIELD_LENGTH = 220
-  const RATE_LIMIT_CATEGORIES = [
-    { key: "remaining_pro", label: "Queries" },
-    { key: "remaining_research", label: "Deep Research" },
-    { key: "remaining_labs", label: "Labs" },
-    { key: "remaining_agentic_research", label: "Agentic Research" },
-  ]
-
-  function readNumberField(obj, keys) {
-    if (!obj || typeof obj !== "object") return null
-    for (let i = 0; i < keys.length; i += 1) {
-      const n = Number(obj[keys[i]])
-      if (Number.isFinite(n)) return n
+  function readEnv(ctx, name) {
+    if (!ctx.host.env || typeof ctx.host.env.get !== "function") return null
+    try {
+      return readString(ctx.host.env.get(name))
+    } catch (e) {
+      ctx.host.log.warn("env read failed (" + name + "): " + String(e))
+      return null
     }
+  }
+
+  function readStoredCookieHeader(ctx) {
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    try {
+      return readString(ctx.host.providerSecrets.read("cookieHeader"))
+    } catch (e) {
+      const message = String(e)
+      if (/not found/i.test(message)) return null
+      ctx.host.log.warn("stored Perplexity cookie header read failed: " + message)
+      return null
+    }
+  }
+
+  function loadCookieHeader(ctx) {
+    const directHeader = readEnv(ctx, "PERPLEXITY_COOKIE_HEADER")
+    if (directHeader) return directHeader
+
+    const rawCookie = readEnv(ctx, "PERPLEXITY_COOKIE")
+    if (rawCookie) return rawCookie
+
+    const stored = readStoredCookieHeader(ctx)
+    if (stored) return stored
+
+    const sessionToken = readEnv(ctx, "PERPLEXITY_SESSION_TOKEN")
+    if (sessionToken) return "__Secure-next-auth.session-token=" + sessionToken
+
     return null
   }
 
-  function parseMoneyNumber(value) {
-    if (value === null || value === undefined) return null
-    if (typeof value === "number") return Number.isFinite(value) ? value : null
-    if (typeof value !== "string") return null
-    const trimmed = value.trim()
-    if (!trimmed) return null
-    const cleaned = trimmed.replace(/[$,]/g, "")
-    const n = Number(cleaned)
+  function readNumber(value) {
+    const n = Number(value)
     return Number.isFinite(n) ? n : null
   }
 
-  function readMoneyLike(value) {
-    const direct = parseMoneyNumber(value)
-    if (direct !== null) return direct
-    if (!value || typeof value !== "object") return null
+  function firstNumber(obj, keys) {
+    if (!obj || typeof obj !== "object") return null
+    for (const key of keys) {
+      const n = readNumber(obj[key])
+      if (n !== null) return n
+    }
+    return null
+  }
 
-    const cents = readNumberField(value, ["cents", "amount_cents", "amountCents", "value_cents", "valueCents"])
-    if (cents !== null) {
-      const dollars = cents / 100
-      return Number.isFinite(dollars) ? dollars : null
+  function bucketName(value) {
+    const text = String(value || "").trim().toLowerCase()
+    if (!text) return null
+    if (/(recurring|subscription|monthly|included|pro|max)/.test(text)) return "recurring"
+    if (/(purchased|prepaid|top[\s_-]?up|paid|wallet)/.test(text)) return "purchased"
+    if (/(bonus|promo|promotional|gift|credit grant)/.test(text)) return "bonus"
+    return null
+  }
+
+  function extractGrantBucket(grant) {
+    if (!grant || typeof grant !== "object") return null
+    return (
+      bucketName(grant.kind) ||
+      bucketName(grant.type) ||
+      bucketName(grant.category) ||
+      bucketName(grant.source) ||
+      bucketName(grant.name) ||
+      bucketName(grant.title)
+    )
+  }
+
+  function extractGrantTotals(grant) {
+    const total = firstNumber(grant, [
+      "totalCredits",
+      "total_credits",
+      "total",
+      "limit",
+      "credits",
+      "granted",
+      "startingBalance",
+      "starting_balance",
+      "amount",
+    ])
+    const remaining = firstNumber(grant, [
+      "remainingCredits",
+      "remaining_credits",
+      "remaining",
+      "available",
+      "availableCredits",
+      "available_credits",
+      "balance",
+      "left",
+    ])
+    const used = firstNumber(grant, ["usedCredits", "used_credits", "used", "consumed", "spent"])
+    return {
+      total,
+      remaining,
+      used,
+    }
+  }
+
+  function extractGrants(payload) {
+    if (!payload || typeof payload !== "object") return []
+    if (Array.isArray(payload)) return payload
+
+    const directArrays = ["grants", "credit_grants", "credits", "balances", "pools", "items"]
+    for (const key of directArrays) {
+      if (Array.isArray(payload[key])) return payload[key]
     }
 
-    return (
-      readNumberField(value, ["usd", "amount_usd", "amountUsd", "value_usd", "valueUsd"]) ??
-      readNumberField(value, ["amount", "value", "balance", "remaining", "available"])
-    )
+    const nestedObjects = ["data", "result", "billing", "wallet"]
+    for (const key of nestedObjects) {
+      const nested = payload[key]
+      if (!nested || typeof nested !== "object") continue
+      const grants = extractGrants(nested)
+      if (grants.length > 0) return grants
+    }
+
+    return []
   }
 
-  function isAllowedAuthByte(byte) {
-    return (
-      (byte >= 0x30 && byte <= 0x39) ||
-      (byte >= 0x41 && byte <= 0x5a) ||
-      (byte >= 0x61 && byte <= 0x7a) ||
-      byte === 0x2e ||
-      byte === 0x2d ||
-      byte === 0x5f
-    )
-  }
+  function parseCreditsPayload(payload) {
+    const grants = extractGrants(payload)
+    if (!Array.isArray(grants) || grants.length === 0) return null
 
-  function extractAuthToken(requestHex) {
-    if (typeof requestHex !== "string") return null
-    const upper = requestHex.trim().toUpperCase()
-    if (!upper) return null
-    const idx = upper.indexOf(BEARER_HEX_PREFIX)
-    if (idx === -1) return null
-    const start = idx + BEARER_HEX_PREFIX.length
-    let token = ""
-    for (let i = start; i + 1 < upper.length; i += 2) {
-      const byte = parseInt(upper.slice(i, i + 2), 16)
-      if (!Number.isFinite(byte)) break
-      if (!isAllowedAuthByte(byte)) break
-      if (byte === 0x5f) {
-        // Stop before bplist marker bytes; avoids capturing '_' that precedes plist int markers.
-        const next = i + 3 < upper.length ? parseInt(upper.slice(i + 2, i + 4), 16) : NaN
-        if (next === 0x10 || next === 0x11 || next === 0x12 || next === 0x13 || next === 0x14) break
+    const buckets = {
+      recurring: { total: 0, remaining: 0, present: false },
+      purchased: { total: 0, remaining: 0, present: false },
+      bonus: { total: 0, remaining: 0, present: false },
+    }
+
+    for (const grant of grants) {
+      const bucket = extractGrantBucket(grant)
+      if (!bucket) continue
+      const totals = extractGrantTotals(grant)
+      if (totals.total === null && totals.remaining === null && totals.used === null) continue
+
+      const target = buckets[bucket]
+      target.present = true
+      if (totals.total !== null) target.total += Math.max(0, totals.total)
+      if (totals.remaining !== null) {
+        target.remaining += Math.max(0, totals.remaining)
+      } else if (totals.total !== null && totals.used !== null) {
+        target.remaining += Math.max(0, totals.total - totals.used)
       }
-      token += String.fromCharCode(byte)
     }
-    const dots = (token.match(/\./g) || []).length
-    return dots >= 2 ? token : null
-  }
 
-  function isPrintableAscii(byte) {
-    return byte >= 0x20 && byte <= 0x7e
-  }
-
-  function extractPrintableField(requestHex, prefixHex) {
-    if (typeof requestHex !== "string") return null
-    const upper = requestHex.trim().toUpperCase()
-    if (!upper) return null
-    const idx = upper.indexOf(prefixHex)
-    if (idx === -1) return null
-    let out = ""
-    for (let i = idx; i + 1 < upper.length && out.length < MAX_REQUEST_FIELD_LENGTH; i += 2) {
-      const byte = parseInt(upper.slice(i, i + 2), 16)
-      if (!Number.isFinite(byte) || !isPrintableAscii(byte)) break
-      out += String.fromCharCode(byte)
+    if (!buckets.recurring.present && !buckets.purchased.present && !buckets.bonus.present) {
+      return null
     }
-    return out ? out : null
+
+    return buckets
   }
 
-  function askAppVersionFromUserAgent(userAgent) {
-    if (typeof userAgent !== "string") return null
-    const m = /^Ask\/([^/]+)/.exec(userAgent.trim())
-    return m && m[1] ? m[1] : null
+  function inferPlanLabel(recurringTotal) {
+    if (!Number.isFinite(recurringTotal) || recurringTotal <= 0) return null
+    if (recurringTotal >= 10000) return "Max"
+    return "Pro"
   }
 
-  function makeRestHeaderOverrides(session) {
-    const headers = {
-      Accept: "*/*",
-      "User-Agent": (session && session.userAgent) || "Ask/0 (macOS) isiOSOnMac/false",
-      "X-Client-Name": "Perplexity-Mac",
-      "X-App-ApiVersion": "2.17",
-      "X-App-ApiClient": "macos",
-      "X-Client-Env": "production",
+  function makeCreditsLine(ctx, label, bucket) {
+    if (!bucket.present) return null
+    const total = Number(bucket.total) || 0
+    const remaining = Number(bucket.remaining) || 0
+    if (total > 0) {
+      const used = Math.max(0, Math.min(total, total - remaining))
+      return ctx.line.progress({
+        label,
+        used,
+        limit: total,
+        format: { kind: "count", suffix: "credits" },
+      })
     }
-    if (session && session.appVersion) headers["X-App-Version"] = session.appVersion
-    if (session && session.deviceId) headers["X-Device-ID"] = session.deviceId
-    return headers
+
+    return ctx.line.progress({
+      label,
+      used: 1,
+      limit: 1,
+      format: { kind: "count", suffix: "credits" },
+    })
   }
 
-  function fetchJsonOptional(ctx, url, authToken, extraHeaders) {
-    if (!authToken) return null
+  function fetchCredits(ctx, cookieHeader) {
     let resp
     try {
-      const headers = {
-        Authorization: "Bearer " + authToken,
-        Accept: "application/json",
-        "User-Agent": "OpenUsage",
-      }
-      if (extraHeaders && typeof extraHeaders === "object") for (const k in extraHeaders) headers[k] = extraHeaders[k]
-      resp = ctx.util.request({ method: "GET", url: url, headers: headers, timeoutMs: 10000 })
+      resp = ctx.util.request({
+        method: "GET",
+        url: CREDITS_URL,
+        headers: {
+          Accept: "application/json",
+          Cookie: cookieHeader,
+          "User-Agent": "UsageBar",
+        },
+        timeoutMs: 10000,
+      })
     } catch (e) {
-      ctx.host.log.warn("request failed (" + url + "): " + String(e))
-      return null
+      ctx.host.log.error("Perplexity credits request failed: " + String(e))
+      throw "Usage request failed. Check your connection."
     }
+
     if (ctx.util.isAuthStatus(resp.status)) {
-      if (resp.status === 403 && typeof resp.bodyText === "string" && resp.bodyText.indexOf("Just a moment") !== -1) {
-        ctx.host.log.warn("cloudflare challenge (try opening perplexity.ai in a browser once)")
-      }
-      ctx.host.log.warn("request unauthorized (" + url + "): status=" + String(resp.status))
-      return null
+      throw "Session expired. Update your Perplexity cookie and try again."
     }
     if (resp.status < 200 || resp.status >= 300) {
-      ctx.host.log.warn("request returned status " + String(resp.status) + " (" + url + ")")
-      return null
-    }
-    const parsed = ctx.util.tryParseJson(resp.bodyText)
-    if (!parsed || typeof parsed !== "object") {
-      ctx.host.log.warn("request returned invalid JSON (" + url + ")")
-      return null
-    }
-    return parsed
-  }
-
-  function readGroupId(value) {
-    if (value === null || value === undefined) return null
-    if (typeof value === "string") {
-      const trimmed = value.trim()
-      return trimmed ? trimmed : null
-    }
-    const n = Number(value)
-    if (Number.isFinite(n)) return String(Math.floor(n))
-    return null
-  }
-
-  function pickGroupId(groupsJson) {
-    const tryFromObj = (obj) => {
-      if (!obj || typeof obj !== "object") return null
-      return (
-        readGroupId(obj.api_org_id) ||
-        readGroupId(obj.apiOrgId) ||
-        readGroupId(obj.org_id) ||
-        readGroupId(obj.orgId) ||
-        readGroupId(obj.id) ||
-        readGroupId(obj.group_id) ||
-        readGroupId(obj.groupId)
-      )
+      throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
     }
 
-    const tryFromArray = (arr) => {
-      if (!Array.isArray(arr)) return null
-      let first = null
-      for (let i = 0; i < arr.length; i += 1) {
-        const item = arr[i]
-        const id = tryFromObj(item)
-        if (!id) continue
-        if (!first) first = id
-        if (item && (item.is_default_org === true || item.isDefaultOrg === true)) return id
-      }
-      return first
+    const payload = ctx.util.tryParseJson(resp.bodyText)
+    if (!payload || typeof payload !== "object") {
+      throw "Usage response invalid. Try again later."
     }
-
-    if (Array.isArray(groupsJson)) return tryFromArray(groupsJson)
-    if (!groupsJson || typeof groupsJson !== "object") return null
-
-    const direct = tryFromObj(groupsJson)
-    if (direct) return direct
-
-    const keys = ["orgs", "groups", "results", "items", "data"]
-    for (let i = 0; i < keys.length; i += 1) {
-      const id = tryFromArray(groupsJson[keys[i]])
-      if (id) return id
-    }
-    return null
-  }
-
-  function readBalanceUsd(group) {
-    const wrappers = ["apiOrganization", "api_organization", "group", "org", "organization", "data", "result", "item"]
-    const keys = ["balance_usd", "balanceUsd", "balance", "pending_balance", "pendingBalance"]
-
-    const tryNode = (node) => {
-      if (!node) return null
-      if (Array.isArray(node)) {
-        for (let i = 0; i < node.length; i += 1) {
-          const n = tryNode(node[i])
-          if (n !== null) return n
-        }
-        return null
-      }
-      if (typeof node !== "object") return null
-
-      for (let i = 0; i < wrappers.length; i += 1) {
-        const n = tryNode(node[wrappers[i]])
-        if (n !== null) return n
-      }
-
-      let n = readNumberField(node, keys)
-      if (n !== null) return n
-
-      for (let i = 0; i < keys.length; i += 1) {
-        n = readMoneyLike(node[keys[i]])
-        if (n !== null) return n
-      }
-
-      const nested = [node.customerInfo, node.wallet, node.billing, node.usage, node.account, node.balances]
-      for (let i = 0; i < nested.length; i += 1) {
-        n = tryNode(nested[i])
-        if (n !== null) return n
-      }
-
-      for (const k in node) if (/(balance|credit|wallet|prepaid|available)/i.test(k)) {
-        n = readMoneyLike(node[k])
-        if (n !== null) return n
-      }
-      return null
-    }
-
-    return tryNode(group)
-  }
-
-  function sumUsageCostUsd(usageAnalytics) {
-    if (!Array.isArray(usageAnalytics)) return null
-    let costSum = 0
-    let hasCost = false
-    let hasValidMeter = usageAnalytics.length === 0
-    for (let i = 0; i < usageAnalytics.length; i += 1) {
-      const meter = usageAnalytics[i]
-      if (!meter || typeof meter !== "object") continue
-      const summaries = meter.meter_event_summaries || meter.meterEventSummaries
-      if (!Array.isArray(summaries)) continue
-      if (summaries.length === 0) hasValidMeter = true
-      for (let j = 0; j < summaries.length; j += 1) {
-        const s = summaries[j]
-        if (!s || typeof s !== "object") continue
-        const c = Number(s.cost)
-        if (Number.isFinite(c)) {
-          costSum += c
-          hasCost = true
-        }
-      }
-    }
-    return (hasCost || hasValidMeter) ? costSum : null
-  }
-
-  function detectPlanLabel(customerInfo) {
-    if (!customerInfo || typeof customerInfo !== "object") return null
-    if (customerInfo.is_max === true || customerInfo.subscription_tier === "max") return "Max"
-    if (customerInfo.is_pro === true) return "Pro"
-    return null
-  }
-
-  function buildRateLimitLines(ctx, rateLimits) {
-    if (!rateLimits || typeof rateLimits !== "object") return []
-    const lines = []
-    for (let i = 0; i < RATE_LIMIT_CATEGORIES.length; i += 1) {
-      const category = RATE_LIMIT_CATEGORIES[i]
-      const val = rateLimits[category.key]
-      if (val === undefined || val === null) continue
-      const n = Number(val)
-      if (!Number.isFinite(n)) continue
-      lines.push(ctx.line.text({
-        label: category.label,
-        value: String(Math.max(0, Math.floor(n))) + " remaining",
-      }))
-    }
-    return lines
-  }
-
-  function queryLocalSessionFromCache(ctx, dbPath) {
-    let rows
-    try {
-      const json = ctx.host.sqlite.query(dbPath, LOCAL_SESSION_SQL)
-      rows = ctx.util.tryParseJson(json)
-    } catch (e) {
-      ctx.host.log.warn("local sqlite read failed (" + dbPath + "): " + String(e))
-      return null
-    }
-    if (!Array.isArray(rows) || rows.length === 0) return null
-
-    const row = rows[0] || {}
-    const requestHex = typeof row.requestHex === "string" ? row.requestHex : null
-    if (!requestHex) return null
-
-    const authToken = extractAuthToken(requestHex)
-    if (!authToken) return null
-
-    const userAgent = extractPrintableField(requestHex, ASK_UA_HEX_PREFIX)
-    const appVersion = askAppVersionFromUserAgent(userAgent)
-    const deviceId = extractPrintableField(requestHex, MACOS_DEVICE_ID_HEX_PREFIX)
-
-    return { authToken: authToken, userAgent: userAgent, appVersion: appVersion, deviceId: deviceId, sourcePath: dbPath }
-  }
-
-  function loadLocalSession(ctx) {
-    for (let i = 0; i < LOCAL_CACHE_DB_PATHS.length; i += 1) {
-      const dbPath = LOCAL_CACHE_DB_PATHS[i]
-      try {
-        if (!ctx.host.fs.exists(dbPath)) continue
-      } catch (e) {
-        ctx.host.log.warn("local cache exists check failed (" + dbPath + "): " + String(e))
-        continue
-      }
-      const found = queryLocalSessionFromCache(ctx, dbPath)
-      if (found) return found
-    }
-    return null
-  }
-
-  function fetchRestState(ctx, session) {
-    const authToken = session && session.authToken
-    if (!authToken) return null
-    const restHeaders = makeRestHeaderOverrides(session)
-    const groups =
-      fetchJsonOptional(ctx, REST_GROUPS_ENDPOINT, authToken, restHeaders) ||
-      fetchJsonOptional(ctx, REST_GROUPS_ENDPOINT + "/", authToken, restHeaders)
-    const groupId = pickGroupId(groups)
-    if (!groupId) return null
-    const base = REST_API_BASE + "/groups/" + encodeURIComponent(groupId)
-    const group =
-      fetchJsonOptional(ctx, base, authToken, restHeaders) ||
-      fetchJsonOptional(ctx, base + "/", authToken, restHeaders)
-    const usageUrl = base + "/usage-analytics"
-    const usageAnalytics =
-      fetchJsonOptional(ctx, usageUrl, authToken, restHeaders) ||
-      fetchJsonOptional(ctx, usageUrl + "/", authToken, restHeaders)
-    const rateLimits = fetchJsonOptional(ctx, RATE_LIMIT_ENDPOINT, authToken, restHeaders)
-    return { groupId: groupId, group: group, usageAnalytics: usageAnalytics, rateLimits: rateLimits }
+    return payload
   }
 
   function probe(ctx) {
-    const session = loadLocalSession(ctx)
-    if (!session) throw "Not logged in. Sign in via Perplexity app."
-    if (session.sourcePath) ctx.host.log.info("using cache db: " + session.sourcePath)
-
-    const restState = fetchRestState(ctx, session)
-    if (!restState || !restState.group) throw "Unable to connect. Try again later."
-
-    const customerInfo = restState.group && restState.group.customerInfo
-    const plan = detectPlanLabel(customerInfo)
-
-    const dollarLines = []
-    const balanceUsd = readBalanceUsd(restState.group)
-    if (balanceUsd !== null && balanceUsd > 0) {
-      const usedUsd = sumUsageCostUsd(restState.usageAnalytics)
-      if (usedUsd !== null) {
-        const usedCents = Math.max(0, Math.round(usedUsd * 100))
-        const limitCents = Math.max(0, Math.round(balanceUsd * 100))
-        if (Number.isFinite(limitCents) && limitCents > 0) {
-          dollarLines.push(ctx.line.progress({
-            label: "API credits",
-            used: usedCents / 100,
-            limit: limitCents / 100,
-            format: { kind: "dollars" },
-          }))
-        }
-      }
+    const cookieHeader = loadCookieHeader(ctx)
+    if (!cookieHeader) {
+      throw "Not logged in. Save a Perplexity Cookie header or set PERPLEXITY_COOKIE_HEADER."
     }
 
-    const rateLines = buildRateLimitLines(ctx, restState.rateLimits)
+    const payload = fetchCredits(ctx, cookieHeader)
+    const buckets = parseCreditsPayload(payload)
+    if (!buckets) {
+      throw "Usage response missing credit pools. Try again later."
+    }
 
-    const lines = dollarLines.concat(rateLines)
+    const lines = [
+      makeCreditsLine(ctx, "Recurring credits", buckets.recurring),
+      makeCreditsLine(ctx, "Purchased credits", buckets.purchased),
+      makeCreditsLine(ctx, "Bonus credits", buckets.bonus),
+    ].filter(Boolean)
+
     if (lines.length === 0) {
-      if (balanceUsd !== null && balanceUsd > 0) throw "Usage data unavailable. Try again later."
-      if (plan) throw "Rate limits unavailable. Try again later."
-      throw "Balance unavailable. Try again later."
+      throw "Usage response missing credit pools. Try again later."
     }
 
-    return plan ? { plan: plan, lines: lines } : { lines: lines }
+    const plan = inferPlanLabel(buckets.recurring.total)
+    return plan ? { plan, lines } : { lines }
   }
 
-  globalThis.__openusage_plugin = { id: "perplexity", probe: probe }
+  globalThis.__openusage_plugin = { id: "perplexity", probe }
 })()

@@ -1,53 +1,60 @@
 # Perplexity
 
-> Uses Perplexity macOS app session data from local cache (no manual configuration).
+> Experimental Windows path. Uses a signed-in web billing session via a manual Cookie header or matching env vars.
 
 ## Overview
 
 - **Protocol:** HTTPS (JSON)
-- **Auth:** Bearer token extracted from local Perplexity app cache request object
-- **Data sources:**
-  - `Cache.db` (local CFNetwork cache) for token + app headers
-  - REST API for balance + usage analytics
+- **Auth:** browser billing-session Cookie header
+- **Endpoint:** `GET https://www.perplexity.ai/rest/billing/credits`
+- **Output:** recurring, purchased, and bonus credit pools
 
-## Local Session (Required)
+## Authentication
 
-1. Install the Perplexity macOS app.
-2. Open the app and sign in once.
+Auth precedence in this fork:
 
-The plugin checks for the Perplexity cache DB at:
+1. `PERPLEXITY_COOKIE_HEADER`
+2. `PERPLEXITY_COOKIE`
+3. stored provider secret `cookieHeader`
+4. `PERPLEXITY_SESSION_TOKEN` converted to `__Secure-next-auth.session-token=<token>`
 
-- `~/Library/Containers/ai.perplexity.mac/Data/Library/Caches/ai.perplexity.mac/Cache.db`
-- fallback: `~/Library/Caches/ai.perplexity.mac/Cache.db`
+If none of those are present, the plugin throws:
 
-It reads the cached request object for:
+- `Not logged in. Save a Perplexity Cookie header or set PERPLEXITY_COOKIE_HEADER.`
 
-- `https://www.perplexity.ai/api/user`
+## Manual setup
 
-Then extracts the cached request's `Authorization: Bearer ...` token (and app-like headers).
+1. Sign in to `https://www.perplexity.ai` in a browser.
+2. Open DevTools and load a billing or credits request.
+3. Copy the full `Cookie` request header.
+4. Paste it into UsageBar Settings for Perplexity.
 
-If no local session is found, the plugin throws:
+Do not paste:
 
-- `Not logged in. Sign in via Perplexity app.`
+- `Set-Cookie`
+- a single cookie value without its name
+- response headers
 
-## Balance + Usage (No Env Vars)
+If you only have the session token, `PERPLEXITY_SESSION_TOKEN` is a convenience fallback, but the full Cookie header is the preferred setup.
 
-When a bearer token is present in the cache DB, the plugin calls:
+## Credits response
 
-- `GET https://www.perplexity.ai/rest/pplx-api/v2/groups` (resolve `<api_org_id>`)
-- `GET https://www.perplexity.ai/rest/pplx-api/v2/groups/<api_org_id>` (read `customerInfo.balance`)
-- `GET https://www.perplexity.ai/rest/pplx-api/v2/groups/<api_org_id>/usage-analytics` (sum `cost`)
+The credits endpoint is undocumented and may return different grant shapes. UsageBar currently normalizes pools into:
 
-## Output
+- `Recurring credits`
+- `Purchased credits`
+- `Bonus credits`
 
-- **Plan**: `Pro` when `customerInfo.is_pro === true`
-- **Usage** (single progress bar line):
-  - `limit = customerInfo.balance`
-  - `used = sum(usage-analytics[].meter_event_summaries[].cost)`
-  - `resetsAt` not set (UI shows `$<limit> limit`, no reset countdown)
+Plan inference is based on the recurring pool size:
+
+- recurring credits present: `Pro`
+- large recurring pool: `Max`
+
+Zero-value pools are rendered as depleted rather than incorrectly showing as full.
 
 ## Limitations
 
-- Cache format is app-version dependent and may change.
-- The REST endpoints used are not a public usage API (may change or break without notice).
-- Some REST endpoints may be protected by Cloudflare; the plugin sends app-like headers from the cached request object, but may still be blocked (usage will be unavailable).
+- This is not a public API and may change without notice.
+- Session cookies expire and must be refreshed manually when Perplexity invalidates them.
+- The plugin does not currently import cookies from a browser automatically.
+- The plugin does not yet offer a WebView sign-in flow.

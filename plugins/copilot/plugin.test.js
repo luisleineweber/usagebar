@@ -42,6 +42,24 @@ function setGhCliKeychain(ctx, value) {
   });
 }
 
+function setGhCliAccountKeychain(ctx, login, value) {
+  ctx.host.keychain.readGenericPasswordForAccount.mockImplementation((service, account) => {
+    if (service === "gh:github.com" && account === login) return value;
+    return null;
+  });
+}
+
+function setGhCliCommandToken(ctx, token) {
+  ctx.host.gh.readAuthToken.mockImplementation((host, user) => {
+    if (host !== "github.com") return null;
+    return token;
+  });
+}
+
+function setGhHosts(ctx, text) {
+  ctx.host.fs.writeText("~/AppData/Roaming/GitHub CLI/hosts.yml", text);
+}
+
 function setStateFileToken(ctx, token) {
   ctx.host.fs.writeText(
     ctx.app.pluginDataDir + "/auth.json",
@@ -90,6 +108,28 @@ describe("copilot plugin", () => {
     expect(call.headers.Authorization).toBe("token gho_plain_token");
   });
 
+  it("loads token from the active gh CLI account on windows", async () => {
+    const ctx = makePluginTestContext();
+    ctx.app.platform = "windows";
+    setGhHosts(ctx, ["github.com:", "    users:", "        work-user:", "    user: work-user"].join("\n"));
+    setGhCliAccountKeychain(ctx, "work-user", "gho_work_token");
+    mockUsageOk(ctx);
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
+    const call = ctx.host.http.request.mock.calls[0][0];
+    expect(call.headers.Authorization).toBe("token gho_work_token");
+    expect(ctx.host.keychain.readGenericPasswordForAccount).toHaveBeenCalledWith(
+      "gh:github.com",
+      "work-user",
+    );
+    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalledWith(
+      "OpenUsage-copilot",
+      JSON.stringify({ token: "gho_work_token", login: "work-user" }),
+    );
+  });
+
   it("loads token from gh CLI keychain (base64-encoded)", async () => {
     const ctx = makePluginTestContext();
     const encoded = ctx.base64.encode("gho_encoded_token");
@@ -100,6 +140,26 @@ describe("copilot plugin", () => {
     expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
     const call = ctx.host.http.request.mock.calls[0][0];
     expect(call.headers.Authorization).toBe("token gho_encoded_token");
+  });
+
+  it("loads token from gh auth token command when keychain paths miss", async () => {
+    const ctx = makePluginTestContext();
+    ctx.app.platform = "windows";
+    setGhHosts(ctx, ["github.com:", "    users:", "        Loues000:", "    user: Loues000"].join("\n"));
+    setGhCliCommandToken(ctx, "gho_command_token");
+    mockUsageOk(ctx);
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
+    expect(ctx.host.gh.readAuthToken).toHaveBeenCalledWith("github.com", "Loues000");
+    const call = ctx.host.http.request.mock.calls[0][0];
+    expect(call.headers.Authorization).toBe("token gho_command_token");
+    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalledWith(
+      "OpenUsage-copilot",
+      JSON.stringify({ token: "gho_command_token", login: "Loues000" }),
+    );
   });
 
   it("loads token from state file", async () => {
@@ -126,6 +186,26 @@ describe("copilot plugin", () => {
     plugin.probe(ctx);
     const call = ctx.host.http.request.mock.calls[0][0];
     expect(call.headers.Authorization).toBe("token ghu_keychain");
+  });
+
+  it("ignores cached token without login metadata when a gh active account is present", async () => {
+    const ctx = makePluginTestContext();
+    ctx.app.platform = "windows";
+    setGhHosts(ctx, ["github.com:", "    users:", "        work-user:", "    user: work-user"].join("\n"));
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) => {
+      if (service === "OpenUsage-copilot") {
+        return JSON.stringify({ token: "old_cached_token" });
+      }
+      return null;
+    });
+    setGhCliAccountKeychain(ctx, "work-user", "gho_work_token");
+    mockUsageOk(ctx);
+
+    const plugin = await loadPlugin();
+    plugin.probe(ctx);
+
+    const call = ctx.host.http.request.mock.calls[0][0];
+    expect(call.headers.Authorization).toBe("token gho_work_token");
   });
 
   it("prefers keychain over state file", async () => {

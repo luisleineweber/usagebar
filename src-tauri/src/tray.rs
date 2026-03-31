@@ -3,10 +3,12 @@ use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::path::BaseDirectory;
 use tauri::tray::{MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_nspanel::ManagerExt;
 use tauri_plugin_store::StoreExt;
 
-use crate::panel::{get_or_init_panel, position_panel_at_tray_icon, show_panel};
+use crate::panel::{
+    get_or_init_panel, position_panel_at_tray_icon, show_panel, show_panel_near_cursor,
+};
+use crate::settings_window;
 
 const LOG_LEVEL_STORE_KEY: &str = "logLevel";
 
@@ -55,14 +57,55 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     log::set_max_level(current_level);
 
     let show_stats = MenuItem::with_id(app_handle, "show_stats", "Show Stats", true, None::<&str>)?;
-    let go_to_settings = MenuItem::with_id(app_handle, "go_to_settings", "Go to Settings", true, None::<&str>)?;
+    let go_to_settings = MenuItem::with_id(
+        app_handle,
+        "go_to_settings",
+        "Go to Settings",
+        true,
+        None::<&str>,
+    )?;
 
     // Log level submenu - clone items for use in event handler
-    let log_error = CheckMenuItem::with_id(app_handle, "log_error", "Error", true, current_level == log::LevelFilter::Error, None::<&str>)?;
-    let log_warn = CheckMenuItem::with_id(app_handle, "log_warn", "Warn", true, current_level == log::LevelFilter::Warn, None::<&str>)?;
-    let log_info = CheckMenuItem::with_id(app_handle, "log_info", "Info", true, current_level == log::LevelFilter::Info, None::<&str>)?;
-    let log_debug = CheckMenuItem::with_id(app_handle, "log_debug", "Debug", true, current_level == log::LevelFilter::Debug, None::<&str>)?;
-    let log_trace = CheckMenuItem::with_id(app_handle, "log_trace", "Trace", true, current_level == log::LevelFilter::Trace, None::<&str>)?;
+    let log_error = CheckMenuItem::with_id(
+        app_handle,
+        "log_error",
+        "Error",
+        true,
+        current_level == log::LevelFilter::Error,
+        None::<&str>,
+    )?;
+    let log_warn = CheckMenuItem::with_id(
+        app_handle,
+        "log_warn",
+        "Warn",
+        true,
+        current_level == log::LevelFilter::Warn,
+        None::<&str>,
+    )?;
+    let log_info = CheckMenuItem::with_id(
+        app_handle,
+        "log_info",
+        "Info",
+        true,
+        current_level == log::LevelFilter::Info,
+        None::<&str>,
+    )?;
+    let log_debug = CheckMenuItem::with_id(
+        app_handle,
+        "log_debug",
+        "Debug",
+        true,
+        current_level == log::LevelFilter::Debug,
+        None::<&str>,
+    )?;
+    let log_trace = CheckMenuItem::with_id(
+        app_handle,
+        "log_trace",
+        "Trace",
+        true,
+        current_level == log::LevelFilter::Trace,
+        None::<&str>,
+    )?;
     let log_level_submenu = Submenu::with_items(
         app_handle,
         "Debug Level",
@@ -80,30 +123,39 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     ];
 
     let separator = PredefinedMenuItem::separator(app_handle)?;
-    let about = MenuItem::with_id(app_handle, "about", "About OpenUsage", true, None::<&str>)?;
+    let about = MenuItem::with_id(app_handle, "about", "About UsageBar", true, None::<&str>)?;
     let quit = MenuItem::with_id(app_handle, "quit", "Quit", true, None::<&str>)?;
 
-    let menu = Menu::with_items(app_handle, &[&show_stats, &go_to_settings, &log_level_submenu, &separator, &about, &quit])?;
+    let menu = Menu::with_items(
+        app_handle,
+        &[
+            &show_stats,
+            &go_to_settings,
+            &log_level_submenu,
+            &separator,
+            &about,
+            &quit,
+        ],
+    )?;
 
     TrayIconBuilder::with_id("tray")
         .icon(icon)
         .icon_as_template(true)
-        .tooltip("OpenUsage")
+        .tooltip("UsageBar")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| {
             log::debug!("tray menu: {}", event.id.as_ref());
             match event.id.as_ref() {
                 "show_stats" => {
-                    show_panel(app_handle);
+                    show_panel_near_cursor(app_handle);
                     let _ = app_handle.emit("tray:navigate", "home");
                 }
                 "go_to_settings" => {
-                    show_panel(app_handle);
-                    let _ = app_handle.emit("tray:navigate", "settings");
+                    let _ = settings_window::open(app_handle, Some("general".to_string()), None);
                 }
                 "about" => {
-                    show_panel(app_handle);
+                    show_panel_near_cursor(app_handle);
                     let _ = app_handle.emit("tray:show-about", ());
                 }
                 "quit" => {
@@ -136,20 +188,19 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
             } = event
             {
                 if button_state == MouseButtonState::Up {
-                    let Some(panel) = get_or_init_panel!(app_handle) else {
+                    let Some(window) = get_or_init_panel!(app_handle) else {
                         return;
                     };
 
-                    if panel.is_visible() {
+                    if window.is_visible().unwrap_or(false) {
                         log::debug!("tray click: hiding panel");
-                        panel.hide();
+                        let _ = window.hide();
                         return;
                     }
                     log::debug!("tray click: showing panel");
 
-                    // macOS quirk: must show window before positioning to another monitor
-                    panel.show_and_make_key();
                     position_panel_at_tray_icon(app_handle, rect.position, rect.size);
+                    show_panel(app_handle);
                 }
             }
         })

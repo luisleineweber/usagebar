@@ -3,6 +3,7 @@ import { makeCtx } from "../test-helpers.js"
 
 const DARWIN_PATH = "~/Library/Application Support/JetBrains/WebStorm2025.3/options/AIAssistantQuotaManager2.xml"
 const LINUX_PATH = "~/.config/JetBrains/IntelliJIdea2025.3/options/AIAssistantQuotaManager2.xml"
+const WINDOWS_GOOGLE_PATH = "~/AppData/Roaming/Google/AndroidStudio2025.3/options/AIAssistantQuotaManager2.xml"
 
 const loadPlugin = async () => {
   await import("./plugin.js")
@@ -282,6 +283,40 @@ describe("jetbrains-ai-assistant plugin", () => {
     const result = plugin.probe(ctx)
     const quota = result.lines.find((line) => line.label === "Quota")
     expect(quota && quota.used).toBe(50)
+  })
+
+  it("discovers Android Studio quota from the Windows Google roaming root", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    ctx.host.fs.writeText(
+      WINDOWS_GOOGLE_PATH,
+      makeQuotaXml({
+        quotaInfo: { current: "65", maximum: "100", available: "35", until: "2099-01-31T00:00:00Z" },
+        nextRefill: { type: "Known", next: "2099-01-01T00:00:00Z", tariff: { amount: "100", duration: "PT720H" } },
+      })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const quota = result.lines.find((line) => line.label === "Quota")
+    expect(quota && quota.used).toBe(65)
+  })
+
+  it("matches IDE directory prefixes case-insensitively", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    ctx.host.fs.writeText(
+      "~/AppData/Roaming/JetBrains/webstorm2025.3/options/AIAssistantQuotaManager2.xml",
+      makeQuotaXml({
+        quotaInfo: { current: "42", maximum: "100", available: "58", until: "2099-01-31T00:00:00Z" },
+        nextRefill: { type: "Known", next: "2099-01-01T00:00:00Z", tariff: { amount: "100", duration: "PT720H" } },
+      })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const quota = result.lines.find((line) => line.label === "Quota")
+    expect(quota && quota.used).toBe(42)
   })
 
   it("continues gracefully when listDir throws", async () => {

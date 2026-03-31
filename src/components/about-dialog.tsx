@@ -1,5 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { ChangelogDialog } from "@/components/changelog-dialog";
+import { Button } from "@/components/ui/button";
+import { APP_NAME, PROJECT_REPO_URL } from "@/lib/project-metadata";
 
 interface AboutDialogProps {
   version: string;
@@ -29,8 +32,14 @@ function ExternalLink({
 }
 
 export function AboutDialog({ version, onClose }: AboutDialogProps) {
+  const [view, setView] = useState<"about" | "changelog">("about");
+
   // Close on ESC key
   useEffect(() => {
+    if (view !== "about") {
+      return;
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -39,7 +48,7 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, view]);
 
   // Close when panel hides (loses visibility)
   useEffect(() => {
@@ -59,6 +68,16 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
     }
   };
 
+  if (view === "changelog") {
+    return (
+      <ChangelogDialog
+        currentVersion={version}
+        onBack={() => setView("about")}
+        onClose={() => setView("about")}
+      />
+    );
+  }
+
   return (
     <div
       className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-xl"
@@ -67,15 +86,25 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
       <div className="bg-card rounded-lg border shadow-xl p-6 max-w-xs w-full mx-4 text-center animate-in fade-in zoom-in-95 duration-200">
         <img
           src="/icon.png"
-          alt="OpenUsage"
+          alt={APP_NAME}
           className="w-16 h-16 mx-auto mb-3 rounded-xl"
         />
 
-        <h2 className="text-xl font-semibold mb-1">OpenUsage</h2>
+        <h2 className="text-xl font-semibold mb-1">{APP_NAME}</h2>
 
-        <span className="inline-block text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full mb-4">
-          v{version}
-        </span>
+        <div className="flex flex-col items-center gap-2 mb-4">
+          <span className="inline-block text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+            v{version}
+          </span>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => setView("changelog")}
+            className="text-[10px] h-5 px-1.5"
+          >
+            View Changelog
+          </Button>
+        </div>
 
         <div className="text-sm text-muted-foreground space-y-1">
           <p>
@@ -84,7 +113,7 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
           </p>
           <p>
             Open source on{" "}
-            <ExternalLink href="https://github.com/robinebers/openusage">
+            <ExternalLink href={PROJECT_REPO_URL}>
               GitHub
             </ExternalLink>
           </p>

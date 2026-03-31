@@ -6,9 +6,15 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#4285F4",
+  "platformSupport": {
+    "windows": {
+      "state": "supported"
+    }
+  },
   "lines": [
     { "type": "progress", "label": "Gemini Pro", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Gemini Flash", "scope": "overview" },
-    { "type": "progress", "label": "Claude", "scope": "overview" }
+    { "type": "progress", "label": "Gemini Flash", "scope": "overview", "primaryOrder": 2 },
+    { "type": "progress", "label": "Gemini Image", "scope": "overview", "primaryOrder": 3 },
+    { "type": "progress", "label": "Claude", "scope": "overview", "primaryOrder": 4 }
   ]
 }

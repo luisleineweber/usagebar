@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "alibaba",
+  "name": "Alibaba Coding Plan",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#FF6A00",
+  "platformSupport": {
+    "windows": {
+      "state": "blocked",
+      "message": "Windows placeholder. Planned path: app-owned Alibaba session or API-key quota fetch; probing is not implemented yet."
+    }
+  },
+  "lines": [
+    { "type": "progress", "label": "Quota", "scope": "overview", "primaryOrder": 1 },
+    { "type": "badge", "label": "Plan", "scope": "detail" }
+  ]
+}

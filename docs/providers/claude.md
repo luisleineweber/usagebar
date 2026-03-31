@@ -76,6 +76,20 @@ All windows are enforced simultaneously — hitting any limit throttles the user
 
 **Fallback:** macOS Keychain, service name `Claude Code-credentials` (same JSON structure).
 
+**Signed-in fallback metadata:** `~/.claude.json`
+
+```jsonc
+{
+  "oauthAccount": {
+    "organizationName": "Example Org",
+    "billingType": "prepaid"
+  },
+  "primaryApiKey": "sk-ant-api03-..."
+}
+```
+
+`~/.claude.json` is useful as a signed-in/account-state fallback when the legacy OAuth file is missing, but `primaryApiKey` is **not** a drop-in replacement for the OAuth bearer token used by `/api/oauth/usage`. OpenUsage should only treat it as account metadata plus a local-usage fallback hint unless `claudeAiOauth` is also present there.
+
 ### Token Refresh
 
 Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively on 401/403.

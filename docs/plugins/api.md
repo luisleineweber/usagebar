@@ -138,6 +138,35 @@ const authPath = codexHome
   : "~/.config/codex/auth.json"
 ```
 
+## Crypto
+
+```typescript
+host.crypto.decryptAes256Gcm(envelope: string, keyB64: string): string
+host.crypto.encryptAes256Gcm(plaintext: string, keyB64: string): string
+```
+
+AES-256-GCM helpers for plugins that need to read or write encrypted local auth stores.
+
+### Behavior
+
+- `keyB64` must be a base64-encoded 32-byte key.
+- `encryptAes256Gcm(...)` returns a JSON envelope string with `nonce` and `ciphertext` fields.
+- `decryptAes256Gcm(...)` expects that same envelope shape and returns the decrypted UTF-8 plaintext.
+- Both methods throw on malformed base64, malformed envelopes, or failed decryption.
+
+### Example
+
+```javascript
+const keyB64 = ctx.host.fs.readText("~/.factory/auth.v2.key").trim()
+const envelope = ctx.host.fs.readText("~/.factory/auth.v2.file")
+const plaintext = ctx.host.crypto.decryptAes256Gcm(envelope, keyB64)
+const auth = JSON.parse(plaintext)
+
+auth.access_token = refreshedAccessToken
+const nextEnvelope = ctx.host.crypto.encryptAes256Gcm(JSON.stringify(auth, null, 2), keyB64)
+ctx.host.fs.writeText("~/.factory/auth.v2.file", nextEnvelope)
+```
+
 ## HTTP
 
 ```typescript
@@ -199,18 +228,22 @@ const resp = ctx.host.http.request({
 })
 ```
 
-## Keychain (macOS only)
+## Keychain / Credential Store
 
 ```typescript
 host.keychain.readGenericPassword(service: string): string
+host.keychain.readGenericPasswordForAccount(service: string, account: string): string
+host.keychain.writeGenericPassword(service: string, value: string): void
+host.keychain.deleteGenericPassword(service: string): void
 ```
 
-Reads a generic password from the macOS Keychain.
+Reads and writes credentials through the platform credential store.
 
 ### Behavior
 
-- **macOS only**: Throws on other platforms
-- **Throws if not found**: Returns the password string if found, throws otherwise
+- `readGenericPassword(service)` uses the OpenUsage-scoped credential namespace.
+- `readGenericPasswordForAccount(service, account)` reads a native service/account pair directly. Use it only when a provider must integrate with an external tool's credential entry, such as GitHub CLI.
+- All keychain methods throw if the credential store is unavailable or the requested entry cannot be read.
 
 ### Example
 
@@ -228,6 +261,34 @@ if (ctx.host.fs.exists("~/.myapp/credentials.json")) {
     throw "Login required. Sign in to continue."
   }
 }
+```
+
+## Provider Secret Vault
+
+```typescript
+host.providerSecrets.read(secretKey: string): string
+host.providerSecrets.write(secretKey: string, value: string): void
+```
+
+Reads and writes app-owned provider secrets for the currently running plugin.
+
+### Behavior
+
+- Secrets are automatically namespaced to the current plugin/provider id.
+- On Windows, values are stored through the local protected provider secret store.
+- On macOS/Linux, values are stored in the system credential vault.
+- `read(...)` throws when the secret is missing or the credential store is unavailable.
+- `write(...)` throws when the value is empty or the credential store write fails.
+
+### Example
+
+```javascript
+const secretKey = "account:" + profileId + ":authJson"
+const authJson = ctx.host.providerSecrets.read(secretKey)
+const auth = JSON.parse(authJson)
+
+auth.tokens.access_token = refreshedAccessToken
+ctx.host.providerSecrets.write(secretKey, JSON.stringify(auth))
 ```
 
 ## SQLite

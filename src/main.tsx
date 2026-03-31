@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { error as logError, warn as logWarn } from "@tauri-apps/plugin-log";
 import { App } from "./App";
+import { SettingsWindowApp } from "./settings-window-app";
 import "./index.css";
 
 // Forward console.error and console.warn to Tauri log file
@@ -31,6 +32,10 @@ console.warn = (...args: unknown[]) => {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    {new URLSearchParams(window.location.search).get("window") === "settings" ? (
+      <SettingsWindowApp />
+    ) : (
+      <App />
+    )}
   </React.StrictMode>,
 );

@@ -1,5 +1,6 @@
 import { renderHook } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
+import type { PluginState } from "@/hooks/app/types"
 import { useSettingsPluginList } from "@/hooks/app/use-settings-plugin-list"
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { PluginSettings } from "@/lib/settings"
@@ -13,6 +14,14 @@ function createPluginMeta(id: string, name: string): PluginMeta {
     lines: [],
     primaryCandidates: [],
   }
+}
+
+const defaultState: PluginState = {
+  data: null,
+  loading: false,
+  error: null,
+  lastManualRefreshAt: null,
+  lastSuccessAt: null,
 }
 
 describe("useSettingsPluginList", () => {
@@ -29,12 +38,26 @@ describe("useSettingsPluginList", () => {
           createPluginMeta("cursor", "Cursor"),
           createPluginMeta("codex", "Codex"),
         ],
+        pluginStates: {
+          codex: defaultState,
+          cursor: { ...defaultState, error: "sign in required" },
+        },
+        providerConfigs: {
+          cursor: { source: "manual" },
+        },
       })
     )
 
     expect(result.current).toEqual([
-      { id: "codex", name: "Codex", enabled: true },
-      { id: "cursor", name: "Cursor", enabled: false },
+      expect.objectContaining({ id: "codex", name: "Codex", enabled: true, iconUrl: "/codex.svg" }),
+      expect.objectContaining({
+        id: "cursor",
+        name: "Cursor",
+        enabled: false,
+        iconUrl: "/cursor.svg",
+        config: { source: "manual" },
+        state: { ...defaultState, error: "sign in required" },
+      }),
     ])
   })
 
@@ -43,6 +66,8 @@ describe("useSettingsPluginList", () => {
       useSettingsPluginList({
         pluginSettings: null,
         pluginsMeta: [createPluginMeta("codex", "Codex")],
+        pluginStates: {},
+        providerConfigs: {},
       })
     )
 

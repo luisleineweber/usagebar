@@ -30,11 +30,14 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
       const next = { ...prev }
       for (const id of ids) {
         const existing = prev[id]
+        const retainedData = existing?.data ?? existing?.lastSettledData ?? null
         next[id] = {
-          data: null,
+          data: retainedData,
+          lastSettledData: existing?.lastSettledData ?? existing?.data ?? null,
           loading: true,
           error: null,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
+          lastSuccessAt: existing?.lastSuccessAt ?? null,
         }
       }
       return next
@@ -46,11 +49,14 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
       const next = { ...prev }
       for (const id of ids) {
         const existing = prev[id]
+        const retainedData = existing?.data ?? existing?.lastSettledData ?? null
         next[id] = {
-          data: null,
+          data: retainedData,
+          lastSettledData: existing?.lastSettledData ?? existing?.data ?? null,
           loading: false,
           error,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
+          lastSuccessAt: existing?.lastSuccessAt ?? null,
         }
       }
       return next
@@ -68,12 +74,18 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
       setPluginStates((prev) => ({
         ...prev,
         [output.providerId]: {
-          data: errorMessage ? null : output,
+          data: errorMessage ? prev[output.providerId]?.data ?? prev[output.providerId]?.lastSettledData ?? null : output,
+          lastSettledData: errorMessage
+            ? prev[output.providerId]?.lastSettledData ?? prev[output.providerId]?.data ?? null
+            : output,
           loading: false,
           error: errorMessage,
           lastManualRefreshAt: !errorMessage && isManual
             ? Date.now()
             : prev[output.providerId]?.lastManualRefreshAt ?? null,
+          lastSuccessAt: !errorMessage
+            ? Date.now()
+            : prev[output.providerId]?.lastSuccessAt ?? null,
         },
       }))
 

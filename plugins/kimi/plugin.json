@@ -6,6 +6,12 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#000000",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Experimental on Windows. Run `kimi login` so ~/.kimi/credentials/kimi-code.json exists before launching UsageBar."
+    }
+  },
   "lines": [
     { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "Weekly", "scope": "overview", "primaryOrder": 2 }

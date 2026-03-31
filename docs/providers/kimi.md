@@ -93,6 +93,15 @@ refresh_token=<refresh_token>
 }
 ```
 
+## Windows setup
+
+1. Run `kimi login` on this machine.
+2. Confirm the CLI created `~/.kimi/credentials/kimi-code.json`.
+3. Restart `UsageBar` if it was already open.
+4. Enable the Kimi provider in Settings and refresh.
+
+Current local evidence on this machine: `~/.kimi/credentials/kimi-code.json` is not present yet, so this rollout stays `experimental` until a real signed-in Windows validation pass is captured.
+
 ## Notes
 
 - The plugin refreshes tokens when near expiry (5-minute buffer).

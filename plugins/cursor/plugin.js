@@ -1,6 +1,4 @@
 (function () {
-  const STATE_DB =
-    "~/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
   const KEYCHAIN_ACCESS_TOKEN_SERVICE = "cursor-access-token"
   const KEYCHAIN_REFRESH_TOKEN_SERVICE = "cursor-refresh-token"
   const BASE_URL = "https://api2.cursor.sh"
@@ -14,11 +12,21 @@
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
   const LOGIN_HINT = "Sign in via Cursor app or run `agent login`."
 
+  function stateDbPath(ctx) {
+    if (ctx.app.platform === "windows") {
+      return "~/AppData/Roaming/Cursor/User/globalStorage/state.vscdb"
+    }
+    if (ctx.app.platform === "linux") {
+      return "~/.config/Cursor/User/globalStorage/state.vscdb"
+    }
+    return "~/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+  }
+
   function readStateValue(ctx, key) {
     try {
       const sql =
         "SELECT value FROM ItemTable WHERE key = '" + key + "' LIMIT 1;"
-      const json = ctx.host.sqlite.query(STATE_DB, sql)
+      const json = ctx.host.sqlite.query(stateDbPath(ctx), sql)
       const rows = ctx.util.tryParseJson(json)
       if (!Array.isArray(rows)) {
         throw new Error("sqlite returned invalid json")
@@ -42,7 +50,7 @@
         "', '" +
         escaped +
         "');"
-      ctx.host.sqlite.exec(STATE_DB, sql)
+      ctx.host.sqlite.exec(stateDbPath(ctx), sql)
       return true
     } catch (e) {
       ctx.host.log.warn("sqlite write failed for " + key + ": " + String(e))
@@ -475,6 +483,12 @@
 
     // Team plans may omit `enabled` even with valid plan usage data.
     if (usage.enabled === false || !usage.planUsage) {
+      ctx.host.log.info("usage lacks planUsage or is disabled, attempting REST usage API fallback")
+      try {
+        return buildUnknownRequestBasedResult(ctx, accessToken, planName)
+      } catch (fallbackError) {
+        ctx.host.log.warn("request-based fallback unavailable: " + String(fallbackError))
+      }
       throw "No active Cursor subscription."
     }
 
@@ -524,7 +538,7 @@
     const isTeamAccount = (
       normalizedPlanName === "team" ||
       (su && su.limitType === "team") ||
-      (su && typeof su.pooledLimit === "number")
+      (su && typeof su.pooledLimit === "number" && su.pooledLimit > 0)
     )
     const hasFiniteLimit = typeof pu.limit === "number" && Number.isFinite(pu.limit)
     const hasFinitePercent = Number.isFinite(pu.totalPercentUsed)

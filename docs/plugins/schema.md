@@ -48,10 +48,17 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Experimental on Windows.",
+      "surfaced": true
+    }
+  },
   "links": [{ "label": "Status", "url": "https://status.example.com" }],
   "lines": [
     { "type": "badge", "label": "Plan", "scope": "overview" },
-    { "type": "progress", "label": "Usage", "scope": "overview", "primary": true },
+    { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
     { "type": "text", "label": "Details", "scope": "detail" }
   ]
 }
@@ -65,6 +72,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `version`       | string | Yes      | Semver version                             |
 | `entry`         | string | Yes      | Relative path to JS entry file             |
 | `icon`          | string | Yes      | Relative path to SVG icon file             |
+| `platformSupport` | object | No     | Optional per-platform support/surfacing metadata |
 | `links`         | array  | No       | Optional quick links shown on detail page  |
 | `lines`         | array  | Yes      | Output shape used for loading skeletons    |
 
@@ -75,6 +83,35 @@ Validation rules:
 - `id` must match `globalThis.__openusage_plugin.id`
 - `icon` must be relative and point to an SVG file (use `fill="currentColor"` for theme compatibility)
 - `links[].url` (if provided) must be an `http://` or `https://` URL
+
+### Platform Support (Optional)
+
+`platformSupport.windows` lets the Windows fork keep provider support state in the manifest instead of duplicating it in Rust and frontend code.
+
+```json
+{
+  "platformSupport": {
+    "windows": {
+      "state": "supported",
+      "surfaced": true,
+      "message": null
+    }
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `state` | string | No | One of `supported`, `experimental`, `blocked` |
+| `surfaced` | boolean | No | Whether the provider should appear in the UI on Windows; defaults to `true` |
+| `message` | string | No | Optional Windows-specific setup/support note shown in the UI |
+
+Windows behavior:
+
+- `supported`: provider can be enabled and probed.
+- `experimental`: provider can be enabled and probed, but the UI shows the Windows warning message.
+- `blocked`: provider stays visible in Settings but is disabled and excluded from probe batches.
+- `surfaced: false`: provider is hidden from normal UI surfaces on Windows.
 
 ### Links Array (Optional)
 
@@ -95,18 +132,18 @@ loading skeletons instantly while probes execute asynchronously.
 | `type`    | string  | Yes      | One of: `text`, `progress`, `badge`               |
 | `label`   | string  | Yes      | Static label shown in the UI for this line        |
 | `scope`   | string  | Yes      | `"overview"` or `"detail"` - where line appears   |
-| `primary` | boolean | No       | If `true`, this progress line appears in tray icon |
+| `primaryOrder` | number | No    | Lower number = higher tray-primary priority among progress lines |
 
 - `"overview"` - shown on both Overview tab and plugin detail pages
 - `"detail"` - shown only on plugin detail pages
 
 ### Primary Progress (Tray Icon)
 
-Plugins can optionally mark one progress line as `primary: true`. This progress metric will be displayed as a horizontal bar in the system tray icon, allowing users to see usage at a glance without opening the app.
+Plugins can optionally rank progress lines with `primaryOrder`. The lowest numbered progress line present in runtime data becomes the tray-primary metric.
 
 Rules:
-- Only `type: "progress"` lines can be primary (the flag is ignored on other types)
-- Only the **first** `primary: true` line is used (subsequent ones are ignored)
+- Only `type: "progress"` lines can set `primaryOrder` (the value is ignored on other types)
+- Lower numbers win (`1` before `2`)
 - Up to 4 enabled plugins with primary progress are shown in the tray (in plugin order)
 - If no data is available yet, the bar shows as a track without fill
 
@@ -116,7 +153,7 @@ Example:
 {
   "lines": [
     { "type": "badge", "label": "Plan", "scope": "overview" },
-    { "type": "progress", "label": "Plan usage", "scope": "overview", "primary": true },
+    { "type": "progress", "label": "Plan usage", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "Extra", "scope": "detail" },
     { "type": "text", "label": "Resets", "scope": "detail" }
   ]
@@ -237,7 +274,7 @@ A complete, working plugin that fetches data and displays all three line types.
   "icon": "icon.svg",
   "lines": [
     { "type": "badge", "label": "Status", "scope": "overview" },
-    { "type": "progress", "label": "Usage", "scope": "overview", "primary": true },
+    { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
     { "type": "text", "label": "Fetched at", "scope": "detail" }
   ]
 }

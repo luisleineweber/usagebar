@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-beta.1
+
+### Highlights
+- First public UsageBar beta target for Windows with GitHub prerelease packaging and NSIS setup output.
+- Standalone Settings window, improved tray handoff, and smoother tray sizing and anchoring behavior.
+- Expanded Windows provider coverage, including supported and experimental integrations tailored to this fork.
+- Release tooling and repo metadata updated for the `Loues000/usagebar` fork path.
+
+---
+
 ## 0.6.10
 
 ### New Features

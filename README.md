@@ -1,18 +1,28 @@
-# Track all your AI coding subscriptions in one place
+# UsageBar
 
-See your usage at a glance from your menu bar. No digging through dashboards.
+Windows-first tray app for tracking AI coding subscription usage across providers in one place.
 
-![OpenUsage Screenshot](screenshot.png)
+UsageBar is a fork of [OpenUsage](https://github.com/robinebers/openusage), redirected toward a Windows-native desktop experience instead of preserving upstream compatibility as the main constraint.
+
+![UsageBar Screenshot](screenshot.png)
 
 ## Download
 
-[**Download the latest release**](https://github.com/robinebers/openusage/releases/latest) (macOS, Apple Silicon & Intel)
+The first public Windows beta is prepared as a GitHub prerelease.
 
-The app auto-updates. Install once and you're set.
+Release plan:
+- Windows: GitHub prerelease with a NSIS setup `.exe`
+- macOS: still secondary while the Windows fork stabilizes
+
+Until the beta tag is published:
+- Build from source (see "Build from source" below).
+- Or follow the upstream project releases if you just want something stable: [OpenUsage releases](https://github.com/robinebers/openusage/releases).
+
+Release process and preflight checks live in [docs/releasing.md](docs/releasing.md).
 
 ## What It Does
 
-OpenUsage lives in your menu bar and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels. No mental math required.
+UsageBar lives in your Windows tray and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels. No dashboard hopping.
 
 - **One glance.** All your AI tools, one panel.
 - **Always up-to-date.** Refreshes automatically on a schedule you pick.
@@ -20,59 +30,60 @@ OpenUsage lives in your menu bar and shows you how much of your AI coding subscr
 - **Lightweight.** Opens instantly, stays out of your way.
 - **Plugin-based.** New providers get added without updating the whole app.
 
-## Supported Providers
+## Providers
 
-- [**Amp**](docs/providers/amp.md) / free tier, bonus, credits
-- [**Antigravity**](docs/providers/antigravity.md) / all models
-- [**Claude**](docs/providers/claude.md) / session, weekly, extra usage, local token usage (ccusage)
-- [**Codex**](docs/providers/codex.md) / session, weekly, reviews, credits
-- [**Copilot**](docs/providers/copilot.md) / premium, chat, completions
-- [**Cursor**](docs/providers/cursor.md) / credits, total usage, auto usage, API usage, on-demand, CLI auth
-- [**Factory / Droid**](docs/providers/factory.md) / standard, premium tokens
-- [**Gemini**](docs/providers/gemini.md) / pro, flash, workspace/free/paid tier
-- [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) / quota, remaining
-- [**Kimi Code**](docs/providers/kimi.md) / session, weekly
-- [**MiniMax**](docs/providers/minimax.md) / coding plan session
-- [**OpenCode Go**](docs/providers/opencode-go.md) / 5h, weekly, monthly spend limits
-- [**Windsurf**](docs/providers/windsurf.md) / prompt credits, flex credits
-- [**Z.ai**](docs/providers/zai.md) / session, weekly, web searches
+Current Windows rollout status comes from each provider's `plugin.json` manifest in this fork.
 
-### Maybe Soon
+| Provider | Windows status | Scope |
+|---|---|---|
+| [**Alibaba Coding Plan**](plugins/alibaba/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Amp**](docs/providers/amp.md) | Experimental | Free tier, bonus, credits |
+| [**Antigravity**](docs/providers/antigravity.md) | Supported | All models |
+| [**Augment**](plugins/augment/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Claude**](docs/providers/claude.md) | Supported | Session, weekly, extra usage, local token usage (`ccusage`) |
+| [**Codex**](docs/providers/codex.md) | Supported | Session, weekly, reviews, credits, managed multi-account selection |
+| [**Copilot**](docs/providers/copilot.md) | Experimental | Premium, chat, completions |
+| [**Cursor**](docs/providers/cursor.md) | Supported | Credits, total usage, auto usage, API usage, on-demand, CLI auth |
+| [**Factory / Droid**](docs/providers/factory.md) | Experimental | Standard, premium tokens |
+| [**Gemini**](docs/providers/gemini.md) | Experimental | Pro, flash, workspace/free/paid tier |
+| [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
+| [**Kilo**](docs/providers/kilo.md) | Experimental | Direct API-key usage endpoint |
+| [**Kimi**](docs/providers/kimi.md) | Experimental | Session, weekly |
+| [**Kimi K2**](docs/providers/kimi-k2.md) | Experimental | Credits, remaining, average tokens |
+| [**Kiro**](plugins/kiro/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding plan session, region-aware API-key auth |
+| [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
+| [**OpenCode**](docs/providers/opencode.md) | Experimental | Session, weekly |
+| [**OpenCode Go**](docs/providers/opencode-go.md) | Supported | Local 5h, weekly, monthly CLI spend history |
+| [**OpenRouter**](docs/providers/openrouter.md) | Experimental | Credits, balance, request-rate detail |
+| [**Perplexity**](docs/providers/perplexity.md) | Experimental | Recurring, purchased, and bonus credits via manual cookie/env auth |
+| [**Synthetic**](docs/providers/synthetic.md) | Experimental | Direct API-key quota endpoint |
+| [**Vertex AI**](plugins/vertex-ai/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Warp**](docs/providers/warp.md) | Experimental | Request limits, plan badge |
+| [**Windsurf**](docs/providers/windsurf.md) | Experimental | Daily quota, weekly quota, extra usage balance |
+| [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches |
 
-- [Vercel AI Gateway](https://github.com/robinebers/openusage/issues/18)
+Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/usagebar/issues/new)
 
-Community contributions welcome.
-Want a provider that's not listed? [Open an issue.](https://github.com/robinebers/openusage/issues/new)
+## Fork Direction
 
-## Open Source, Community Driven
+This repository is no longer trying to stay narrowly aligned with upstream pull-request boundaries. The priority here is a clean Windows tray app, a plugin-first provider model, and pragmatic product decisions for this fork.
 
-OpenUsage is built by its users. Hundreds of people use it daily, and the project grows through community contributions: new providers, bug fixes, and ideas.
+That means the fork can change UX, provider strategy, release packaging, and architecture when that is the right tradeoff for Windows.
 
-I maintain the project as a guide and quality gatekeeper, but this is your app as much as mine. If something is missing or broken, the best way to get it fixed is to contribute by opening an issue, or submitting a PR.
+Upstream lineage stays visible and upstream fixes can still be pulled in through `upstream`, but this repository should be read as its own product direction.
 
-Plugins are currently bundled as we build our the API, but soon will be made flexible so you can build and load their own.
-
-### How to Contribute
+## Contributing
 
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
-- **Fix a bug.** PRs welcome. Provide before/after screenshots.
-- **Request a feature.** [Open an issue](https://github.com/robinebers/openusage/issues/new) and make your case.
+- **Fix a bug.** Keep the change small, focused, and verified.
+- **Request a feature.** [Open an issue.](https://github.com/Loues000/usagebar/issues/new) Include the provider, auth source, and Windows-specific constraints.
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 
-## Built Entirely with AI
+## Lineage
 
-Not a single line of code in this project was read or written by hand. 100% AI-generated, AI-reviewed, AI-shipped — using [Cursor](https://cursor.com), [Claude Code](https://docs.anthropic.com/en/docs/claude-code), and [Codex CLI](https://github.com/openai/codex).
-
-OpenUsage is a real-world example of what I teach in the [AI Builder's Blueprint](https://itsbyrob.in/EBDqgJ6) — a proven process for building and shipping software with AI, no coding background required.
-
-## Sponsors
-
-OpenUsage is supported by our sponsors. Become a sponsor to get your logo here and on [openusage.ai](https://openusage.ai).
-
-[Become a Sponsor](https://github.com/sponsors/robinebers)
-
-<!-- Add sponsor logos here -->
+UsageBar started from the [OpenUsage](https://github.com/robinebers/openusage) codebase. This fork also borrows practical Windows ideas from [CodexBar](https://github.com/steipete/CodexBar) and provider reference patterns from [ccusage](https://github.com/ryoppippi/ccusage) where they fit.
 
 ## Credits
 
@@ -91,4 +102,26 @@ Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](http
 
 ### Stack
 
-...
+- Tauri v2
+- Rust
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS v4
+- Zustand
+- Vitest
+
+### Local release build
+
+For a Windows beta-style build on this machine:
+
+```bash
+bun run release:check -- --release-tag v0.1.0-beta.1
+bun run build:release -- --bundles nsis
+```
+
+If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` for an unsigned local build. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
+
+Before pushing a release tag, run the same preflight with `--require-clean` so the tag is cut from a clean worktree.
+
+</details>

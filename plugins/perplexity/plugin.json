@@ -6,11 +6,15 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#20808D",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Experimental on Windows. Save a Perplexity Cookie header or set PERPLEXITY_COOKIE_HEADER before probing."
+    }
+  },
   "lines": [
-    { "type": "progress", "label": "API credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Queries", "scope": "overview" },
-    { "type": "text", "label": "Deep Research", "scope": "overview" },
-    { "type": "text", "label": "Labs", "scope": "detail" },
-    { "type": "text", "label": "Agentic Research", "scope": "detail" }
+    { "type": "progress", "label": "Recurring credits", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Purchased credits", "scope": "overview" },
+    { "type": "progress", "label": "Bonus credits", "scope": "detail" }
   ]
 }

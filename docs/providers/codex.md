@@ -78,9 +78,9 @@ OpenUsage Codex plugin auth lookup order:
 1. `CODEX_HOME/auth.json` (when `CODEX_HOME` is set)
 2. `~/.config/codex/auth.json`
 3. `~/.codex/auth.json`
-4. macOS keychain service `Codex Auth` (fallback)
+4. keychain service `Codex Auth` (fallback)
 
-Keychain fallback is available on macOS only.
+The Windows fork also supports imported app-managed Codex account profiles. When Settings has a selected managed profile, UsageBar reads and refreshes `provider-secret account:<profileId>:authJson` first instead of auto-detecting the current local login.
 
 Expected auth payload shape (file or keychain JSON value):
 
@@ -115,3 +115,10 @@ grant_type=refresh_token
 ```
 
 Response returns new `access_token`, and optionally new `refresh_token` and `id_token`.
+
+## Managed multi-account support
+
+- Settings can import the currently detected local Codex login into an app-managed profile.
+- Selecting a managed profile pins probes and refreshes to that stored auth payload.
+- If no managed profile is selected, the plugin keeps the legacy local auto-detection flow above.
+- If a selected managed profile is missing or invalid, the plugin returns an explicit account error instead of silently switching to a different local login.

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
 import { PanelFooter } from "@/components/panel-footer"
 import type { UpdateStatus } from "@/hooks/use-app-update"
+import { APP_NAME } from "@/lib/project-metadata"
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(() => Promise.resolve()),
@@ -182,7 +183,7 @@ describe("PanelFooter", () => {
     }
 
     render(<Harness />)
-    await userEvent.click(screen.getByRole("button", { name: /OpenUsage/ }))
+    await userEvent.click(screen.getByRole("button", { name: new RegExp(APP_NAME, "i") }))
     expect(screen.getByText("Open source on")).toBeInTheDocument()
 
     // Close via Escape to exercise AboutDialog onClose path.

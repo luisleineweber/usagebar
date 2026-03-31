@@ -20,7 +20,7 @@ export function OverviewPage({
   if (plugins.length === 0) {
     return (
       <div className="text-center text-muted-foreground py-8">
-        No providers enabled
+        No active providers
       </div>
     )
   }
@@ -31,11 +31,11 @@ export function OverviewPage({
         <ProviderCard
           key={plugin.meta.id}
           name={plugin.meta.name}
-          plan={plugin.data?.plan}
+          plan={plugin.data?.plan ?? plugin.lastSettledData?.plan}
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}
           error={plugin.error}
-          lines={plugin.data?.lines ?? []}
+          lines={plugin.data?.lines ?? plugin.lastSettledData?.lines ?? []}
           skeletonLines={plugin.meta.lines}
           lastManualRefreshAt={plugin.lastManualRefreshAt}
           onRetry={onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined}

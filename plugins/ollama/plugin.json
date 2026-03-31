@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "ollama",
+  "name": "Ollama",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#202020",
+  "platformSupport": {
+    "windows": {
+      "state": "supported"
+    }
+  },
+  "links": [
+    { "label": "Settings", "url": "https://ollama.com/settings" }
+  ],
+  "lines": [
+    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Weekly", "scope": "overview" }
+  ]
+}
