@@ -969,7 +969,7 @@
 # First beta Windows release
 
 ## Acceptance Criteria
-- [ ] GitHub publish workflow can create a Windows prerelease from a tag like `v0.1.0-beta.2` and upload a setup `.exe`.
+- [ ] GitHub publish workflow can create a Windows prerelease from a tag like `v0.1.0-beta.3` and upload a setup `.exe`.
 - [x] App release metadata points to this fork (`UsageBar` branding in bundle UI, fork updater URL, repo issue links).
 - [x] Local Windows release command works from this repo without relying on the old macOS-only shell script.
 - [x] A local Windows release build is attempted and its resulting artifact path or blocker is recorded before the slice is marked done.
@@ -980,9 +980,10 @@
 - [x] Run a local Windows release build, then record verification notes and breadcrumbs.
 
 ## Verification Notes
-- Verified the local Windows beta build with `node ./scripts/build-release.mjs --bundles nsis` -> exit code `0`, unsigned local build path auto-added `--no-sign`, and produced `src-tauri/target/release/bundle/nsis/UsageBar_0.1.0-beta.2_x64-setup.exe`.
-- Verified the release candidate checks for `v0.1.0-beta.2` with `node ./scripts/release-preflight.mjs --release-tag v0.1.0-beta.2`, `npm run build`, `npx vitest run`, and `cargo test --manifest-path src-tauri/Cargo.toml` -> all passed locally before tagging.
+- Verified the local Windows beta build with `node ./scripts/build-release.mjs --bundles nsis` -> exit code `0`, unsigned local build path auto-added `--no-sign`, and produced `src-tauri/target/release/bundle/nsis/UsageBar_0.1.0-beta.3_x64-setup.exe`.
+- Verified the release candidate checks for `v0.1.0-beta.3` with `node ./scripts/release-preflight.mjs --release-tag v0.1.0-beta.3`, `npm run build`, `npx vitest run`, and `cargo test --manifest-path src-tauri/Cargo.toml` -> all passed locally before tagging.
 - First tagged publish attempt on `v0.1.0-beta.1` failed in GitHub Actions because the repo had no `TAURI_SIGNING_PRIVATE_KEY` secret and the Windows Tauri wrapper spawned the local `.cmd` entrypoint incompatibly on the runner. The follow-up release was moved to `v0.1.0-beta.2` per the release failure rule.
+- The `v0.1.0-beta.2` publish retry failed after that secret fix because the GitHub Actions Bun install did not expose a local `tauri.cmd`, which forced the wrapper onto an `npx` fallback that could not resolve the executable on `windows-latest`. The follow-up release was moved to `v0.1.0-beta.3`.
 - Verified the native release binary build path with `Get-Item src-tauri/target/release/openusage.exe` -> built `src-tauri/target/release/openusage.exe` before NSIS packaging.
 - Verified the Tauri CLI supports local unsigned bundling with `node ./scripts/tauri/wrapper.mjs build --help` -> documents `--no-sign`.
 - Verified the official NSIS bundle download host is reachable from this machine with `curl.exe -L --head https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip` -> final `200 OK`; the initial DNS error was transient, not a repo config issue.
@@ -1001,7 +1002,7 @@
 
 ## Verification Notes
 - Verified focused Rust coverage with `cargo test --manifest-path src-tauri/Cargo.toml configure_ccusage_command` -> 2 tests passed.
-- Verified the packaged Windows release path with `node ./scripts/build-release.mjs --bundles nsis` -> exit code `0` and produced `src-tauri/target/release/bundle/nsis/UsageBar_0.1.0-beta.2_x64-setup.exe`.
+- Verified the packaged Windows release path with `node ./scripts/build-release.mjs --bundles nsis` -> exit code `0` and produced `src-tauri/target/release/bundle/nsis/UsageBar_0.1.0-beta.3_x64-setup.exe`.
 - Follow-up: the packaged refresh path still surfaced the Bun shim itself (`bunx.exe`) above other apps. Switched the Windows Bun-backed `ccusage` path to `bun.exe x ...`, cached resolved runners for the session, and re-verified with `cargo test --manifest-path src-tauri/Cargo.toml ccusage -- --nocapture` plus `node ./scripts/build-release.mjs --bundles nsis`.
 - The visual “no command window flash” outcome is not fully terminal-verifiable here; it still needs a manual launch check against the newly installed build on this Windows machine.
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-beta.2
+## 0.1.0-beta.3
 
 ### Highlights
 - First public UsageBar beta target for Windows with GitHub prerelease packaging and NSIS setup output.
@@ -8,6 +8,7 @@
 - Expanded Windows provider coverage, including supported and experimental integrations tailored to this fork.
 - Release tooling and repo metadata updated for the `Loues000/usagebar` fork path.
 - GitHub publish workflow reduced to the Windows release target and hardened for Tauri updater signing on this fork.
+- Tauri CLI launch path now resolves directly through the installed package entrypoint so Windows CI does not depend on `npx` or `.cmd` shim layout.
 
 ---
 
