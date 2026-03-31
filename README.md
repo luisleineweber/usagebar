@@ -116,7 +116,7 @@ Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](http
 For a Windows beta-style build on this machine:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-beta.1
+bun run release:check -- --release-tag v0.1.0-beta.2
 bun run build:release -- --bundles nsis
 ```
 
