@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
+import { getCurrentWindow } from "@tauri-apps/api/window"
 import { useShallow } from "zustand/react/shallow"
 import { SettingsPage } from "@/pages/settings"
 import { useProbe } from "@/hooks/app/use-probe"
@@ -286,7 +287,15 @@ export function SettingsWindowApp() {
     (providerId: string, options?: { revealInTray?: boolean }) => {
       setSelectedProviderId(providerId)
       if (!options?.revealInTray) return
-      void showPanelForView(providerId).catch((error) => {
+      void (async () => {
+        try {
+          await getCurrentWindow().hide()
+        } catch (error) {
+          console.error("Failed to hide settings window before tray handoff:", error)
+        }
+
+        await showPanelForView(providerId)
+      })().catch((error) => {
         console.error("Failed to reveal selected provider in tray panel:", error)
       })
     },

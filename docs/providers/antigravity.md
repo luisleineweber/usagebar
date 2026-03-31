@@ -2,7 +2,7 @@
 
 > Reverse-engineered from app bundle and language server binary. May change without notice.
 
-Antigravity is essentially a Google-branded fork of [Windsurf](windsurf.md) - both use the same Codeium language server binary and Connect-RPC protocol. The discovery, port probing, and RPC endpoints are nearly identical. The main differences: Antigravity uses fraction-based quota instead of credits, and local LS requests do not require an API key.
+Antigravity is essentially a Google-branded fork of [Windsurf](windsurf.md) - both use the same Codeium language server binary and Connect-RPC protocol. The discovery, port probing, and RPC endpoints are nearly identical. The main differences: Antigravity uses fraction-based quota instead of credits, and local LS requests do not require an API key. Once signed in, UsageBar can keep reading the stored SQLite/OAuth credentials even when the Antigravity IDE is closed; only the live LS path needs the app running.
 
 In OpenUsage, Antigravity is treated as a grouped-quota provider. Both the overview card and provider detail page show grouped quota buckets only: `Gemini Pro`, `Gemini Flash`, `Gemini Image`, and `Claude`. Unknown quota is shown as unavailable, never as exhausted.
 
@@ -15,7 +15,7 @@ In OpenUsage, Antigravity is treated as a grouped-quota provider. Both the overv
 - **Quota:** fraction (`0.0-1.0`, where `1.0` means 100% remaining)
 - **Quota window:** 5 hours
 - **Timestamps:** ISO 8601
-- **Requires:** Antigravity IDE running for LS mode, or signed-in local credentials for Cloud Code fallback
+- **Requires:** Antigravity IDE running for LS mode only; signed-in local credentials are enough for Cloud Code fallback after the IDE closes
 
 ## Discovery
 
@@ -267,7 +267,7 @@ User-facing placeholder-backed IDs such as `MODEL_PLACEHOLDER_M9` and `MODEL_PLA
 
 1. Read `antigravityAuthStatus` from SQLite for the optional API key.
 2. Read `jetskiStateSync.agentManagerInitState` from SQLite and decode OAuth tokens.
-3. Probe the LS first:
+3. Probe the LS first when the IDE is running:
    a. Discover the Antigravity LS process.
    b. Probe ports with `GetUnleashData`.
    c. Call `GetUserStatus`.
@@ -277,7 +277,7 @@ User-facing placeholder-backed IDs such as `MODEL_PLACEHOLDER_M9` and `MODEL_PLA
    b. Keep `resetTime` only when it is usable.
    c. Use `clientModelSorts` ordering when present.
    d. Render grouped quota lines only.
-5. If LS has no usable numeric fractions, fall back to Cloud Code:
+5. If LS has no usable numeric fractions, or the IDE is not running, fall back to Cloud Code:
    a. Try proto access token, cached refreshed token, then API key.
    b. Respect `agentModelSorts` ordering when present.
    c. Refresh via Google OAuth if Cloud Code returns auth failures and a refresh token exists.

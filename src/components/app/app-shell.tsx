@@ -119,6 +119,9 @@ export function AppShell({
                     resolvedSelectedPlugin={resolvedSelectedPlugin}
                     hasResolvedViews={hasResolvedViews}
                     isPanelResizing={isPanelResizing}
+                    onOpenProviderSettings={(providerId) => {
+                      void openSettingsWindow({ tab: "providers", providerId }).catch(console.error)
+                    }}
                   />
                 </div>
               </div>

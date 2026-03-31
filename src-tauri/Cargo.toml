@@ -1,7 +1,7 @@
 [package]
 name = "openusage"
-version = "0.6.10"
-description = "OpenUsage is an open source AI subscription limit tracker"
+version = "0.1.0-beta.1"
+description = "UsageBar is a Windows-first desktop tracker for AI coding subscription usage"
 authors = ["Robin Ebers"]
 edition = "2024"
 
@@ -29,6 +29,7 @@ reqwest = { version = "0.13", features = ["blocking"] }
 rquickjs = { version = "0.11" }
 tauri-plugin-store = "2.4.2"
 base64 = "0.22"
+aes-gcm = "0.10"
 uuid = { version = "1", features = ["v4"] }
 tauri-plugin-log = "2"
 tauri-plugin-aptabase = { git = "https://github.com/aptabase/tauri-plugin-aptabase", rev = "e896cceb" }

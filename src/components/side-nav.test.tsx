@@ -2,11 +2,9 @@ import { render, screen } from "@testing-library/react"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
-import { openUrl } from "@tauri-apps/plugin-opener"
 import { invoke } from "@tauri-apps/api/core"
 
 import { SideNav } from "@/components/side-nav"
-import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 
 const darkModeState = vi.hoisted(() => ({
   useDarkModeMock: vi.fn(() => false),
@@ -52,10 +50,6 @@ vi.mock("@dnd-kit/sortable", () => ({
 
 vi.mock("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => "" } },
-}))
-
-vi.mock("@tauri-apps/plugin-opener", () => ({
-  openUrl: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -147,13 +141,13 @@ describe("SideNav", () => {
     expect(onReorder).toHaveBeenCalledWith(["b", "a"])
   })
 
-  it("opens the current repo issues page and hides the panel from Help", async () => {
+  it("renders only Home and Settings actions when there are no plugins", () => {
     render(<SideNav activeView="home" onViewChange={() => {}} plugins={[]} />)
 
-    await userEvent.click(screen.getByRole("button", { name: "Help" }))
-
-    expect(openUrl).toHaveBeenCalledWith(PROJECT_ISSUES_URL)
-    expect(invoke).toHaveBeenCalledWith("hide_panel")
+    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Help" })).not.toBeInTheDocument()
+    expect(invoke).not.toHaveBeenCalled()
   })
 })
 

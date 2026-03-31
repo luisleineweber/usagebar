@@ -81,9 +81,12 @@ Premium tokens (`premium.totalAllowance > 0`) are only available on Max/Enterpri
 
 ### Token Location
 
-- `~/.factory/auth.json` (legacy droid auth file)
-- `~/.factory/auth.encrypted` (current droid auth file)
-- OS keychain entry (when droid uses keyring-backed storage)
+Lookup order in this fork:
+
+1. `~/.factory/auth.v2.file` plus `~/.factory/auth.v2.key` (current droid / Factory v2 store)
+2. `~/.factory/auth.encrypted` (legacy file store)
+3. `~/.factory/auth.json` (older legacy file store)
+4. OS keychain entry (when droid uses keyring-backed storage)
 
 ```jsonc
 {
@@ -91,6 +94,10 @@ Premium tokens (`premium.totalAllowance > 0`) are only available on Max/Enterpri
   "refresh_token": "<token>"            // 25-char WorkOS session token
 }
 ```
+
+### v2 encrypted store
+
+`auth.v2.file` is an AES-256-GCM envelope and `auth.v2.key` is the matching base64 key. UsageBar now decrypts that pair first, parses the same auth JSON payload shape, and writes refreshed tokens back into the encrypted v2 file.
 
 ### JWT Payload Structure
 
@@ -145,8 +152,9 @@ This creates auth data in the droid auth store (file and/or keychain, depending 
 ## Windows setup
 
 1. Install the `droid` CLI and complete sign-in once with `droid`.
-2. Confirm that either `~/.factory/auth.encrypted` or `~/.factory/auth.json` now exists.
-3. Restart `UsageBar` if it was already open.
-4. Enable the Factory provider in Settings and refresh.
+2. Prefer the current store: confirm that both `~/.factory/auth.v2.file` and `~/.factory/auth.v2.key` now exist.
+3. Legacy fallback still works if only `~/.factory/auth.encrypted` or `~/.factory/auth.json` exists.
+4. Restart `UsageBar` if it was already open.
+5. Enable the Factory provider in Settings and refresh.
 
-Current local evidence on this machine: neither `~/.factory/auth.encrypted` nor `~/.factory/auth.json` is present yet, so this rollout stays `experimental` until a real signed-in Windows validation pass is captured.
+Current local evidence on this machine: Windows validation is still marked `experimental` until a real signed-in v2-store capture is recorded in this fork.

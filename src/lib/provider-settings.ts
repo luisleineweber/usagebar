@@ -9,6 +9,7 @@ export type ProviderSecretMetadata = {
 export type ProviderConfig = {
   source?: ProviderSourceMode
   workspaceId?: string
+  selectedAccountProfileId?: string
   secrets?: Record<string, ProviderSecretMetadata>
   updatedAt?: number
 }
@@ -120,9 +121,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   codex: {
     mode: "detected",
     title: "Codex Setup",
-    summary: "Current plugin reads local auth data and refreshes it automatically.",
-    statusHint: "Manual web-cookie input is not exposed yet because the plugin auth shape is richer than a single token.",
-    connectHint: "Install Codex CLI, sign in on this machine, then retry the provider check.",
+    summary: "Tracks Codex CLI usage from local auth and now supports app-managed imported accounts.",
+    statusHint: "Import the current local Codex login into a managed profile when you want to pin UsageBar to a specific account.",
+    connectHint: "Install Codex CLI, sign in on this machine, then import the detected login into a managed profile if you want account pinning.",
   },
   claude: {
     mode: "detected",
@@ -141,8 +142,8 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   factory: {
     mode: "detected",
     title: "Factory Setup",
-    summary: "Current plugin reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it.",
-    statusHint: "Run `droid` so ~/.factory/auth.encrypted or ~/.factory/auth.json exists before launching UsageBar.",
+    summary: "Reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it automatically.",
+    statusHint: "Run `droid` so ~/.factory/auth.v2.file plus ~/.factory/auth.v2.key exists before launching UsageBar. Legacy auth.encrypted and auth.json still work.",
     connectHint: "Run `droid` on this machine, restart UsageBar if needed, then retry the provider check.",
   },
   gemini: {
@@ -190,16 +191,22 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   antigravity: {
     mode: "automatic",
     title: "Antigravity Setup",
-    summary: "Detected from local process state, SQLite, and OAuth refresh data.",
-    statusHint: "This provider is auto-detected when the local app/session is present.",
-    connectHint: "Open Antigravity locally and finish sign-in once, then refresh.",
+    summary: "Detected from local process state, SQLite, and OAuth refresh data. Stored credentials keep working after a one-time sign-in, even when Antigravity closes.",
+    statusHint: "Live LS data is auto-detected while Antigravity is open; stored SQLite/OAuth data keeps working after sign-in.",
+    connectHint: "Open Antigravity locally once to sign in, then UsageBar can keep reading the stored credentials even after the IDE closes.",
   },
   perplexity: {
-    mode: "automatic",
+    mode: "editable",
     title: "Perplexity Setup",
-    summary: "Detected from the local app cache.",
-    statusHint: "No manual configuration is required in the current plugin.",
-    connectHint: "Sign in to Perplexity on this machine so the local cache contains an active session.",
+    summary: "Fetches Perplexity credit pools from the signed-in billing session using a manual Cookie header or matching env vars.",
+    statusHint: "Manual cookie or env mode is the supported Windows path in this build.",
+    connectHint: "Open a signed-in perplexity.ai billing request in DevTools, copy the full Cookie request header, paste it here, then retry. Do not paste Set-Cookie.",
+    secretField: {
+      key: "cookieHeader",
+      label: "Cookie header",
+      description: "Paste the full Cookie request header from a signed-in perplexity.ai billing request. Do not paste Set-Cookie.",
+      placeholder: "__Secure-next-auth.session-token=...; pplx_session=...;",
+    },
   },
   "jetbrains-ai-assistant": {
     mode: "automatic",
@@ -225,11 +232,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     "Windows placeholder. Planned implementation: start with an app-owned Alibaba session or API-key path for Coding Plan quota, then add provider-specific region handling.",
     "Target plan: add secure API-key and session support later; probing stays disabled until the Windows implementation lands."
   ),
-  kilo: plannedWindowsProviderDefinition(
-    "Kilo Setup",
-    "Planned Windows implementation: read local Kilo config or CLI auth first, with direct API usage once a stable token source is confirmed.",
-    "Target plan: prefer config or CLI-auth detection on Windows; add manual API-key fallback only if the local path is insufficient."
-  ),
+  kilo: {
+    mode: "editable",
+    title: "Kilo Setup",
+    summary: "Fetches Kilo usage from a stored API key or KILO_API_KEY. CLI-session fallback is still deferred in this Windows-first build.",
+    statusHint: "Save a Kilo API key here or set KILO_API_KEY before launching UsageBar.",
+    connectHint: "Create a Kilo API key, save it here or set KILO_API_KEY, then retry. Local kilo login fallback is planned but not wired yet.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste a Kilo API key. UsageBar stores it in the app credential vault and uses it for the Kilo tRPC usage endpoint.",
+      placeholder: "kilo_...",
+    },
+  },
   "kimi-k2": {
     mode: "editable",
     title: "Kimi K2 Setup",
@@ -261,11 +276,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       placeholder: "sk-or-v1-...",
     },
   },
-  synthetic: plannedWindowsProviderDefinition(
-    "Synthetic Setup",
-    "Planned Windows implementation: use a stored API key against Synthetic quota endpoints as a straightforward token-based provider.",
-    "Target plan: add secure API-key storage and direct usage polling on Windows."
-  ),
+  synthetic: {
+    mode: "editable",
+    title: "Synthetic Setup",
+    summary: "Fetches Synthetic quota data from a stored API key or SYNTHETIC_API_KEY.",
+    statusHint: "Save a Synthetic API key here or set SYNTHETIC_API_KEY before launching UsageBar.",
+    connectHint: "Create a Synthetic API key, save it here or set SYNTHETIC_API_KEY, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste a Synthetic API key. UsageBar stores it in the app credential vault and uses it for the quotas endpoint.",
+      placeholder: "synthetic_...",
+    },
+  },
   "vertex-ai": plannedWindowsProviderDefinition(
     "Vertex AI Setup",
     "Planned Windows implementation: use Google ADC or gcloud application-default auth plus quota APIs, with optional local-log enrichment later.",
@@ -308,6 +331,9 @@ function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
   const workspaceId = typeof raw.workspaceId === "string"
     ? raw.workspaceId.trim() || undefined
     : undefined
+  const selectedAccountProfileId = typeof raw.selectedAccountProfileId === "string"
+    ? raw.selectedAccountProfileId.trim() || undefined
+    : undefined
   const updatedAt = typeof raw.updatedAt === "number" && Number.isFinite(raw.updatedAt)
     ? raw.updatedAt
     : undefined
@@ -316,6 +342,7 @@ function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
   return {
     source,
     workspaceId,
+    selectedAccountProfileId,
     updatedAt,
     secrets: Object.keys(secrets).length > 0 ? secrets : undefined,
   }
@@ -408,5 +435,9 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
     return config?.source === "manual" ? "Manual cookie" : "Automatic"
   }
   if (providerId === "ollama") return "Manual cookie"
+  if (providerId === "perplexity") return "Manual cookie"
+  if (providerId === "codex") {
+    return config?.selectedAccountProfileId ? "Managed account" : "Auto-detected"
+  }
   return "Auto-detected"
 }

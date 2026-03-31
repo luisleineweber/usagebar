@@ -43,6 +43,9 @@ export type AppContentActionProps = {
 }
 
 export type AppContentProps = AppContentDerivedProps & AppContentActionProps
+  & {
+    onOpenProviderSettings?: (providerId: string) => void
+  }
 
 export function AppContent({
   displayPlugins,
@@ -52,6 +55,7 @@ export function AppContent({
   isPanelResizing = false,
   onRetryPlugin,
   onResetTimerDisplayModeToggle,
+  onOpenProviderSettings,
 }: AppContentProps) {
   const {
     activeView,
@@ -112,6 +116,7 @@ export function AppContent({
         plugin={resolvedSelectedPlugin}
         hasResolvedViews={hasResolvedViews}
         onRetry={handleRetry}
+        onOpenProviderSettings={onOpenProviderSettings}
         displayMode={displayMode}
         resetTimerDisplayMode={resetTimerDisplayMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}

@@ -1,6 +1,9 @@
+import { ExternalLink } from "lucide-react"
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GlobalShortcutSection } from "@/components/global-shortcut-section"
+import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 import { getBarFillLayout, getTrayIconSizePx } from "@/lib/tray-bars-icon"
 import {
   AUTO_UPDATE_OPTIONS,
@@ -349,6 +352,22 @@ export function GeneralSettingsPane({
           />
           Start on login
         </label>
+      </section>
+
+      <section>
+        <h3 className="mb-0 text-lg font-semibold">Support</h3>
+        <p className="mb-2 text-sm text-muted-foreground">Open the GitHub issue tracker from settings.</p>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-between sm:w-auto"
+          onClick={() => {
+            openUrl(PROJECT_ISSUES_URL).catch(console.error)
+          }}
+        >
+          Report an issue
+          <ExternalLink className="size-4" />
+        </Button>
       </section>
       </div>
     </div>

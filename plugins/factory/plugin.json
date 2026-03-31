@@ -9,7 +9,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Experimental on Windows. Run `droid` so ~/.factory/auth.encrypted or ~/.factory/auth.json exists before launching UsageBar."
+      "message": "Experimental on Windows. Run `droid` so ~/.factory/auth.v2.file and ~/.factory/auth.v2.key exist before launching UsageBar. Legacy auth.encrypted and auth.json still work."
     }
   },
   "lines": [

@@ -5,10 +5,11 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "brandColor": "#141414",
   "platformSupport": {
     "windows": {
-      "state": "blocked",
-      "message": "Windows placeholder. Planned path: stored API key plus direct Synthetic quota polling."
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored Synthetic API key or SYNTHETIC_API_KEY to fetch quota data."
     }
   },
   "lines": [

@@ -65,6 +65,40 @@ describe("factory plugin", () => {
     expect(result.lines.find((line) => line.label === "Standard")).toBeTruthy()
   })
 
+  it("loads auth from auth.v2.file before legacy auth files", async () => {
+    const ctx = makeCtx()
+    const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    const keyB64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    const payload = JSON.stringify({
+      access_token: makeJwt(futureExp),
+      refresh_token: "refresh-v2",
+    })
+    const envelope = ctx.host.crypto.encryptAes256Gcm(payload, keyB64)
+    ctx.host.fs.writeText("~/.factory/auth.v2.key", keyB64)
+    ctx.host.fs.writeText("~/.factory/auth.v2.file", envelope)
+    ctx.host.fs.writeText("~/.factory/auth.encrypted", JSON.stringify({
+      access_token: "stale-token",
+      refresh_token: "stale-refresh",
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        usage: {
+          startDate: 1770623326000,
+          endDate: 1772956800000,
+          standard: { orgTotalTokensUsed: 123, totalAllowance: 20000000 },
+          premium: { orgTotalTokensUsed: 0, totalAllowance: 0 },
+        },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.find((line) => line.label === "Standard")).toBeTruthy()
+    expect(ctx.host.crypto.decryptAes256Gcm).toHaveBeenCalled()
+  })
+
   it("prefers auth.encrypted over stale auth.json when both exist", async () => {
     const ctx = makeCtx()
     const pastExp = Math.floor(Date.now() / 1000) - 1000
@@ -392,6 +426,53 @@ describe("factory plugin", () => {
     expect(refreshCalled).toBe(true)
     // Verify auth file was updated
     expect(ctx.host.fs.writeText).toHaveBeenCalled()
+  })
+
+  it("refreshes v2 auth and writes back encrypted envelope", async () => {
+    const ctx = makeCtx()
+    const nearExp = Math.floor(Date.now() / 1000) + 12 * 60 * 60
+    const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    const keyB64 = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    const envelope = ctx.host.crypto.encryptAes256Gcm(
+      JSON.stringify({
+        access_token: makeJwt(nearExp),
+        refresh_token: "refresh",
+      }),
+      keyB64
+    )
+    ctx.host.fs.writeText("~/.factory/auth.v2.key", keyB64)
+    ctx.host.fs.writeText("~/.factory/auth.v2.file", envelope)
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("workos.com")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            access_token: makeJwt(futureExp),
+            refresh_token: "new-refresh",
+          }),
+        }
+      }
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify({
+          usage: {
+            startDate: 1770623326000,
+            endDate: 1772956800000,
+            standard: { orgTotalTokensUsed: 0, totalAllowance: 20000000 },
+            premium: { orgTotalTokensUsed: 0, totalAllowance: 0 },
+          },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    const fileWrite = ctx.host.fs.writeText.mock.calls.find((call) => call[0] === "~/.factory/auth.v2.file")
+    expect(fileWrite).toBeTruthy()
+    expect(ctx.host.crypto.encryptAes256Gcm).toHaveBeenCalled()
   })
 
   it("falls back to existing token when proactive refresh throws", async () => {

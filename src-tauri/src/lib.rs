@@ -1,5 +1,6 @@
 #[cfg(target_os = "macos")]
 mod app_nap;
+mod codex_account_store;
 mod panel;
 mod plugin_engine;
 mod provider_secret_store;
@@ -13,8 +14,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use base64::Engine;
 use keyring::Entry;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use tauri::{Emitter, Manager};
 use tauri_plugin_aptabase::EventTracker;
 use tauri_plugin_log::{Target, TargetKind};
@@ -217,6 +220,276 @@ fn today_utc_ymd() -> String {
         date.month() as u8,
         date.day()
     )
+}
+
+fn now_utc_unix_ms() -> i64 {
+    time::OffsetDateTime::now_utc().unix_timestamp() * 1000
+}
+
+fn provider_config_file_paths(app_data_dir: &std::path::Path) -> [PathBuf; 2] {
+    [
+        app_data_dir.join("settings.json"),
+        app_data_dir.join(".store").join("settings.json"),
+    ]
+}
+
+fn load_provider_configs_json(app_data_dir: &std::path::Path) -> Result<serde_json::Map<String, JsonValue>, String> {
+    for path in provider_config_file_paths(app_data_dir) {
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(format!(
+                    "Could not read provider settings from {}: {}",
+                    path.display(),
+                    error
+                ))
+            }
+        };
+
+        let json: JsonValue =
+            serde_json::from_str(&text).map_err(|error| format!("Could not parse provider settings: {}", error))?;
+        let configs = json
+            .get("providerConfigs")
+            .and_then(JsonValue::as_object)
+            .cloned()
+            .unwrap_or_default();
+        return Ok(configs);
+    }
+
+    Ok(serde_json::Map::new())
+}
+
+fn read_provider_config_string(
+    app_data_dir: &std::path::Path,
+    provider_id: &str,
+    key: &str,
+) -> Result<Option<String>, String> {
+    let configs = load_provider_configs_json(app_data_dir)?;
+    Ok(configs
+        .get(provider_id)
+        .and_then(JsonValue::as_object)
+        .and_then(|config| config.get(key))
+        .and_then(JsonValue::as_str)
+        .map(str::to_string))
+}
+
+fn try_parse_json_or_hex_json(text: &str) -> Option<JsonValue> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Ok(json) = serde_json::from_str(trimmed) {
+        return Some(json);
+    }
+
+    let hex = trimmed
+        .strip_prefix("0x")
+        .or_else(|| trimmed.strip_prefix("0X"))
+        .unwrap_or(trimmed);
+    if hex.is_empty() || hex.len() % 2 != 0 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    let bytes: Vec<u8> = (0..hex.len())
+        .step_by(2)
+        .filter_map(|index| u8::from_str_radix(&hex[index..index + 2], 16).ok())
+        .collect();
+    if bytes.len() * 2 != hex.len() {
+        return None;
+    }
+    let decoded = String::from_utf8(bytes).ok()?;
+    serde_json::from_str(&decoded).ok()
+}
+
+fn json_string_or_object(text: &str) -> Option<JsonValue> {
+    let parsed = try_parse_json_or_hex_json(text)?;
+    match parsed {
+        JsonValue::String(inner) => try_parse_json_or_hex_json(&inner).or(Some(JsonValue::String(inner))),
+        other => Some(other),
+    }
+}
+
+fn json_string_field<'a>(object: &'a serde_json::Map<String, JsonValue>, key: &str) -> Option<&'a str> {
+    object.get(key).and_then(JsonValue::as_str).map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn decode_base64url_to_json(token: &str) -> Option<JsonValue> {
+    let payload = token.split('.').nth(1)?;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    let decoded = URL_SAFE_NO_PAD.decode(payload).ok()?;
+    serde_json::from_slice(&decoded).ok()
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedCodexAuth {
+    auth_json: String,
+    email: Option<String>,
+    account_id: Option<String>,
+}
+
+fn resolve_codex_home_from_env() -> Option<String> {
+    let value = std::env::var("CODEX_HOME").ok()?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn codex_auth_paths() -> Vec<PathBuf> {
+    if let Some(home) = resolve_codex_home_from_env() {
+        return vec![PathBuf::from(home).join("auth.json")];
+    }
+
+    vec![
+        PathBuf::from("~/.config/codex/auth.json"),
+        PathBuf::from("~/.codex/auth.json"),
+    ]
+}
+
+fn normalize_codex_auth(json: JsonValue) -> Option<ResolvedCodexAuth> {
+    let auth = match json {
+        JsonValue::Object(map) => map,
+        _ => return None,
+    };
+
+    let tokens = auth.get("tokens").and_then(JsonValue::as_object);
+    let access_token = tokens
+        .and_then(|tokens| json_string_field(tokens, "access_token"))
+        .map(str::to_string);
+    let refresh_token = tokens
+        .and_then(|tokens| json_string_field(tokens, "refresh_token"))
+        .map(str::to_string);
+    let api_key = json_string_field(&auth, "OPENAI_API_KEY").map(str::to_string);
+
+    if access_token.is_none() && refresh_token.is_none() && api_key.is_none() {
+        return None;
+    }
+
+    let account_id = tokens
+        .and_then(|tokens| json_string_field(tokens, "account_id"))
+        .map(str::to_string);
+
+    let token_for_identity = tokens
+        .and_then(|tokens| json_string_field(tokens, "id_token"))
+        .or_else(|| tokens.and_then(|tokens| json_string_field(tokens, "access_token")));
+    let token_payload = token_for_identity.and_then(decode_base64url_to_json);
+    let email = token_payload
+        .as_ref()
+        .and_then(JsonValue::as_object)
+        .and_then(|payload| {
+            payload
+                .get("email")
+                .and_then(JsonValue::as_str)
+                .or_else(|| payload.get("upn").and_then(JsonValue::as_str))
+        })
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let account_id = account_id.or_else(|| {
+        token_payload
+            .as_ref()
+            .and_then(JsonValue::as_object)
+            .and_then(|payload| {
+                payload
+                    .get("account_id")
+                    .and_then(JsonValue::as_str)
+                    .or_else(|| payload.get("accountId").and_then(JsonValue::as_str))
+                    .or_else(|| payload.get("sub").and_then(JsonValue::as_str))
+            })
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    });
+
+    let auth_json = serde_json::to_string_pretty(&JsonValue::Object(auth)).ok()?;
+    Some(ResolvedCodexAuth {
+        auth_json,
+        email,
+        account_id,
+    })
+}
+
+fn read_codex_auth_from_path(path: &PathBuf) -> Result<Option<ResolvedCodexAuth>, String> {
+    let raw_path = path.to_string_lossy().to_string();
+    let expanded = if raw_path == "~" {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("~"))
+            .to_string_lossy()
+            .to_string()
+    } else if let Some(rest) = raw_path.strip_prefix("~/") {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("~"))
+            .join(rest)
+            .to_string_lossy()
+            .to_string()
+    } else {
+        raw_path
+    };
+    let raw = match std::fs::read_to_string(&expanded) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(format!(
+                "Could not read Codex auth file {}: {}",
+                expanded,
+                error
+            ))
+        }
+    };
+
+    Ok(json_string_or_object(&raw).and_then(normalize_codex_auth))
+}
+
+fn read_codex_auth_from_keychain() -> Result<Option<ResolvedCodexAuth>, String> {
+    let entry =
+        Entry::new("OpenUsage", "Codex Auth").map_err(|error| format!("Could not access Codex keychain entry: {}", error))?;
+
+    match entry.get_password() {
+        Ok(value) => Ok(json_string_or_object(&value).and_then(normalize_codex_auth)),
+        Err(error) => {
+            let message = error.to_string();
+            if is_missing_credential_error(&message) {
+                Ok(None)
+            } else {
+                Err(format!("Could not read Codex keychain entry: {}", error))
+            }
+        }
+    }
+}
+
+fn resolve_current_codex_auth() -> Result<ResolvedCodexAuth, String> {
+    for path in codex_auth_paths() {
+        if let Some(auth) = read_codex_auth_from_path(&path)? {
+            return Ok(auth);
+        }
+    }
+
+    if let Some(auth) = read_codex_auth_from_keychain()? {
+        return Ok(auth);
+    }
+
+    Err("No current Codex login was found. Run `codex` on this machine first.".to_string())
+}
+
+fn codex_profile_label(email: Option<&str>, account_id: Option<&str>, now_ms: i64) -> String {
+    if let Some(email) = email {
+        return email.to_string();
+    }
+    if let Some(account_id) = account_id {
+        return format!("Codex {}", account_id);
+    }
+    format!("Codex {}", now_ms)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportedCodexAccountResponse {
+    profile: codex_account_store::CodexAccountProfile,
+    was_first_profile: bool,
 }
 
 fn should_track_app_started(last_tracked_day: Option<&str>, today: &str) -> bool {
@@ -720,6 +993,96 @@ fn delete_provider_secret(
     Ok(())
 }
 
+#[tauri::command]
+fn list_codex_account_profiles(
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<codex_account_store::CodexAccountProfile>, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not access the app data directory: {}", error))?;
+    codex_account_store::list_profiles(&app_data_dir)
+}
+
+#[tauri::command]
+fn import_current_codex_account_profile(
+    app_handle: tauri::AppHandle,
+) -> Result<ImportedCodexAccountResponse, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not access the app data directory: {}", error))?;
+    let existing_profiles = codex_account_store::list_profiles(&app_data_dir)?;
+    let resolved = resolve_current_codex_auth()?;
+    let now_ms = now_utc_unix_ms();
+    let imported = codex_account_store::ImportedCodexAccount {
+        label: codex_profile_label(resolved.email.as_deref(), resolved.account_id.as_deref(), now_ms),
+        email: resolved.email.clone(),
+        account_id: resolved.account_id.clone(),
+    };
+    let profile = codex_account_store::import_profile(&app_data_dir, imported, now_ms)?;
+    let secret_key = format!("account:{}:authJson", profile.profile_id);
+
+    #[cfg(target_os = "windows")]
+    provider_secret_store::save_provider_secret(&app_data_dir, "codex", &secret_key, &resolved.auth_json)
+        .map_err(|error| format!("Could not save imported Codex profile auth: {}", error))?;
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let service = provider_secret_service("codex", &secret_key);
+        let entry = open_provider_secret_entry(provider_secret_entry_spec(&service))
+            .map_err(|error| format!("Could not access the system credential vault: {}", error))?;
+        entry
+            .set_password(&resolved.auth_json)
+            .map_err(|error| format!("Could not save imported Codex profile auth: {}", error))?;
+    }
+
+    Ok(ImportedCodexAccountResponse {
+        profile,
+        was_first_profile: existing_profiles.is_empty(),
+    })
+}
+
+#[tauri::command]
+fn delete_codex_account_profile(
+    app_handle: tauri::AppHandle,
+    profile_id: String,
+) -> Result<Option<codex_account_store::CodexAccountProfile>, String> {
+    let trimmed_profile_id = profile_id.trim();
+    if trimmed_profile_id.is_empty() {
+        return Err("profile id is required".to_string());
+    }
+
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not access the app data directory: {}", error))?;
+    let removed = codex_account_store::delete_profile(&app_data_dir, trimmed_profile_id)?;
+    if removed.is_none() {
+        return Ok(None);
+    }
+
+    let secret_key = format!("account:{}:authJson", trimmed_profile_id);
+    #[cfg(target_os = "windows")]
+    provider_secret_store::delete_provider_secret(&app_data_dir, "codex", &secret_key)
+        .map_err(|error| format!("Could not remove imported Codex profile auth: {}", error))?;
+
+    let service = provider_secret_service("codex", &secret_key);
+    delete_provider_secret_service(&service)
+        .map_err(|error| format!("Could not remove imported Codex profile auth: {}", error))?;
+
+    if let Some(selected_profile_id) = read_provider_config_string(&app_data_dir, "codex", "selectedAccountProfileId")? {
+        if selected_profile_id.trim() == trimmed_profile_id {
+            log::info!(
+                "deleted selected Codex profile '{}'; UI should clear selectedAccountProfileId on next settings load",
+                trimmed_profile_id
+            );
+        }
+    }
+
+    Ok(removed)
+}
+
 struct ResolvedPluginSupport {
     support_state: &'static str,
     support_message: Option<String>,
@@ -923,6 +1286,9 @@ pub fn run() {
             get_log_path,
             set_provider_secret,
             delete_provider_secret,
+            list_codex_account_profiles,
+            import_current_codex_account_profile,
+            delete_codex_account_profile,
             update_global_shortcut
         ])
         .setup(|app| {

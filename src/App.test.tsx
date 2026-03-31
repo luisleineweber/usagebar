@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   isTauriMock: vi.fn(() => false),
   trackMock: vi.fn(),
   setSizeMock: vi.fn(),
+  hideWindowMock: vi.fn(),
   currentMonitorMock: vi.fn(),
   startBatchMock: vi.fn(),
   savePluginSettingsMock: vi.fn(),
@@ -173,7 +174,7 @@ vi.mock("@tauri-apps/api/path", () => ({
 }))
 
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ setSize: state.setSizeMock }),
+  getCurrentWindow: () => ({ setSize: state.setSizeMock, hide: state.hideWindowMock }),
   PhysicalSize: class {
     width: number
     height: number
@@ -271,6 +272,7 @@ describe("App", () => {
     state.isTauriMock.mockReturnValue(false)
     state.trackMock.mockReset()
     state.setSizeMock.mockReset()
+    state.hideWindowMock.mockReset()
     state.currentMonitorMock.mockReset()
     state.startBatchMock.mockReset()
     state.savePluginSettingsMock.mockReset()
@@ -341,6 +343,7 @@ describe("App", () => {
         return 100
       },
     })
+    state.hideWindowMock.mockResolvedValue(undefined)
     state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 } })
     state.startBatchMock.mockResolvedValue(["a"])
     state.trayGetByIdMock.mockResolvedValue({
@@ -1436,6 +1439,7 @@ describe("App", () => {
         view: "b",
       })
     )
+    expect(state.hideWindowMock).toHaveBeenCalledTimes(1)
   })
 
   it("logs when tray handle cannot be loaded", async () => {

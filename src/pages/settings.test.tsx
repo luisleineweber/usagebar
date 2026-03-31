@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import { useState } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { openUrl } from "@tauri-apps/plugin-opener"
 
 let latestOnDragEnd: ((event: any) => void) | undefined
 
@@ -42,8 +43,13 @@ vi.mock("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => "" } },
 }))
 
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: vi.fn(() => Promise.resolve()),
+}))
+
 import { SettingsPage } from "@/pages/settings"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
+import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 
 const providers: SettingsPluginState[] = [
   {
@@ -173,7 +179,16 @@ describe("SettingsPage", () => {
     render(<TestHarness />)
     expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
     expect(screen.getByText("Menubar Icon")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
     expect(screen.queryByText("Reorder your lineup and select a provider to manage.")).not.toBeInTheDocument()
+  })
+
+  it("opens the issue tracker from the General tab", async () => {
+    render(<TestHarness />)
+
+    await userEvent.click(screen.getByRole("button", { name: /report an issue/i }))
+
+    expect(openUrl).toHaveBeenCalledWith(PROJECT_ISSUES_URL)
   })
 
   it("switches to the Providers tab and shows provider detail", async () => {
@@ -194,7 +209,7 @@ describe("SettingsPage", () => {
     expect(screen.getAllByText("Not signed in").length).toBeGreaterThan(0)
   })
 
-  it("keeps provider selection local to the Settings window", async () => {
+  it("marks provider-row clicks as tray-reveal selections", async () => {
     const onSelectedProviderChange = vi.fn()
     render(
       <SettingsPage
