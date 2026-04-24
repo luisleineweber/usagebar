@@ -7,8 +7,8 @@
   "icon": "icon.svg",
   "platformSupport": {
     "windows": {
-      "state": "blocked",
-      "message": "Windows placeholder. Planned path: local Kiro CLI usage parsing."
+      "state": "experimental",
+      "message": "Windows experimental. UsageBar reads the local Kiro auth/cache state and refreshes live usage when desktop credentials are present."
     }
   },
   "lines": [

@@ -1,3 +1,4 @@
+pub mod browser_bridge;
 pub mod host_api;
 pub mod manifest;
 pub mod runtime;

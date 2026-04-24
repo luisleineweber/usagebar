@@ -209,7 +209,7 @@ describe("SettingsPage", () => {
     expect(screen.getAllByText("Not signed in").length).toBeGreaterThan(0)
   })
 
-  it("marks provider-row clicks as tray-reveal selections", async () => {
+  it("marks provider-row clicks as tray-sync selections", async () => {
     const onSelectedProviderChange = vi.fn()
     render(
       <SettingsPage
@@ -223,7 +223,14 @@ describe("SettingsPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /codex/i }))
 
-    expect(onSelectedProviderChange.mock.calls).toContainEqual(["codex", { revealInTray: true }])
+    expect(onSelectedProviderChange.mock.calls).toContainEqual(["codex", { syncTray: true }])
+  })
+
+  it("shows an explicit tray-open action for the selected provider", async () => {
+    render(<TestHarness />)
+    await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
+
+    expect(screen.getByRole("button", { name: /open in tray/i })).toBeInTheDocument()
   })
 
   it("reorders providers from the Providers tab", async () => {

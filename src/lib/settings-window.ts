@@ -7,6 +7,11 @@ export type SettingsWindowTarget = {
   providerId?: string | null
 }
 
+export type SelectedProviderChangeOptions = {
+  syncTray?: boolean
+  revealInTray?: boolean
+}
+
 export function parseSettingsWindowLocation(search: string): SettingsWindowTarget {
   const params = new URLSearchParams(search)
   const tab = params.get("tab") === "providers" ? "providers" : "general"

@@ -116,7 +116,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     title: "OpenCode Go Setup",
     summary: "Detected from the local OpenCode auth file and SQLite history on this machine.",
     statusHint: "No manual setup is required once ~/.local/share/opencode/auth.json or local opencode.db history exists.",
-    connectHint: "Use OpenCode Go on this machine so ~/.local/share/opencode/auth.json or ~/.local/share/opencode/opencode.db exists, then retry.",
+    connectHint: "Install OpenCode Go, sign in on this machine, then retry.",
   },
   codex: {
     mode: "detected",
@@ -130,7 +130,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     title: "Claude Setup",
     summary: "Current plugin uses local Claude OAuth credentials and refresh flow.",
     statusHint: "The app shows runtime status here before adding editable auth controls.",
-    connectHint: "Sign in to Claude locally so OpenUsage can read the existing OAuth session.",
+    connectHint: "Run `claude` CLI and sign in on this machine, then retry.",
   },
   cursor: {
     mode: "detected",
@@ -144,14 +144,14 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     title: "Factory Setup",
     summary: "Reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it automatically.",
     statusHint: "Run `droid` so ~/.factory/auth.v2.file plus ~/.factory/auth.v2.key exists before launching UsageBar. Legacy auth.encrypted and auth.json still work.",
-    connectHint: "Run `droid` on this machine, restart UsageBar if needed, then retry the provider check.",
+    connectHint: "Install the Factory CLI (`droid`), sign in, restart UsageBar if needed, then retry.",
   },
   gemini: {
     mode: "automatic",
     title: "Gemini Setup",
     summary: "Detected from Gemini CLI OAuth credentials.",
     statusHint: "No manual setup is required once Gemini CLI is signed in.",
-    connectHint: "Run Gemini CLI sign-in on this machine, then retry.",
+    connectHint: "Install Gemini CLI, run `gemini` and sign in, then retry.",
   },
   copilot: {
     mode: "automatic",
@@ -165,7 +165,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     title: "Amp Setup",
     summary: "Detected from the local Amp CLI secrets file.",
     statusHint: "No provider-specific controls are needed yet.",
-    connectHint: "Sign in to Amp on this machine so its local secrets file is available.",
+    connectHint: "Install Amp Code CLI, run `amp login`, then retry.",
   },
   windsurf: {
     mode: "automatic",
@@ -173,6 +173,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     summary: "Detected from local Windsurf sign-in state and refreshed from the Windsurf cloud quota endpoint.",
     statusHint: "The current plugin reads the local auth DB automatically; no manual token field is exposed.",
     connectHint: "Sign in to Windsurf once on this machine, then refresh to fetch the current daily and weekly quota state.",
+  },
+  zed: {
+    mode: "editable",
+    title: "Zed Setup",
+    summary: "Fetches Zed dashboard billing spend from a signed-in dashboard Cookie header, then replays that session inside an embedded browser context. When no billing cookie is configured, the provider falls back to local Zed-hosted telemetry totals.",
+    statusHint: "Windows experimental. Billing spend now uses a live browser-backed dashboard request instead of a pasted JSON snapshot. The local Zed client token alone still does not unlock the billing API.",
+    connectHint: "Open https://dashboard.zed.dev/account, capture the full Cookie request header from a fresh cloud.zed.dev/frontend/billing/usage request, paste it here, then retry. Do not paste Set-Cookie.",
+    secretField: {
+      key: "cookieHeader",
+      label: "Cookie header",
+      description: "Paste the full Cookie request header from a fresh signed-in cloud.zed.dev/frontend/billing/usage request. UsageBar replays it through an embedded browser context. Do not paste Set-Cookie.",
+      placeholder: "zed.session=...; __cf_bm=...; c15t=...;",
+    },
   },
   kimi: {
     mode: "automatic",
@@ -194,6 +207,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     summary: "Detected from local process state, SQLite, and OAuth refresh data. Stored credentials keep working after a one-time sign-in, even when Antigravity closes.",
     statusHint: "Live LS data is auto-detected while Antigravity is open; stored SQLite/OAuth data keeps working after sign-in.",
     connectHint: "Open Antigravity locally once to sign in, then UsageBar can keep reading the stored credentials even after the IDE closes.",
+  },
+  abacus: {
+    mode: "editable",
+    title: "Abacus AI Setup",
+    summary: "Fetches Abacus AI compute-point usage from the signed-in web session using a manual Cookie header or ABACUS_COOKIE_HEADER.",
+    statusHint: "Manual cookie or env mode is the supported Windows path in this build.",
+    connectHint: "Open a signed-in Abacus AI compute-points usage request in DevTools, copy the full Cookie request header, paste it here, then retry. Do not paste Set-Cookie.",
+    secretField: {
+      key: "cookieHeader",
+      label: "Cookie header",
+      description: "Paste the full Cookie header from a signed-in apps.abacus.ai request. Do not paste Set-Cookie.",
+      placeholder: "sessionid=...; session_token=...;",
+    },
   },
   perplexity: {
     mode: "editable",
@@ -227,17 +253,25 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     "Planned Windows implementation: detect local Augment app or CLI session state first, then add a provider-specific local probe before considering any web flow.",
     "Target plan: reuse local process or CLI auth on Windows instead of browser-cookie scraping."
   ),
-  alibaba: plannedWindowsProviderDefinition(
-    "Alibaba Coding Plan Setup",
-    "Windows placeholder. Planned implementation: start with an app-owned Alibaba session or API-key path for Coding Plan quota, then add provider-specific region handling.",
-    "Target plan: add secure API-key and session support later; probing stays disabled until the Windows implementation lands."
-  ),
+  alibaba: {
+    mode: "editable",
+    title: "Alibaba Coding Plan Setup",
+    summary: "Fetches daily and weekly Coding Plan quotas from a stored API key or ALIBABA_API_KEY, with optional ALIBABA_REGION override.",
+    statusHint: "Save an Alibaba API key here or set ALIBABA_API_KEY before launching UsageBar. Default region is cn-beijing unless ALIBABA_REGION is set.",
+    connectHint: "Create an Alibaba API key, save it here or set ALIBABA_API_KEY, then retry. Set ALIBABA_REGION if your account uses a non-default region.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste an Alibaba API key. UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint.",
+      placeholder: "ali_...",
+    },
+  },
   kilo: {
     mode: "editable",
     title: "Kilo Setup",
     summary: "Fetches Kilo usage from a stored API key or KILO_API_KEY. CLI-session fallback is still deferred in this Windows-first build.",
     statusHint: "Save a Kilo API key here or set KILO_API_KEY before launching UsageBar.",
-    connectHint: "Create a Kilo API key, save it here or set KILO_API_KEY, then retry. Local kilo login fallback is planned but not wired yet.",
+    connectHint: "Create a Kilo API key at https://kilo.com, save it here or set KILO_API_KEY, then retry.",
     secretField: {
       key: "apiKey",
       label: "API key",
@@ -250,7 +284,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     title: "Kimi K2 Setup",
     summary: "Fetches Kimi K2 credits from a stored API key or KIMI_K2_API_KEY-compatible env vars.",
     statusHint: "Save a Kimi K2 API key here or set KIMI_K2_API_KEY, KIMI_API_KEY, or KIMI_KEY before launching UsageBar.",
-    connectHint: "Create a Kimi K2 API key, save it here or set KIMI_K2_API_KEY, then retry.",
+    connectHint: "Create a Kimi K2 API key at https://kimi.moonshot.cn, save it here or set KIMI_K2_API_KEY, then retry.",
     secretField: {
       key: "apiKey",
       label: "API key",
@@ -258,11 +292,13 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       placeholder: "kimi_...",
     },
   },
-  kiro: plannedWindowsProviderDefinition(
-    "Kiro Setup",
-    "Planned Windows implementation: execute the local Kiro CLI usage command and parse its output instead of building a browser-session path.",
-    "Target plan: rely on CLI detection and parsing on Windows while that command remains available."
-  ),
+  kiro: {
+    mode: "automatic",
+    title: "Kiro Setup",
+    summary: "Reads local Kiro auth and cache state, then refreshes live usage from the Kiro usage endpoint when the desktop session is present.",
+    statusHint: "Open Kiro and sign in on this machine so UsageBar can read the local auth token, profile, and usage cache.",
+    connectHint: "Open Kiro, sign in, and load the Kiro account dashboard once, then retry.",
+  },
   openrouter: {
     mode: "editable",
     title: "OpenRouter Setup",
@@ -281,7 +317,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     title: "Synthetic Setup",
     summary: "Fetches Synthetic quota data from a stored API key or SYNTHETIC_API_KEY.",
     statusHint: "Save a Synthetic API key here or set SYNTHETIC_API_KEY before launching UsageBar.",
-    connectHint: "Create a Synthetic API key, save it here or set SYNTHETIC_API_KEY, then retry.",
+    connectHint: "Create a Synthetic API key at https://api.synthetic.new, save it here or set SYNTHETIC_API_KEY, then retry.",
     secretField: {
       key: "apiKey",
       label: "API key",
@@ -436,6 +472,7 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   }
   if (providerId === "ollama") return "Manual cookie"
   if (providerId === "perplexity") return "Manual cookie"
+  if (providerId === "abacus") return "Manual cookie"
   if (providerId === "codex") {
     return config?.selectedAccountProfileId ? "Managed account" : "Auto-detected"
   }

@@ -650,6 +650,23 @@ fn take_pending_panel_view() -> Option<String> {
 }
 
 #[tauri::command]
+fn sync_panel_view(app_handle: tauri::AppHandle, view: String) -> Result<(), String> {
+    let normalized_view = view.trim().to_string();
+    if normalized_view.is_empty() {
+        return Err("view must not be empty".to_string());
+    }
+
+    store_pending_panel_view(normalized_view.clone());
+    if app_handle.get_webview_window("main").is_some() {
+        app_handle
+            .emit_to("main", "tray:navigate", normalized_view)
+            .map_err(|error| format!("failed to navigate tray panel: {}", error))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn show_panel_for_view(app_handle: tauri::AppHandle, view: String) -> Result<(), String> {
     let normalized_view = view.trim().to_string();
     if normalized_view.is_empty() {
@@ -773,7 +790,7 @@ async fn start_probe_batch(
         tauri::async_runtime::spawn_blocking(move || {
             let plugin_id = plugin.manifest.id.clone();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                plugin_engine::runtime::run_probe(&plugin, &data_dir, &version)
+                plugin_engine::runtime::run_probe(&plugin, &data_dir, &version, Some(&handle))
             }));
 
             match result {
@@ -1278,6 +1295,7 @@ pub fn run() {
             sync_panel_geometry,
             apply_panel_bounds,
             take_pending_panel_view,
+            sync_panel_view,
             show_panel_for_view,
             open_settings_window,
             open_devtools,

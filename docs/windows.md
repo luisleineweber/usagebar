@@ -111,6 +111,7 @@ Record these fields in the relevant provider doc or rollout note:
 | Kimi K2 | Experimental | P2 | real Windows API-key validation plus broader live credits-shape evidence |
 | MiniMax | Experimental | P2 | real Windows API-key validation plus broader real-plan coverage |
 | Warp | Experimental | P2 | real Windows token validation plus broader live plan variance evidence |
+| Zed | Experimental | P2 | billing spend depends on a manual dashboard cookie header that is replayed through an embedded browser; automatic session import is still missing |
 | Factory / Droid | Experimental | P2 | real Windows validation of the v2 auth store plus signed-in runtime evidence |
 | Z.ai | Experimental | P3 | real Windows API-key validation for the internal quota endpoints |
 | Windsurf | Experimental | P2 | broader real-account/runtime validation after Windows LS + cloud path port |

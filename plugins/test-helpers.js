@@ -23,6 +23,7 @@ export const makeCtx = () => {
         },
         readText: (path) => files.get(path),
         writeText: vi.fn((path, text) => files.set(path, text)),
+        remove: vi.fn((path) => files.delete(path)),
         listDir: (path) => {
           const base = String(path).replace(/\/+$/, "")
           const out = new Set()
@@ -60,6 +61,7 @@ export const makeCtx = () => {
       keychain: {
         readGenericPassword: vi.fn(),
         readGenericPasswordForAccount: vi.fn(),
+        readGenericPasswordForTarget: vi.fn(),
         writeGenericPassword: vi.fn(),
         deleteGenericPassword: vi.fn(),
       },
@@ -72,6 +74,9 @@ export const makeCtx = () => {
       },
       http: {
         request: vi.fn(),
+      },
+      browser: {
+        requestWithCookies: vi.fn(),
       },
       providerSecrets: {
         read: vi.fn(() => null),

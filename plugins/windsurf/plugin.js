@@ -143,20 +143,22 @@
     var weeklyReset = unixSecondsToIso(ctx, planStatus.weeklyQuotaResetAtUnix)
     var extraUsageBalance = formatDollarsFromMicros(planStatus.overageBalanceMicros)
 
-    if (!dailyReset || !weeklyReset || !extraUsageBalance) throw QUOTA_HINT
+    // Require daily/weekly reset, but extra usage balance may be missing
+    if (!dailyReset || !weeklyReset) throw QUOTA_HINT
 
     var dailyLine = buildQuotaLine(ctx, "Daily quota", planStatus.dailyQuotaRemainingPercent, dailyReset, DAY_MS)
     var weeklyLine = buildQuotaLine(ctx, "Weekly quota", planStatus.weeklyQuotaRemainingPercent, weeklyReset, WEEK_MS)
 
     if (!dailyLine || !weeklyLine) throw QUOTA_HINT
 
+    var lines = [dailyLine, weeklyLine]
+    if (extraUsageBalance && extraUsageBalance !== "$0.00") {
+      lines.push(ctx.line.text({ label: "Extra usage balance", value: extraUsageBalance }))
+    }
+
     return {
       plan: planName,
-      lines: [
-        dailyLine,
-        weeklyLine,
-        ctx.line.text({ label: "Extra usage balance", value: extraUsageBalance }),
-      ],
+      lines: lines,
     }
   }
 

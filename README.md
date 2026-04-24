@@ -29,6 +29,8 @@ UsageBar lives in your Windows tray and shows you how much of your AI coding sub
 - **Global shortcut.** Toggle the panel from anywhere with a customizable keyboard shortcut.
 - **Lightweight.** Opens instantly, stays out of your way.
 - **Plugin-based.** New providers get added without updating the whole app.
+- **Proxy support.** Route requests through SOCKS5/HTTP proxies for restricted networks.
+- **Custom OAuth.** Bring your own OAuth credentials for enterprise compliance.
 
 ## Providers
 
@@ -36,7 +38,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 
 | Provider | Windows status | Scope |
 |---|---|---|
-| [**Alibaba Coding Plan**](plugins/alibaba/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Alibaba Coding Plan**](docs/providers/alibaba.md) | Experimental | Coding Plan daily/weekly quotas with region-aware auth |
 | [**Amp**](docs/providers/amp.md) | Experimental | Free tier, bonus, credits |
 | [**Antigravity**](docs/providers/antigravity.md) | Supported | All models |
 | [**Augment**](plugins/augment/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
@@ -50,7 +52,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Kilo**](docs/providers/kilo.md) | Experimental | Direct API-key usage endpoint |
 | [**Kimi**](docs/providers/kimi.md) | Experimental | Session, weekly |
 | [**Kimi K2**](docs/providers/kimi-k2.md) | Experimental | Credits, remaining, average tokens |
-| [**Kiro**](plugins/kiro/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Kiro**](docs/providers/kiro.md) | Experimental | Credits, bonus credits, overages tracking |
 | [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding plan session, region-aware API-key auth |
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
 | [**OpenCode**](docs/providers/opencode.md) | Experimental | Session, weekly |
@@ -61,6 +63,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Vertex AI**](plugins/vertex-ai/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
 | [**Warp**](docs/providers/warp.md) | Experimental | Request limits, plan badge |
 | [**Windsurf**](docs/providers/windsurf.md) | Experimental | Daily quota, weekly quota, extra usage balance |
+| [**Zed**](docs/providers/zed.md) | Experimental | Dashboard token spend via browser-backed cookie replay, with local telemetry fallback |
 | [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches |
 
 Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/usagebar/issues/new)

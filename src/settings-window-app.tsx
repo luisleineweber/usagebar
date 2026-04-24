@@ -10,7 +10,6 @@ import { useSettingsPluginActions } from "@/hooks/app/use-settings-plugin-action
 import { useSettingsPluginList } from "@/hooks/app/use-settings-plugin-list"
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
-import { showPanelForView } from "@/lib/panel-window"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { parseSettingsWindowLocation, type SettingsWindowTab } from "@/lib/settings-window"
 import {
@@ -24,6 +23,8 @@ import {
 import { deleteProviderSecret, setProviderSecret } from "@/lib/provider-secrets"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
+import { syncPanelView, showPanelForView } from "@/lib/panel-window"
+import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 
 type SettingsOpenPayload = {
   tab?: SettingsWindowTab
@@ -36,6 +37,7 @@ export function SettingsWindowApp() {
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
     initialTargetRef.current.providerId ?? null
   )
+  const selectedProviderIdRef = useRef<string | null>(initialTargetRef.current.providerId ?? null)
 
   const {
     pluginsMeta,
@@ -226,6 +228,48 @@ export function SettingsWindowApp() {
     }
   }, [])
 
+  useEffect(() => {
+    let unlistenCloseRequested: (() => void) | undefined
+    let disposed = false
+
+    void getCurrentWindow()
+      .onCloseRequested(async (event) => {
+        event.preventDefault()
+        const providerView = selectedProviderIdRef.current?.trim() || "home"
+
+        try {
+          await showPanelForView(providerView)
+        } catch (error) {
+          console.error("Failed to reveal selected provider when settings closed:", error)
+        }
+
+        try {
+          await getCurrentWindow().hide()
+        } catch (error) {
+          console.error("Failed to hide settings window after close request:", error)
+        }
+      })
+      .then((dispose) => {
+        if (disposed) {
+          dispose()
+          return
+        }
+        unlistenCloseRequested = dispose
+      })
+      .catch((error) => {
+        console.error("Failed to listen for settings window close requests:", error)
+      })
+
+    return () => {
+      disposed = true
+      unlistenCloseRequested?.()
+    }
+  }, [])
+
+  useEffect(() => {
+    selectedProviderIdRef.current = selectedProviderId
+  }, [selectedProviderId])
+
   const providerConfigsRef = useRef(providerConfigs)
   useEffect(() => {
     providerConfigsRef.current = providerConfigs
@@ -284,19 +328,26 @@ export function SettingsWindowApp() {
   )
 
   const handleSelectedProviderChange = useCallback(
-    (providerId: string, options?: { revealInTray?: boolean }) => {
+    (providerId: string, options?: SelectedProviderChangeOptions) => {
       setSelectedProviderId(providerId)
-      if (!options?.revealInTray) return
-      void (async () => {
-        try {
-          await getCurrentWindow().hide()
-        } catch (error) {
-          console.error("Failed to hide settings window before tray handoff:", error)
-        }
+      if (options?.revealInTray) {
+        void (async () => {
+          try {
+            await getCurrentWindow().hide()
+          } catch (error) {
+            console.error("Failed to hide settings window before tray handoff:", error)
+          }
 
-        await showPanelForView(providerId)
-      })().catch((error) => {
-        console.error("Failed to reveal selected provider in tray panel:", error)
+          await showPanelForView(providerId)
+        })().catch((error) => {
+          console.error("Failed to reveal selected provider in tray panel:", error)
+        })
+        return
+      }
+
+      if (!options?.syncTray) return
+      void syncPanelView(providerId).catch((error) => {
+        console.error("Failed to sync selected provider to tray panel:", error)
       })
     },
     []

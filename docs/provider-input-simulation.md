@@ -44,6 +44,7 @@ Safety:
 | `vertex-ai` | None | No current path | Placeholder plugin only. |
 | `warp` | stored provider secret `token`, `WARP_API_KEY`, `WARP_TOKEN` | Works partially | Secret/env replay can fake auth setup, but request limits still come from Warp HTTP. |
 | `windsurf` | `~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb`, `~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb` | Works partially | SQLite replay can fake account discovery; quota still comes from Windsurf HTTP. |
+| `zed` | stored provider secret `cookieHeader`, external Windows credential target `zed:url=https://zed.dev`, `~/AppData/Local/Zed/logs/telemetry.log` | Works partially | Embedded-browser cookie replay can cover billing auth, while local replay covers sign-in detection and telemetry fallback. |
 | `zai` | `ZAI_API_KEY`, `GLM_API_KEY` env vars | Works partially | No file path today; auth is env-only and usage comes from HTTP. |
 
 ## Provider Details
@@ -287,6 +288,19 @@ Safety:
 - What to fake:
 - SQLite rows for `windsurfAuthStatus`.
 - Limitation: daily/weekly quota values still come from Windsurf HTTP, so file replay is only a login/session shim.
+
+### `zed`
+- Local inputs read:
+- provider secret `cookieHeader`
+- external Windows generic credential target `zed:url=https://zed.dev`
+- `~/AppData/Local/Zed/logs/telemetry.log`
+- What to fake:
+- A full dashboard `Cookie` request header from `cloud.zed.dev/frontend/billing/usage`, saved in Settings.
+- The Windows credential target payload as either a raw token string or the current Zed JSON wrapper with `token`.
+- JSON lines in `telemetry.log` that match `Agent Thread Completion Usage Updated`.
+- Limitation:
+- Billing spend still depends on a live signed-in dashboard session cookie.
+- The local credential plus telemetry path is only the fallback when no billing cookie is configured.
 
 ### `zai`
 - Local inputs read:

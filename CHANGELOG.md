@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-beta.4
+
+### Highlights
+- Added Zed as a Windows-experimental provider with dashboard-cookie billing and local telemetry fallback support.
+- Improved provider setup and plugin host support for credential reads, browser bridge access, and provider-specific local data flows.
+- Refined Settings provider selection so the Settings window and tray target stay in sync during provider handoff.
+- Fixed provider regressions and guidance for Cursor, Antigravity, Kiro, Alibaba, Claude, and Windsurf.
+- Moved issue reporting into Settings and refreshed Windows/provider documentation for the current beta surface.
+
+---
+
 ## 0.1.0-beta.3
 
 ### Highlights

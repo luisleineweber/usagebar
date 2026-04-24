@@ -90,6 +90,11 @@ export function useSettingsBootstrap({
 
         const storedSettings = await loadPluginSettings()
         const normalized = normalizePluginSettings(storedSettings, surfacedPlugins)
+        const enabledIds = getProbeEligiblePluginIds(normalized, surfacedPlugins)
+        if (isMounted) {
+          setPluginSettings(normalized)
+          setLoadingForPlugins(enabledIds)
+        }
         if (!arePluginSettingsEqual(storedSettings, normalized)) {
           await savePluginSettings(normalized)
         }
@@ -155,7 +160,6 @@ export function useSettingsBootstrap({
         }
 
         if (isMounted) {
-          setPluginSettings(normalized)
           setAutoUpdateInterval(storedInterval)
           setThemeMode(storedThemeMode)
           setDisplayMode(storedDisplayMode)
@@ -164,8 +168,6 @@ export function useSettingsBootstrap({
           setStartOnLogin(storedStartOnLogin)
           setMenubarIconStyle(storedMenubarIconStyle)
 
-          const enabledIds = getProbeEligiblePluginIds(normalized, surfacedPlugins)
-          setLoadingForPlugins(enabledIds)
           try {
             await startBatch(enabledIds)
           } catch (error) {

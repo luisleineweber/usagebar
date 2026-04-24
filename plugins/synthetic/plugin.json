@@ -4,7 +4,7 @@
   "name": "Synthetic",
   "version": "0.0.1",
   "entry": "plugin.js",
-  "icon": "icon.svg",
+  "icon": "synthetic.svg",
   "brandColor": "#141414",
   "platformSupport": {
     "windows": {

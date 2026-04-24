@@ -3006,7 +3006,7 @@ dependencies = [
 
 [[package]]
 name = "openusage"
-version = "0.1.0-beta.3"
+version = "0.1.0-beta.4"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",

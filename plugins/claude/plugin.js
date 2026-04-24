@@ -4,9 +4,48 @@
   const KEYCHAIN_SERVICE = "Claude Code-credentials"
   const USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
   const REFRESH_URL = "https://platform.claude.com/v1/oauth/token"
-  const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-  const SCOPES = "user:profile user:inference user:sessions:claude_code user:mcp_servers"
+  const DEFAULT_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+  const DEFAULT_SCOPES = "user:profile user:inference user:sessions:claude_code user:mcp_servers"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
+
+  function loadOAuthConfig(ctx) {
+    const configFile = "~/.usagebar/config.json"
+    if (!ctx.host.fs.exists(configFile)) {
+      return null
+    }
+    try {
+      const text = ctx.host.fs.readText(configFile)
+      const parsed = ctx.util.tryParseJson(text)
+      if (parsed && parsed.claude && parsed.claude.oauth) {
+        const oauth = parsed.claude.oauth
+        if (oauth.clientId) {
+          ctx.host.log.info("using custom OAuth config from ~/.usagebar/config.json")
+          return {
+            clientId: oauth.clientId,
+            clientSecret: oauth.clientSecret || null,
+            scopes: oauth.scopes || DEFAULT_SCOPES,
+            refreshUrl: oauth.refreshUrl || REFRESH_URL,
+          }
+        }
+      }
+    } catch (e) {
+      ctx.host.log.warn("failed to load custom OAuth config: " + String(e))
+    }
+    return null
+  }
+
+  function getOAuthConfig(ctx) {
+    const custom = loadOAuthConfig(ctx)
+    if (custom) {
+      return custom
+    }
+    return {
+      clientId: DEFAULT_CLIENT_ID,
+      clientSecret: null,
+      scopes: DEFAULT_SCOPES,
+      refreshUrl: REFRESH_URL,
+    }
+  }
 
   function readNonEmptyString(value) {
     if (typeof value !== "string") return ""
@@ -261,17 +300,18 @@
       return null
     }
 
+    const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
     try {
       const resp = ctx.util.request({
         method: "POST",
-        url: REFRESH_URL,
+        url: oauthConfig.refreshUrl,
         headers: { "Content-Type": "application/json" },
         bodyText: JSON.stringify({
           grant_type: "refresh_token",
           refresh_token: oauth.refreshToken,
-          client_id: CLIENT_ID,
-          scope: SCOPES,
+          client_id: oauthConfig.clientId,
+          scope: oauthConfig.scopes,
         }),
         timeoutMs: 15000,
       })

@@ -4,12 +4,12 @@
   "name": "Alibaba Coding Plan",
   "version": "0.0.1",
   "entry": "plugin.js",
-  "icon": "icon.svg",
+  "icon": "alibabacloud-color.svg",
   "brandColor": "#FF6A00",
   "platformSupport": {
     "windows": {
-      "state": "blocked",
-      "message": "Windows placeholder. Planned path: app-owned Alibaba session or API-key quota fetch; probing is not implemented yet."
+      "state": "experimental",
+      "message": "Windows experimental. Save an Alibaba API key in Setup or set ALIBABA_API_KEY, then use ALIBABA_REGION if you need a non-default region."
     }
   },
   "lines": [

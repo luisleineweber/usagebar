@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "abacus",
+  "name": "Abacus AI",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#38BDF8",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Windows experimental. Save an Abacus AI Cookie header or set ABACUS_COOKIE_HEADER before probing."
+    }
+  },
+  "links": [
+    { "label": "Usage", "url": "https://apps.abacus.ai/chatllm/admin/compute-points-usage" }
+  ],
+  "lines": [
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
+    { "type": "text", "label": "Billing", "scope": "detail" }
+  ]
+}

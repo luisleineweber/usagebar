@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "zed",
+  "name": "Zed",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#0A66FF",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Windows experimental. Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback."
+    }
+  },
+  "links": [
+    { "label": "Dashboard", "url": "https://dashboard.zed.dev/account" },
+    { "label": "Docs", "url": "https://zed.dev/docs" }
+  ],
+  "lines": [
+    { "type": "badge", "label": "Source", "scope": "overview" },
+    { "type": "progress", "label": "Spend", "scope": "overview", "primaryOrder": 1 },
+    { "type": "text", "label": "Limit", "scope": "detail" },
+    { "type": "text", "label": "Updated", "scope": "detail" },
+    { "type": "text", "label": "Prompts", "scope": "detail" },
+    { "type": "text", "label": "Input", "scope": "detail" },
+    { "type": "text", "label": "Output", "scope": "detail" },
+    { "type": "text", "label": "Cache read", "scope": "detail" },
+    { "type": "text", "label": "Cache write", "scope": "detail" },
+    { "type": "text", "label": "Models", "scope": "detail" }
+  ]
+}

@@ -4,7 +4,7 @@
   "name": "Augment",
   "version": "0.0.1",
   "entry": "plugin.js",
-  "icon": "icon.svg",
+  "icon": "Augment_Code_idmreFUtWy_1.svg",
   "platformSupport": {
     "windows": {
       "state": "blocked",

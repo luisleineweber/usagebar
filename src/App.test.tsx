@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
@@ -30,6 +30,7 @@ const state = vi.hoisted(() => ({
   saveStartOnLoginMock: vi.fn(),
   loadProviderConfigsMock: vi.fn(),
   saveProviderConfigsMock: vi.fn(),
+  closeRequestedHandler: null as null | ((event: { preventDefault: () => void }) => void | Promise<void>),
   autostartEnableMock: vi.fn(),
   autostartDisableMock: vi.fn(),
   autostartIsEnabledMock: vi.fn(),
@@ -174,7 +175,14 @@ vi.mock("@tauri-apps/api/path", () => ({
 }))
 
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ setSize: state.setSizeMock, hide: state.hideWindowMock }),
+  getCurrentWindow: () => ({
+    setSize: state.setSizeMock,
+    hide: state.hideWindowMock,
+    onCloseRequested: async (handler: (event: { preventDefault: () => void }) => void | Promise<void>) => {
+      state.closeRequestedHandler = handler
+      return vi.fn()
+    },
+  }),
   PhysicalSize: class {
     width: number
     height: number
@@ -294,6 +302,7 @@ describe("App", () => {
     state.saveStartOnLoginMock.mockReset()
     state.loadProviderConfigsMock.mockReset()
     state.saveProviderConfigsMock.mockReset()
+    state.closeRequestedHandler = null
     state.autostartEnableMock.mockReset()
     state.autostartDisableMock.mockReset()
     state.autostartIsEnabledMock.mockReset()
@@ -313,6 +322,10 @@ describe("App", () => {
     menuState.menuCloseMock.mockReset()
     eventState.handlers.clear()
     eventState.listenMock.mockReset()
+    eventState.listenMock.mockImplementation(async (eventName: string, handler: (event: any) => void) => {
+      eventState.handlers.set(eventName, handler)
+      return () => { eventState.handlers.delete(eventName) }
+    })
     updaterState.checkMock.mockReset()
     updaterState.relaunchMock.mockReset()
     updaterState.checkMock.mockResolvedValue(null)
@@ -431,6 +444,47 @@ describe("App", () => {
       )
     )
     expect(screen.getByText("Alpha")).toBeInTheDocument()
+  })
+
+  it("raises the cold-start panel height for the full nav stack before slower bootstrap finishes", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    let resolveStartOnLogin: ((value: boolean) => void) | null = null
+    state.loadStartOnLoginMock.mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        resolveStartOnLogin = resolve
+      })
+    )
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [{ type: "text", label: "Now", scope: "overview" }] },
+          { id: "b", name: "Beta", iconUrl: "icon-b", primaryProgressLabel: null, lines: [] },
+          { id: "c", name: "Gamma", iconUrl: "icon-c", primaryProgressLabel: null, lines: [] },
+          { id: "d", name: "Delta", iconUrl: "icon-d", primaryProgressLabel: null, lines: [] },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b", "c", "d"], disabled: [] })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(state.invokeMock).toHaveBeenCalledWith(
+        "apply_panel_bounds",
+        expect.objectContaining({ panelHeightPx: expect.any(Number) })
+      )
+      const raisedNavHeightCall = state.invokeMock.mock.calls.find(
+        ([command, payload]) =>
+          command === "apply_panel_bounds"
+          && typeof payload?.panelHeightPx === "number"
+          && payload.panelHeightPx >= 332
+      )
+      expect(raisedNavHeightCall).toBeTruthy()
+      expect(state.loadMenubarIconStyleMock).not.toHaveBeenCalled()
+    })
+
+    resolveStartOnLogin?.(false)
   })
 
   it("keeps surfaced OpenCode in the plugin list and preserves saved settings", async () => {
@@ -823,10 +877,13 @@ describe("App", () => {
     state.isTauriMock.mockReturnValue(true)
     render(<App />)
 
-    await waitFor(() => expect(eventState.listenMock).toHaveBeenCalled())
+    await waitFor(() => {
+      expect(eventState.handlers.has("tray:navigate")).toBe(true)
+    })
     const handler = eventState.handlers.get("tray:navigate")
-    expect(handler).toBeTruthy()
-    handler?.({ payload: "nope" })
+    await act(async () => {
+      handler?.({ payload: "nope" })
+    })
 
     await screen.findByText("Provider not found")
   })
@@ -1421,25 +1478,67 @@ describe("App", () => {
     )
   })
 
-  it("reveals the tray panel for an explicitly selected provider in the settings window", async () => {
+  it("syncs the tray target when selecting a provider in the settings window", async () => {
     state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
     renderSettingsWindow()
 
     await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
 
-    const revealCallsBeforeClick = state.invokeMock.mock.calls.filter(
-      ([command]) => command === "show_panel_for_view"
-    )
-    expect(revealCallsBeforeClick).toHaveLength(0)
+    const hideCallsBeforeClick = state.hideWindowMock.mock.calls.length
 
     await userEvent.click(await screen.findByRole("button", { name: /beta/i }))
+
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("sync_panel_view", {
+        view: "b",
+      })
+    )
+    expect(state.hideWindowMock).toHaveBeenCalledTimes(hideCallsBeforeClick)
+  })
+
+  it("opens the tray panel from the explicit provider action button", async () => {
+    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
+    renderSettingsWindow()
+
+    await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
+    await userEvent.click(await screen.findByRole("button", { name: /beta/i }))
+
+    await userEvent.click(await screen.findByRole("button", { name: /open in tray/i }))
 
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
         view: "b",
       })
     )
-    expect(state.hideWindowMock).toHaveBeenCalledTimes(1)
+    expect(state.hideWindowMock).toHaveBeenCalled()
+  })
+
+  it("reveals the selected provider when the settings window closes", async () => {
+    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
+    renderSettingsWindow()
+
+    await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
+    await userEvent.click(await screen.findByRole("button", { name: /beta/i }))
+
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("sync_panel_view", {
+        view: "b",
+      })
+    )
+
+    state.invokeMock.mockClear()
+
+    await waitFor(() => expect(state.closeRequestedHandler).not.toBeNull())
+    const preventDefault = vi.fn()
+    await state.closeRequestedHandler?.({ preventDefault })
+
+    expect(preventDefault).toHaveBeenCalled()
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
+        view: "b",
+      })
+    )
+    expect(state.hideWindowMock).toHaveBeenCalled()
   })
 
   it("logs when tray handle cannot be loaded", async () => {

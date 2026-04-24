@@ -9,6 +9,7 @@
   var GOOGLE_CLIENT_ID = "REDACTED_GOOGLE_OAUTH_CLIENT_ID"
   var GOOGLE_CLIENT_SECRET = "REDACTED_GOOGLE_OAUTH_CLIENT_SECRET"
   var QUOTA_PERIOD_MS = 5 * 60 * 60 * 1000
+  var LIVE_USAGE_CACHE_FILE = "last-live-usage.json"
   var BLACKLISTED_MODEL_IDS = {
     "MODEL_CHAT_20706": true,
     "MODEL_CHAT_23310": true,
@@ -170,6 +171,116 @@
       return { accessToken: data.accessToken, expiresAtMs: data.expiresAtMs }
     } catch (e) {
       ctx.host.log.warn("failed to read cached token: " + String(e))
+      return null
+    }
+  }
+
+  function liveUsageCachePath(ctx) {
+    return ctx.app.pluginDataDir + "/" + LIVE_USAGE_CACHE_FILE
+  }
+
+  function currentTimeMs(ctx) {
+    var parsed = ctx && ctx.util && typeof ctx.util.parseDateMs === "function"
+      ? ctx.util.parseDateMs(ctx.nowIso)
+      : null
+    return typeof parsed === "number" && isFinite(parsed) ? parsed : Date.now()
+  }
+
+  function latestResetTimeIso(ctx, lines) {
+    var latestMs = null
+    for (var i = 0; i < lines.length; i++) {
+      var resetsAt = parseResetTime(lines[i] && lines[i].resetsAt)
+      var resetMs = resetsAt && ctx.util && typeof ctx.util.parseDateMs === "function"
+        ? ctx.util.parseDateMs(resetsAt)
+        : null
+      if (typeof resetMs !== "number" || !isFinite(resetMs)) continue
+      if (latestMs === null || resetMs > latestMs) latestMs = resetMs
+    }
+    return latestMs === null ? null : new Date(latestMs).toISOString()
+  }
+
+  function deleteCachedLiveUsage(ctx, reason) {
+    try {
+      var path = liveUsageCachePath(ctx)
+      if (!ctx.host.fs.exists(path)) return
+      if (typeof ctx.host.fs.remove === "function") ctx.host.fs.remove(path)
+      else ctx.host.fs.writeText(path, "")
+      ctx.host.log.warn("deleted cached live Antigravity usage: " + reason)
+    } catch (e) {
+      ctx.host.log.warn("failed to delete cached live Antigravity usage: " + String(e))
+    }
+  }
+
+  function cacheLiveUsage(ctx, output) {
+    try {
+      ctx.host.fs.writeText(liveUsageCachePath(ctx), JSON.stringify({
+        plan: typeof output.plan === "string" && output.plan.trim() ? output.plan : null,
+        lines: output.lines,
+        lastSeenResetAt: latestResetTimeIso(ctx, output.lines),
+      }))
+    } catch (e) {
+      ctx.host.log.warn("failed to cache live Antigravity usage: " + String(e))
+    }
+  }
+
+  function loadCachedLiveUsage(ctx) {
+    try {
+      var path = liveUsageCachePath(ctx)
+      if (!ctx.host.fs.exists(path)) return null
+      var parsed = ctx.util.tryParseJson(ctx.host.fs.readText(path))
+      if (!parsed || !Array.isArray(parsed.lines) || parsed.lines.length === 0) return null
+      var nowMs = currentTimeMs(ctx)
+      var cachedResetMs = typeof ctx.util.parseDateMs === "function"
+        ? ctx.util.parseDateMs(parsed.lastSeenResetAt)
+        : null
+      if (typeof cachedResetMs === "number" && isFinite(cachedResetMs) && cachedResetMs <= nowMs) {
+        deleteCachedLiveUsage(ctx, "cached reset window elapsed")
+        return null
+      }
+
+      var lines = []
+      var droppedExpiredLines = false
+      for (var i = 0; i < parsed.lines.length; i++) {
+        var line = parsed.lines[i]
+        if (!line || line.type !== "progress") return null
+        if (typeof line.label !== "string" || !line.label.trim()) return null
+        if (typeof line.used !== "number" || !isFinite(line.used)) return null
+        if (typeof line.limit !== "number" || !isFinite(line.limit) || line.limit <= 0) return null
+        if (!line.format || line.format.kind !== "percent") return null
+        var resetsAt = parseResetTime(line.resetsAt)
+        var resetMs = resetsAt && typeof ctx.util.parseDateMs === "function"
+          ? ctx.util.parseDateMs(resetsAt)
+          : null
+        if (typeof resetMs === "number" && isFinite(resetMs) && resetMs <= nowMs) {
+          droppedExpiredLines = true
+          continue
+        }
+        lines.push(ctx.line.progress({
+          label: line.label,
+          used: line.used,
+          limit: line.limit,
+          format: { kind: "percent" },
+          resetsAt: resetsAt,
+          periodDurationMs: typeof line.periodDurationMs === "number" && isFinite(line.periodDurationMs)
+            ? line.periodDurationMs
+            : QUOTA_PERIOD_MS,
+          color: typeof line.color === "string" ? line.color : undefined,
+        }))
+      }
+
+      if (lines.length === 0) {
+        deleteCachedLiveUsage(ctx, "all cached live usage lines expired")
+        return null
+      }
+
+      var output = {
+        plan: typeof parsed.plan === "string" && parsed.plan.trim() ? parsed.plan : null,
+        lines: lines,
+      }
+      if (droppedExpiredLines) cacheLiveUsage(ctx, output)
+      return output
+    } catch (e) {
+      ctx.host.log.warn("failed to read cached live Antigravity usage: " + String(e))
       return null
     }
   }
@@ -625,7 +736,19 @@
     var apiKey = loadApiKey(ctx)
     var proto = loadProtoTokens(ctx)
     var ls = probeLs(ctx, apiKey)
-    if (ls && hasUsableQuota(ls.models)) return { plan: ls.plan, lines: buildGroupedLines(ctx, ls.models) }
+    if (ls && hasUsableQuota(ls.models)) {
+      var liveOutput = { plan: ls.plan, lines: buildGroupedLines(ctx, ls.models) }
+      cacheLiveUsage(ctx, liveOutput)
+      return liveOutput
+    }
+
+    if (!ls) {
+      var cachedLive = loadCachedLiveUsage(ctx)
+      if (cachedLive) {
+        ctx.host.log.warn("using cached live Antigravity usage because the language server is not running")
+        return cachedLive
+      }
+    }
 
     var cached = loadCachedToken(ctx)
     var ccData = resolveCloudCodeData(ctx, cached, proto, apiKey)

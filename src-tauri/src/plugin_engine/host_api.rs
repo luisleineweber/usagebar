@@ -1,3 +1,4 @@
+use crate::plugin_engine::browser_bridge;
 use crate::provider_secret_store;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -9,14 +10,25 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 #[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
+use tauri::AppHandle;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::Foundation::GetLastError;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::Security::Credentials::{
+    CRED_TYPE_GENERIC, CREDENTIALW, CredFree, CredReadW,
+};
 
-const WHITELISTED_ENV_VARS: [&str; 21] = [
+const WHITELISTED_ENV_VARS: [&str; 23] = [
     "CODEX_HOME",
     "GH_CONFIG_DIR",
+    "ALIBABA_API_KEY",
+    "ALIBABA_REGION",
     "KILO_API_KEY",
     "KIMI_K2_API_KEY",
     "KIMI_API_KEY",
@@ -124,6 +136,74 @@ fn configure_background_command(command: &mut Command) {
     {
         command.creation_flags(CREATE_NO_WINDOW);
     }
+}
+
+#[cfg(target_os = "windows")]
+fn read_windows_generic_password_target(target: &str) -> Result<String, String> {
+    let mut target_wide: Vec<u16> = OsStr::new(target).encode_wide().collect();
+    target_wide.push(0);
+
+    let mut credential_ptr: *mut CREDENTIALW = std::ptr::null_mut();
+    let read_ok = unsafe {
+        CredReadW(
+            target_wide.as_ptr(),
+            CRED_TYPE_GENERIC,
+            0,
+            &mut credential_ptr,
+        )
+    };
+    if read_ok == 0 {
+        return Err(format!(
+            "credential read failed: os error {}",
+            unsafe { GetLastError() }
+        ));
+    }
+
+    let decode_result = (|| {
+        let credential = unsafe { &*credential_ptr };
+        let blob_len = credential.CredentialBlobSize as usize;
+        let blob = if blob_len == 0 || credential.CredentialBlob.is_null() {
+            &[][..]
+        } else {
+            unsafe { std::slice::from_raw_parts(credential.CredentialBlob, blob_len) }
+        };
+        decode_windows_generic_password_blob(blob)
+    })();
+
+    unsafe {
+        CredFree(credential_ptr as *mut std::ffi::c_void);
+    }
+
+    decode_result
+}
+
+#[cfg(target_os = "windows")]
+fn decode_windows_generic_password_blob(blob: &[u8]) -> Result<String, String> {
+    if blob.is_empty() {
+        return Ok(String::new());
+    }
+
+    if let Ok(utf8) = String::from_utf8(blob.to_vec()) {
+        let trimmed = utf8.trim_end_matches('\0').trim();
+        if !trimmed.is_empty() && !trimmed.contains('\0') {
+            return Ok(trimmed.to_string());
+        }
+    }
+
+    if blob.len() % 2 == 0 {
+        let wide: Vec<u16> = blob
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        if let Ok(utf16) = String::from_utf16(&wide) {
+            let trimmed = utf16.trim_end_matches('\0').trim();
+            if !trimmed.is_empty() {
+                return Ok(trimmed.to_string());
+            }
+        }
+    }
+
+    Err("credential blob was not valid UTF-8 or UTF-16 text".to_string())
 }
 
 fn read_env_from_process(name: &str) -> Option<String> {
@@ -443,6 +523,7 @@ pub fn inject_host_api<'js>(
     plugin_id: &str,
     app_data_dir: &PathBuf,
     app_version: &str,
+    app_handle: Option<AppHandle>,
 ) -> rquickjs::Result<()> {
     let globals = ctx.globals();
     let probe_ctx = Object::new(ctx.clone())?;
@@ -474,6 +555,7 @@ pub fn inject_host_api<'js>(
     inject_env(ctx, &host, plugin_id)?;
     inject_provider_config(ctx, &host, plugin_id, app_data_dir)?;
     inject_http(ctx, &host, plugin_id)?;
+    inject_browser(ctx, &host, plugin_id, app_handle)?;
     inject_keychain(ctx, &host)?;
     inject_gh(ctx, &host)?;
     inject_provider_secrets(ctx, &host, plugin_id, app_data_dir)?;
@@ -701,6 +783,16 @@ fn inject_http<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rqui
     let http_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
 
+    // Load proxy config once at injection time
+    let proxy_config = load_app_config().and_then(|c| c.proxy);
+    let proxy_url = proxy_config.as_ref().and_then(|p| {
+        if p.enabled && !p.url.is_empty() {
+            Some(p.url.clone())
+        } else {
+            None
+        }
+    });
+
     http_obj.set(
         "_requestRaw",
         Function::new(
@@ -712,7 +804,19 @@ fn inject_http<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rqui
 
                 let method_str = req.method.as_deref().unwrap_or("GET");
                 let redacted_url = redact_url(&req.url);
-                log::info!("[plugin:{}] HTTP {} {}", pid, method_str, redacted_url);
+
+                // Check if we should bypass proxy for this URL
+                let should_use_proxy = proxy_url.as_ref().map_or(false, |_| {
+                    !should_bypass_proxy(&req.url)
+                });
+
+                if should_use_proxy {
+                    if let Some(ref url) = proxy_url {
+                        log::info!("[plugin:{}] HTTP {} {} via proxy {}", pid, method_str, redacted_url, redact_proxy_url(url));
+                    }
+                } else {
+                    log::info!("[plugin:{}] HTTP {} {}", pid, method_str, redacted_url);
+                }
 
                 let mut header_map = reqwest::header::HeaderMap::new();
                 if let Some(headers) = &req.headers {
@@ -735,14 +839,16 @@ fn inject_http<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rqui
                 }
 
                 let timeout_ms = req.timeout_ms.unwrap_or(10_000);
-                let mut builder = reqwest::blocking::Client::builder()
-                    .timeout(std::time::Duration::from_millis(timeout_ms))
-                    .redirect(reqwest::redirect::Policy::none());
-                if req.dangerously_ignore_tls.unwrap_or(false) {
-                    builder = builder.danger_accept_invalid_certs(true);
-                }
-                let client = builder
-                    .build()
+                let ignore_tls = req.dangerously_ignore_tls.unwrap_or(false);
+                
+                // Determine proxy URL to use (if any)
+                let effective_proxy = if should_use_proxy {
+                    proxy_url.as_deref()
+                } else {
+                    None
+                };
+
+                let client = build_client_with_proxy(timeout_ms, ignore_tls, effective_proxy)
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))?;
 
                 let method = req.method.as_deref().unwrap_or("GET");
@@ -828,6 +934,64 @@ fn inject_http<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rqui
     Ok(())
 }
 
+fn inject_browser<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+    app_handle: Option<AppHandle>,
+) -> rquickjs::Result<()> {
+    let browser_obj = Object::new(ctx.clone())?;
+    let pid = plugin_id.to_string();
+
+    browser_obj.set(
+        "_requestWithCookiesRaw",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, req_json: String| -> rquickjs::Result<String> {
+                let Some(app_handle) = app_handle.clone() else {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "browser-backed requests are unavailable in this build",
+                    ));
+                };
+
+                let req: BrowserRequestWithCookiesReqParams =
+                    serde_json::from_str(&req_json).map_err(|error| {
+                        Exception::throw_message(
+                            &ctx_inner,
+                            &format!("invalid browser request: {}", error),
+                        )
+                    })?;
+
+                let redacted_url = redact_url(&req.url);
+                log::info!("[plugin:{}] browser GET {}", pid, redacted_url);
+
+                let response = browser_bridge::request_with_cookies(
+                    &app_handle,
+                    &browser_bridge::BrowserRequestWithCookiesParams {
+                        url: req.url,
+                        cookie_header: req.cookie_header,
+                        source_url: req.source_url,
+                        timeout_ms: req.timeout_ms,
+                    },
+                )
+                .map_err(|error| Exception::throw_message(&ctx_inner, &error))?;
+
+                let resp = BrowserRequestWithCookiesRespParams {
+                    status: response.status,
+                    body_text: response.body_text,
+                    final_url: response.final_url,
+                };
+                serde_json::to_string(&resp)
+                    .map_err(|error| Exception::throw_message(&ctx_inner, &error.to_string()))
+            },
+        )?,
+    )?;
+
+    host.set("browser", browser_obj)?;
+    Ok(())
+}
+
 pub fn patch_http_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
@@ -843,6 +1007,28 @@ pub fn patch_http_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
                     dangerouslyIgnoreTls: req.dangerouslyIgnoreTls || false
                 });
                 var respJson = rawFn(json);
+                return JSON.parse(respJson);
+            };
+        })();
+        "#
+        .as_bytes(),
+    )
+}
+
+pub fn patch_browser_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
+    ctx.eval::<(), _>(
+        r#"
+        (function() {
+            var rawFn = __openusage_ctx.host.browser && __openusage_ctx.host.browser._requestWithCookiesRaw;
+            if (!rawFn) return;
+            __openusage_ctx.host.browser.requestWithCookies = function(req) {
+                var reqJson = JSON.stringify({
+                    url: req.url,
+                    cookieHeader: req.cookieHeader || "",
+                    sourceUrl: req.sourceUrl || null,
+                    timeoutMs: req.timeoutMs || 15000
+                });
+                var respJson = rawFn(reqJson);
                 return JSON.parse(respJson);
             };
         })();
@@ -1151,6 +1337,23 @@ struct HttpRespParams {
     status: u16,
     headers: std::collections::HashMap<String, String>,
     body_text: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserRequestWithCookiesReqParams {
+    url: String,
+    cookie_header: String,
+    source_url: Option<String>,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserRequestWithCookiesRespParams {
+    status: u16,
+    body_text: String,
+    final_url: String,
 }
 
 // --- Language Server Discovery ---
@@ -2365,6 +2568,28 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
     )?;
 
     keychain_obj.set(
+        "readGenericPasswordForTarget",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>, target: String| -> rquickjs::Result<String> {
+                #[cfg(target_os = "windows")]
+                {
+                    return read_windows_generic_password_target(&target)
+                        .map_err(|e| Exception::throw_message(&ctx_inner, &e));
+                }
+
+                #[cfg(not(target_os = "windows"))]
+                {
+                    Err(Exception::throw_message(
+                        &ctx_inner,
+                        "credential target reads are only supported on Windows",
+                    ))
+                }
+            },
+        )?,
+    )?;
+
+    keychain_obj.set(
         "deleteGenericPassword",
         Function::new(
             ctx.clone(),
@@ -2687,6 +2912,80 @@ fn expand_path(path: &str) -> String {
     path.to_string()
 }
 
+// --- Proxy Configuration ---
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProxyConfig {
+    enabled: bool,
+    url: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppConfig {
+    proxy: Option<ProxyConfig>,
+}
+
+fn load_app_config() -> Option<AppConfig> {
+    let home = dirs::home_dir()?;
+    let config_path = home.join(".usagebar").join("config.json");
+    
+    let text = std::fs::read_to_string(&config_path).ok()?;
+    let config: AppConfig = serde_json::from_str(&text).ok()?;
+    Some(config)
+}
+
+fn should_bypass_proxy(url: &str) -> bool {
+    // Bypass proxy for localhost, 127.0.0.1, and ::1
+    let lower = url.to_lowercase();
+    lower.contains("localhost") || 
+    lower.contains("127.0.0.1") || 
+    lower.contains("::1") ||
+    lower.contains("[::1]")
+}
+
+fn redact_proxy_url(url: &str) -> String {
+    // Redact credentials in proxy URL like http://user:pass@host:port
+    if let Some(at_pos) = url.find('@') {
+        if let Some(protocol_end) = url.find("://") {
+            let protocol = &url[..protocol_end + 3];
+            let after_at = &url[at_pos + 1..];
+            return format!("{}***@***@{}", protocol, after_at);
+        }
+    }
+    url.to_string()
+}
+
+fn build_client_with_proxy(
+    timeout_ms: u64,
+    ignore_tls: bool,
+    proxy_url: Option<&str>,
+) -> Result<reqwest::blocking::Client, reqwest::Error> {
+    let mut builder = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_millis(timeout_ms))
+        .redirect(reqwest::redirect::Policy::none());
+    
+    if ignore_tls {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    
+    if let Some(proxy_url) = proxy_url {
+        if !proxy_url.is_empty() {
+            // Parse and set proxy for all schemes
+            if proxy_url.starts_with("socks5://") {
+                let proxy = reqwest::Proxy::all(proxy_url)?;
+                builder = builder.proxy(proxy);
+            } else if proxy_url.starts_with("http://") || proxy_url.starts_with("https://") {
+                let proxy = reqwest::Proxy::all(proxy_url)?;
+                builder = builder.proxy(proxy);
+            }
+        }
+    }
+    
+    builder.build()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2722,12 +3021,12 @@ mod tests {
     }
 
     #[test]
-    fn keychain_api_exposes_account_read_and_write() {
+    fn keychain_api_exposes_target_and_account_reads() {
         let rt = Runtime::new().expect("runtime");
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -2741,10 +3040,29 @@ mod tests {
             let _read_for_account: Function = keychain
                 .get("readGenericPasswordForAccount")
                 .expect("readGenericPasswordForAccount");
+            let _read_for_target: Function = keychain
+                .get("readGenericPasswordForTarget")
+                .expect("readGenericPasswordForTarget");
 
             let gh: Object = host.get("gh").expect("gh");
             let _read_auth_token: Function = gh.get("readAuthToken").expect("readAuthToken");
         });
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn decode_windows_generic_password_blob_accepts_utf8_and_utf16() {
+        let utf8 = decode_windows_generic_password_blob(br#"{"token":"abc"}"#)
+            .expect("utf8 credential");
+        assert_eq!(utf8, r#"{"token":"abc"}"#);
+
+        let utf16: Vec<u8> = "zed-session"
+            .encode_utf16()
+            .flat_map(|code_unit| code_unit.to_le_bytes())
+            .collect();
+        let decoded_utf16 =
+            decode_windows_generic_password_blob(&utf16).expect("utf16 credential");
+        assert_eq!(decoded_utf16, "zed-session");
     }
 
     #[test]
@@ -2753,7 +3071,7 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -2782,7 +3100,7 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -2814,7 +3132,7 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -2882,7 +3200,7 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0").expect("inject host api");
+            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");

@@ -50,7 +50,12 @@ pub struct PluginOutput {
     pub icon_url: String,
 }
 
-pub fn run_probe(plugin: &LoadedPlugin, app_data_dir: &PathBuf, app_version: &str) -> PluginOutput {
+pub fn run_probe(
+    plugin: &LoadedPlugin,
+    app_data_dir: &PathBuf,
+    app_version: &str,
+    app_handle: Option<&tauri::AppHandle>,
+) -> PluginOutput {
     let fallback = error_output(plugin, "runtime error".to_string());
 
     let rt = match Runtime::new() {
@@ -70,11 +75,22 @@ pub fn run_probe(plugin: &LoadedPlugin, app_data_dir: &PathBuf, app_version: &st
     let app_data = app_data_dir.clone();
 
     ctx.with(|ctx| {
-        if host_api::inject_host_api(&ctx, &plugin_id, &app_data, app_version).is_err() {
+        if host_api::inject_host_api(
+            &ctx,
+            &plugin_id,
+            &app_data,
+            app_version,
+            app_handle.cloned(),
+        )
+        .is_err()
+        {
             return error_output(plugin, "host api injection failed".to_string());
         }
         if host_api::patch_http_wrapper(&ctx).is_err() {
             return error_output(plugin, "http wrapper patch failed".to_string());
+        }
+        if host_api::patch_browser_wrapper(&ctx).is_err() {
+            return error_output(plugin, "browser wrapper patch failed".to_string());
         }
         if host_api::patch_ls_wrapper(&ctx).is_err() {
             return error_output(plugin, "ls wrapper patch failed".to_string());
@@ -522,7 +538,7 @@ mod tests {
             };
             "#,
         );
-        let output = run_probe(&plugin, &temp_app_dir("sync"), "0.0.0");
+        let output = run_probe(&plugin, &temp_app_dir("sync"), "0.0.0", None);
         assert_eq!(error_text(output), "boom");
     }
 
@@ -537,7 +553,7 @@ mod tests {
             };
             "#,
         );
-        let output = run_probe(&plugin, &temp_app_dir("async"), "0.0.0");
+        let output = run_probe(&plugin, &temp_app_dir("async"), "0.0.0", None);
         assert_eq!(error_text(output), "boom");
     }
 

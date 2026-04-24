@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { ProviderConfig } from "@/lib/provider-settings"
+import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import { cn } from "@/lib/utils"
 
 function ProviderIconMask({ iconUrl, brandColor }: { iconUrl: string; brandColor?: string }) {
@@ -143,7 +144,7 @@ function SortableProviderRow({
 type ProvidersSettingsPaneProps = {
   providers: SettingsPluginState[]
   selectedProviderId: string | null
-  onSelectedProviderChange: (id: string, options?: { revealInTray?: boolean }) => void
+  onSelectedProviderChange: (id: string, options?: SelectedProviderChangeOptions) => void
   onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
   onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
@@ -220,7 +221,7 @@ export function ProvidersSettingsPane({
                     key={plugin.id}
                     plugin={plugin}
                     selected={plugin.id === selectedProvider?.id}
-                    onSelect={() => onSelectedProviderChange(plugin.id, { revealInTray: true })}
+                    onSelect={() => onSelectedProviderChange(plugin.id, { syncTray: true })}
                     onToggle={onToggle}
                   />
                 ))}
@@ -242,6 +243,11 @@ export function ProvidersSettingsPane({
             onConfigChange={(providerId, patch) => onProviderConfigChange(providerId, patch ?? {})}
             onSecretSave={onProviderSecretSave}
             onSecretDelete={onProviderSecretDelete}
+            onOpenInTray={
+              selectedProvider
+                ? () => onSelectedProviderChange(selectedProvider.id, { revealInTray: true })
+                : undefined
+            }
           />
         ) : (
           <div className="flex h-full items-center justify-center rounded-[26px] border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">

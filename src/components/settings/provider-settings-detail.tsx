@@ -23,6 +23,7 @@ export type ProviderSettingsDetailProps = {
   state?: PluginState
   onEnabledChange: (enabled: boolean) => void
   onRetry?: () => void
+  onOpenInTray?: () => void
   onConfigChange?: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
   onSecretSave?: (providerId: string, secretKey: string, value: string) => Promise<void>
   onSecretDelete?: (providerId: string, secretKey: string) => Promise<void>
@@ -75,6 +76,7 @@ export function ProviderSettingsDetail({
   state,
   onEnabledChange,
   onRetry,
+  onOpenInTray,
   onConfigChange,
   onSecretSave,
   onSecretDelete,
@@ -216,6 +218,11 @@ export function ProviderSettingsDetail({
         </div>
 
         <div className="flex items-center gap-2">
+          {onOpenInTray && (
+            <Button type="button" variant="outline" size="xs" onClick={onOpenInTray}>
+              Open in tray
+            </Button>
+          )}
           {onRetry && plugin.supportState !== "comingSoonOnWindows" && (
             <Button type="button" variant="outline" size="xs" onClick={onRetry} disabled={state?.loading}>
               <RefreshCw className={cn("size-3", state?.loading && "animate-spin")} />

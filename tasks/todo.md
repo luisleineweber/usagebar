@@ -1,3 +1,41 @@
+# Sync Settings provider selection into the tray target live
+
+## Acceptance Criteria
+- [x] Selecting a provider row in `Settings > Providers` updates the tray target without forcing the Settings window to close.
+- [x] The selected provider still has an explicit tray-reveal action for users who want the hard handoff immediately.
+- [x] A focused frontend regression covers the live selection sync and the explicit tray-reveal path.
+
+## Plan
+- [x] Add a small cross-window sync command so Settings can update the pending tray target without hiding itself.
+- [x] Update the Providers pane and provider detail UI so row clicks stay local while an explicit tray button remains available.
+- [x] Run focused frontend verification, then record the lesson, choices, and breadcrumbs before marking the slice done.
+
+## Verification Notes
+- Verified the settings/provider sync path with `npx vitest run src/App.test.tsx src/pages/settings.test.tsx` -> 2 files passed, 93 tests passed.
+- Verified the frontend type surface with `npx tsc --noEmit`.
+- Verified the Rust bridge command with `cargo test --manifest-path src-tauri/Cargo.toml pending_panel_view_is_consumed_once` -> 1 Rust test passed; crate compiled successfully with the new `sync_panel_view` command.
+
+# Land Zed as a Windows-experimental billing provider
+
+## Acceptance Criteria
+- [x] `Zed` is surfaced as a Windows-experimental provider instead of staying absent from the provider list.
+- [x] The provider shows dashboard billing spend when a signed-in dashboard Cookie header is configured.
+- [x] The plugin uses the local Zed credential target only for the telemetry fallback path and fails clearly when that fallback sign-in state is missing or malformed.
+- [x] The provider falls back to local Zed agent token totals from telemetry when no billing cookie is configured.
+- [x] Focused Zed plugin tests, provider-settings detail tests, and host keychain API tests pass before the slice is marked done.
+
+## Plan
+- [x] Add the smallest host keychain extension needed to read an external Windows credential target directly.
+- [x] Implement `plugins/zed` plus the bundled mirror around manual dashboard-cookie billing plus telemetry fallback.
+- [x] Update provider settings/docs/README/input-simulation notes, then run focused verification and record repo notes.
+
+## Verification Notes
+- Verified the Zed plugin contract with `npx vitest run plugins/zed/plugin.test.js` -> 1 file passed, 10 tests passed.
+- Verified the settings-detail copy with `npx vitest run src/components/settings/provider-settings-detail.test.tsx` -> 1 file passed, 18 tests passed.
+- Verified the host keychain API surface with `cargo test --manifest-path src-tauri/Cargo.toml keychain_api_exposes_target_and_account_reads` -> 1 Rust test passed.
+- Verified the Windows credential-blob decoding helper with `cargo test --manifest-path src-tauri/Cargo.toml decode_windows_generic_password_blob_accepts_utf8_and_utf16` -> 1 Rust test passed.
+- Synced the bundled plugin mirror with `node ./copy-bundled.cjs` -> bundled plugin count increased to 27 and now includes `zed`.
+
 # Clarify Antigravity offline mode
 
 ## Acceptance Criteria
@@ -1045,3 +1083,53 @@
 - Verified the plugin-host env exposure with `cargo test --manifest-path src-tauri/Cargo.toml env_api_respects_allowlist_in_host_and_js` -> 1 Rust test passed.
 - Synced bundled plugin output with `node ./copy-bundled.cjs` so `src-tauri/resources/bundled_plugins/kilo` now matches the implemented source plugin instead of the old placeholder copy.
 - Checked local live-key evidence with `if ($env:KILO_API_KEY) { 'KILO_API_KEY=set' } else { 'KILO_API_KEY=missing' }` -> `KILO_API_KEY=missing` on this machine, so the provider remains explicitly `experimental` pending real Windows API-key validation.
+
+# Swap in delivered SVG plugin icons
+
+## Acceptance Criteria
+- [x] Plugins with new vector assets use the new SVG paths instead of the generic `icon.svg` placeholders.
+- [x] The old placeholder SVGs are removed where a replacement now exists.
+- [x] The About dialog no longer depends on the old PNG placeholder.
+- [x] A quick verification pass confirms the updated asset paths bundle cleanly.
+
+## Plan
+- [x] Update the relevant plugin manifests to point at the new SVG assets.
+- [x] Remove the unneeded placeholder SVGs and the old About-dialog PNG reference.
+- [x] Rebundle the plugins and verify the resulting asset set and diff.
+
+## Verification Notes
+- Verified the asset sync with `node ./copy-bundled.cjs` -> bundled 26 plugins, including the updated icon paths for `alibaba`, `augment`, `openrouter`, `synthetic`, `vertex-ai`, and `warp`.
+- Verified the app build with `npm run build` -> `tsc` passed and Vite production build completed successfully.
+
+# Disable broken updater checks in dev and prerelease builds
+
+## Acceptance Criteria
+- [x] `npm run tauri dev` no longer triggers the updater check path on startup.
+- [x] Current prerelease app versions like `0.1.0-beta.3` also skip the updater check instead of hitting GitHub's stable-only `releases/latest` alias.
+- [x] Stable non-prerelease versions still keep the existing updater path.
+- [x] Focused updater-hook verification passes before the slice is marked done.
+
+## Plan
+- [x] Add an updater-eligibility gate in `src/hooks/use-app-update.ts` for local dev and prerelease versions.
+- [x] Add focused hook coverage for the disabled paths in `src/hooks/use-app-update.test.ts`.
+- [x] Record the updater-channel default in repo notes and verify with a focused Vitest run.
+
+## Verification Notes
+- Verified the updater hook with `npx vitest run src/hooks/use-app-update.test.ts` -> 1 file passed, 16 tests passed.
+- Verified the live startup path with a one-off PowerShell `Start-Process npm.cmd run tauri dev` smoke capture -> reached `OpenUsage v0.1.0-beta.3 starting` and no longer logged `update endpoint did not respond with a successful status code`.
+
+# Fix first-open tray nav clipping
+
+## Acceptance Criteria
+- [x] Opening the bar on a cold/first bootstrap does not leave the bottom `Settings` action clipped off-screen.
+- [x] Plugin/nav state becomes available before slower preference/system bootstrap calls finish.
+- [x] Focused regression coverage proves the early plugin-settings bootstrap ordering.
+
+## Plan
+- [x] Move normalized `pluginSettings` publication earlier in `useSettingsBootstrap`.
+- [x] Add a focused hook regression test for the early publication path under slow later loads.
+- [x] Run focused verification, then record notes/breadcrumbs/lesson before marking done.
+
+## Verification Notes
+- Verified bootstrap ordering with `npx vitest run src/hooks/app/use-settings-bootstrap.test.ts src/hooks/app/use-panel.test.ts` -> 2 files passed, 17 tests passed.
+- Verified the cold-start tray-height regression with `npx vitest run src/App.test.tsx -t "raises the cold-start panel height for the full nav stack before slower bootstrap finishes"` -> 1 test passed.

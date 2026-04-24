@@ -233,6 +233,7 @@ const resp = ctx.host.http.request({
 ```typescript
 host.keychain.readGenericPassword(service: string): string
 host.keychain.readGenericPasswordForAccount(service: string, account: string): string
+host.keychain.readGenericPasswordForTarget(target: string): string
 host.keychain.writeGenericPassword(service: string, value: string): void
 host.keychain.deleteGenericPassword(service: string): void
 ```
@@ -243,6 +244,7 @@ Reads and writes credentials through the platform credential store.
 
 - `readGenericPassword(service)` uses the OpenUsage-scoped credential namespace.
 - `readGenericPasswordForAccount(service, account)` reads a native service/account pair directly. Use it only when a provider must integrate with an external tool's credential entry, such as GitHub CLI.
+- `readGenericPasswordForTarget(target)` reads a native Windows generic credential by its raw target name. Use it only when a Windows app stores credentials under a fixed target instead of an app-owned OpenUsage namespace.
 - All keychain methods throw if the credential store is unavailable or the requested entry cannot be read.
 
 ### Example

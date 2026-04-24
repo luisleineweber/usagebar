@@ -4,7 +4,7 @@
   "name": "Vertex AI",
   "version": "0.0.1",
   "entry": "plugin.js",
-  "icon": "icon.svg",
+  "icon": "vertexai-color.svg",
   "platformSupport": {
     "windows": {
       "state": "blocked",

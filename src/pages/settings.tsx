@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import type { ProviderConfig } from "@/lib/provider-settings"
+import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import type {
   AutoUpdateIntervalMinutes,
   DisplayMode,
@@ -17,7 +18,7 @@ import type {
 interface SettingsPageProps {
   providers: SettingsPluginState[]
   selectedProviderId: string | null
-  onSelectedProviderChange: (id: string, options?: { revealInTray?: boolean }) => void
+  onSelectedProviderChange: (id: string, options?: SelectedProviderChangeOptions) => void
   settingsTab: "general" | "providers"
   onSettingsTabChange: (value: "general" | "providers") => void
   onReorder: (orderedIds: string[]) => void

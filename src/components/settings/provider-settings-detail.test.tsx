@@ -69,6 +69,16 @@ const warpPlugin = {
   primaryCandidates: [],
 }
 
+const zedPlugin = {
+  id: "zed",
+  name: "Zed",
+  iconUrl: "/zed.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Windows experimental. Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback.",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const syntheticPlugin = {
   id: "synthetic",
   name: "Synthetic",
@@ -280,7 +290,7 @@ describe("ProviderSettingsDetail", () => {
 
     expect(screen.getByText("OpenCode Go")).toBeInTheDocument()
     expect(screen.getByText(/Detected from the local OpenCode auth file and SQLite history on this machine\./)).toBeInTheDocument()
-    expect(screen.getByText(/Use OpenCode Go on this machine so ~\/\.local\/share\/opencode\/auth\.json or ~\/\.local\/share\/opencode\/opencode\.db exists, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/Install OpenCode Go, sign in on this machine, then retry\./)).toBeInTheDocument()
   })
 
   it("shows explicit OpenRouter API-key guidance", () => {
@@ -309,7 +319,7 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText(/Fetches Kimi K2 credits from a stored API key or KIMI_K2_API_KEY-compatible env vars\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Kimi K2 API key, save it here or set KIMI_K2_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Kimi K2 API key at https:\/\/kimi\.moonshot\.cn, save it here or set KIMI_K2_API_KEY, then retry\./)).toBeInTheDocument()
     expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the credits endpoint\./)).toBeInTheDocument()
   })
 
@@ -324,8 +334,7 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText(/Fetches Kilo usage from a stored API key or KILO_API_KEY\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Kilo API key, save it here or set KILO_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/CLI-session fallback is still deferred/i)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Kilo API key at https:\/\/kilo\.com, save it here or set KILO_API_KEY, then retry\./)).toBeInTheDocument()
     expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Kilo tRPC usage endpoint\./)).toBeInTheDocument()
   })
 
@@ -342,6 +351,22 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars\./)).toBeInTheDocument()
     expect(screen.getByText(/Create a Warp API key in Warp Settings -> Platform -> API Keys, save it here or set WARP_API_KEY, then retry\./)).toBeInTheDocument()
     expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the request-limit GraphQL endpoint\./)).toBeInTheDocument()
+  })
+
+  it("shows explicit Zed local-telemetry guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={zedPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches Zed dashboard billing spend from a signed-in dashboard Cookie header, then replays that session inside an embedded browser context\./)).toBeInTheDocument()
+    expect(screen.getByText(/Open https:\/\/dashboard\.zed\.dev\/account, capture the full Cookie request header from a fresh cloud\.zed\.dev\/frontend\/billing\/usage request/)).toBeInTheDocument()
+    expect(screen.getByText(/Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback\./)).toBeInTheDocument()
+    expect(screen.getByLabelText("Zed Cookie header")).toBeInTheDocument()
   })
 
   it("shows no editable inputs for auto-detected providers", () => {
@@ -369,7 +394,7 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText(/Fetches Synthetic quota data from a stored API key or SYNTHETIC_API_KEY\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Synthetic API key, save it here or set SYNTHETIC_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Synthetic API key at https:\/\/api\.synthetic\.new, save it here or set SYNTHETIC_API_KEY, then retry\./)).toBeInTheDocument()
     expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the quotas endpoint\./)).toBeInTheDocument()
   })
 

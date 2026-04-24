@@ -43,6 +43,12 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 - updater signature files (`.sig`)
 - a Windows setup executable ending in `setup.exe`
 
+Current updater channel note:
+
+- GitHub's `releases/latest` alias only resolves stable releases, not prereleases.
+- UsageBar currently keeps updater checks disabled for prerelease app versions like `0.1.0-beta.3`.
+- Re-enable prerelease auto-updates only after moving off the stable-only alias or after shipping a stable release channel.
+
 ## Release Checklist
 
 1. Update version metadata in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`

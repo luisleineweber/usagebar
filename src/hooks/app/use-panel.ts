@@ -89,6 +89,11 @@ export function usePanel({
   const scheduledResizeFrameRef = useRef<number | null>(null)
   const scheduledMeasureFrameRef = useRef<number | null>(null)
   const tweenTimeoutsRef = useRef<number[]>([])
+  const onPanelFocusRef = useRef(onPanelFocus)
+
+  useEffect(() => {
+    onPanelFocusRef.current = onPanelFocus
+  }, [onPanelFocus])
 
   useEffect(() => {
     if (!isTauri()) return
@@ -105,13 +110,13 @@ export function usePanel({
     void syncPendingPanelView()
       .then((pendingView) => {
         if (pendingView) {
-          onPanelFocus?.(pendingView)
+          onPanelFocusRef.current?.(pendingView)
         }
       })
       .catch((error) => {
         console.error("Failed to sync pending panel view:", error)
       })
-  }, [onPanelFocus, setActiveView])
+  }, [setActiveView])
 
   useEffect(() => {
     if (!isTauri()) return
@@ -145,7 +150,7 @@ export function usePanel({
         })
         .then((pendingView) => {
           requestPanelResizeRef.current()
-          onPanelFocus?.(pendingView ?? undefined)
+          onPanelFocusRef.current?.(pendingView ?? undefined)
         })
     }
 
@@ -156,7 +161,7 @@ export function usePanel({
       document.removeEventListener("keydown", handleKeyDown)
       window.removeEventListener("focus", handleFocus)
     }
-  }, [onPanelFocus, setActiveView, showAbout])
+  }, [setActiveView, showAbout])
 
   useEffect(() => {
     if (!isTauri()) return
@@ -167,7 +172,7 @@ export function usePanel({
       const u1 = await listen<string>("tray:navigate", (event) => {
         const nextView = event.payload as ActiveView
         setActiveView(nextView)
-        onPanelFocus?.(nextView)
+        onPanelFocusRef.current?.(nextView)
         void invoke("take_pending_panel_view").catch((error) => {
           console.error("Failed to clear pending panel view after live navigation:", error)
         })
@@ -198,7 +203,7 @@ export function usePanel({
         }
       }
     }
-  }, [onPanelFocus, setActiveView, setShowAbout])
+  }, [setActiveView, setShowAbout])
 
   useEffect(() => {
     if (!isTauri()) return

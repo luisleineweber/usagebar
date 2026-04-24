@@ -204,6 +204,81 @@ describe("antigravity plugin", () => {
     expect(getLine(result, "Claude").used).toBe(50)
   })
 
+  it("caches live LS quota and reuses it while Antigravity is closed", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-02-02T00:00:00.000Z"
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery())
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
+      return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse()) }
+    })
+
+    const plugin = await loadPlugin()
+    const liveResult = plugin.probe(ctx)
+
+    expect(getProgressLabels(liveResult)).toEqual(["Gemini Pro", "Claude"])
+    expect(getLine(liveResult, "Gemini Pro").used).toBe(20)
+    expect(getLine(liveResult, "Claude").used).toBe(40)
+
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.http.request.mockClear()
+
+    const cachedResult = plugin.probe(ctx)
+
+    expect(getProgressLabels(cachedResult)).toEqual(["Gemini Pro", "Claude"])
+    expect(getLine(cachedResult, "Gemini Pro").used).toBe(20)
+    expect(getLine(cachedResult, "Claude").used).toBe(40)
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "using cached live Antigravity usage because the language server is not running"
+    )
+  })
+
+  it("deletes cached live usage after the stored reset window has passed", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-02-02T00:00:00.000Z"
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery())
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
+      return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse({
+        userStatus: {
+          planStatus: {
+            planInfo: { planName: "Pro" },
+          },
+          cascadeModelConfigData: {
+            clientModelConfigs: [
+              {
+                label: "Gemini 3.1 Pro (High)",
+                modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                quotaInfo: { remainingFraction: 0.8, resetTime: "2026-02-02T01:00:00Z" },
+              },
+              {
+                label: "Claude Sonnet 4.6 (Thinking)",
+                modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" },
+                quotaInfo: { remainingFraction: 0.6, resetTime: "2026-02-02T02:00:00Z" },
+              },
+            ],
+          },
+        },
+      })) }
+    })
+
+    const plugin = await loadPlugin()
+    const liveResult = plugin.probe(ctx)
+
+    expect(getProgressLabels(liveResult)).toEqual(["Gemini Pro", "Claude"])
+
+    ctx.nowIso = "2026-02-02T03:00:00.000Z"
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.http.request.mockClear()
+
+    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity and try again.")
+    expect(ctx.host.fs.remove).toHaveBeenCalledWith("/tmp/openusage-test/plugin/last-live-usage.json")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "deleted cached live Antigravity usage: cached reset window elapsed"
+    )
+  })
+
   it("does not turn missing fractions into 100 percent when LS is partial", async () => {
     const ctx = makeCtx()
     ctx.host.ls.discover.mockReturnValue(makeDiscovery())
