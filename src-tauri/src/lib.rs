@@ -1322,7 +1322,7 @@ pub fn run() {
             use tauri::Manager;
 
             let version = app.package_info().version.to_string();
-            log::info!("OpenUsage v{} starting", version);
+            log::info!("UsageBar v{} starting", version);
 
             track_app_started_once_per_day_per_version(app);
 

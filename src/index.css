@@ -214,12 +214,7 @@ html[data-window="settings"] #root {
   }
 }
 
-/* Remove focus rings - this is a menu bar app, not keyboard-navigated */
-*:focus,
 *:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-  --tw-ring-shadow: 0 0 #0000 !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
-  border-color: transparent !important;
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }

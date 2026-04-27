@@ -233,7 +233,7 @@ export function AppShell({
           <div
             ref={menuRef}
             role="menu"
-            aria-label="UsageBar Kontextmenü"
+            aria-label="UsageBar context menu"
             className="fixed z-50 w-56 rounded-md border border-border bg-popover py-1 text-sm text-popover-foreground shadow-xl"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
@@ -245,7 +245,7 @@ export function AppShell({
               onClick={() => runContextAction("reload")}
             >
               <RefreshCw className="size-4" />
-              <span className="flex-1">Provider aktualisieren</span>
+              <span className="flex-1">Refresh provider</span>
             </button>
             <button
               type="button"
@@ -254,7 +254,7 @@ export function AppShell({
               onClick={() => runContextAction("refresh-all")}
             >
               <ListRestart className="size-4" />
-              <span className="flex-1">Alle Provider aktualisieren</span>
+              <span className="flex-1">Refresh all providers</span>
             </button>
             <button
               type="button"
@@ -263,7 +263,7 @@ export function AppShell({
               onClick={() => runContextAction("arrange")}
             >
               <SlidersHorizontal className="size-4" />
-              <span className="flex-1">Provider anordnen</span>
+              <span className="flex-1">Arrange providers</span>
             </button>
             <button
               type="button"
@@ -272,7 +272,7 @@ export function AppShell({
               onClick={() => runContextAction("settings")}
             >
               <SettingsIcon className="size-4" />
-              <span className="flex-1">Einstellungen</span>
+              <span className="flex-1">Settings</span>
             </button>
             <button
               type="button"
@@ -282,7 +282,7 @@ export function AppShell({
               onClick={() => runContextAction("provider-settings")}
             >
               <SettingsIcon className="size-4" />
-              <span className="flex-1">Provider-Einstellungen</span>
+              <span className="flex-1">Provider settings</span>
             </button>
             <div className="my-1 h-px bg-border" />
             <button
@@ -293,7 +293,7 @@ export function AppShell({
               onClick={() => runContextAction("remove")}
             >
               <EyeOff className="size-4" />
-              <span className="flex-1">Provider ausblenden</span>
+              <span className="flex-1">Hide provider</span>
             </button>
             <button
               type="button"
@@ -302,7 +302,7 @@ export function AppShell({
               onClick={() => runContextAction("close")}
             >
               <Power className="size-4" />
-              <span className="flex-1">Schließen</span>
+              <span className="flex-1">Close</span>
             </button>
           </div>
         ) : null}
