@@ -24,25 +24,24 @@ vi.mock("@/hooks/use-changelog", () => ({
 }))
 
 describe("AboutDialog", () => {
-  it("renders version, links, and maintainers", () => {
+  it("renders version, fork lineage, author, and links", () => {
     render(<AboutDialog version="1.2.3" onClose={() => {}} />)
     expect(screen.getByText(APP_NAME)).toBeInTheDocument()
     expect(screen.getByText("v1.2.3")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "OpenUsage" })).toBeInTheDocument()
+    expect(screen.getByText(/redirected toward a Windows-native desktop experience/i)).toBeInTheDocument()
+    expect(screen.getByText("By")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Luis Leineweber" })).toBeInTheDocument()
     expect(screen.getByText("GitHub")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "View Changelog" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "validatedev" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "davidarny" })).toBeInTheDocument()
+    expect(screen.getByText(/Original OpenUsage by/i)).toBeInTheDocument()
   })
 
-  it("opens maintainer GitHub profiles on click", async () => {
+  it("opens the author GitHub profile on click", async () => {
     render(<AboutDialog version="1.2.3" onClose={() => {}} />)
 
-    await userEvent.click(screen.getByRole("button", { name: "validatedev" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://github.com/validatedev")
-
-    openerState.openUrlMock.mockClear()
-    await userEvent.click(screen.getByRole("button", { name: "davidarny" }))
-    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://github.com/davidarny")
+    await userEvent.click(screen.getByRole("button", { name: "Luis Leineweber" }))
+    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://github.com/Loues000")
   })
 
   it("closes on Escape", async () => {
@@ -130,6 +129,12 @@ describe("AboutDialog", () => {
     render(<AboutDialog version="1.2.3" onClose={() => {}} />)
     await userEvent.click(screen.getByRole("button", { name: "GitHub" }))
     expect(openerState.openUrlMock).toHaveBeenCalledWith(PROJECT_REPO_URL)
+  })
+
+  it("opens the upstream OpenUsage repository from the lineage text", async () => {
+    render(<AboutDialog version="1.2.3" onClose={() => {}} />)
+    await userEvent.click(screen.getByRole("button", { name: "OpenUsage" }))
+    expect(openerState.openUrlMock).toHaveBeenCalledWith("https://github.com/robinebers/openusage")
   })
 })
 

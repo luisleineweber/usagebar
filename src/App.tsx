@@ -25,6 +25,7 @@ import type { ActiveView } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
+import { listenPluginSettingsUpdated, notifyPluginSettingsUpdated } from "@/lib/plugin-settings-events"
 
 const TRAY_PROBE_DEBOUNCE_MS = 500
 const TRAY_SETTINGS_DEBOUNCE_MS = 2000
@@ -123,6 +124,29 @@ function App() {
     }
   }, [scheduleTrayIconUpdate])
 
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    let disposed = false
+
+    void listenPluginSettingsUpdated((nextSettings) => {
+      setPluginSettings(nextSettings)
+      scheduleTrayIconUpdate("settings", 0)
+    }).then((dispose) => {
+      if (disposed) {
+        dispose()
+        return
+      }
+      unlisten = dispose
+    }).catch((error) => {
+      console.error("Failed to listen for plugin settings updates:", error)
+    })
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [scheduleTrayIconUpdate, setPluginSettings])
+
   const { applyStartOnLogin } = useSettingsBootstrap({
     setPluginSettings,
     setPluginsMeta,
@@ -178,6 +202,7 @@ function App() {
     setErrorForPlugins,
     startBatch,
     scheduleTrayIconUpdate,
+    onPluginSettingsChange: notifyPluginSettingsUpdated,
   })
 
   useEffect(() => {
@@ -319,6 +344,10 @@ function App() {
     (pluginId: string, action: PluginContextAction) => {
       if (action === "reload") {
         handleRetryPlugin(pluginId)
+        return
+      }
+      if (action === "arrange") {
+        track("providers_arrange_started", { provider_id: pluginId })
         return
       }
 

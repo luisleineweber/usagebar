@@ -8,7 +8,6 @@ export type SettingsWindowTarget = {
 }
 
 export type SelectedProviderChangeOptions = {
-  syncTray?: boolean
   revealInTray?: boolean
 }
 

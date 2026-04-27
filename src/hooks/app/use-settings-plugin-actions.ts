@@ -13,6 +13,7 @@ type UseSettingsPluginActionsArgs = {
   setErrorForPlugins: (ids: string[], error: string) => void
   startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
   scheduleTrayIconUpdate: ScheduleTrayIconUpdate
+  onPluginSettingsChange?: (settings: PluginSettings) => void | Promise<void>
 }
 
 export function useSettingsPluginActions({
@@ -22,7 +23,15 @@ export function useSettingsPluginActions({
   setErrorForPlugins,
   startBatch,
   scheduleTrayIconUpdate,
+  onPluginSettingsChange,
 }: UseSettingsPluginActionsArgs) {
+  const publishPluginSettingsChange = useCallback((settings: PluginSettings) => {
+    if (!onPluginSettingsChange) return
+    void Promise.resolve(onPluginSettingsChange(settings)).catch((error) => {
+      console.error("Failed to publish plugin settings change:", error)
+    })
+  }, [onPluginSettingsChange])
+
   const handleReorder = useCallback((orderedIds: string[]) => {
     if (!pluginSettings) return
     track("providers_reordered", { count: orderedIds.length })
@@ -51,11 +60,12 @@ export function useSettingsPluginActions({
       order: mergedOrder,
     }
     setPluginSettings(nextSettings)
+    publishPluginSettingsChange(nextSettings)
     scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
     void savePluginSettings(nextSettings).catch((error) => {
       console.error("Failed to save plugin order:", error)
     })
-  }, [pluginSettings, scheduleTrayIconUpdate, setPluginSettings])
+  }, [pluginSettings, publishPluginSettingsChange, scheduleTrayIconUpdate, setPluginSettings])
 
   const handleToggle = useCallback((id: string) => {
     if (!pluginSettings) return
@@ -79,12 +89,14 @@ export function useSettingsPluginActions({
       disabled: Array.from(disabled),
     }
     setPluginSettings(nextSettings)
+    publishPluginSettingsChange(nextSettings)
     scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
     void savePluginSettings(nextSettings).catch((error) => {
       console.error("Failed to save plugin toggle:", error)
     })
   }, [
     pluginSettings,
+    publishPluginSettingsChange,
     scheduleTrayIconUpdate,
     setErrorForPlugins,
     setLoadingForPlugins,

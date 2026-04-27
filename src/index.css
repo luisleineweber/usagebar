@@ -198,6 +198,22 @@ html[data-window="settings"] #root {
   }
 }
 
+.nav-arrange-item {
+  animation: nav-arrange-wiggle 900ms ease-in-out infinite;
+}
+.nav-arrange-item:nth-child(2n) {
+  animation-delay: -450ms;
+}
+@keyframes nav-arrange-wiggle {
+  0%,
+  100% {
+    rotate: -1deg;
+  }
+  50% {
+    rotate: 1deg;
+  }
+}
+
 /* Remove focus rings - this is a menu bar app, not keyboard-navigated */
 *:focus,
 *:focus-visible {

@@ -54,7 +54,7 @@ import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 const providers: SettingsPluginState[] = [
   {
     id: "opencode",
-    name: "OpenCode",
+    name: "OpenCode Zen",
     iconUrl: "/opencode.svg",
     brandColor: "#16a34a",
     enabled: true,
@@ -63,7 +63,7 @@ const providers: SettingsPluginState[] = [
     supportMessage: "Experimental on Windows.",
     meta: {
       id: "opencode",
-      name: "OpenCode",
+      name: "OpenCode Zen",
       iconUrl: "/opencode.svg",
       brandColor: "#16a34a",
       supportState: "experimental",
@@ -209,7 +209,7 @@ describe("SettingsPage", () => {
     expect(screen.getAllByText("Not signed in").length).toBeGreaterThan(0)
   })
 
-  it("marks provider-row clicks as tray-sync selections", async () => {
+  it("reveals provider-row clicks in the tray", async () => {
     const onSelectedProviderChange = vi.fn()
     render(
       <SettingsPage
@@ -223,7 +223,7 @@ describe("SettingsPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /codex/i }))
 
-    expect(onSelectedProviderChange.mock.calls).toContainEqual(["codex", { syncTray: true }])
+    expect(onSelectedProviderChange.mock.calls).toContainEqual(["codex", { revealInTray: true }])
   })
 
   it("shows an explicit tray-open action for the selected provider", async () => {

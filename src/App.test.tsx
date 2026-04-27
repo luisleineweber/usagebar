@@ -56,6 +56,7 @@ const eventState = vi.hoisted(() => {
   const handlers = new Map<string, (event: any) => void>()
   return {
     handlers,
+    emitMock: vi.fn(async () => undefined),
     listenMock: vi.fn(async (eventName: string, handler: (event: any) => void) => {
       handlers.set(eventName, handler)
       return () => { handlers.delete(eventName) }
@@ -121,6 +122,7 @@ vi.mock("@/lib/analytics", () => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: eventState.listenMock,
+  emit: eventState.emitMock,
 }))
 
 vi.mock("@tauri-apps/api/menu", () => ({
@@ -320,6 +322,8 @@ describe("App", () => {
     menuState.menuNewMock.mockReset()
     menuState.menuPopupMock.mockReset()
     menuState.menuCloseMock.mockReset()
+    eventState.emitMock.mockReset()
+    eventState.emitMock.mockResolvedValue(undefined)
     eventState.handlers.clear()
     eventState.listenMock.mockReset()
     eventState.listenMock.mockImplementation(async (eventName: string, handler: (event: any) => void) => {
@@ -384,19 +388,19 @@ describe("App", () => {
 
   const triggerPluginContextAction = async (
     pluginName: string,
-    pluginId: string,
-    action: "reload" | "remove" | "inspect"
+    _pluginId: string,
+    action: "reload" | "remove" | "arrange"
   ) => {
-    menuState.iconMenuItemConfigs.length = 0
-    menuState.menuPopupMock.mockClear()
-
     const pluginButton = await screen.findByRole("button", { name: pluginName })
     fireEvent.contextMenu(pluginButton)
-    await waitFor(() => expect(menuState.menuPopupMock).toHaveBeenCalled())
-
-    const contextAction = menuState.iconMenuItemConfigs.find((item) => item.id === `ctx-${action}-${pluginId}`)?.action
+    const labels = {
+      reload: "Provider aktualisieren",
+      remove: "Provider ausblenden",
+      arrange: "Provider anordnen",
+    }
+    const contextAction = await screen.findByRole("menuitem", { name: labels[action] })
     expect(contextAction).toBeDefined()
-    return contextAction as () => void
+    return () => fireEvent.click(contextAction)
   }
 
   const openSettings = async () => {
@@ -494,7 +498,7 @@ describe("App", () => {
           { id: "codex", name: "Codex", iconUrl: "icon-codex", primaryCandidates: [], lines: [] },
           {
             id: "opencode",
-            name: "OpenCode",
+            name: "OpenCode Zen",
             iconUrl: "icon-opencode",
             supportState: "experimental",
             supportMessage: "Experimental on Windows.",
@@ -809,12 +813,12 @@ describe("App", () => {
 
     // Open about via version button in footer
     await userEvent.click(await screen.findByRole("button", { name: new RegExp(APP_NAME, "i") }))
-    await screen.findByText("Built by")
+    await screen.findByRole("button", { name: "Luis Leineweber" })
 
     // Close about via ESC key
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
     await waitFor(() => {
-      expect(screen.queryByText("Built by")).not.toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: "Luis Leineweber" })).not.toBeInTheDocument()
     })
   })
 
@@ -1076,8 +1080,7 @@ describe("App", () => {
     state.trackMock.mockClear()
 
     const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    const reloadConfig = menuState.iconMenuItemConfigs.find((item) => item.id === "ctx-reload-b")
-    expect(reloadConfig?.enabled).toBe(true)
+    expect(screen.getByRole("menuitem", { name: "Provider aktualisieren" })).not.toBeDisabled()
     reloadAction()
 
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
@@ -1105,8 +1108,7 @@ describe("App", () => {
     state.trackMock.mockClear()
 
     const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    const firstReloadConfig = menuState.iconMenuItemConfigs.find((item) => item.id === "ctx-reload-b")
-    expect(firstReloadConfig?.enabled).toBe(true)
+    expect(screen.getByRole("menuitem", { name: "Provider aktualisieren" })).not.toBeDisabled()
     reloadAction()
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
 
@@ -1121,40 +1123,26 @@ describe("App", () => {
     state.startBatchMock.mockClear()
     state.trackMock.mockClear()
     const cooldownReloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    const cooldownReloadConfig = menuState.iconMenuItemConfigs.find((item) => item.id === "ctx-reload-b")
-    expect(cooldownReloadConfig?.enabled).toBe(false)
+    expect(screen.getByRole("menuitem", { name: "Provider aktualisieren" })).toBeDisabled()
     cooldownReloadAction()
 
     expect(state.startBatchMock).not.toHaveBeenCalled()
     expect(state.trackMock).not.toHaveBeenCalled()
   })
 
-  it("closes sidebar context menu resources after popup", async () => {
+  it("renders custom sidebar context menu actions", async () => {
     render(<App />)
 
     const pluginButton = await screen.findByRole("button", { name: "Alpha" })
     fireEvent.contextMenu(pluginButton)
-    await waitFor(() => expect(menuState.menuPopupMock).toHaveBeenCalled())
-
-    expect(menuState.iconMenuItemConfigs).toHaveLength(3)
-    for (const config of menuState.iconMenuItemConfigs) {
-      expect(config.icon).toBeUndefined()
-    }
-
-    await waitFor(() => expect(menuState.menuCloseMock).toHaveBeenCalledTimes(1))
-    expect(menuState.iconMenuItemCloseMock).toHaveBeenCalledTimes(3)
-    expect(menuState.predefinedMenuItemCloseMock).toHaveBeenCalledTimes(1)
-  })
-
-  it("opens devtools from sidebar context menu inspect action", async () => {
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    state.invokeMock.mockClear()
-
-    const inspectAction = await triggerPluginContextAction("Alpha", "a", "inspect")
-    inspectAction()
-
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("open_devtools"))
+    const menu = await screen.findByRole("menu", { name: "UsageBar Kontextmenü" })
+    expect(within(menu).getByRole("menuitem", { name: "Provider aktualisieren" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Alle Provider aktualisieren" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Provider anordnen" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Einstellungen" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Provider-Einstellungen" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Provider ausblenden" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Schließen" })).toBeInTheDocument()
   })
 
   it("removes plugin from sidebar context menu", async () => {
@@ -1478,22 +1466,55 @@ describe("App", () => {
     )
   })
 
-  it("syncs the tray target when selecting a provider in the settings window", async () => {
+  it("reveals the tray target when selecting a provider in the settings window", async () => {
     state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
     renderSettingsWindow()
 
     await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
 
-    const hideCallsBeforeClick = state.hideWindowMock.mock.calls.length
-
     await userEvent.click(await screen.findByRole("button", { name: /beta/i }))
 
     await waitFor(() =>
-      expect(state.invokeMock).toHaveBeenCalledWith("sync_panel_view", {
+      expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
         view: "b",
       })
     )
-    expect(state.hideWindowMock).toHaveBeenCalledTimes(hideCallsBeforeClick)
+    expect(state.hideWindowMock).toHaveBeenCalled()
+  })
+
+  it("publishes provider settings changes from the settings window", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: ["b"] })
+    renderSettingsWindow()
+
+    await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
+    const betaRow = await screen.findByRole("button", { name: /beta/i })
+    await userEvent.click(within(betaRow).getByRole("checkbox"))
+
+    await waitFor(() =>
+      expect(eventState.emitMock).toHaveBeenCalledWith("plugin-settings:updated", {
+        order: ["a", "b"],
+        disabled: [],
+      })
+    )
+  })
+
+  it("applies provider settings updates from the settings window to the tray", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: ["b"] })
+    render(<App />)
+
+    await screen.findByRole("button", { name: "Alpha" })
+    expect(screen.queryByRole("button", { name: "Beta" })).not.toBeInTheDocument()
+
+    await waitFor(() => expect(eventState.handlers.has("plugin-settings:updated")).toBe(true))
+    await act(async () => {
+      eventState.handlers.get("plugin-settings:updated")?.({
+        payload: { order: ["a", "b"], disabled: [] },
+      })
+    })
+
+    expect(await screen.findByRole("button", { name: "Beta" })).toBeInTheDocument()
   })
 
   it("opens the tray panel from the explicit provider action button", async () => {
@@ -1513,32 +1534,12 @@ describe("App", () => {
     expect(state.hideWindowMock).toHaveBeenCalled()
   })
 
-  it("reveals the selected provider when the settings window closes", async () => {
+  it("does not intercept the settings window close button", async () => {
     state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
     renderSettingsWindow()
 
-    await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
-    await userEvent.click(await screen.findByRole("button", { name: /beta/i }))
-
-    await waitFor(() =>
-      expect(state.invokeMock).toHaveBeenCalledWith("sync_panel_view", {
-        view: "b",
-      })
-    )
-
-    state.invokeMock.mockClear()
-
-    await waitFor(() => expect(state.closeRequestedHandler).not.toBeNull())
-    const preventDefault = vi.fn()
-    await state.closeRequestedHandler?.({ preventDefault })
-
-    expect(preventDefault).toHaveBeenCalled()
-    await waitFor(() =>
-      expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
-        view: "b",
-      })
-    )
-    expect(state.hideWindowMock).toHaveBeenCalled()
+    await screen.findByRole("tab", { name: "Providers" })
+    expect(state.closeRequestedHandler).toBeNull()
   })
 
   it("logs when tray handle cannot be loaded", async () => {

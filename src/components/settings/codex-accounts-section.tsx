@@ -107,7 +107,7 @@ export function CodexAccountsSection({ config, onConfigChange }: CodexAccountsSe
   }
 
   return (
-    <div className="rounded-[24px] border border-border/60 bg-background/60 px-4 py-4">
+    <div className="border-t border-border/55 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -124,7 +124,7 @@ export function CodexAccountsSection({ config, onConfigChange }: CodexAccountsSe
 
       <div className="mt-3 space-y-2">
         {profiles.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/60 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+          <div className="border-t border-dashed border-border/55 py-3 text-sm text-muted-foreground">
             No imported Codex accounts yet. The provider still falls back to the detected local login until you import one.
           </div>
         ) : (
@@ -133,7 +133,7 @@ export function CodexAccountsSection({ config, onConfigChange }: CodexAccountsSe
             return (
               <div
                 key={profile.profileId}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-3 py-3"
+                className="flex flex-wrap items-center justify-between gap-3 border-t border-border/55 py-3"
               >
                 <button
                   type="button"
@@ -145,7 +145,7 @@ export function CodexAccountsSection({ config, onConfigChange }: CodexAccountsSe
                 </button>
                 <div className="flex items-center gap-2">
                   {selected && (
-                    <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
                       Active
                     </span>
                   )}
