@@ -21,7 +21,7 @@ const ollamaPlugin = {
 
 const opencodePlugin = {
   id: "opencode",
-  name: "OpenCode",
+  name: "OpenCode Zen",
   iconUrl: "/opencode.svg",
   lines: [],
   primaryCandidates: [],
@@ -85,6 +85,26 @@ const syntheticPlugin = {
   iconUrl: "/synthetic.svg",
   supportState: "experimental" as const,
   supportMessage: "Windows experimental. Use a stored Synthetic API key or SYNTHETIC_API_KEY to fetch quota data.",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const augmentPlugin = {
+  id: "augment",
+  name: "Augment",
+  iconUrl: "/augment.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Windows experimental. Save an Augment Cookie header or set AUGMENT_COOKIE_HEADER before probing.",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const vertexAiPlugin = {
+  id: "vertex-ai",
+  name: "Vertex AI",
+  iconUrl: "/vertex-ai.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Windows experimental. Uses gcloud application-default credentials and Cloud Monitoring quota data.",
   lines: [],
   primaryCandidates: [],
 }
@@ -230,7 +250,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    const input = screen.getByLabelText("OpenCode Workspace ID")
+    const input = screen.getByLabelText("OpenCode Zen Workspace ID")
     await userEvent.clear(input)
     await userEvent.type(input, "wrk_new")
     await userEvent.click(screen.getByRole("button", { name: "Save" }))
@@ -254,7 +274,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    await userEvent.selectOptions(screen.getByLabelText("OpenCode source"), "auto")
+    await userEvent.selectOptions(screen.getByLabelText("OpenCode Zen source"), "auto")
 
     await waitFor(() => {
       expect(onConfigChange).toHaveBeenCalledWith("opencode", { source: "auto" })
@@ -274,7 +294,7 @@ describe("ProviderSettingsDetail", () => {
 
     expect(screen.getByText(/sign in at https:\/\/opencode.ai/i)).toBeInTheDocument()
     expect(screen.getByText(/copy the full Cookie request header/i)).toBeInTheDocument()
-    expect(screen.getByText(/This is separate from OpenCode Go local CLI spend\./)).toBeInTheDocument()
+    expect(screen.getByText(/This is separate from the OpenCode Go subscription\./)).toBeInTheDocument()
     expect(screen.getByText(/Do not paste Set-Cookie\./)).toBeInTheDocument()
   })
 
@@ -289,7 +309,7 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText("OpenCode Go")).toBeInTheDocument()
-    expect(screen.getByText(/Detected from the local OpenCode auth file and SQLite history on this machine\./)).toBeInTheDocument()
+    expect(screen.getByText(/Tracks OpenCode Go subscription limit usage from the local OpenCode auth file and SQLite history on this machine\./)).toBeInTheDocument()
     expect(screen.getByText(/Install OpenCode Go, sign in on this machine, then retry\./)).toBeInTheDocument()
   })
 
@@ -364,7 +384,7 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText(/Fetches Zed dashboard billing spend from a signed-in dashboard Cookie header, then replays that session inside an embedded browser context\./)).toBeInTheDocument()
-    expect(screen.getByText(/Open https:\/\/dashboard\.zed\.dev\/account, capture the full Cookie request header from a fresh cloud\.zed\.dev\/frontend\/billing\/usage request/)).toBeInTheDocument()
+    expect(screen.getByText(/Open the Zed AI Usage page at https:\/\/dashboard\.zed\.dev\/org_<id>\/billing\/usage, open DevTools -> Network, click the usage request, copy only the Cookie value/)).toBeInTheDocument()
     expect(screen.getByText(/Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback\./)).toBeInTheDocument()
     expect(screen.getByLabelText("Zed Cookie header")).toBeInTheDocument()
   })
@@ -396,6 +416,36 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/Fetches Synthetic quota data from a stored API key or SYNTHETIC_API_KEY\./)).toBeInTheDocument()
     expect(screen.getByText(/Create a Synthetic API key at https:\/\/api\.synthetic\.new, save it here or set SYNTHETIC_API_KEY, then retry\./)).toBeInTheDocument()
     expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the quotas endpoint\./)).toBeInTheDocument()
+  })
+
+  it("shows explicit Augment cookie guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={augmentPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches Augment credit usage from the signed-in web session using a manual Cookie header or AUGMENT_COOKIE_HEADER\./)).toBeInTheDocument()
+    expect(screen.getByText(/copy the full Cookie request header, paste it here, then retry\. Do not paste Set-Cookie\./)).toBeInTheDocument()
+    expect(screen.getByLabelText("Augment Cookie header")).toBeInTheDocument()
+  })
+
+  it("shows explicit Vertex AI gcloud guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={vertexAiPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Detected from gcloud application-default credentials and Cloud Monitoring quota metrics\./)).toBeInTheDocument()
+    expect(screen.getByText(/gcloud auth application-default login/)).toBeInTheDocument()
+    expect(screen.getByText(/GOOGLE_CLOUD_PROJECT/)).toBeInTheDocument()
   })
 
   it("shows explicit Antigravity offline guidance", () => {

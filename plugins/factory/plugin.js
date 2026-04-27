@@ -298,16 +298,16 @@
   }
 
   function fetchUsage(ctx, accessToken) {
+    const url = USAGE_URL + "?useCache=true"
     return ctx.util.request({
-      method: "POST",
-      url: USAGE_URL,
+      method: "GET",
+      url: url,
       headers: {
         Authorization: "Bearer " + accessToken,
         "Content-Type": "application/json",
         Accept: "application/json",
         "User-Agent": "OpenUsage",
       },
-      bodyText: JSON.stringify({ useCache: true }),
       timeoutMs: 10000,
     })
   }
@@ -316,7 +316,7 @@
     const authState = loadAuth(ctx)
     if (!authState) {
       ctx.host.log.error("probe failed: not logged in")
-      throw "Not logged in. Run `droid` to authenticate."
+      throw "Not logged in. No usable Droid session found. Run `droid` to authenticate, then refresh Factory."
     }
 
     const auth = authState.auth

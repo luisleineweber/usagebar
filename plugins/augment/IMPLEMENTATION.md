@@ -1,12 +1,13 @@
-# Augment Windows Placeholder
+# Augment Windows Implementation
 
-Status: visible in Settings, blocked from probing on Windows.
+Status: Windows experimental.
 
-Planned implementation:
-- Detect local Augment desktop or CLI session state first.
-- Prefer local process or CLI-backed usage over browser cookies.
-- Add a direct local probe only after a stable Windows auth/state source is confirmed.
+Implementation:
+- Reads a manual Augment `Cookie` header from the app provider-secret store.
+- Falls back to `AUGMENT_COOKIE_HEADER` when no stored secret exists.
+- Calls `https://app.augmentcode.com/api/credits` and optionally `https://app.augmentcode.com/api/subscription`.
+- Maps credits to the primary progress line and subscription metadata to detail rows.
 
-Why this placeholder exists:
-- The provider was listed as a missing candidate in `docs/specs/provider-source-evaluation-2026-03-16.md`.
-- This keeps the future provider visible in Settings without pretending Windows support exists yet.
+Deferred:
+- Auggie CLI probing is not implemented because the JS plugin host does not expose a subprocess API.
+- Browser-cookie auto import is not implemented for this provider yet.

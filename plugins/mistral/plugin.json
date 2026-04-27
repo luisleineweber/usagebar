@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "mistral",
+  "name": "Mistral",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#FF500F",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Experimental on Windows. Save a Mistral Cookie header or set MISTRAL_COOKIE_HEADER before probing."
+    }
+  },
+  "links": [
+    { "label": "Usage", "url": "https://admin.mistral.ai/organization/usage" },
+    { "label": "Status", "url": "https://status.mistral.ai/" }
+  ],
+  "lines": [
+    { "type": "text", "label": "Spend", "scope": "overview" },
+    { "type": "text", "label": "Input tokens", "scope": "detail" },
+    { "type": "text", "label": "Output tokens", "scope": "detail" },
+    { "type": "text", "label": "Cached tokens", "scope": "detail" },
+    { "type": "text", "label": "Models", "scope": "detail" }
+  ]
+}

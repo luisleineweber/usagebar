@@ -313,6 +313,42 @@ describe("factory plugin", () => {
     expect(standardLine.limit).toBe(20000000)
   })
 
+  it("uses the current cached GET usage endpoint", async () => {
+    const ctx = makeCtx()
+    const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
+    ctx.host.fs.writeText("~/.factory/auth.json", JSON.stringify({
+      access_token: makeJwt(futureExp),
+      refresh_token: "refresh",
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        usage: {
+          startDate: 1770623326000,
+          endDate: 1772956800000,
+          standard: {
+            orgTotalTokensUsed: 1,
+            totalAllowance: 20000000,
+          },
+          premium: {
+            orgTotalTokensUsed: 0,
+            totalAllowance: 0,
+          },
+        },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      url: "https://api.factory.ai/api/organization/subscription/usage?useCache=true",
+    }))
+    expect(ctx.host.http.request.mock.calls[0][0]).not.toHaveProperty("bodyText")
+  })
+
   it("shows premium line when premium allowance > 0", async () => {
     const ctx = makeCtx()
     const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60

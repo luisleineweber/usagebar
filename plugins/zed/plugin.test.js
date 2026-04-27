@@ -5,6 +5,7 @@ import { makePluginTestContext } from "../test-helpers.js";
 const TELEMETRY_PATH = "~/AppData/Local/Zed/logs/telemetry.log";
 const CREDENTIAL_TARGET = "zed:url=https://zed.dev";
 const BILLING_URL = "https://cloud.zed.dev/frontend/billing/usage";
+const BILLING_SUBSCRIPTION_URL = "https://cloud.zed.dev/frontend/billing/subscriptions/current";
 
 const loadPlugin = async () => {
   await import("./plugin.js");
@@ -65,6 +66,22 @@ function billingPayload(overrides = {}) {
   };
 }
 
+function subscriptionPayload(overrides = {}) {
+  return {
+    subscription: {
+      id: 1596962,
+      name: "Zed Student",
+      is_token_based: true,
+      status: "active",
+      period: {
+        start_at: "2026-04-10T00:00:00.000Z",
+        end_at: "2026-05-10T00:00:00.000Z",
+      },
+      ...overrides,
+    },
+  };
+}
+
 describe("zed plugin", () => {
   beforeEach(() => {
     delete globalThis.__openusage_plugin;
@@ -95,9 +112,14 @@ describe("zed plugin", () => {
     const ctx = makePluginTestContext();
     setWindows(ctx);
     setCookie(ctx, "session=abc; zed_session=def");
-    ctx.host.browser.requestWithCookies.mockReturnValue({
-      status: 200,
-      bodyText: JSON.stringify(billingPayload()),
+    ctx.host.browser.requestWithCookies.mockImplementation((request) => {
+      if (request.url === BILLING_URL) {
+        return { status: 200, bodyText: JSON.stringify(billingPayload()) };
+      }
+      if (request.url === BILLING_SUBSCRIPTION_URL) {
+        return { status: 200, bodyText: JSON.stringify(subscriptionPayload()) };
+      }
+      return { status: 404, bodyText: "" };
     });
 
     const plugin = await loadPlugin();
@@ -116,15 +138,44 @@ describe("zed plugin", () => {
       used: 10,
       limit: 10,
       format: { kind: "dollars" },
+      resetsAt: "2026-05-10T00:00:00.000Z",
+      periodDurationMs: 30 * 24 * 60 * 60 * 1000,
     });
     expect(result.lines.find((line) => line.label === "Limit")?.value).toBe("$10");
     expect(result.lines.find((line) => line.label === "Updated")?.value).toBe("2026-04-03T14:33:11.104Z");
 
-    const request = ctx.host.browser.requestWithCookies.mock.calls[0][0];
-    expect(request.url).toBe(BILLING_URL);
-    expect(request.cookieHeader).toBe("session=abc; zed_session=def");
-    expect(request.sourceUrl).toBe("https://dashboard.zed.dev/account");
+    const usageRequest = ctx.host.browser.requestWithCookies.mock.calls[0][0];
+    expect(usageRequest.url).toBe(BILLING_URL);
+    expect(usageRequest.cookieHeader).toBe("session=abc; zed_session=def");
+    expect(usageRequest.sourceUrl).toBe("https://dashboard.zed.dev/account");
+    const subscriptionRequest = ctx.host.browser.requestWithCookies.mock.calls[1][0];
+    expect(subscriptionRequest.url).toBe(BILLING_SUBSCRIPTION_URL);
+    expect(subscriptionRequest.cookieHeader).toBe("session=abc; zed_session=def");
+    expect(subscriptionRequest.sourceUrl).toBe("https://dashboard.zed.dev/account");
     expect(ctx.host.keychain.readGenericPasswordForTarget).not.toHaveBeenCalled();
+  });
+
+  it("keeps billing spend when subscription period is unavailable", async () => {
+    const ctx = makePluginTestContext();
+    setWindows(ctx);
+    setCookie(ctx, "session=abc");
+    ctx.host.browser.requestWithCookies.mockImplementation((request) => {
+      if (request.url === BILLING_URL) {
+        return { status: 200, bodyText: JSON.stringify(billingPayload()) };
+      }
+      return { status: 500, bodyText: "" };
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    const spend = result.lines.find((line) => line.label === "Spend");
+    expect(spend.used).toBe(10);
+    expect(spend.resetsAt).toBeUndefined();
+    expect(spend.periodDurationMs).toBeUndefined();
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "zed billing subscription unavailable: Zed billing subscription request failed (HTTP 500). Try again later."
+    );
   });
 
   it("throws a clear auth error when the billing cookie is stale", async () => {

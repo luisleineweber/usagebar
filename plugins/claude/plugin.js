@@ -495,6 +495,52 @@
     }))
   }
 
+  function firstUsageWindow(data, keys) {
+    if (!data || typeof data !== "object") return null
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]
+      if (data[key] && typeof data[key] === "object") {
+        return { window: data[key], sourceKey: key }
+      }
+    }
+    return null
+  }
+
+  function hasUsageKey(data, keys) {
+    if (!data || typeof data !== "object") return false
+    for (let i = 0; i < keys.length; i++) {
+      if (Object.prototype.hasOwnProperty.call(data, keys[i])) return true
+    }
+    return false
+  }
+
+  function appendExtraRateWindow(lines, ctx, data, label, keys) {
+    const found = firstUsageWindow(data, keys)
+    if (found) {
+      const used = Number(found.window.utilization)
+      if (!Number.isFinite(used)) return
+      lines.push(ctx.line.progress({
+        label: label,
+        used: used,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt: ctx.util.toIso(found.window.resets_at),
+        periodDurationMs: 7 * 24 * 60 * 60 * 1000
+      }))
+      return
+    }
+
+    if (hasUsageKey(data, keys)) {
+      lines.push(ctx.line.progress({
+        label: label,
+        used: 0,
+        limit: 100,
+        format: { kind: "percent" },
+        periodDurationMs: 7 * 24 * 60 * 60 * 1000
+      }))
+    }
+  }
+
   function appendTokenUsageLines(lines, ctx, usage) {
     const now = new Date()
     const todayKey = dayKeyFromDate(now)
@@ -704,6 +750,24 @@
         periodDurationMs: 7 * 24 * 60 * 60 * 1000 // 7 days
       }))
     }
+    appendExtraRateWindow(lines, ctx, data, "Designs", [
+      "seven_day_design",
+      "seven_day_claude_design",
+      "claude_design",
+      "design",
+      "seven_day_omelette",
+      "omelette",
+      "omelette_promotional",
+    ])
+    appendExtraRateWindow(lines, ctx, data, "Daily Routines", [
+      "seven_day_routines",
+      "seven_day_claude_routines",
+      "claude_routines",
+      "routines",
+      "routine",
+      "seven_day_cowork",
+      "cowork",
+    ])
 
     if (data.extra_usage && data.extra_usage.is_enabled) {
       const used = data.extra_usage.used_credits

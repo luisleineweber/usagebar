@@ -97,7 +97,7 @@ describe("opencode-go plugin", () => {
     );
   });
 
-  it("enables with auth only and returns zeroed bars", async () => {
+  it("does not render allowance bars from auth alone", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
 
@@ -109,15 +109,15 @@ describe("opencode-go plugin", () => {
     const result = plugin.probe(ctx);
 
     expect(result.plan).toBe("Go");
-    expect(result.lines.map((line) => line.label)).toEqual([
-      "5h",
-      "Weekly",
-      "Monthly",
+    expect(result.lines).toEqual([
+      {
+        type: "badge",
+        label: "Status",
+        text: "No Go subscription usage",
+        color: "#a3a3a3",
+        subtitle: "Zen auth exists, but no local Go usage was found.",
+      },
     ]);
-    expect(result.lines.every((line) => line.used === 0)).toBe(true);
-    expect(result.lines[0].resetsAt).toBe("2026-03-06T17:00:00.000Z");
-    expect(result.lines[1].resetsAt).toBe("2026-03-09T00:00:00.000Z");
-    expect(result.lines[2].resetsAt).toBe("2026-04-01T00:00:00.000Z");
   });
 
   it("enables with history only when auth is absent", async () => {
@@ -136,7 +136,7 @@ describe("opencode-go plugin", () => {
     expect(result.lines[0].used).toBe(25);
   });
 
-  it("accepts the current opencode auth key entry", async () => {
+  it("accepts the current opencode auth key entry without assuming subscription usage", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
 
@@ -153,7 +153,11 @@ describe("opencode-go plugin", () => {
     const result = plugin.probe(ctx);
 
     expect(result.plan).toBe("Go");
-    expect(result.lines.map((line) => line.label)).toEqual(["5h", "Weekly", "Monthly"]);
+    expect(result.lines[0]).toMatchObject({
+      type: "badge",
+      label: "Status",
+      text: "No Go subscription usage",
+    });
   });
 
   it("accepts current opencode history rows as detection evidence", async () => {
@@ -274,7 +278,7 @@ describe("opencode-go plugin", () => {
         {
           type: "badge",
           label: "Status",
-          text: "No usage data",
+          text: "No Go usage data",
           color: "#a3a3a3",
         },
       ],
@@ -293,7 +297,7 @@ describe("opencode-go plugin", () => {
         {
           type: "badge",
           label: "Status",
-          text: "No usage data",
+          text: "No Go usage data",
           color: "#a3a3a3",
         },
       ],

@@ -63,20 +63,6 @@ const OPENCODE_SOURCE_OPTIONS: ProviderSettingsOption[] = [
   },
 ]
 
-function plannedWindowsProviderDefinition(
-  title: string,
-  summary: string,
-  connectHint: string
-): ProviderSettingsDefinition {
-  return {
-    mode: "automatic",
-    title,
-    summary,
-    statusHint: "Windows placeholder only. Probing stays disabled until the provider implementation lands.",
-    connectHint,
-  }
-}
-
 const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> = {
   ollama: {
     mode: "editable",
@@ -93,10 +79,10 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   },
   opencode: {
     mode: "editable",
-    title: "OpenCode Setup",
-    summary: "Tracks OpenCode web subscription usage from the signed-in workspace billing session. This is separate from OpenCode Go local CLI spend.",
+    title: "OpenCode Zen Setup",
+    summary: "Tracks OpenCode Zen pay-as-you-go billing usage from the signed-in workspace session. This is separate from the OpenCode Go subscription.",
     statusHint: "Manual mode is the reliable path in this Windows-first build.",
-    connectHint: "Sign in at https://opencode.ai, open the target workspace billing page, then copy the full Cookie request header from DevTools > Network for the billing page or an opencode.ai/_server request. Paste that here, then add a workspace override only if auto-discovery picks the wrong team.",
+    connectHint: "Use this for OpenCode Zen pay-as-you-go usage. Sign in at https://opencode.ai, open the target workspace billing page, then copy the full Cookie request header from DevTools > Network for the billing page or an opencode.ai/_server request. Paste that here, then add a workspace override only if auto-discovery picks the wrong team.",
     sourceOptions: OPENCODE_SOURCE_OPTIONS,
     secretField: {
       key: "cookieHeader",
@@ -114,8 +100,8 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   "opencode-go": {
     mode: "automatic",
     title: "OpenCode Go Setup",
-    summary: "Detected from the local OpenCode auth file and SQLite history on this machine.",
-    statusHint: "No manual setup is required once ~/.local/share/opencode/auth.json or local opencode.db history exists.",
+    summary: "Tracks OpenCode Go subscription limit usage from the local OpenCode auth file and SQLite history on this machine.",
+    statusHint: "No manual setup is required once the Go subscription has local auth or opencode.db history.",
     connectHint: "Install OpenCode Go, sign in on this machine, then retry.",
   },
   codex: {
@@ -179,11 +165,11 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     title: "Zed Setup",
     summary: "Fetches Zed dashboard billing spend from a signed-in dashboard Cookie header, then replays that session inside an embedded browser context. When no billing cookie is configured, the provider falls back to local Zed-hosted telemetry totals.",
     statusHint: "Windows experimental. Billing spend now uses a live browser-backed dashboard request instead of a pasted JSON snapshot. The local Zed client token alone still does not unlock the billing API.",
-    connectHint: "Open https://dashboard.zed.dev/account, capture the full Cookie request header from a fresh cloud.zed.dev/frontend/billing/usage request, paste it here, then retry. Do not paste Set-Cookie.",
+    connectHint: "Open the Zed AI Usage page at https://dashboard.zed.dev/org_<id>/billing/usage, open DevTools -> Network, click the usage request, copy only the Cookie value from Headers -> Request Headers, paste it here, then retry. Do not paste Set-Cookie or the dashboard URL.",
     secretField: {
       key: "cookieHeader",
       label: "Cookie header",
-      description: "Paste the full Cookie request header from a fresh signed-in cloud.zed.dev/frontend/billing/usage request. UsageBar replays it through an embedded browser context. Do not paste Set-Cookie.",
+      description: "Paste the full Cookie request header value from the signed-in Zed AI Usage page's usage request. UsageBar replays it through an embedded browser context. Do not paste Set-Cookie, the full Headers panel, or the dashboard URL.",
       placeholder: "zed.session=...; __cf_bm=...; c15t=...;",
     },
   },
@@ -234,6 +220,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       placeholder: "__Secure-next-auth.session-token=...; pplx_session=...;",
     },
   },
+  mistral: {
+    mode: "editable",
+    title: "Mistral Setup",
+    summary: "Fetches current-month Mistral billing usage from the signed-in admin session using a manual Cookie header or MISTRAL_COOKIE_HEADER.",
+    statusHint: "Manual cookie or env mode is the supported Windows path in this build.",
+    connectHint: "Open https://admin.mistral.ai/organization/usage while signed in, copy the full Cookie request header from the billing usage request, paste it here, then retry. Do not paste Set-Cookie.",
+    secretField: {
+      key: "cookieHeader",
+      label: "Cookie header",
+      description: "Paste the full Cookie request header from a signed-in admin.mistral.ai usage request. Do not paste Set-Cookie.",
+      placeholder: "ory_session_...=...; csrftoken=...;",
+    },
+  },
   "jetbrains-ai-assistant": {
     mode: "automatic",
     title: "JetBrains AI Setup",
@@ -248,11 +247,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     statusHint: "Set ZAI_API_KEY or GLM_API_KEY before launching UsageBar.",
     connectHint: "Create a persistent ZAI_API_KEY or GLM_API_KEY user environment variable, restart UsageBar, then refresh.",
   },
-  augment: plannedWindowsProviderDefinition(
-    "Augment Setup",
-    "Planned Windows implementation: detect local Augment app or CLI session state first, then add a provider-specific local probe before considering any web flow.",
-    "Target plan: reuse local process or CLI auth on Windows instead of browser-cookie scraping."
-  ),
+  augment: {
+    mode: "editable",
+    title: "Augment Setup",
+    summary: "Fetches Augment credit usage from the signed-in web session using a manual Cookie header or AUGMENT_COOKIE_HEADER.",
+    statusHint: "Manual cookie or env mode is the supported Windows path in this build.",
+    connectHint: "Open a signed-in app.augmentcode.com subscription or credits request in DevTools, copy the full Cookie request header, paste it here, then retry. Do not paste Set-Cookie.",
+    secretField: {
+      key: "cookieHeader",
+      label: "Cookie header",
+      description: "Paste the full Cookie request header from a signed-in app.augmentcode.com request. Do not paste Set-Cookie.",
+      placeholder: "_session=...; authjs.session-token=...;",
+    },
+  },
   alibaba: {
     mode: "editable",
     title: "Alibaba Coding Plan Setup",
@@ -325,11 +332,13 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       placeholder: "synthetic_...",
     },
   },
-  "vertex-ai": plannedWindowsProviderDefinition(
-    "Vertex AI Setup",
-    "Planned Windows implementation: use Google ADC or gcloud application-default auth plus quota APIs, with optional local-log enrichment later.",
-    "Target plan: prefer official Google auth and quota APIs on Windows, not browser-session scraping."
-  ),
+  "vertex-ai": {
+    mode: "automatic",
+    title: "Vertex AI Setup",
+    summary: "Detected from gcloud application-default credentials and Cloud Monitoring quota metrics.",
+    statusHint: "Run `gcloud auth application-default login` and configure a project before launching UsageBar.",
+    connectHint: "Run `gcloud auth application-default login`, then `gcloud config set project PROJECT_ID` or set GOOGLE_CLOUD_PROJECT, and ensure the project allows Cloud Monitoring time-series reads.",
+  },
   warp: {
     mode: "editable",
     title: "Warp Setup",
@@ -473,6 +482,7 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   if (providerId === "ollama") return "Manual cookie"
   if (providerId === "perplexity") return "Manual cookie"
   if (providerId === "abacus") return "Manual cookie"
+  if (providerId === "augment") return "Manual cookie"
   if (providerId === "codex") {
     return config?.selectedAccountProfileId ? "Managed account" : "Auto-detected"
   }

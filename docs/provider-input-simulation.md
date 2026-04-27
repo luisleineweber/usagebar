@@ -41,7 +41,7 @@ Safety:
 | `openrouter` | stored provider secret `apiKey`, `OPENROUTER_API_KEY`, `OPENROUTER_API_URL` | Works partially | Secret/env replay can fake auth setup, but credits and key data still come from OpenRouter HTTP. |
 | `perplexity` | stored provider secret `cookieHeader`, `PERPLEXITY_COOKIE_HEADER`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN` | Works partially | Cookie/env replay can fake signed-in billing auth, but credit data still comes from Perplexity HTTP. |
 | `synthetic` | stored provider secret `apiKey`, `SYNTHETIC_API_KEY` | Works partially | Secret/env replay can fake auth setup, but quota data still comes from Synthetic HTTP. |
-| `vertex-ai` | None | No current path | Placeholder plugin only. |
+| `vertex-ai` | `~/AppData/Roaming/gcloud/application_default_credentials.json`, `~/.config/gcloud/application_default_credentials.json`, `CLOUDSDK_CONFIG`, `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`, `CLOUDSDK_CORE_PROJECT` | Works partially | ADC/project replay can fake auth setup and parser paths, but quota data still comes from Google Cloud Monitoring HTTP. |
 | `warp` | stored provider secret `token`, `WARP_API_KEY`, `WARP_TOKEN` | Works partially | Secret/env replay can fake auth setup, but request limits still come from Warp HTTP. |
 | `windsurf` | `~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb`, `~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb` | Works partially | SQLite replay can fake account discovery; quota still comes from Windsurf HTTP. |
 | `zed` | stored provider secret `cookieHeader`, external Windows credential target `zed:url=https://zed.dev`, `~/AppData/Local/Zed/logs/telemetry.log` | Works partially | Embedded-browser cookie replay can cover billing auth, while local replay covers sign-in detection and telemetry fallback. |
@@ -70,8 +70,14 @@ Safety:
 - Limitation: even with fake auth files, the provider still talks to a live LS/HTTP endpoint for actual usage.
 
 ### `augment`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
+- Local inputs read:
+- provider secret `cookieHeader`
+- `AUGMENT_COOKIE_HEADER`
+- What to fake:
+- Save an Augment Cookie header through the app settings or expose `AUGMENT_COOKIE_HEADER` before launching UsageBar.
+- Limitation:
+- The provider still fetches credit data over HTTP.
+- Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `claude`
 - Local inputs read:
@@ -267,8 +273,15 @@ Safety:
 - Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `vertex-ai`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
+- Local inputs read:
+- gcloud ADC credentials under `~/AppData/Roaming/gcloud` or `~/.config/gcloud`
+- optional `CLOUDSDK_CONFIG`
+- optional project env vars `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`, `CLOUDSDK_CORE_PROJECT`
+- What to fake:
+- Write an `application_default_credentials.json` fixture plus a `configurations/config_default` project file.
+- Limitation:
+- The provider still refreshes OAuth and fetches Cloud Monitoring quota data over HTTP.
+- Local file/env replay covers ADC/project discovery only.
 
 ### `warp`
 - Local inputs read:

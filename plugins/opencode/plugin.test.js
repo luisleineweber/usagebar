@@ -38,14 +38,15 @@ describe("opencode plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Set OPENCODE_COOKIE_HEADER to your OpenCode cookie header.")
   })
 
-  it("parses session and weekly usage from the subscription response", async () => {
+  it("shows Zen pay-as-you-go balance from the billing response", async () => {
     const ctx = makeCtx()
     setManualCookie(ctx)
     const workspaceId = setWorkspace(ctx)
     ctx.host.http.request.mockReturnValue(
       response(JSON.stringify({
-        rollingUsage: { usagePercent: 42, resetInSec: 1800 },
-        weeklyUsage: { usagePercent: 17, resetInSec: 86400 },
+        billing: {
+          currentBalance: 12.34,
+        },
       }))
     )
 
@@ -59,12 +60,85 @@ describe("opencode plugin", () => {
         Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
       }),
     }))
-    expect(result.lines).toHaveLength(2)
-    expect(result.lines[0]).toMatchObject({ label: "Session", used: 42, limit: 100 })
-    expect(result.lines[1]).toMatchObject({ label: "Weekly", used: 17, limit: 100 })
+    expect(result.lines).toEqual([
+      {
+        type: "text",
+        label: "Balance",
+        value: "$12.34",
+        subtitle: "OpenCode Zen pay-as-you-go balance",
+      },
+    ])
   })
 
-  it("surfaces explicit null subscription responses as no subscription data", async () => {
+  it("reads zero Zen balance from cent-denominated fields", async () => {
+    const ctx = makeCtx()
+    setManualCookie(ctx)
+    setWorkspace(ctx)
+    ctx.host.http.request.mockReturnValue(
+      response(JSON.stringify({
+        data: {
+          zen: {
+            balanceCents: 0,
+          },
+        },
+      }))
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines[0]).toMatchObject({ label: "Balance", value: "$0.00" })
+  })
+
+  it("reads Zen balance from serialized server text", async () => {
+    const ctx = makeCtx()
+    setManualCookie(ctx)
+    setWorkspace(ctx)
+    ctx.host.http.request.mockReturnValue(
+      response("return { currentBalance: 5.25, billing: true }")
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines[0]).toMatchObject({ label: "Balance", value: "$5.25" })
+  })
+
+  it("falls back to the billing page hydrated balance", async () => {
+    const ctx = makeCtx()
+    setManualCookie(ctx)
+    const workspaceId = setWorkspace(ctx, "wrk_01KGFHEAF5E5M17063C23DR6ZH")
+    ctx.host.http.request
+      .mockReturnValueOnce(response(JSON.stringify({
+        customerID: null,
+        paymentMethodID: null,
+      })))
+      .mockReturnValueOnce(response(`
+        <script>
+          _$HY.r["billing.get[\\"${workspaceId}\\"]"] = $R[15];
+          $R[22]($R[16], $R[25] = {
+            customerID: null,
+            paymentMethodID: null,
+            balance: 0,
+            monthlyUsage: 0
+          });
+        </script>
+      `))
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(ctx.host.http.request).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "GET",
+      url: `https://opencode.ai/workspace/${workspaceId}/billing`,
+      headers: expect.objectContaining({
+        Cookie: "auth=test; __Host-auth=test2",
+      }),
+    }))
+    expect(result.lines[0]).toMatchObject({ label: "Balance", value: "$0.00" })
+  })
+
+  it("surfaces explicit null Zen billing responses as no usage data", async () => {
     const ctx = makeCtx()
     setManualCookie(ctx)
     setWorkspace(ctx, "wrk_nullcase")
@@ -72,10 +146,10 @@ describe("opencode plugin", () => {
 
     const plugin = await loadPlugin()
 
-    expect(() => plugin.probe(ctx)).toThrow("OpenCode has no subscription usage data for this workspace.")
+    expect(() => plugin.probe(ctx)).toThrow("OpenCode Zen has no billing usage data for this workspace.")
   })
 
-  it("surfaces missing billing fields as a workspace-or-response-shape problem", async () => {
+  it("surfaces missing balance fields as a workspace-or-response-shape problem", async () => {
     const ctx = makeCtx()
     setManualCookie(ctx)
     const workspaceId = setWorkspace(ctx, "wrk_shapeproblem")
@@ -91,10 +165,10 @@ describe("opencode plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow(
       "OpenCode returned billing data for workspace " +
         workspaceId +
-        ", but it did not include the expected usage fields (rolling usage percent, rolling reset, weekly usage percent, weekly reset). Verify the workspace ID from the billing URL or an opencode.ai/_server payload. If that workspace is correct, OpenCode likely changed the billing response shape."
+        ", but it did not include the expected Zen balance field. Verify the workspace ID from the billing URL or an opencode.ai/_server payload. If that workspace is correct, OpenCode likely changed the billing response shape."
     )
     expect(ctx.host.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("opencode subscription response missing fields for " + workspaceId)
+      expect.stringContaining("opencode zen billing response missing balance for " + workspaceId)
     )
   })
 })

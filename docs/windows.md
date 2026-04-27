@@ -98,10 +98,11 @@ Record these fields in the relevant provider doc or rollout note:
 | Codex | Working | P0 | broader runtime validation and doc alignment |
 | Cursor | Partially working | P0 | account-state variance across free/trial/paid/team/enterprise |
 | Ollama | Working v1 | P0 | only manual cookie mode exists |
-| OpenCode | Experimental | P1 | browser import + real-world cookie/workspace validation |
+| OpenCode Zen | Experimental | P1 | browser import + real-world cookie/workspace validation for pay-as-you-go billing |
 | OpenCode Go | Working on Windows | P1 | keep current local auth/history schema coverage aligned with upstream CLI changes |
 | OpenRouter | Experimental | P2 | real Windows API-key validation plus broader live key-quota evidence |
 | Synthetic | Experimental | P2 | real Windows API-key validation plus broader live quota-shape evidence |
+| Augment | Experimental | P2 | real Windows web-cookie validation plus future CLI/browser import path |
 | Amp | Experimental | P2 | real signed-in Windows validation |
 | Copilot | Experimental | P2 | real free/paid validation plus broader multi-account runtime evidence |
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |
@@ -110,6 +111,7 @@ Record these fields in the relevant provider doc or rollout note:
 | Kimi Code | Experimental | P2 | real Windows credential-file validation plus broader signed-in runtime evidence |
 | Kimi K2 | Experimental | P2 | real Windows API-key validation plus broader live credits-shape evidence |
 | MiniMax | Experimental | P2 | real Windows API-key validation plus broader real-plan coverage |
+| Vertex AI | Experimental | P2 | real Windows gcloud ADC and Cloud Monitoring validation |
 | Warp | Experimental | P2 | real Windows token validation plus broader live plan variance evidence |
 | Zed | Experimental | P2 | billing spend depends on a manual dashboard cookie header that is replayed through an embedded browser; automatic session import is still missing |
 | Factory / Droid | Experimental | P2 | real Windows validation of the v2 auth store plus signed-in runtime evidence |

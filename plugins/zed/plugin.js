@@ -3,6 +3,7 @@
   const WINDOWS_CREDENTIAL_TARGET = "zed:url=https://zed.dev";
   const WINDOWS_TELEMETRY_LOG = "~/AppData/Local/Zed/logs/telemetry.log";
   const BILLING_USAGE_URL = "https://cloud.zed.dev/frontend/billing/usage";
+  const BILLING_SUBSCRIPTION_URL = "https://cloud.zed.dev/frontend/billing/subscriptions/current";
   const USAGE_EVENT = "Agent Thread Completion Usage Updated";
   const TOKEN_FIELDS = [
     "token",
@@ -101,7 +102,7 @@
     return token;
   }
 
-  function requestBillingUsage(ctx, cookieHeader) {
+  function requestBillingJson(ctx, cookieHeader, url, description) {
     if (!ctx.host.browser || typeof ctx.host.browser.requestWithCookies !== "function") {
       throw "Zed browser-backed billing request is unavailable in this build.";
     }
@@ -109,29 +110,42 @@
     let response;
     try {
       response = ctx.host.browser.requestWithCookies({
-        url: BILLING_USAGE_URL,
+        url,
         cookieHeader,
         sourceUrl: "https://dashboard.zed.dev/account",
         timeoutMs: 15000,
       });
     } catch (e) {
-      ctx.host.log.error("zed billing request failed: " + String(e));
-      throw "Zed billing request failed: " + String(e);
+      ctx.host.log.error("zed " + description + " request failed: " + String(e));
+      throw "Zed " + description + " request failed: " + String(e);
     }
 
     if (ctx.util.isAuthStatus(response.status)) {
       throw "Zed dashboard session expired or was rejected. Re-capture the Cookie header from a fresh /frontend/billing/usage request.";
     }
     if (response.status < 200 || response.status >= 300) {
-      throw "Zed billing request failed (HTTP " + String(response.status) + "). Try again later.";
+      throw "Zed " + description + " request failed (HTTP " + String(response.status) + "). Try again later.";
     }
 
     const body = ctx.util.tryParseJson(response.bodyText);
     if (!body || typeof body !== "object") {
-      throw "Zed billing response invalid. Refresh the Cookie header or update UsageBar.";
+      throw "Zed " + description + " response invalid. Refresh the Cookie header or update UsageBar.";
     }
 
     return body;
+  }
+
+  function requestBillingUsage(ctx, cookieHeader) {
+    return requestBillingJson(ctx, cookieHeader, BILLING_USAGE_URL, "billing");
+  }
+
+  function requestBillingSubscription(ctx, cookieHeader) {
+    try {
+      return requestBillingJson(ctx, cookieHeader, BILLING_SUBSCRIPTION_URL, "billing subscription");
+    } catch (e) {
+      ctx.host.log.warn("zed billing subscription unavailable: " + String(e));
+      return null;
+    }
   }
 
   function formatBillingPlanLabel(ctx, value) {
@@ -143,7 +157,32 @@
     return label || text;
   }
 
-  function buildBillingResult(ctx, payload) {
+  function billingPeriod(ctx, subscriptionPayload) {
+    const subscription = subscriptionPayload && typeof subscriptionPayload === "object"
+      ? subscriptionPayload.subscription
+      : null;
+    const period = subscription && typeof subscription === "object" ? subscription.period : null;
+    if (!period || typeof period !== "object") {
+      return { resetsAt: null, periodDurationMs: null };
+    }
+
+    const startIso = ctx.util.toIso(period.start_at);
+    const endIso = ctx.util.toIso(period.end_at);
+    if (!endIso) {
+      return { resetsAt: null, periodDurationMs: null };
+    }
+
+    let periodDurationMs = null;
+    const startMs = ctx.util.parseDateMs(startIso);
+    const endMs = ctx.util.parseDateMs(endIso);
+    if (startMs !== null && endMs !== null && endMs > startMs) {
+      periodDurationMs = endMs - startMs;
+    }
+
+    return { resetsAt: endIso, periodDurationMs };
+  }
+
+  function buildBillingResult(ctx, payload, subscriptionPayload) {
     const currentUsage = payload.current_usage;
     const tokenSpend = currentUsage && typeof currentUsage === "object" ? currentUsage.token_spend : null;
     if (!currentUsage || typeof currentUsage !== "object") {
@@ -162,6 +201,19 @@
       ? ctx.util.toIso(tokenSpend.updated_at)
       : null;
     const plan = formatBillingPlanLabel(ctx, payload.plan);
+    const period = billingPeriod(ctx, subscriptionPayload);
+    const spendLine = {
+      label: "Spend",
+      used: ctx.fmt.dollars(spendCents),
+      limit: ctx.fmt.dollars(limitCents),
+      format: { kind: "dollars" },
+    };
+    if (period.resetsAt) {
+      spendLine.resetsAt = period.resetsAt;
+    }
+    if (period.periodDurationMs !== null) {
+      spendLine.periodDurationMs = period.periodDurationMs;
+    }
 
     return {
       plan: plan ? ctx.fmt.planLabel(plan) : "Billing",
@@ -171,12 +223,7 @@
           text: "Dashboard billing",
           subtitle: "Live browser-backed dashboard request.",
         }),
-        ctx.line.progress({
-          label: "Spend",
-          used: ctx.fmt.dollars(spendCents),
-          limit: ctx.fmt.dollars(limitCents),
-          format: { kind: "dollars" },
-        }),
+        ctx.line.progress(spendLine),
         ctx.line.text({
           label: "Limit",
           value: "$" + String(ctx.fmt.dollars(limitCents * 1)),
@@ -358,7 +405,11 @@
   function probe(ctx) {
     const cookieHeader = readDashboardCookie(ctx);
     if (cookieHeader) {
-      return buildBillingResult(ctx, requestBillingUsage(ctx, cookieHeader));
+      return buildBillingResult(
+        ctx,
+        requestBillingUsage(ctx, cookieHeader),
+        requestBillingSubscription(ctx, cookieHeader)
+      );
     }
 
     loadLocalCredential(ctx);

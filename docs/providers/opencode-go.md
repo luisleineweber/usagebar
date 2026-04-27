@@ -1,18 +1,20 @@
 # OpenCode Go
 
-> Uses local OpenCode history from SQLite to track observed OpenCode Go spend on this machine.
+> Uses local OpenCode history from SQLite to track observed OpenCode Go subscription-limit usage on this machine.
 
-This is separate from [OpenCode web usage](./opencode.md):
+OpenCode has two similarly named products, and UsageBar keeps them separate:
 
-- `OpenCode Go` reads local CLI history from `opencode.db`
-- `OpenCode` reads signed-in workspace subscription usage from the OpenCode website
+- `OpenCode Go`: subscription model access with 5-hour, weekly, and monthly dollar-value limits.
+- `OpenCode Zen`: pay-as-you-go model access. You add balance and are charged per request.
+
+This page is for Go. For the Zen pay-as-you-go provider, see [OpenCode Zen](./opencode.md).
 
 ## Overview
 
 - **Source of truth:** `~/.local/share/opencode/opencode.db`
 - **Auth discovery:** `~/.local/share/opencode/auth.json`
 - **Provider ID:** `opencode-go`
-- **Usage scope:** local observed assistant spend only
+- **Usage scope:** local observed assistant spend against Go subscription limits only
 
 ## Detection
 
@@ -21,7 +23,7 @@ The plugin enables when either condition is true:
 - `~/.local/share/opencode/auth.json` contains an `opencode-go` or current `opencode` entry with a non-empty `key`
 - local OpenCode history already contains `opencode-go` or current `opencode` assistant messages with numeric `cost`
 
-If neither signal exists, the plugin stays hidden.
+If neither signal exists, the plugin stays hidden. If auth exists but no local Go usage history exists yet, UsageBar shows a neutral status instead of zero-filled allowance bars because the same local auth file can exist for Zen without proving an active Go subscription.
 
 ## Data Source
 
@@ -42,7 +44,7 @@ Only assistant messages with numeric `cost` count. Missing remote or other-devic
 
 ## Limits
 
-OpenUsage uses the current published OpenCode Go plan limits from the official docs:
+OpenUsage uses the current published OpenCode Go subscription limits from the official docs:
 
 - `5h`: `$12`
 - `Weekly`: `$30`
@@ -56,11 +58,11 @@ Bars show observed local spend as a percentage of those fixed limits and clamp a
 - `Weekly`: UTC Monday `00:00` through the next UTC Monday `00:00`
 - `Monthly`: inferred subscription-style monthly window using the earliest local OpenCode Go usage timestamp as the anchor
 
-Monthly usage is inferred from local history, not read from OpenCode’s account API. OpenUsage reuses the earliest observed local OpenCode Go usage timestamp as the monthly anchor. If no local history exists yet, it falls back to UTC calendar month boundaries until the first Go usage is recorded.
+Monthly usage is inferred from local history, not read from OpenCode's account API. OpenUsage reuses the earliest observed local OpenCode Go usage timestamp as the monthly anchor. If no local history exists yet, it falls back to UTC calendar month boundaries until the first Go usage is recorded.
 
 ## Failure Behavior
 
-If auth or prior history already indicates OpenCode Go is in use, but SQLite becomes unreadable or malformed, the provider stays visible and shows a grey `Status: No usage data` badge instead of failing hard.
+If prior history already indicates OpenCode Go is in use, but SQLite becomes unreadable or malformed, the provider stays visible and shows a grey `Status: No Go usage data` badge instead of failing hard.
 
 ## Windows setup
 
@@ -68,7 +70,7 @@ If auth or prior history already indicates OpenCode Go is in use, but SQLite bec
 2. Confirm that `~/.local/share/opencode/opencode.db` exists once local history has been created.
 3. Enable the OpenCode Go provider in Settings and refresh.
 
-Current local evidence on this machine: both files exist, the current auth file uses the newer `opencode` entry name rather than only `opencode-go`, and a real local probe returned the expected `5h`, `Weekly`, and `Monthly` lines on Windows.
+Current local evidence on this machine: both files exist and the current auth file uses the newer `opencode` entry name rather than only `opencode-go`. UsageBar only shows the `5h`, `Weekly`, and `Monthly` allowance bars when local Go usage history exists.
 
 ## Future Compatibility
 

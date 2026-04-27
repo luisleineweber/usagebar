@@ -5,14 +5,22 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "vertexai-color.svg",
+  "brandColor": "#4285F4",
   "platformSupport": {
     "windows": {
-      "state": "blocked",
-      "message": "Windows placeholder. Planned path: Google ADC or gcloud application-default auth plus quota APIs."
+      "state": "experimental",
+      "message": "Windows experimental. Uses gcloud application-default credentials and Cloud Monitoring quota data."
     }
   },
+  "links": [
+    { "label": "Vertex AI", "url": "https://console.cloud.google.com/vertex-ai" },
+    { "label": "Google Cloud Status", "url": "https://status.cloud.google.com" }
+  ],
   "lines": [
-    { "type": "progress", "label": "Quota", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Project", "scope": "detail" }
+    { "type": "badge", "label": "Source", "scope": "overview" },
+    { "type": "progress", "label": "Quota usage", "scope": "overview", "primaryOrder": 1 },
+    { "type": "text", "label": "Project", "scope": "detail" },
+    { "type": "text", "label": "Quota", "scope": "detail" },
+    { "type": "text", "label": "Account", "scope": "detail" }
   ]
 }

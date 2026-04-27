@@ -9,6 +9,7 @@ Primary path:
 - Dashboard token spend in dollars
 - Dashboard spend limit in dollars
 - Billing payload update timestamp
+- Billing period reset date when the subscription endpoint is available
 
 Fallback path:
 
@@ -22,9 +23,15 @@ Fallback path:
 ## Setup on Windows
 
 1. Sign in at `https://dashboard.zed.dev/account`.
-2. Open DevTools and capture the full `Cookie` request header from a `https://cloud.zed.dev/frontend/billing/usage` request.
-3. Paste that cookie header into `Settings -> Providers -> Zed`.
-4. Refresh the provider.
+2. Open the Zed AI Usage page. In the screenshot, this is the dashboard route ending in `/billing/usage`, for example `https://dashboard.zed.dev/org_<id>/billing/usage`.
+3. Open browser DevTools with `F12` or `Ctrl+Shift+I`, then select the `Network` tab.
+4. Refresh the page if the request list is empty.
+5. Click the request named `usage`. In the screenshot, it is selected in the Network request list and the Headers panel shows `:path /org_<id>/billing/usage`.
+6. In `Headers -> Request Headers`, copy the full value of the `Cookie` header only. It is the long semicolon-separated line shown under `Cookie:`.
+7. Paste that cookie header into `Settings -> Providers -> Zed -> Cookie header`.
+8. Refresh the provider.
+
+Copy the request header named exactly `Cookie`. Do not paste the `Set-Cookie` response header, the whole Headers panel, or the dashboard URL.
 
 If the pasted cookie comes from an old browser session, the billing request can still return `401`. Re-capture the header from the live page if that happens.
 
@@ -34,10 +41,12 @@ If you skip the cookie setup, UsageBar falls back to the local Zed telemetry log
 
 ### Billing path
 
-- **Endpoint:** `GET https://cloud.zed.dev/frontend/billing/usage`
+- **Usage endpoint:** `GET https://cloud.zed.dev/frontend/billing/usage`
+- **Subscription endpoint:** `GET https://cloud.zed.dev/frontend/billing/subscriptions/current`
 - **Auth:** browser session via `Cookie` header
-- **Runtime path:** hidden browser window loads `https://dashboard.zed.dev/account`, injects the captured cookies into the browser store, then fetches `https://cloud.zed.dev/frontend/billing/usage` with `credentials: "include"`
+- **Runtime path:** hidden browser window loads `https://dashboard.zed.dev/account`, injects the captured cookies into the browser store, then fetches the billing endpoints with `credentials: "include"`
 - **Observed payload shape:** `plan`, `current_usage.token_spend_in_cents`, `current_usage.token_spend.{spend_in_cents, limit_in_cents, updated_at}`, `portal_url`
+- **Observed subscription shape:** `subscription.period.{start_at,end_at}` for the current billing window; `end_at` is used as the spend reset date
 
 ### Fallback telemetry path
 
@@ -57,7 +66,7 @@ The local Zed client credential is readable on Windows, but it does not authenti
 When the dashboard cookie is configured:
 
 - `Source`: `Dashboard billing`
-- `Spend`: dollar progress from current spend to spend limit
+- `Spend`: dollar progress from current spend to spend limit, with reset countdown when `subscription.period.end_at` is available
 - `Limit`: dollar limit
 - `Updated`: billing payload timestamp
 

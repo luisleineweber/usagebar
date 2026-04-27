@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "opencode",
-  "name": "OpenCode",
+  "name": "OpenCode Zen",
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
@@ -16,7 +16,6 @@
     { "label": "Dashboard", "url": "https://opencode.ai/" }
   ],
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Weekly", "scope": "overview", "primaryOrder": 2 }
+    { "type": "text", "label": "Balance", "scope": "overview" }
   ]
 }

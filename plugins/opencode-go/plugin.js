@@ -261,8 +261,19 @@
     return [
       ctx.line.badge({
         label: "Status",
-        text: "No usage data",
+        text: "No Go usage data",
         color: "#a3a3a3",
+      }),
+    ];
+  }
+
+  function buildNotSubscribedLines(ctx) {
+    return [
+      ctx.line.badge({
+        label: "Status",
+        text: "No Go subscription usage",
+        color: "#a3a3a3",
+        subtitle: "Zen auth exists, but no local Go usage was found.",
       }),
     ];
   }
@@ -278,6 +289,10 @@
 
     if (!history.ok) {
       return { plan: "Go", lines: buildSoftEmptyLines(ctx) };
+    }
+
+    if (!history.present) {
+      return { plan: "Go", lines: buildNotSubscribedLines(ctx) };
     }
 
     const rowsResult = loadHistory(ctx);

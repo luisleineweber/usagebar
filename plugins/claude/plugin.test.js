@@ -147,6 +147,50 @@ describe("claude plugin", () => {
     expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
   })
 
+  it("renders Claude Designs and Daily Routines usage bars from OAuth payload aliases", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () =>
+      JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        seven_day_design: { utilization: 12, resets_at: "2099-01-01T00:00:00.000Z" },
+        seven_day_cowork: { utilization: 34, resets_at: "2099-01-02T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    const designs = result.lines.find((line) => line.label === "Designs")
+    const routines = result.lines.find((line) => line.label === "Daily Routines")
+    expect(designs).toBeTruthy()
+    expect(designs.used).toBe(12)
+    expect(routines).toBeTruthy()
+    expect(routines.used).toBe(34)
+  })
+
+  it("renders zero-percent Claude extra bars when product keys are present with null payloads", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.readText = () =>
+      JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
+    ctx.host.fs.exists = () => true
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        omelette: null,
+        cowork: null,
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Designs")?.used).toBe(0)
+    expect(result.lines.find((line) => line.label === "Daily Routines")?.used).toBe(0)
+  })
+
   it("appends max rate limit tier to the plan label when present", async () => {
     const runCase = async (rateLimitTier, expectedPlan) => {
       const ctx = makeCtx()

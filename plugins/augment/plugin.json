@@ -5,14 +5,20 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "Augment_Code_idmreFUtWy_1.svg",
+  "brandColor": "#6366F1",
   "platformSupport": {
     "windows": {
-      "state": "blocked",
-      "message": "Windows placeholder. Planned path: local Augment app or CLI session detection first; probing is not implemented yet."
+      "state": "experimental",
+      "message": "Windows experimental. Save an Augment Cookie header or set AUGMENT_COOKIE_HEADER before probing."
     }
   },
+  "links": [
+    { "label": "Dashboard", "url": "https://app.augmentcode.com/account/subscription" }
+  ],
   "lines": [
-    { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Session", "scope": "detail" }
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
+    { "type": "text", "label": "Remaining", "scope": "overview" },
+    { "type": "text", "label": "Account", "scope": "detail" },
+    { "type": "text", "label": "Organization", "scope": "detail" }
   ]
 }

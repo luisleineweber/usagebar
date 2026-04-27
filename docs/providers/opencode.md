@@ -1,28 +1,29 @@
-# OpenCode
+# OpenCode Zen
 
-Tracks OpenCode subscription usage from the authenticated workspace billing flow on `opencode.ai`.
+Tracks OpenCode Zen pay-as-you-go billing usage from the authenticated workspace flow on `opencode.ai`.
 
-This is not the same provider as [OpenCode Go](./opencode-go.md):
+OpenCode has two similarly named products, and UsageBar keeps them separate:
 
-- `OpenCode`: web subscription usage for an OpenCode workspace, read from the signed-in website session
-- `OpenCode Go`: local observed CLI spend from `~/.local/share/opencode/opencode.db`
+- `OpenCode Zen`: pay-as-you-go model access. You add balance and are charged per request.
+- `OpenCode Go`: subscription model access with 5-hour, weekly, and monthly dollar-value limits.
+
+This page is for Zen. For the Go subscription provider, see [OpenCode Go](./opencode-go.md).
 
 ## Data source
 
 - Authenticated OpenCode website session via a manually stored `Cookie` request header
-- `https://opencode.ai/_server` workspace lookup and subscription usage calls
+- `https://opencode.ai/_server` workspace lookup and billing usage calls
 - No public quota API is used in this Windows-first slice
 
 ## What it shows
 
-- `Session`: rolling 5-hour usage percentage
-- `Weekly`: rolling weekly usage percentage
+- Current OpenCode Zen pay-as-you-go balance for the selected workspace
 
 ## Where usage lives
 
 There is a real OpenCode website flow for this, but it is not a public docs page or a stable public API.
 
-OpenUsage currently expects the same authenticated workspace billing session that CodexBar uses:
+UsageBar currently expects the authenticated workspace billing session for OpenCode Zen:
 
 - sign in on `https://opencode.ai`
 - open the target workspace billing view at `https://opencode.ai/workspace/wrk_.../billing` once you have a workspace selected
@@ -32,7 +33,7 @@ If OpenCode redirects you back to home or sign-in, the session is not ready yet.
 
 ## Setup
 
-1. Open the OpenCode provider detail in UsageBar.
+1. Open the OpenCode Zen provider detail in UsageBar.
 2. Leave `Source` on `Manual`.
 3. In your browser, sign in at `https://opencode.ai`.
 4. Open the workspace billing page for the team you want to track.
@@ -40,7 +41,7 @@ If OpenCode redirects you back to home or sign-in, the session is not ready yet.
 6. Reload the billing page.
 7. Click either the page request for `/workspace/.../billing` or an `https://opencode.ai/_server` request made during that load.
 8. In `Request Headers`, copy the full `Cookie` header value.
-9. Paste that full semicolon-separated value into `OpenCode -> Cookie header`.
+9. Paste that full semicolon-separated value into `OpenCode Zen -> Cookie header`.
 10. Save the secret and click `Retry`.
 
 ## Cookie header capture details
@@ -86,10 +87,11 @@ Good places to find it:
 - missing cookie: `Set OPENCODE_COOKIE_HEADER to your OpenCode cookie header.`
 - expired cookie: `OpenCode session cookie is invalid or expired.`
 - missing workspace: `OpenCode workspace not found. Set OPENCODE_WORKSPACE_ID.`
-- missing subscription data: `OpenCode has no subscription usage data for this workspace.`
-- unexpected billing payload: `OpenCode returned billing data for workspace wrk_..., but it did not include the expected usage fields (...)`
+- missing billing usage data: `OpenCode Zen has no billing usage data for this workspace.`
+- unexpected billing payload: `OpenCode returned billing data for workspace wrk_..., but it did not include the expected Zen balance field.`
 
 ## Notes
 
 - Browser auto-import is not implemented in this Windows build yet.
 - The current plugin reads an internal web flow, so this provider is more brittle than CLI/file/API-backed providers.
+- OpenCode Go can fall back to Zen balance after Go limits only when that option is enabled in OpenCode; UsageBar still treats Zen and Go as separate providers because they are billed differently.

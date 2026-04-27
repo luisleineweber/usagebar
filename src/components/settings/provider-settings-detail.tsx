@@ -108,10 +108,7 @@ export function ProviderSettingsDetail({
 
   const sourceValue = (config?.source ?? "manual") as ProviderSourceMode
   const statusBadgeVariant = probeStatus.tone === "success" ? "default" : "outline"
-  const accentStyle = useMemo(
-    () => (plugin.brandColor ? { borderColor: `${plugin.brandColor}33` } : undefined),
-    [plugin.brandColor]
-  )
+  const accentStyle = useMemo(() => (plugin.brandColor ? { color: plugin.brandColor } : undefined), [plugin.brandColor])
   const showManualFields = definition.mode === "editable" && sourceValue === "manual"
   const baseSetupHint = isConnected ? definition.statusHint : (definition.connectHint ?? definition.statusHint)
   const setupHint = plugin.supportState === "comingSoonOnWindows"
@@ -191,11 +188,7 @@ export function ProviderSettingsDetail({
   }
 
   return (
-    <section
-      className="flex flex-col rounded-[26px] border border-border/70 bg-card/95 p-5 shadow-[0_18px_45px_rgba(0,0,0,0.14)]"
-      style={accentStyle}
-      data-testid={`provider-settings-${plugin.id}`}
-    >
+    <section className="flex flex-col" style={accentStyle} data-testid={`provider-settings-${plugin.id}`}>
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-5">
         <div className="flex min-w-0 items-start gap-3">
           <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} />
@@ -229,7 +222,7 @@ export function ProviderSettingsDetail({
               Retry
             </Button>
           )}
-          <label className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5 text-sm">
+          <label className="flex items-center gap-2 text-sm">
             <span>Enabled</span>
             <Checkbox checked={enabled} disabled={plugin.supportState === "comingSoonOnWindows"} onCheckedChange={(checked) => onEnabledChange(checked === true)} />
           </label>
@@ -239,15 +232,15 @@ export function ProviderSettingsDetail({
       <div className="mt-5 pr-1 text-sm">
         <div className="grid gap-3">
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3">
+          <div className="border-t border-border/55 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Source</div>
             <div className="mt-2 text-sm font-medium text-foreground">{getProviderSourceLabel(plugin.id, config)}</div>
           </div>
-          <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3">
+          <div className="border-t border-border/55 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Last success</div>
             <div className="mt-2 text-sm font-medium text-foreground">{lastSuccessText ?? "No successful probe yet"}</div>
           </div>
-          <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3">
+          <div className="border-t border-border/55 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Secret state</div>
             <div className="mt-2 text-sm font-medium text-foreground">
               {secretPresent ? `Stored${secretUpdatedText ? ` · ${secretUpdatedText}` : ""}` : "No secret stored"}
@@ -255,7 +248,7 @@ export function ProviderSettingsDetail({
           </div>
         </div>
 
-        <div className="flex items-start gap-2 rounded-2xl border border-border/60 bg-background/60 px-3 py-3">
+        <div className="flex items-start gap-2 border-t border-border/55 py-3">
           {probeStatus.tone === "error" ? (
             <AlertCircle className="mt-0.5 size-4 text-destructive" />
           ) : probeStatus.tone === "success" ? (
@@ -269,14 +262,14 @@ export function ProviderSettingsDetail({
           </div>
         </div>
 
-        <div className="rounded-2xl bg-muted/40 px-4 py-3">
+        <div className="border-t border-border/55 py-3">
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {isConnected ? "Connection details" : "How to connect"}
           </div>
           <p className="mt-1 text-muted-foreground">{setupHint}</p>
         </div>
 
-        <div className="rounded-[24px] border border-border/60 bg-background/60 px-4 py-4">
+        <div className="border-t border-border/55 py-4">
           <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">Settings</h4>
 
           <div className="mt-3 space-y-4">

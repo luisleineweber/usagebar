@@ -109,6 +109,27 @@
     return response.bodyText
   }
 
+  function requestBillingPage(ctx, opts) {
+    var response = ctx.host.http.request({
+      method: "GET",
+      url: BASE_URL + "/workspace/" + opts.workspaceId + "/billing",
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Cookie: opts.cookieHeader,
+        Referer: BASE_URL + "/workspace/" + opts.workspaceId + "/billing",
+        "User-Agent": "OpenUsage/OpenCode",
+      },
+      timeoutMs: 15000,
+    })
+    if (response.status === 401 || response.status === 403) {
+      throw "OpenCode session cookie is invalid or expired."
+    }
+    if (response.status < 200 || response.status >= 300) {
+      throw "OpenCode billing page request failed (HTTP " + response.status + ")."
+    }
+    return response.bodyText
+  }
+
   function collectWorkspaceIds(value, out) {
     if (!value) return
     if (typeof value === "string") {
@@ -168,83 +189,117 @@
     throw "OpenCode workspace not found. Set OPENCODE_WORKSPACE_ID."
   }
 
-  function findWindowUsage(value, keys) {
-    if (!value || typeof value !== "object") return null
-    for (var i = 0; i < keys.length; i++) {
-      var direct = value[keys[i]]
-      if (direct && typeof direct === "object") return direct
-    }
-    var objectKeys = Object.keys(value)
-    for (var j = 0; j < objectKeys.length; j++) {
-      var nested = value[objectKeys[j]]
-      if (!nested || typeof nested !== "object") continue
-      var found = findWindowUsage(nested, keys)
-      if (found) return found
-    }
-    return null
-  }
-
-  function readNumber(value) {
-    if (typeof value === "number" && Number.isFinite(value)) return value
-    if (typeof value === "string") {
-      var parsed = Number(value)
-      if (Number.isFinite(parsed)) return parsed
-    }
-    return null
-  }
-
-  function summarizeSubscriptionShape(parsed) {
+  function summarizeBillingShape(parsed) {
     if (!parsed || typeof parsed !== "object") return "response was not valid JSON"
     var keys = Object.keys(parsed).slice(0, 8)
     if (keys.length === 0) return "response JSON object was empty"
     return "top-level keys: " + keys.join(", ")
   }
 
-  function parseSubscription(ctx, text, nowMs, workspaceId) {
+  function readCurrencyNumber(value) {
+    if (typeof value === "number" && Number.isFinite(value)) return value
+    if (typeof value !== "string") return null
+    var cleaned = value.trim().replace(/[$,\s]/g, "")
+    if (!cleaned) return null
+    var parsed = Number(cleaned)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  function keyLooksLikeBalance(key) {
+    var lower = String(key || "").toLowerCase()
+    if (lower.indexOf("balance") !== -1) return true
+    if (lower.indexOf("credit") !== -1 && lower.indexOf("card") === -1) return true
+    if (lower.indexOf("guthaben") !== -1) return true
+    return false
+  }
+
+  function normalizeBalanceFromKey(key, value) {
+    var number = readCurrencyNumber(value)
+    if (number === null) return null
+    var lower = String(key || "").toLowerCase()
+    if (
+      lower.indexOf("cent") !== -1 ||
+      lower.indexOf("cents") !== -1 ||
+      lower.indexOf("minor") !== -1
+    ) {
+      return number / 100
+    }
+    return number
+  }
+
+  function findBalanceValue(value, path, depth) {
+    if (depth > 6 || value === null || value === undefined) return null
+
+    if (typeof value !== "object") {
+      return keyLooksLikeBalance(path[path.length - 1])
+        ? normalizeBalanceFromKey(path[path.length - 1], value)
+        : null
+    }
+
+    if (Array.isArray(value)) {
+      for (var i = 0; i < value.length; i++) {
+        var fromArray = findBalanceValue(value[i], path, depth + 1)
+        if (fromArray !== null) return fromArray
+      }
+      return null
+    }
+
+    var keys = Object.keys(value)
+    for (var j = 0; j < keys.length; j++) {
+      var key = keys[j]
+      if (!keyLooksLikeBalance(key)) continue
+      var direct = normalizeBalanceFromKey(key, value[key])
+      if (direct !== null) return direct
+      if (value[key] && typeof value[key] === "object") {
+        var nestedBalance = findBalanceValue(value[key], path.concat(key), depth + 1)
+        if (nestedBalance !== null) return nestedBalance
+      }
+    }
+
+    for (var k = 0; k < keys.length; k++) {
+      var found = findBalanceValue(value[keys[k]], path.concat(keys[k]), depth + 1)
+      if (found !== null) return found
+    }
+
+    return null
+  }
+
+  function formatDollars(value) {
+    var rounded = Math.round(value * 100) / 100
+    return "$" + rounded.toFixed(2)
+  }
+
+  function readZenBalance(ctx, text) {
     var parsed = ctx.util.tryParseJson(text)
-    var rolling = parsed
-      ? findWindowUsage(parsed, ["rollingUsage", "rolling", "rolling_usage", "rollingWindow"])
-      : null
-    var weekly = parsed
-      ? findWindowUsage(parsed, ["weeklyUsage", "weekly", "weekly_usage", "weeklyWindow"])
-      : null
+    var balance = parsed ? findBalanceValue(parsed, [], 0) : null
 
-    var rollingPercent = rolling ? readNumber(rolling.usagePercent || rolling.percent) : null
-    var rollingReset = rolling ? readNumber(rolling.resetInSec || rolling.resetSeconds) : null
-    var weeklyPercent = weekly ? readNumber(weekly.usagePercent || weekly.percent) : null
-    var weeklyReset = weekly ? readNumber(weekly.resetInSec || weekly.resetSeconds) : null
-
-    if (rollingPercent === null) {
-      var rollingPercentMatch = text.match(/rollingUsage[^}]*?usagePercent\s*:\s*([0-9]+(?:\.[0-9]+)?)/)
-      rollingPercent = rollingPercentMatch ? Number(rollingPercentMatch[1]) : null
-    }
-    if (rollingReset === null) {
-      var rollingResetMatch = text.match(/rollingUsage[^}]*?resetInSec\s*:\s*([0-9]+)/)
-      rollingReset = rollingResetMatch ? Number(rollingResetMatch[1]) : null
-    }
-    if (weeklyPercent === null) {
-      var weeklyPercentMatch = text.match(/weeklyUsage[^}]*?usagePercent\s*:\s*([0-9]+(?:\.[0-9]+)?)/)
-      weeklyPercent = weeklyPercentMatch ? Number(weeklyPercentMatch[1]) : null
-    }
-    if (weeklyReset === null) {
-      var weeklyResetMatch = text.match(/weeklyUsage[^}]*?resetInSec\s*:\s*([0-9]+)/)
-      weeklyReset = weeklyResetMatch ? Number(weeklyResetMatch[1]) : null
+    if (balance === null) {
+      var balanceMatch = String(text).match(
+        /(?:currentBalance|balance|creditBalance|credits|guthaben)\s*[:=]\s*["']?\$?([0-9]+(?:[,.][0-9]+)?)/i
+      )
+      if (balanceMatch) balance = readCurrencyNumber(balanceMatch[1].replace(",", "."))
     }
 
-    var missing = []
-    if (rollingPercent === null) missing.push("rolling usage percent")
-    if (rollingReset === null) missing.push("rolling reset")
-    if (weeklyPercent === null) missing.push("weekly usage percent")
-    if (weeklyReset === null) missing.push("weekly reset")
+    if (balance === null) {
+      var centsMatch = String(text).match(
+        /(?:balanceCents|creditCents|balanceMinor|creditMinor)\s*[:=]\s*["']?([0-9]+)/i
+      )
+      if (centsMatch) balance = Number(centsMatch[1]) / 100
+    }
 
-    if (missing.length > 0) {
-      var summary = summarizeSubscriptionShape(parsed)
+    return { balance: balance, parsed: parsed }
+  }
+
+  function parseZenBalance(ctx, text, workspaceId) {
+    var result = readZenBalance(ctx, text)
+    var balance = result.balance
+
+    if (balance === null) {
+      var summary = summarizeBillingShape(result.parsed)
       if (ctx.host.log && typeof ctx.host.log.warn === "function") {
         ctx.host.log.warn(
-          "opencode subscription response missing fields for " +
+          "opencode zen billing response missing balance for " +
             workspaceId +
-            ": " +
-            missing.join(", ") +
             " (" +
             summary +
             ")"
@@ -253,18 +308,11 @@
       throw (
         "OpenCode returned billing data for workspace " +
         workspaceId +
-        ", but it did not include the expected usage fields (" +
-        missing.join(", ") +
-        "). Verify the workspace ID from the billing URL or an opencode.ai/_server payload. If that workspace is correct, OpenCode likely changed the billing response shape."
+        ", but it did not include the expected Zen balance field. Verify the workspace ID from the billing URL or an opencode.ai/_server payload. If that workspace is correct, OpenCode likely changed the billing response shape."
       )
     }
 
-    return {
-      rollingPercent: rollingPercent,
-      rollingResetIso: new Date(nowMs + rollingReset * 1000).toISOString(),
-      weeklyPercent: weeklyPercent,
-      weeklyResetIso: new Date(nowMs + weeklyReset * 1000).toISOString(),
-    }
+    return balance
   }
 
   function probe(ctx) {
@@ -280,27 +328,26 @@
     })
 
     if (String(text).trim() === "null") {
-      throw "OpenCode has no subscription usage data for this workspace."
+      throw "OpenCode Zen has no billing usage data for this workspace."
     }
 
-    var usage = parseSubscription(ctx, text, Date.now(), workspaceId)
+    var balanceResult = readZenBalance(ctx, text)
+    var balance = balanceResult.balance
+    if (balance === null) {
+      var billingPageText = requestBillingPage(ctx, {
+        workspaceId: workspaceId,
+        cookieHeader: cookieHeader,
+      })
+      balance = readZenBalance(ctx, billingPageText).balance
+    }
+    if (balance === null) balance = parseZenBalance(ctx, text, workspaceId)
+
     return {
       lines: [
-        ctx.line.progress({
-          label: "Session",
-          used: usage.rollingPercent,
-          limit: 100,
-          format: { kind: "percent" },
-          resetsAt: usage.rollingResetIso,
-          periodDurationMs: 5 * 60 * 60 * 1000,
-        }),
-        ctx.line.progress({
-          label: "Weekly",
-          used: usage.weeklyPercent,
-          limit: 100,
-          format: { kind: "percent" },
-          resetsAt: usage.weeklyResetIso,
-          periodDurationMs: 7 * 24 * 60 * 60 * 1000,
+        ctx.line.text({
+          label: "Balance",
+          value: formatDollars(balance),
+          subtitle: "OpenCode Zen pay-as-you-go balance",
         }),
       ],
     }

@@ -41,7 +41,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Alibaba Coding Plan**](docs/providers/alibaba.md) | Experimental | Coding Plan daily/weekly quotas with region-aware auth |
 | [**Amp**](docs/providers/amp.md) | Experimental | Free tier, bonus, credits |
 | [**Antigravity**](docs/providers/antigravity.md) | Supported | All models |
-| [**Augment**](plugins/augment/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Augment**](docs/providers/augment.md) | Experimental | Credits via signed-in Augment web Cookie header |
 | [**Claude**](docs/providers/claude.md) | Supported | Session, weekly, extra usage, local token usage (`ccusage`) |
 | [**Codex**](docs/providers/codex.md) | Supported | Session, weekly, reviews, credits, managed multi-account selection |
 | [**Copilot**](docs/providers/copilot.md) | Experimental | Premium, chat, completions |
@@ -55,12 +55,12 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Kiro**](docs/providers/kiro.md) | Experimental | Credits, bonus credits, overages tracking |
 | [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding plan session, region-aware API-key auth |
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
-| [**OpenCode**](docs/providers/opencode.md) | Experimental | Session, weekly |
-| [**OpenCode Go**](docs/providers/opencode-go.md) | Supported | Local 5h, weekly, monthly CLI spend history |
+| [**OpenCode Zen**](docs/providers/opencode.md) | Experimental | Pay-as-you-go billing usage from the signed-in workspace session |
+| [**OpenCode Go**](docs/providers/opencode-go.md) | Supported | Subscription 5h, weekly, monthly limit tracking from local CLI history |
 | [**OpenRouter**](docs/providers/openrouter.md) | Experimental | Credits, balance, request-rate detail |
 | [**Perplexity**](docs/providers/perplexity.md) | Experimental | Recurring, purchased, and bonus credits via manual cookie/env auth |
 | [**Synthetic**](docs/providers/synthetic.md) | Experimental | Direct API-key quota endpoint |
-| [**Vertex AI**](plugins/vertex-ai/) | Blocked placeholder | Visible in Settings only; implementation not landed yet |
+| [**Vertex AI**](docs/providers/vertex-ai.md) | Experimental | gcloud ADC OAuth plus Cloud Monitoring quota usage |
 | [**Warp**](docs/providers/warp.md) | Experimental | Request limits, plan badge |
 | [**Windsurf**](docs/providers/windsurf.md) | Experimental | Daily quota, weekly quota, extra usage balance |
 | [**Zed**](docs/providers/zed.md) | Experimental | Dashboard token spend via browser-backed cookie replay, with local telemetry fallback |
