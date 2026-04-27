@@ -75,10 +75,10 @@ function SortableProviderRow({
       type="button"
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "flex w-full flex-wrap items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-colors sm:flex-nowrap sm:items-center",
+        "flex w-full flex-wrap items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors sm:flex-nowrap sm:items-center",
         selected
-          ? "border-primary/35 bg-primary text-primary-foreground shadow-[0_14px_35px_rgba(37,99,235,0.26)]"
-          : "border-transparent bg-card/70 hover:border-border/60 hover:bg-background/85",
+          ? "border-primary/30 bg-primary text-primary-foreground"
+          : "border-transparent bg-transparent hover:border-border/55 hover:bg-muted/35",
         isDragging && "opacity-50"
       )}
       onClick={onSelect}
@@ -190,23 +190,23 @@ export function ProvidersSettingsPane({
 
   if (providers.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+      <div className="border-t border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
         No providers available yet.
       </div>
     )
   }
 
   return (
-    <div className="grid gap-5 py-1 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <section className="flex flex-col rounded-[26px] border border-border/70 bg-[linear-gradient(180deg,_hsl(var(--muted))/0.62,_hsl(var(--card))/0.92)] p-4 shadow-[0_10px_35px_rgba(0,0,0,0.12)]">
+    <div className="grid gap-6 py-1 xl:grid-cols-[340px_minmax(0,1fr)] xl:gap-7">
+      <section className="flex flex-col border-b border-border/55 pb-5 xl:border-b-0 xl:border-r xl:pr-6">
         <div className="mb-4 border-b border-border/60 pb-4">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Providers</h3>
           <p className="mt-1 text-sm text-muted-foreground">Reorder your lineup and select a provider to manage.</p>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded-full border border-border/70 bg-background/70 px-2 py-1">
+            <span className="text-muted-foreground">
               {providers.filter((provider) => provider.enabled).length} enabled
             </span>
-            <span className="rounded-full border border-border/70 bg-background/70 px-2 py-1">
+            <span className="text-muted-foreground">
               {providers.filter((provider) => provider.supported).length} supported
             </span>
           </div>
@@ -221,7 +221,7 @@ export function ProvidersSettingsPane({
                     key={plugin.id}
                     plugin={plugin}
                     selected={plugin.id === selectedProvider?.id}
-                    onSelect={() => onSelectedProviderChange(plugin.id, { syncTray: true })}
+                    onSelect={() => onSelectedProviderChange(plugin.id, { revealInTray: true })}
                     onToggle={onToggle}
                   />
                 ))}
@@ -231,7 +231,7 @@ export function ProvidersSettingsPane({
         </div>
       </section>
 
-      <div className="min-w-0">
+      <div className="min-w-0 xl:pl-1">
         {selectedProvider ? (
           <ProviderSettingsDetail
             plugin={selectedProvider.meta}
@@ -250,7 +250,7 @@ export function ProvidersSettingsPane({
             }
           />
         ) : (
-          <div className="flex h-full items-center justify-center rounded-[26px] border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center border-t border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
             Select a provider to edit its settings.
           </div>
         )}

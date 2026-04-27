@@ -1,7 +1,5 @@
 import { useCallback } from "react"
-import { Settings } from "lucide-react"
-import { invoke } from "@tauri-apps/api/core"
-import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu"
+import { Check, GripVertical, Settings } from "lucide-react"
 import {
   DndContext,
   PointerSensor,
@@ -17,6 +15,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { cn } from "@/lib/utils"
+import { getRelativeLuminance } from "@/lib/color"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 
 function GaugeIcon({ className }: { className?: string }) {
   return (
@@ -25,13 +26,10 @@ function GaugeIcon({ className }: { className?: string }) {
     </svg>
   )
 }
-import { cn } from "@/lib/utils"
-import { getRelativeLuminance } from "@/lib/color"
-import { useDarkMode } from "@/hooks/use-dark-mode"
 
 type ActiveView = "home" | string
 
-type PluginContextAction = "reload" | "remove"
+type PluginContextAction = "reload" | "remove" | "arrange"
 
 interface NavPlugin {
   id: string
@@ -47,9 +45,10 @@ interface SideNavProps {
   onViewChange: (view: ActiveView) => void
   plugins: NavPlugin[]
   onOpenSettings?: () => void
-  onPluginContextAction?: (pluginId: string, action: PluginContextAction) => void
-  isPluginRefreshAvailable?: (pluginId: string) => boolean
   onReorder?: (orderedIds: string[]) => void
+  arrangeMode?: boolean
+  onArrangeModeChange?: (enabled: boolean) => void
+  onOpenContextMenu?: (event: React.MouseEvent, pluginId?: string) => void
 }
 
 interface NavButtonProps {
@@ -94,6 +93,7 @@ interface SortableNavPluginProps {
   isDark: boolean
   onClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
+  isArrangeMode: boolean
 }
 
 function SortableNavPlugin({
@@ -102,6 +102,7 @@ function SortableNavPlugin({
   isDark,
   onClick,
   onContextMenu,
+  isArrangeMode,
 }: SortableNavPluginProps) {
   const {
     attributes,
@@ -110,7 +111,7 @@ function SortableNavPlugin({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: plugin.id })
+  } = useSortable({ id: plugin.id, disabled: !isArrangeMode })
 
   return (
     <div
@@ -118,10 +119,12 @@ function SortableNavPlugin({
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.5 : undefined,
+        opacity: isDragging ? 0.55 : undefined,
+        zIndex: isDragging ? 20 : undefined,
       }}
-      {...attributes}
-      {...listeners}
+      {...(isArrangeMode ? attributes : {})}
+      {...(isArrangeMode ? listeners : {})}
+      className={cn("relative touch-none transition-[filter]", isArrangeMode && "nav-arrange-item")}
     >
       <NavButton
         isActive={isActive}
@@ -129,6 +132,9 @@ function SortableNavPlugin({
         onContextMenu={onContextMenu}
         aria-label={plugin.name}
       >
+        {isArrangeMode ? (
+          <GripVertical className="pointer-events-none absolute left-0 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/70" />
+        ) : null}
         <span
           role="img"
           aria-label={plugin.name}
@@ -159,14 +165,15 @@ export function SideNav({
   onViewChange,
   plugins,
   onOpenSettings,
-  onPluginContextAction,
-  isPluginRefreshAvailable,
   onReorder,
+  arrangeMode = false,
+  onArrangeModeChange,
+  onOpenContextMenu,
 }: SideNavProps) {
   const isDark = useDarkMode()
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { delay: 300, tolerance: 5 },
+      activationConstraint: { distance: 4 },
     })
   )
 
@@ -185,52 +192,23 @@ export function SideNav({
   )
 
   const handlePluginContextMenu = useCallback(
-    (e: React.MouseEvent, pluginId: string) => {
-      e.preventDefault()
-      if (!onPluginContextAction) return
-
-      ;(async () => {
-        const reloadItem = await MenuItem.new({
-          id: `ctx-reload-${pluginId}`,
-          text: "Refresh usage",
-          enabled: isPluginRefreshAvailable ? isPluginRefreshAvailable(pluginId) : true,
-          action: () => onPluginContextAction(pluginId, "reload"),
-        })
-        const removeItem = await MenuItem.new({
-          id: `ctx-remove-${pluginId}`,
-          text: "Disable plugin",
-          action: () => onPluginContextAction(pluginId, "remove"),
-        })
-        const bottomSeparator = await PredefinedMenuItem.new({ item: "Separator" })
-        const inspectItem = await MenuItem.new({
-          id: `ctx-inspect-${pluginId}`,
-          text: "Inspect Element",
-          action: () => {
-            invoke("open_devtools").catch(console.error)
-          },
-        })
-        const menu = await Menu.new({
-          items: [reloadItem, removeItem, bottomSeparator, inspectItem],
-        })
-        try {
-          await menu.popup()
-        } finally {
-          await Promise.allSettled([
-            menu.close(),
-            reloadItem.close(),
-            removeItem.close(),
-            bottomSeparator.close(),
-            inspectItem.close(),
-          ])
-        }
-      })().catch(console.error)
+    (event: React.MouseEvent, pluginId: string) => {
+      event.preventDefault()
+      event.stopPropagation()
+      onOpenContextMenu?.(event, pluginId)
     },
-    [isPluginRefreshAvailable, onPluginContextAction]
+    [onOpenContextMenu]
   )
 
   return (
-    <nav className="flex flex-col w-12 border-r bg-muted/50 dark:bg-card py-3">
-      {/* Home */}
+    <nav
+      className={cn("relative flex flex-col w-12 border-r bg-muted/50 dark:bg-card py-3", arrangeMode && "bg-accent/40")}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onOpenContextMenu?.(event)
+      }}
+    >
       <NavButton
         isActive={activeView === "home"}
         onClick={() => onViewChange("home")}
@@ -239,7 +217,6 @@ export function SideNav({
         <GaugeIcon className="size-6 dark:text-page-accent" />
       </NavButton>
 
-      {/* Plugin icons */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -253,16 +230,29 @@ export function SideNav({
               isActive={activeView === plugin.id}
               isDark={isDark}
               onClick={() => onViewChange(plugin.id)}
-              onContextMenu={(e) => handlePluginContextMenu(e, plugin.id)}
+              onContextMenu={(event) => handlePluginContextMenu(event, plugin.id)}
+              isArrangeMode={arrangeMode}
             />
           ))}
         </SortableContext>
       </DndContext>
 
-      {/* Spacer */}
+      {arrangeMode ? (
+        <div className="px-1.5 pt-2">
+          <button
+            type="button"
+            className="flex h-8 w-full items-center justify-center rounded-md border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-accent"
+            aria-label="Provider-Anordnung fertig"
+            title="Provider-Anordnung fertig"
+            onClick={() => onArrangeModeChange?.(false)}
+          >
+            <Check className="size-4" />
+          </button>
+        </div>
+      ) : null}
+
       <div className="flex-1" />
 
-      {/* Settings */}
       <NavButton
         isActive={false}
         onClick={() => onOpenSettings?.()}

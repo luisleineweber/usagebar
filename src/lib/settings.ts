@@ -79,6 +79,7 @@ export const RESET_TIMER_DISPLAY_OPTIONS: { value: ResetTimerDisplayMode; label:
 const store = new LazyStore(SETTINGS_STORE_PATH);
 
 const DEFAULT_ENABLED_PLUGINS = new Set(["claude", "codex", "cursor"]);
+const SETTINGS_PROVIDER_ORDER_PREFIX = ["codex", "claude", "cursor"];
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   order: [],
@@ -148,7 +149,21 @@ export function normalizePluginSettings(
       disabled.push(id);
     }
   }
-  return { order, disabled };
+  const preferredOrder = new Set(SETTINGS_PROVIDER_ORDER_PREFIX);
+  const pluginNames = new Map(plugins.map((plugin) => [plugin.id, plugin.name]));
+  const orderedWithPrefix = [
+    ...SETTINGS_PROVIDER_ORDER_PREFIX.filter((id) => knownSet.has(id)),
+    ...order
+      .filter((id) => !preferredOrder.has(id))
+      .sort((a, b) => {
+        const nameCompare = (pluginNames.get(a) ?? a).localeCompare(pluginNames.get(b) ?? b, undefined, {
+          sensitivity: "base",
+        });
+        return nameCompare || a.localeCompare(b);
+      }),
+  ];
+
+  return { order: orderedWithPrefix, disabled };
 }
 
 export function arePluginSettingsEqual(

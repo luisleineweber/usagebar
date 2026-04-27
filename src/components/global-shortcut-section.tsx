@@ -242,7 +242,7 @@ export function GlobalShortcutSection({
   const hasShortcut = globalShortcut !== null
 
   return (
-    <section>
+    <section className="border-t border-border/55 pt-4">
       <h3 className="text-lg font-semibold mb-0">Global Shortcut</h3>
       <p className="text-sm text-muted-foreground mb-2">
         Show panel from anywhere

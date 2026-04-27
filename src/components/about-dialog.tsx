@@ -4,6 +4,9 @@ import { ChangelogDialog } from "@/components/changelog-dialog";
 import { Button } from "@/components/ui/button";
 import { APP_NAME, PROJECT_REPO_URL } from "@/lib/project-metadata";
 
+const OPENUSAGE_REPO_URL = "https://github.com/robinebers/openusage";
+const AUTHOR_URL = "https://github.com/Loues000";
+
 interface AboutDialogProps {
   version: string;
   onClose: () => void;
@@ -106,10 +109,14 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
           </Button>
         </div>
 
-        <div className="text-sm text-muted-foreground space-y-1">
+        <div className="text-sm text-muted-foreground space-y-2">
           <p>
-            Built by{" "}
-            <ExternalLink href="https://itsbyrob.in/x">Robin Ebers</ExternalLink>
+            {APP_NAME} is a fork of{" "}
+            <ExternalLink href={OPENUSAGE_REPO_URL}>OpenUsage</ExternalLink>,
+            redirected toward a Windows-native desktop experience.
+          </p>
+          <p>
+            By <ExternalLink href={AUTHOR_URL}>Luis Leineweber</ExternalLink>
           </p>
           <p>
             Open source on{" "}
@@ -118,14 +125,8 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
             </ExternalLink>
           </p>
           <p className="text-xs pt-1">
-            Maintainers:{" "}
-            <ExternalLink href="https://github.com/validatedev">
-              validatedev
-            </ExternalLink>
-            ,{" "}
-            <ExternalLink href="https://github.com/davidarny">
-              davidarny
-            </ExternalLink>
+            Original OpenUsage by{" "}
+            <ExternalLink href="https://itsbyrob.in/x">Robin Ebers</ExternalLink>
           </p>
         </div>
       </div>

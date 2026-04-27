@@ -23,9 +23,10 @@ import { cn } from "@/lib/utils"
 
 const TRAY_PREVIEW_SIZE_PX = getTrayIconSizePx(1)
 const PREVIEW_BAR_TRACK_PX = 20
-const DENSE_SEGMENTED_GROUP_CLASS = "grid grid-cols-2 gap-1 lg:grid-cols-4"
-const TWO_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-1 sm:grid-cols-2"
-const THREE_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-1 sm:grid-cols-3"
+const DENSE_SEGMENTED_GROUP_CLASS = "grid grid-cols-2 gap-2 lg:grid-cols-4"
+const TWO_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-2"
+const THREE_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-3"
+const SETTINGS_SECTION_CLASS = "border-t border-border/55 pt-4 first:border-t-0 first:pt-0"
 
 function getPreviewBarLayout(fraction: number): { fillPercent: number; remainderPercent: number } {
   const { fillW, remainderDrawW } = getBarFillLayout(PREVIEW_BAR_TRACK_PX, fraction)
@@ -198,13 +199,11 @@ export function GeneralSettingsPane({
   onStartOnLoginChange,
 }: GeneralSettingsPaneProps) {
   return (
-    <div className="rounded-[26px] border border-border/70 bg-card/92 px-4 py-4 shadow-[0_12px_35px_rgba(0,0,0,0.12)] sm:px-5 sm:py-5">
-      <div className="space-y-5">
-      <section>
+    <div className="space-y-5 py-1">
+      <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-lg font-semibold">Auto Refresh</h3>
         <p className="mb-2 text-sm text-muted-foreground">How obsessive are you</p>
-        <div className="rounded-lg bg-muted/50 p-1">
-          <div className={DENSE_SEGMENTED_GROUP_CLASS} role="radiogroup" aria-label="Auto-update interval">
+        <div className={DENSE_SEGMENTED_GROUP_CLASS} role="radiogroup" aria-label="Auto-update interval">
             {AUTO_UPDATE_OPTIONS.map((option) => {
               const isActive = option.value === autoUpdateInterval
               return (
@@ -222,15 +221,13 @@ export function GeneralSettingsPane({
                 </Button>
               )
             })}
-          </div>
         </div>
       </section>
 
-      <section>
+      <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-lg font-semibold">Usage Mode</h3>
         <p className="mb-2 text-sm text-muted-foreground">Glass half full or half empty</p>
-        <div className="rounded-lg bg-muted/50 p-1">
-          <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Usage display mode">
+        <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Usage display mode">
             {DISPLAY_MODE_OPTIONS.map((option) => {
               const isActive = option.value === displayMode
               return (
@@ -248,15 +245,13 @@ export function GeneralSettingsPane({
                 </Button>
               )
             })}
-          </div>
         </div>
       </section>
 
-      <section>
+      <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-lg font-semibold">Reset Timers</h3>
         <p className="mb-2 text-sm text-muted-foreground">Countdown or clock time</p>
-        <div className="rounded-lg bg-muted/50 p-1">
-          <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Reset timer display mode">
+        <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Reset timer display mode">
             {RESET_TIMER_DISPLAY_OPTIONS.map((option) => {
               const isActive = option.value === resetTimerDisplayMode
               const absoluteTimeExample = new Intl.DateTimeFormat(undefined, {
@@ -282,15 +277,13 @@ export function GeneralSettingsPane({
                 </Button>
               )
             })}
-          </div>
         </div>
       </section>
 
-      <section>
+      <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-lg font-semibold">Menubar Icon</h3>
         <p className="mb-2 text-sm text-muted-foreground">What shows in the menu bar</p>
-        <div className="rounded-lg bg-muted/50 p-1">
-          <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Menubar icon style">
+        <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Menubar icon style">
             {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
               const isActive = option.value === menubarIconStyle
               return (
@@ -309,15 +302,13 @@ export function GeneralSettingsPane({
                 </Button>
               )
             })}
-          </div>
         </div>
       </section>
 
-      <section>
+      <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-lg font-semibold">App Theme</h3>
         <p className="mb-2 text-sm text-muted-foreground">How it looks around here</p>
-        <div className="rounded-lg bg-muted/50 p-1">
-          <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Theme mode">
+        <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Theme mode">
             {THEME_OPTIONS.map((option) => {
               const isActive = option.value === themeMode
               return (
@@ -335,13 +326,12 @@ export function GeneralSettingsPane({
                 </Button>
               )
             })}
-          </div>
         </div>
       </section>
 
       <GlobalShortcutSection globalShortcut={globalShortcut} onGlobalShortcutChange={onGlobalShortcutChange} />
 
-      <section>
+      <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-lg font-semibold">Start on Login</h3>
         <p className="mb-2 text-sm text-muted-foreground">OpenUsage starts when you sign in</p>
         <label className="flex flex-wrap select-none items-center gap-2 text-sm text-foreground">
@@ -354,7 +344,7 @@ export function GeneralSettingsPane({
         </label>
       </section>
 
-      <section>
+      <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-lg font-semibold">Support</h3>
         <p className="mb-2 text-sm text-muted-foreground">Open the GitHub issue tracker from settings.</p>
         <Button
@@ -369,7 +359,6 @@ export function GeneralSettingsPane({
           <ExternalLink className="size-4" />
         </Button>
       </section>
-      </div>
     </div>
   )
 }

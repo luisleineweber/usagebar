@@ -88,7 +88,7 @@ describe("settings", () => {
       { order: ["b", "b", "c"], disabled: ["c", "a"] },
       plugins
     )
-    expect(normalized).toEqual({ order: ["b", "a"], disabled: ["a"] })
+    expect(normalized).toEqual({ order: ["a", "b"], disabled: ["a"] })
   })
 
   it("auto-disables new non-default plugins", () => {
@@ -100,6 +100,22 @@ describe("settings", () => {
     const result = normalizePluginSettings({ order: [], disabled: [] }, plugins)
     expect(result.order).toEqual(["claude", "copilot", "windsurf"])
     expect(result.disabled).toEqual(["copilot", "windsurf"])
+  })
+
+  it("keeps Codex, Claude, and Cursor first, then sorts remaining providers alphabetically", () => {
+    const plugins: PluginMeta[] = [
+      { id: "windsurf", name: "Windsurf", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "cursor", name: "Cursor", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "claude", name: "Claude", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "codex", name: "Codex", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "copilot", name: "Copilot", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "abacus", name: "Abacus", iconUrl: "", lines: [], primaryCandidates: [] },
+    ]
+    const result = normalizePluginSettings(
+      { order: ["windsurf", "cursor", "claude", "codex", "copilot", "abacus"], disabled: [] },
+      plugins
+    )
+    expect(result.order).toEqual(["codex", "claude", "cursor", "abacus", "copilot", "windsurf"])
   })
 
   it("compares settings equality", () => {

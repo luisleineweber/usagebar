@@ -23,7 +23,8 @@ import {
 import { deleteProviderSecret, setProviderSecret } from "@/lib/provider-secrets"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
-import { syncPanelView, showPanelForView } from "@/lib/panel-window"
+import { showPanelForView } from "@/lib/panel-window"
+import { notifyPluginSettingsUpdated } from "@/lib/plugin-settings-events"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 
 type SettingsOpenPayload = {
@@ -37,7 +38,6 @@ export function SettingsWindowApp() {
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
     initialTargetRef.current.providerId ?? null
   )
-  const selectedProviderIdRef = useRef<string | null>(initialTargetRef.current.providerId ?? null)
 
   const {
     pluginsMeta,
@@ -163,6 +163,7 @@ export function SettingsWindowApp() {
     setErrorForPlugins,
     startBatch,
     scheduleTrayIconUpdate,
+    onPluginSettingsChange: notifyPluginSettingsUpdated,
   })
 
   const settingsPlugins = useSettingsPluginList({
@@ -227,48 +228,6 @@ export function SettingsWindowApp() {
       unlisten?.()
     }
   }, [])
-
-  useEffect(() => {
-    let unlistenCloseRequested: (() => void) | undefined
-    let disposed = false
-
-    void getCurrentWindow()
-      .onCloseRequested(async (event) => {
-        event.preventDefault()
-        const providerView = selectedProviderIdRef.current?.trim() || "home"
-
-        try {
-          await showPanelForView(providerView)
-        } catch (error) {
-          console.error("Failed to reveal selected provider when settings closed:", error)
-        }
-
-        try {
-          await getCurrentWindow().hide()
-        } catch (error) {
-          console.error("Failed to hide settings window after close request:", error)
-        }
-      })
-      .then((dispose) => {
-        if (disposed) {
-          dispose()
-          return
-        }
-        unlistenCloseRequested = dispose
-      })
-      .catch((error) => {
-        console.error("Failed to listen for settings window close requests:", error)
-      })
-
-    return () => {
-      disposed = true
-      unlistenCloseRequested?.()
-    }
-  }, [])
-
-  useEffect(() => {
-    selectedProviderIdRef.current = selectedProviderId
-  }, [selectedProviderId])
 
   const providerConfigsRef = useRef(providerConfigs)
   useEffect(() => {
@@ -345,10 +304,6 @@ export function SettingsWindowApp() {
         return
       }
 
-      if (!options?.syncTray) return
-      void syncPanelView(providerId).catch((error) => {
-        console.error("Failed to sync selected provider to tray panel:", error)
-      })
     },
     []
   )
