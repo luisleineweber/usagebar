@@ -333,7 +333,7 @@ export function GeneralSettingsPane({
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-lg font-semibold">Start on Login</h3>
-        <p className="mb-2 text-sm text-muted-foreground">OpenUsage starts when you sign in</p>
+        <p className="mb-2 text-sm text-muted-foreground">UsageBar starts when you sign in</p>
         <label className="flex flex-wrap select-none items-center gap-2 text-sm text-foreground">
           <Checkbox
             key={`start-on-login-${startOnLogin}`}

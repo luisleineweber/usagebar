@@ -394,9 +394,9 @@ describe("App", () => {
     const pluginButton = await screen.findByRole("button", { name: pluginName })
     fireEvent.contextMenu(pluginButton)
     const labels = {
-      reload: "Provider aktualisieren",
-      remove: "Provider ausblenden",
-      arrange: "Provider anordnen",
+      reload: "Refresh provider",
+      remove: "Hide provider",
+      arrange: "Arrange providers",
     }
     const contextAction = await screen.findByRole("menuitem", { name: labels[action] })
     expect(contextAction).toBeDefined()
@@ -1080,7 +1080,7 @@ describe("App", () => {
     state.trackMock.mockClear()
 
     const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    expect(screen.getByRole("menuitem", { name: "Provider aktualisieren" })).not.toBeDisabled()
+    expect(screen.getByRole("menuitem", { name: "Refresh provider" })).not.toBeDisabled()
     reloadAction()
 
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
@@ -1108,7 +1108,7 @@ describe("App", () => {
     state.trackMock.mockClear()
 
     const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    expect(screen.getByRole("menuitem", { name: "Provider aktualisieren" })).not.toBeDisabled()
+    expect(screen.getByRole("menuitem", { name: "Refresh provider" })).not.toBeDisabled()
     reloadAction()
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
 
@@ -1123,7 +1123,7 @@ describe("App", () => {
     state.startBatchMock.mockClear()
     state.trackMock.mockClear()
     const cooldownReloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    expect(screen.getByRole("menuitem", { name: "Provider aktualisieren" })).toBeDisabled()
+    expect(screen.getByRole("menuitem", { name: "Refresh provider" })).toBeDisabled()
     cooldownReloadAction()
 
     expect(state.startBatchMock).not.toHaveBeenCalled()
@@ -1135,14 +1135,14 @@ describe("App", () => {
 
     const pluginButton = await screen.findByRole("button", { name: "Alpha" })
     fireEvent.contextMenu(pluginButton)
-    const menu = await screen.findByRole("menu", { name: "UsageBar Kontextmenü" })
-    expect(within(menu).getByRole("menuitem", { name: "Provider aktualisieren" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Alle Provider aktualisieren" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Provider anordnen" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Einstellungen" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Provider-Einstellungen" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Provider ausblenden" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Schließen" })).toBeInTheDocument()
+    const menu = await screen.findByRole("menu", { name: "UsageBar context menu" })
+    expect(within(menu).getByRole("menuitem", { name: "Refresh provider" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Refresh all providers" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Arrange providers" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Settings" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Provider settings" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Hide provider" })).toBeInTheDocument()
+    expect(within(menu).getByRole("menuitem", { name: "Close" })).toBeInTheDocument()
   })
 
   it("removes plugin from sidebar context menu", async () => {
