@@ -65,5 +65,5 @@ fn main() {
         None => return,
     };
 
-    openusage_lib::run()
+    usagebar_lib::run()
 }
