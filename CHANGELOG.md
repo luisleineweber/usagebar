@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0-beta.5
+
+### Highlights
+- Added Windows-experimental Augment and Vertex AI provider probes with setup guidance for cookie, gcloud ADC, and Cloud Monitoring based usage paths.
+- Added Mistral as a Windows-experimental provider with cookie-header setup and usage detail support.
+- Improved OpenCode Zen and OpenCode Go coverage for current Windows-local auth, history, and dashboard data shapes.
+- Expanded Zed provider behavior with billing-cookie dashboard support, telemetry fallback refinements, and clearer Windows setup notes.
+- Refined Settings provider handoff so provider selection, tray targeting, and Settings window behavior stay aligned.
+- Reduced packaged Windows startup console flashes by hardening the background `ccusage` runner path.
+
+---
+
 ## 0.1.0-beta.4
 
 ### Highlights

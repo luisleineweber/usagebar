@@ -130,6 +130,9 @@ Work style: Be radically precise. No fluff. Pure information only (drop grammar;
 - In `plugin.json`, set `brandColor` to the provider's real brand color.
 - Plugin SVG logos must use `currentColor` so icon theming works correctly.
 
+## Before Release
+- Update `CHANGELOG.md` with a section for the exact release version before tagging, publishing, or running the final release preflight.
+
 ## Project Notes
 - This repo is a fork of `openusage`: `https://github.com/robinebers/openusage`.
 - Windows transformation work was helped by `CodexBar`: `https://github.com/steipete/CodexBar`.

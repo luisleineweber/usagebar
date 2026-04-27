@@ -1,3 +1,24 @@
+# Replace remaining placeholder providers
+
+## Acceptance Criteria
+- [x] `Augment` no longer throws as a Windows placeholder and can probe Augment usage from a stored/manual Cookie header.
+- [x] `Vertex AI` no longer throws as a Windows placeholder and can read gcloud ADC credentials, refresh OAuth, and query Cloud Monitoring quota usage.
+- [x] README, provider setup copy, provider docs, Windows rollout/status docs, and bundled plugin output reflect the new experimental implementations.
+- [ ] Focused plugin tests, provider-settings detail tests, and the host env allowlist test pass before the slice is marked done.
+
+## Plan
+- [x] Replace `plugins/augment` and `plugins/vertex-ai` placeholder probes with concrete Windows-experimental probes.
+- [x] Add focused tests for missing auth, parsing, auth failures, and core quota/cookie response mapping.
+- [x] Update setup/docs/status metadata and sync `src-tauri/resources/bundled_plugins`.
+- [ ] Run focused verification and record results.
+
+## Verification Notes
+- Verified provider contracts with `npx vitest run plugins/augment/plugin.test.js plugins/vertex-ai/plugin.test.js src/components/settings/provider-settings-detail.test.tsx` -> 3 files passed, 31 tests passed.
+- Verified frontend types with `npx tsc --noEmit`.
+- Synced bundled provider output with `node ./copy-bundled.cjs` -> bundled 28 plugins including `augment` and `vertex-ai`.
+- Checked local entitlement inputs: `AUGMENT_COOKIE_HEADER=missing`, Google Cloud project env missing, and both default gcloud ADC paths returned `False`, so both providers remain experimental pending real-account validation.
+- Rust env allowlist verification is blocked locally: `cargo test --manifest-path src-tauri/Cargo.toml env_api_respects_allowlist_in_host_and_js` compiled but the test binary exited before running with `STATUS_ENTRYPOINT_NOT_FOUND`; retrying with `CARGO_TARGET_DIR=src-tauri/target-test-temp-env` timed out during Tauri stack compilation.
+
 # Sync Settings provider selection into the tray target live
 
 ## Acceptance Criteria
