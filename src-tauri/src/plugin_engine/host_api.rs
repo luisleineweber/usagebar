@@ -24,11 +24,16 @@ use windows_sys::Win32::Security::Credentials::{
     CRED_TYPE_GENERIC, CREDENTIALW, CredFree, CredReadW,
 };
 
-const WHITELISTED_ENV_VARS: [&str; 23] = [
+const WHITELISTED_ENV_VARS: [&str; 30] = [
     "CODEX_HOME",
     "GH_CONFIG_DIR",
     "ALIBABA_API_KEY",
     "ALIBABA_REGION",
+    "AUGMENT_COOKIE_HEADER",
+    "CLOUDSDK_CONFIG",
+    "GOOGLE_CLOUD_PROJECT",
+    "GCLOUD_PROJECT",
+    "CLOUDSDK_CORE_PROJECT",
     "KILO_API_KEY",
     "KIMI_K2_API_KEY",
     "KIMI_API_KEY",
@@ -38,6 +43,8 @@ const WHITELISTED_ENV_VARS: [&str; 23] = [
     "MINIMAX_API_KEY",
     "MINIMAX_API_TOKEN",
     "MINIMAX_CN_API_KEY",
+    "MISTRAL_COOKIE_HEADER",
+    "MISTRAL_SESSION",
     "OPENROUTER_API_KEY",
     "OPENROUTER_API_URL",
     "OPENCODE_COOKIE_HEADER",
@@ -1779,7 +1786,7 @@ fn ls_parse_netstat_ports(output: &str, process_pid: i32) -> Vec<i32> {
     ports.into_iter().collect()
 }
 
-const CCUSAGE_VERSION: &str = "18.0.10";
+const CCUSAGE_VERSION: &str = "18.0.11";
 const CCUSAGE_CLAUDE_PACKAGE_NAME: &str = "ccusage";
 const CCUSAGE_CODEX_PACKAGE_NAME: &str = "@ccusage/codex";
 const CCUSAGE_TIMEOUT_SECS: u64 = 15;
