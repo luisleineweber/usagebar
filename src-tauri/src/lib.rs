@@ -534,6 +534,82 @@ fn track_app_started_once_per_day_per_version(app: &tauri::App) {
     }
 }
 
+#[cfg(desktop)]
+fn copy_dir_contents_if_missing(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    if !src.exists() {
+        return Ok(());
+    }
+
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_contents_if_missing(&src_path, &dst_path)?;
+        } else if !dst_path.exists() {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn migrate_legacy_openusage_app_data(app_data_dir: &std::path::Path) {
+    const LEGACY_IDENTIFIER: &str = "com.sunstory.openusage";
+    const MIGRATION_MARKER_FILE: &str = ".openusage-data-migrated";
+
+    let marker_path = app_data_dir.join(MIGRATION_MARKER_FILE);
+    if marker_path.exists() {
+        return;
+    }
+
+    let Some(parent_dir) = app_data_dir.parent() else {
+        return;
+    };
+    let legacy_dir = parent_dir.join(LEGACY_IDENTIFIER);
+    if !legacy_dir.exists() || legacy_dir == app_data_dir {
+        return;
+    }
+
+    if let Err(error) = std::fs::create_dir_all(app_data_dir) {
+        log::warn!("failed to create app data dir for legacy migration: {}", error);
+        return;
+    }
+
+    for file_name in ["settings.json", "provider-secrets.json", "usage-api-cache.json"] {
+        let src = legacy_dir.join(file_name);
+        if src.exists() {
+            let dst = app_data_dir.join(file_name);
+            if let Err(error) = std::fs::copy(&src, &dst) {
+                log::warn!(
+                    "failed to migrate {} from legacy OpenUsage app data: {}",
+                    file_name,
+                    error
+                );
+            }
+        }
+    }
+
+    if let Err(error) =
+        copy_dir_contents_if_missing(&legacy_dir.join("plugins_data"), &app_data_dir.join("plugins_data"))
+    {
+        log::warn!("failed to migrate legacy plugin data: {}", error);
+    }
+
+    match std::fs::write(&marker_path, b"migrated from com.sunstory.openusage\n") {
+        Ok(()) => log::info!(
+            "migrated legacy OpenUsage app data from {:?} to {:?}",
+            legacy_dir,
+            app_data_dir
+        ),
+        Err(error) => log::warn!("failed to write legacy app data migration marker: {}", error),
+    }
+}
+
+#[cfg(not(desktop))]
+fn migrate_legacy_openusage_app_data(_app_data_dir: &std::path::Path) {}
+
 #[cfg(not(desktop))]
 fn track_app_started_once_per_day_per_version(app: &tauri::App) {
     let _ = app.track_event("app_started", None);
@@ -1328,6 +1404,7 @@ pub fn run() {
 
             let app_data_dir = app.path().app_data_dir().expect("no app data dir");
             let resource_dir = app.path().resource_dir().expect("no resource dir");
+            migrate_legacy_openusage_app_data(&app_data_dir);
             log::debug!("app_data_dir: {:?}", app_data_dir);
 
             let (_, plugins) = plugin_engine::initialize_plugins(&app_data_dir, &resource_dir);
