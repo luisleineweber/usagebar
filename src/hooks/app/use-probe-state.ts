@@ -1,6 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { PluginOutput } from "@/lib/plugin-types"
+import type { PluginOutput, ProviderUsageHistory } from "@/lib/plugin-types"
 import type { PluginState } from "@/hooks/app/types"
+
+const MAX_HISTORY_POINTS_PER_PROVIDER = 240
+
+function appendUsageHistory(
+  history: ProviderUsageHistory | undefined,
+  output: PluginOutput,
+  capturedAt: number
+): ProviderUsageHistory | undefined {
+  const points = output.lines
+    .filter((line) => line.type === "progress")
+    .map((line) => ({
+      capturedAt,
+      label: line.label,
+      used: line.used,
+      limit: line.limit,
+      format: line.format,
+      color: line.color,
+    }))
+
+  if (points.length === 0) return history
+
+  return {
+    points: [...(history?.points ?? []), ...points].slice(-MAX_HISTORY_POINTS_PER_PROVIDER),
+  }
+}
 
 type UseProbeStateArgs = {
   onProbeResult?: () => void
@@ -36,6 +61,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           lastSettledData: existing?.lastSettledData ?? existing?.data ?? null,
           loading: true,
           error: null,
+          history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
         }
@@ -55,6 +81,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           lastSettledData: existing?.lastSettledData ?? existing?.data ?? null,
           loading: false,
           error,
+          history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
         }
@@ -71,23 +98,30 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
         manualRefreshIdsRef.current.delete(output.providerId)
       }
 
-      setPluginStates((prev) => ({
-        ...prev,
-        [output.providerId]: {
-          data: errorMessage ? prev[output.providerId]?.data ?? prev[output.providerId]?.lastSettledData ?? null : output,
-          lastSettledData: errorMessage
-            ? prev[output.providerId]?.lastSettledData ?? prev[output.providerId]?.data ?? null
-            : output,
-          loading: false,
-          error: errorMessage,
-          lastManualRefreshAt: !errorMessage && isManual
-            ? Date.now()
-            : prev[output.providerId]?.lastManualRefreshAt ?? null,
-          lastSuccessAt: !errorMessage
-            ? Date.now()
-            : prev[output.providerId]?.lastSuccessAt ?? null,
-        },
-      }))
+      setPluginStates((prev) => {
+        const existing = prev[output.providerId]
+        const capturedAt = Date.now()
+        return {
+          ...prev,
+          [output.providerId]: {
+            data: errorMessage ? existing?.data ?? existing?.lastSettledData ?? null : output,
+            lastSettledData: errorMessage
+              ? existing?.lastSettledData ?? existing?.data ?? null
+              : output,
+            history: errorMessage
+              ? existing?.history
+              : appendUsageHistory(existing?.history, output, capturedAt),
+            loading: false,
+            error: errorMessage,
+            lastManualRefreshAt: !errorMessage && isManual
+              ? capturedAt
+              : existing?.lastManualRefreshAt ?? null,
+            lastSuccessAt: !errorMessage
+              ? capturedAt
+              : existing?.lastSuccessAt ?? null,
+          },
+        }
+      })
 
       onProbeResult?.()
     },
