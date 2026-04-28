@@ -90,6 +90,18 @@ All windows are enforced simultaneously — hitting any limit throttles the user
 
 `~/.claude.json` is useful as a signed-in/account-state fallback when the legacy OAuth file is missing, but `primaryApiKey` is **not** a drop-in replacement for the OAuth bearer token used by `/api/oauth/usage`. OpenUsage should only treat it as account metadata plus a local-usage fallback hint unless `claudeAiOauth` is also present there.
 
+### Claude web fallback
+
+UsageBar can use a stored `claude.ai` Cookie header when local OAuth credentials are missing. The header must include `sessionKey=sk-ant-...`.
+
+When configured, UsageBar calls:
+
+- `GET https://claude.ai/api/organizations`
+- `GET https://claude.ai/api/organizations/{org_id}/usage`
+- Best-effort `GET https://claude.ai/api/organizations/{org_id}/overage_spend_limit`
+
+This mirrors CodexBar's web/API probing in a Windows-friendly manual-cookie form. Local OAuth credentials are still preferred; the web fallback is only used when OAuth credentials are unavailable.
+
 ### Token Refresh
 
 Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively on 401/403.

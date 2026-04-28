@@ -45,10 +45,7 @@ The credits endpoint is undocumented and may return different grant shapes. Usag
 - `Purchased credits`
 - `Bonus credits`
 
-Plan inference is based on the recurring pool size:
-
-- recurring credits present: `Pro`
-- large recurring pool: `Max`
+UsageBar does not infer a Perplexity subscription name from credit totals. Perplexity credit allowances can vary by plan, region, promotion, and enterprise contract, so the provider renders the credit pools without a plan badge unless a future endpoint exposes an explicit plan label.
 
 Zero-value pools are rendered as depleted rather than incorrectly showing as full.
 

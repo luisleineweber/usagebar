@@ -82,6 +82,16 @@ OpenUsage Codex plugin auth lookup order:
 
 The Windows fork also supports imported app-managed Codex account profiles. When Settings has a selected managed profile, UsageBar reads and refreshes `provider-secret account:<profileId>:authJson` first instead of auto-detecting the current local login.
 
+## Optional OpenAI web dashboard history
+
+UsageBar can also replay a signed-in `chatgpt.com` dashboard session when a Codex provider `cookieHeader` secret is configured in Settings.
+
+- Open `https://chatgpt.com/codex/cloud/settings/analytics` while signed in.
+- Copy the browser request `Cookie` header from DevTools. Do not paste `Set-Cookie`.
+- UsageBar stores it in the app credential vault and uses the browser-backed host request path.
+
+This optional path is best-effort and supplements the OAuth `/backend-api/wham/usage` response with dashboard usage breakdown and credits history lines when the dashboard returns a JSON snapshot. Local OAuth remains the authority for session, weekly, reviews, credits, managed accounts, and token refresh.
+
 Expected auth payload shape (file or keychain JSON value):
 
 ```jsonc
