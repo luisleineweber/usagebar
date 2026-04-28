@@ -11,6 +11,14 @@ const codexPlugin = {
   primaryCandidates: [],
 }
 
+const cursorPlugin = {
+  id: "cursor",
+  name: "Cursor",
+  iconUrl: "/cursor.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const ollamaPlugin = {
   id: "ollama",
   name: "Ollama",
@@ -130,9 +138,7 @@ describe("ProviderSettingsDetail", () => {
 
     expect(screen.getByText("How to connect")).toBeInTheDocument()
     expect(
-      screen.getByText(
-        "Install Codex CLI, sign in on this machine, then import the detected login into a managed profile if you want account pinning."
-      )
+      screen.getByText(/For dashboard history, open https:\/\/chatgpt\.com\/codex\/cloud\/settings\/analytics/)
     ).toBeInTheDocument()
   })
 
@@ -392,7 +398,7 @@ describe("ProviderSettingsDetail", () => {
   it("shows no editable inputs for auto-detected providers", () => {
     render(
       <ProviderSettingsDetail
-        plugin={codexPlugin}
+        plugin={cursorPlugin}
         enabled
         state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
         onEnabledChange={vi.fn()}
@@ -400,7 +406,7 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText("This provider currently relies on local auto-detection and does not expose editable settings yet.")).toBeInTheDocument()
-    expect(screen.queryByLabelText("Codex source")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Cursor source")).not.toBeInTheDocument()
   })
 
   it("shows explicit Synthetic API-key guidance", () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+﻿import { useCallback, useEffect, useRef, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { useShallow } from "zustand/react/shallow"
@@ -309,8 +309,8 @@ export function SettingsWindowApp() {
   )
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(67,122,255,0.14),_transparent_32%),linear-gradient(180deg,_hsl(var(--background)),_hsl(var(--muted))/0.45)] px-4 py-4 text-foreground md:px-6 md:py-6">
-      <div className="mx-auto w-full max-w-6xl">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(67,122,255,0.14),_transparent_32%),linear-gradient(180deg,_hsl(var(--background)),_hsl(var(--muted))/0.45)] px-6 py-6 text-foreground md:px-10 md:py-10">
+      <div className="mx-auto w-full max-w-5xl">
         <SettingsPage
           providers={settingsPlugins}
           selectedProviderId={selectedProviderId}

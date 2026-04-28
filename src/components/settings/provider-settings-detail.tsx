@@ -189,10 +189,11 @@ export function ProviderSettingsDetail({
 
   return (
     <section className="flex flex-col" style={accentStyle} data-testid={`provider-settings-${plugin.id}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/60 pb-5">
+      {/* Provider header */}
+      <div className="border-b border-border/60 pb-5">
         <div className="flex min-w-0 items-start gap-3">
           <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Provider configuration
             </div>
@@ -210,7 +211,8 @@ export function ProviderSettingsDetail({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Action row — separated from title to avoid cramped flex-wrap */}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {onOpenInTray && (
             <Button type="button" variant="outline" size="xs" onClick={onOpenInTray}>
               Open in tray
@@ -222,15 +224,14 @@ export function ProviderSettingsDetail({
               Retry
             </Button>
           )}
-          <label className="flex items-center gap-2 text-sm">
-            <span>Enabled</span>
+          <label className="ml-auto flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Enabled</span>
             <Checkbox checked={enabled} disabled={plugin.supportState === "comingSoonOnWindows"} onCheckedChange={(checked) => onEnabledChange(checked === true)} />
           </label>
         </div>
       </div>
 
       <div className="mt-5 pr-1 text-sm">
-        <div className="grid gap-3">
         <div className="grid gap-3 md:grid-cols-3">
           <div className="border-t border-border/55 py-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Source</div>
@@ -280,7 +281,7 @@ export function ProviderSettingsDetail({
                 </label>
                 <select
                   aria-label={`${plugin.name} source`}
-                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-primary"
+                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
                   value={sourceValue}
                   onChange={(event) => void handleSourceChange(event.target.value)}
                   disabled={isSavingConfig}
@@ -305,7 +306,7 @@ export function ProviderSettingsDetail({
                   </label>
                   <textarea
                     aria-label={`${plugin.name} ${definition.secretField.label}`}
-                    className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-primary"
+                    className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
                     placeholder={definition.secretField.placeholder}
                     value={secretDraft}
                     onChange={(event) => setSecretDraft(event.target.value)}
@@ -335,7 +336,7 @@ export function ProviderSettingsDetail({
                 <div className="flex gap-2">
                   <input
                     aria-label={`${plugin.name} ${definition.textField.label}`}
-                    className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-primary"
+                    className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
                     placeholder={definition.textField.placeholder}
                     value={workspaceDraft}
                     onChange={(event) => setWorkspaceDraft(event.target.value)}
@@ -359,7 +360,6 @@ export function ProviderSettingsDetail({
             {saveMessage && <p className="text-xs text-primary">{saveMessage}</p>}
             {saveError && <p className="text-xs text-destructive">{saveError}</p>}
           </div>
-        </div>
         </div>
       </div>
     </section>

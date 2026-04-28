@@ -3,6 +3,7 @@ import { useShallow } from "zustand/react/shallow"
 import { AppShell } from "@/components/app/app-shell"
 import { useAppPluginViews } from "@/hooks/app/use-app-plugin-views"
 import { useProbe } from "@/hooks/app/use-probe"
+import { useProviderStatuses } from "@/hooks/app/use-provider-statuses"
 import { useSettingsBootstrap } from "@/hooks/app/use-settings-bootstrap"
 import { useSettingsDisplayActions } from "@/hooks/app/use-settings-display-actions"
 import { useSettingsPluginActions } from "@/hooks/app/use-settings-plugin-actions"
@@ -109,6 +110,11 @@ function App() {
     onProbeResult: handleProbeResult,
   })
 
+  const providerStatuses = useProviderStatuses({
+    pluginsMeta,
+    pluginSettings,
+  })
+
   const { scheduleTrayIconUpdate, traySettingsPreview } = useTrayIcon({
     pluginsMeta,
     pluginSettings,
@@ -116,6 +122,7 @@ function App() {
     displayMode,
     menubarIconStyle,
     activeView,
+    providerStatuses,
   })
 
   useEffect(() => {
@@ -229,6 +236,7 @@ function App() {
     pluginSettings,
     pluginsMeta,
     pluginStates,
+    providerStatuses,
   })
 
   const providerConfigsRef = useRef(providerConfigs)

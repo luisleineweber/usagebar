@@ -26,6 +26,7 @@ const PREVIEW_BAR_TRACK_PX = 20
 const DENSE_SEGMENTED_GROUP_CLASS = "grid grid-cols-2 gap-2 lg:grid-cols-4"
 const TWO_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-2"
 const THREE_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-3"
+const FOUR_OPTION_GROUP_CLASS = "grid grid-cols-2 gap-2 sm:grid-cols-4"
 const SETTINGS_SECTION_CLASS = "border-t border-border/55 pt-4 first:border-t-0 first:pt-0"
 
 function getPreviewBarLayout(fraction: number): { fillPercent: number; remainderPercent: number } {
@@ -96,7 +97,7 @@ function MenubarIconStylePreview({
     )
   }
 
-  if (style === "bars") {
+  if (style === "bars" || style === "merged") {
     const trackClass = isActive ? "bg-primary-foreground/15" : "bg-foreground/15"
     const remainderClass = isActive ? "bg-primary-foreground/20" : "bg-foreground/15"
     const fillClass = isActive ? "bg-primary-foreground" : "bg-foreground"
@@ -201,140 +202,140 @@ export function GeneralSettingsPane({
   return (
     <div className="space-y-5 py-1">
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-lg font-semibold">Auto Refresh</h3>
-        <p className="mb-2 text-sm text-muted-foreground">How obsessive are you</p>
+        <h3 className="mb-0 text-base font-semibold">Auto Refresh</h3>
+        <p className="mb-3 text-sm text-muted-foreground">How obsessive are you</p>
         <div className={DENSE_SEGMENTED_GROUP_CLASS} role="radiogroup" aria-label="Auto-update interval">
-            {AUTO_UPDATE_OPTIONS.map((option) => {
-              const isActive = option.value === autoUpdateInterval
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={isActive}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  className="min-h-9 w-full"
-                  onClick={() => onAutoUpdateIntervalChange(option.value)}
-                >
-                  {option.label}
-                </Button>
-              )
-            })}
+          {AUTO_UPDATE_OPTIONS.map((option) => {
+            const isActive = option.value === autoUpdateInterval
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                className="min-h-9 w-full"
+                onClick={() => onAutoUpdateIntervalChange(option.value)}
+              >
+                {option.label}
+              </Button>
+            )
+          })}
         </div>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-lg font-semibold">Usage Mode</h3>
-        <p className="mb-2 text-sm text-muted-foreground">Glass half full or half empty</p>
+        <h3 className="mb-0 text-base font-semibold">Usage Mode</h3>
+        <p className="mb-3 text-sm text-muted-foreground">Glass half full or half empty</p>
         <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Usage display mode">
-            {DISPLAY_MODE_OPTIONS.map((option) => {
-              const isActive = option.value === displayMode
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={isActive}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  className="min-h-9 w-full"
-                  onClick={() => onDisplayModeChange(option.value)}
-                >
-                  {option.label}
-                </Button>
-              )
-            })}
+          {DISPLAY_MODE_OPTIONS.map((option) => {
+            const isActive = option.value === displayMode
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                className="min-h-9 w-full"
+                onClick={() => onDisplayModeChange(option.value)}
+              >
+                {option.label}
+              </Button>
+            )
+          })}
         </div>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-lg font-semibold">Reset Timers</h3>
-        <p className="mb-2 text-sm text-muted-foreground">Countdown or clock time</p>
+        <h3 className="mb-0 text-base font-semibold">Reset Timers</h3>
+        <p className="mb-3 text-sm text-muted-foreground">Countdown or clock time</p>
         <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Reset timer display mode">
-            {RESET_TIMER_DISPLAY_OPTIONS.map((option) => {
-              const isActive = option.value === resetTimerDisplayMode
-              const absoluteTimeExample = new Intl.DateTimeFormat(undefined, {
-                hour: "numeric",
-                minute: "2-digit",
-              }).format(new Date(2026, 1, 2, 11, 4))
-              const example = option.value === "relative" ? "5h 12m" : `today at ${absoluteTimeExample}`
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={isActive}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  className="flex h-auto min-h-14 w-full flex-col items-center gap-0 py-2"
-                  onClick={() => onResetTimerDisplayModeChange(option.value)}
-                >
-                  <span>{option.label}</span>
-                  <span className={cn("text-xs font-normal", isActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                    {example}
-                  </span>
-                </Button>
-              )
-            })}
+          {RESET_TIMER_DISPLAY_OPTIONS.map((option) => {
+            const isActive = option.value === resetTimerDisplayMode
+            const absoluteTimeExample = new Intl.DateTimeFormat(undefined, {
+              hour: "numeric",
+              minute: "2-digit",
+            }).format(new Date(2026, 1, 2, 11, 4))
+            const example = option.value === "relative" ? "5h 12m" : `today at ${absoluteTimeExample}`
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                className="flex h-auto min-h-14 w-full flex-col items-center gap-0 py-2"
+                onClick={() => onResetTimerDisplayModeChange(option.value)}
+              >
+                <span>{option.label}</span>
+                <span className={cn("text-xs font-normal", isActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                  {example}
+                </span>
+              </Button>
+            )
+          })}
         </div>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-lg font-semibold">Menubar Icon</h3>
-        <p className="mb-2 text-sm text-muted-foreground">What shows in the menu bar</p>
-        <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Menubar icon style">
-            {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
-              const isActive = option.value === menubarIconStyle
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-label={option.label}
-                  aria-checked={isActive}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  className="flex h-10 w-full items-center justify-center"
-                  onClick={() => onMenubarIconStyleChange(option.value)}
-                >
-                  <MenubarIconStylePreview style={option.value} isActive={isActive} traySettingsPreview={traySettingsPreview} />
-                </Button>
-              )
-            })}
+        <h3 className="mb-0 text-base font-semibold">Menubar Icon</h3>
+        <p className="mb-3 text-sm text-muted-foreground">What shows in the menu bar</p>
+        <div className={FOUR_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Menubar icon style">
+          {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
+            const isActive = option.value === menubarIconStyle
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-label={option.label}
+                aria-checked={isActive}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                className="flex h-10 w-full items-center justify-center"
+                onClick={() => onMenubarIconStyleChange(option.value)}
+              >
+                <MenubarIconStylePreview style={option.value} isActive={isActive} traySettingsPreview={traySettingsPreview} />
+              </Button>
+            )
+          })}
         </div>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-lg font-semibold">App Theme</h3>
-        <p className="mb-2 text-sm text-muted-foreground">How it looks around here</p>
+        <h3 className="mb-0 text-base font-semibold">App Theme</h3>
+        <p className="mb-3 text-sm text-muted-foreground">How it looks around here</p>
         <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Theme mode">
-            {THEME_OPTIONS.map((option) => {
-              const isActive = option.value === themeMode
-              return (
-                <Button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={isActive}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  className="min-h-9 w-full"
-                  onClick={() => onThemeModeChange(option.value)}
-                >
-                  {option.label}
-                </Button>
-              )
-            })}
+          {THEME_OPTIONS.map((option) => {
+            const isActive = option.value === themeMode
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                className="min-h-9 w-full"
+                onClick={() => onThemeModeChange(option.value)}
+              >
+                {option.label}
+              </Button>
+            )
+          })}
         </div>
       </section>
 
       <GlobalShortcutSection globalShortcut={globalShortcut} onGlobalShortcutChange={onGlobalShortcutChange} />
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-lg font-semibold">Start on Login</h3>
-        <p className="mb-2 text-sm text-muted-foreground">UsageBar starts when you sign in</p>
-        <label className="flex flex-wrap select-none items-center gap-2 text-sm text-foreground">
+        <h3 className="mb-0 text-base font-semibold">Start on Login</h3>
+        <p className="mb-3 text-sm text-muted-foreground">UsageBar starts when you sign in</p>
+        <label className="flex select-none items-center gap-2 text-sm text-foreground">
           <Checkbox
             key={`start-on-login-${startOnLogin}`}
             checked={startOnLogin}
@@ -345,8 +346,8 @@ export function GeneralSettingsPane({
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-lg font-semibold">Support</h3>
-        <p className="mb-2 text-sm text-muted-foreground">Open the GitHub issue tracker from settings.</p>
+        <h3 className="mb-0 text-base font-semibold">Support</h3>
+        <p className="mb-3 text-sm text-muted-foreground">Open the GitHub issue tracker from settings.</p>
         <Button
           type="button"
           variant="outline"

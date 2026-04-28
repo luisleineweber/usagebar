@@ -8,6 +8,7 @@ import { getTrayIconSizePx, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
 import { getTrayPrimaryBars, type TrayPrimaryBar } from "@/lib/tray-primary-progress"
 import { formatTrayPercentText, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { PluginState } from "@/hooks/app/types"
+import { hasProviderStatusIssue, type ProviderStatus } from "@/lib/provider-status"
 
 type TrayUpdateReason = "probe" | "settings" | "init"
 
@@ -18,6 +19,7 @@ type UseTrayIconArgs = {
   displayMode: DisplayMode
   menubarIconStyle: MenubarIconStyle
   activeView: string
+  providerStatuses?: Record<string, ProviderStatus>
 }
 
 export type TraySettingsPreview = {
@@ -56,6 +58,7 @@ export function useTrayIcon({
   displayMode,
   menubarIconStyle,
   activeView,
+  providerStatuses = {},
 }: UseTrayIconArgs) {
   const trayRef = useRef<TrayIcon | null>(null)
   const trayGaugeIconPathRef = useRef<string | null>(null)
@@ -73,6 +76,7 @@ export function useTrayIcon({
   const displayModeRef = useRef(displayMode)
   const menubarIconStyleRef = useRef(menubarIconStyle)
   const activeViewRef = useRef(activeView)
+  const providerStatusesRef = useRef(providerStatuses)
   const lastTrayProviderIdRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -98,6 +102,10 @@ export function useTrayIcon({
   useEffect(() => {
     activeViewRef.current = activeView
   }, [activeView])
+
+  useEffect(() => {
+    providerStatusesRef.current = providerStatuses
+  }, [providerStatuses])
 
   const scheduleTrayIconUpdate = useCallback((
     _reason: TrayUpdateReason,
@@ -235,11 +243,14 @@ export function useTrayIcon({
         isSameTraySettingsPreview(prev, nextPreview) ? prev : nextPreview
       )
 
-      if (style === "bars") {
+      const hasIncident = enabledPluginIds.some((id) => hasProviderStatusIssue(providerStatusesRef.current[id]))
+
+      if (style === "bars" || style === "merged") {
         renderTrayBarsIcon({
           bars: barsForPreview,
           sizePx,
-          style: "bars",
+          style,
+          statusIndicator: hasIncident ? "major" : "none",
         })
           .then(async (img) => {
             await tray.setIcon(img)
@@ -268,6 +279,7 @@ export function useTrayIcon({
           sizePx,
           style: "donut",
           providerIconUrl,
+          statusIndicator: hasProviderStatusIssue(providerStatusesRef.current[trayProviderId]) ? "major" : "none",
         })
           .then(async (img) => {
             await tray.setIcon(img)
@@ -290,6 +302,7 @@ export function useTrayIcon({
         style: "provider",
         percentText: supportsNativeTrayTitle ? undefined : providerPercentText,
         providerIconUrl,
+        statusIndicator: hasProviderStatusIssue(providerStatusesRef.current[trayProviderId]) ? "major" : "none",
       })
         .then(async (img) => {
           await tray.setIcon(img)
@@ -346,7 +359,7 @@ export function useTrayIcon({
   useEffect(() => {
     if (!trayReady) return
     scheduleTrayIconUpdate("settings", 0)
-  }, [activeView, menubarIconStyle, scheduleTrayIconUpdate, trayReady])
+  }, [activeView, menubarIconStyle, providerStatuses, scheduleTrayIconUpdate, trayReady])
 
   useEffect(() => {
     return () => {

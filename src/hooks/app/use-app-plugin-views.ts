@@ -3,8 +3,9 @@ import type { ActiveView, NavPlugin } from "@/components/side-nav"
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { PluginSettings } from "@/lib/settings"
 import type { PluginState } from "@/hooks/app/types"
+import type { ProviderStatus } from "@/lib/provider-status"
 
-export type DisplayPluginState = { meta: PluginMeta } & PluginState
+export type DisplayPluginState = { meta: PluginMeta; status?: ProviderStatus } & PluginState
 
 type UseAppPluginViewsArgs = {
   activeView: ActiveView
@@ -12,6 +13,7 @@ type UseAppPluginViewsArgs = {
   pluginSettings: PluginSettings | null
   pluginsMeta: PluginMeta[]
   pluginStates: Record<string, PluginState>
+  providerStatuses?: Record<string, ProviderStatus>
 }
 
 export function useAppPluginViews({
@@ -20,6 +22,7 @@ export function useAppPluginViews({
   pluginSettings,
   pluginsMeta,
   pluginStates,
+  providerStatuses = {},
 }: UseAppPluginViewsArgs) {
   const lastResolvedNavPluginsRef = useRef<NavPlugin[]>([])
   const lastResolvedSelectedPluginRef = useRef<DisplayPluginState | null>(null)
@@ -40,6 +43,7 @@ export function useAppPluginViews({
           pluginStates[id] ?? {
             data: null,
             lastSettledData: null,
+            history: undefined,
             loading: false,
             error: null,
             lastManualRefreshAt: null,
@@ -72,8 +76,9 @@ export function useAppPluginViews({
       brandColor: plugin.meta.brandColor,
       supportState: plugin.meta.supportState,
       supportMessage: plugin.meta.supportMessage,
+      status: providerStatuses[plugin.meta.id],
     }))
-  }, [enabledSupportedPlugins])
+  }, [enabledSupportedPlugins, providerStatuses])
 
   const hasResolvedViews = pluginSettings !== null && pluginsMeta.length > 0
 
@@ -119,6 +124,7 @@ export function useAppPluginViews({
       ...fallback,
       data: fallback.data ?? fallback.lastSettledData ?? null,
       lastSettledData: fallback.lastSettledData ?? fallback.data ?? null,
+      history: fallback.history,
       loading: true,
       error: null,
     }

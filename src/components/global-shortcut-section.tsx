@@ -243,8 +243,8 @@ export function GlobalShortcutSection({
 
   return (
     <section className="border-t border-border/55 pt-4">
-      <h3 className="text-lg font-semibold mb-0">Global Shortcut</h3>
-      <p className="text-sm text-muted-foreground mb-2">
+      <h3 className="mb-0 text-base font-semibold">Global Shortcut</h3>
+      <p className="mb-3 text-sm text-muted-foreground">
         Show panel from anywhere
       </p>
       <div className="space-y-2">

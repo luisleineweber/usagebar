@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { cn } from "@/lib/utils"
 import { getRelativeLuminance } from "@/lib/color"
 import { useDarkMode } from "@/hooks/use-dark-mode"
+import { hasProviderStatusIssue, providerStatusLabel, type ProviderStatus } from "@/lib/provider-status"
 
 function GaugeIcon({ className }: { className?: string }) {
   return (
@@ -38,6 +39,7 @@ interface NavPlugin {
   brandColor?: string
   supportState?: "supported" | "experimental" | "comingSoonOnWindows"
   supportMessage?: string | null
+  status?: ProviderStatus
 }
 
 interface SideNavProps {
@@ -138,7 +140,7 @@ function SortableNavPlugin({
         <span
           role="img"
           aria-label={plugin.name}
-          title={plugin.supportState !== "supported" ? plugin.supportMessage ?? undefined : undefined}
+          title={providerStatusLabel(plugin.status) ?? (plugin.supportState !== "supported" ? plugin.supportMessage ?? undefined : undefined)}
           className={cn(
             "size-6 inline-block",
             plugin.supportState === "comingSoonOnWindows" ? "opacity-45" : ""
@@ -155,6 +157,12 @@ function SortableNavPlugin({
             maskPosition: "center",
           }}
         />
+        {hasProviderStatusIssue(plugin.status) ? (
+          <span
+            aria-hidden
+            className="absolute right-2 top-2 size-2 rounded-full bg-destructive ring-2 ring-muted dark:ring-card"
+          />
+        ) : null}
       </NavButton>
     </div>
   )
