@@ -54,7 +54,7 @@ Returns token usage for the current billing period.
       "userTokens": 0,
       "orgTotalTokensUsed": 0,
       "orgOverageUsed": 0,
-      "basicAllowance": 0,              // 0 for Pro, >0 for Max/Enterprise
+      "basicAllowance": 0,
       "totalAllowance": 0,
       "orgOverageLimit": 0,
       "usedRatio": 0
@@ -67,15 +67,7 @@ Returns token usage for the current billing period.
 
 ### Plan Detection
 
-Plan is inferred from `standard.totalAllowance`:
-
-| Allowance | Plan |
-|---|---|
-| 200M+ | Max |
-| 20M+ | Pro |
-| >0 | Basic |
-
-Premium tokens (`premium.totalAllowance > 0`) are only available on Max/Enterprise plans.
+UsageBar does not infer a Factory subscription name from token allowances. The endpoint currently exposes usage buckets, not a stable public plan contract, so the provider renders `Standard` and optional `Premium` usage lines without a plan badge.
 
 ## Authentication
 

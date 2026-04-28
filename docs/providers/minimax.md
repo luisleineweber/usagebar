@@ -78,16 +78,14 @@ Expected payload fields:
 - Treat `current_interval_usage_count` as remaining prompts (MiniMax remains API behavior).
 - If only remaining aliases are provided, compute `used = total - remaining`.
 - If explicit used-count fields are provided, prefer them.
-- Plan name is taken from explicit plan/title fields when available.
-- If plan fields are missing in GLOBAL mode, infer plan tier from known limits (`100/300/1000/2000` prompts or `1500/4500/15000/30000` model-call equivalents).
-- If plan fields are missing in CN mode, infer only exact known CN limits (`600/1500/4500` model-call counts).
+- Plan name is taken only from explicit plan/title fields when available. UsageBar does not infer MiniMax subscription names from quota totals.
 - Use `end_time` for reset timestamp when present.
 - Fallback to `remains_time` when `end_time` is absent.
 - Use `start_time` + `end_time` as `periodDurationMs` when both are valid.
 
 ## Output
 
-- **Plan**: best-effort from API payload (normalized to concise label, with ` (CN)` or ` (GLOBAL)` suffix)
+- **Plan**: explicit API payload plan/title when present (normalized to concise label, with ` (CN)` or ` (GLOBAL)` suffix)
 - **Session** (overview progress line):
   - `label`: `Session`
   - `format`: count (`prompts`)

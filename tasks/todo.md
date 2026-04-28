@@ -1,3 +1,19 @@
+# Remove false provider subscription labels
+
+## Acceptance Criteria
+- [x] Providers do not show invented subscription names when an API only returns usage quantities.
+- [x] README/provider docs describe tracked usage surfaces instead of unverified plan possibilities.
+- [x] Focused Factory, MiniMax, and Perplexity plugin tests pass, and bundled plugin output is refreshed.
+
+## Plan
+- [x] Audit provider showcase copy and plan inference paths for hard-coded subscription claims.
+- [x] Remove Factory, MiniMax, and Perplexity plan inference that was based only on allowances/credit totals.
+- [x] Run focused verification and sync bundled plugin copies.
+
+## Verification Notes
+- Verified focused provider regressions with `npx vitest run plugins/factory/plugin.test.js plugins/minimax/plugin.test.js plugins/perplexity/plugin.test.js` -> 3 files passed, 88 tests passed.
+- Synced desktop bundled plugins with `node ./copy-bundled.cjs` -> bundled 29 plugins.
+
 # Replace remaining placeholder providers
 
 ## Acceptance Criteria
