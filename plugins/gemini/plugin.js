@@ -12,6 +12,10 @@
     "~/AppData/Roaming/npm/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
     "~/AppData/Roaming/npm/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js",
   ]
+  const HOMEBREW_BUNDLE_DIRS = [
+    "/opt/homebrew/opt/gemini-cli/libexec/lib/node_modules/@google/gemini-cli/bundle",
+    "/usr/local/opt/gemini-cli/libexec/lib/node_modules/@google/gemini-cli/bundle",
+  ]
 
   const LOAD_CODE_ASSIST_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
   const QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
@@ -80,6 +84,16 @@
     return { clientId: idMatch[1], clientSecret: secretMatch[1] }
   }
 
+  function listDirSafe(ctx, path) {
+    if (!ctx.host.fs || typeof ctx.host.fs.listDir !== "function") return []
+    try {
+      return ctx.host.fs.listDir(path) || []
+    } catch (e) {
+      ctx.host.log.warn("failed listing oauth candidate dir " + path + ": " + String(e))
+      return []
+    }
+  }
+
   function getOauth2JsPaths(ctx) {
     const candidates = ctx.app.platform === "windows"
       ? WINDOWS_OAUTH2_JS_PATHS.concat(SHARED_OAUTH2_JS_PATHS)
@@ -91,6 +105,21 @@
       if (seen.has(path)) continue
       seen.add(path)
       out.push(path)
+    }
+    for (let i = 0; i < HOMEBREW_BUNDLE_DIRS.length; i += 1) {
+      const bundleDir = HOMEBREW_BUNDLE_DIRS[i]
+      const entries = listDirSafe(ctx, bundleDir)
+      for (let j = 0; j < entries.length; j += 1) {
+        const name = entries[j]
+        if (typeof name !== "string") continue
+        if (name.indexOf("chunk-") === 0 && name.slice(-3) === ".js") {
+          const path = bundleDir + "/" + name
+          if (!seen.has(path)) {
+            seen.add(path)
+            out.push(path)
+          }
+        }
+      }
     }
     return out
   }
@@ -104,9 +133,10 @@
         const parsed = parseOauthClientCreds(ctx.host.fs.readText(path))
         if (parsed) return parsed
       } catch (e) {
-        ctx.host.log.warn("failed reading oauth2.js: " + String(e))
+        ctx.host.log.warn("failed reading oauth candidate at " + path + ": " + String(e))
       }
     }
+    ctx.host.log.warn("Gemini OAuth client credentials not found in any known install path")
     return null
   }
 
@@ -160,7 +190,7 @@
     }
 
     if (ctx.util.isAuthStatus(resp.status)) {
-      throw "Gemini session expired. Run `gemini auth login` to authenticate."
+      throw "Gemini session expired. Run `gemini` and re-authenticate when prompted."
     }
     if (resp.status < 200 || resp.status >= 300) return null
 
@@ -336,7 +366,7 @@
     })
 
     if (ctx.util.isAuthStatus(resp.status)) {
-      throw "Gemini session expired. Run `gemini auth login` to authenticate."
+      throw "Gemini session expired. Run `gemini` and re-authenticate when prompted."
     }
     if (resp.status < 200 || resp.status >= 300) return { data: null, accessToken: currentToken }
     return { data: ctx.util.tryParseJson(resp.bodyText), accessToken: currentToken }
@@ -357,7 +387,7 @@
     })
 
     if (ctx.util.isAuthStatus(resp.status)) {
-      throw "Gemini session expired. Run `gemini auth login` to authenticate."
+      throw "Gemini session expired. Run `gemini` and re-authenticate when prompted."
     }
     if (resp.status < 200 || resp.status >= 300) {
       throw "Gemini quota request failed (HTTP " + String(resp.status) + "). Try again later."
@@ -369,13 +399,13 @@
     assertSupportedAuthType(ctx)
 
     const creds = loadOauthCreds(ctx)
-    if (!creds) throw "Not logged in. Run `gemini auth login` to authenticate."
+    if (!creds) throw "Not logged in. Run `gemini` and complete the OAuth prompt."
 
     let accessToken = creds.access_token
     if (needsRefresh(creds)) {
       const refreshed = refreshToken(ctx, creds)
       if (refreshed) accessToken = refreshed
-      else if (!accessToken) throw "Not logged in. Run `gemini auth login` to authenticate."
+      else if (!accessToken) throw "Not logged in. Run `gemini` and complete the OAuth prompt."
     }
 
     const idTokenPayload = decodeIdToken(ctx, creds.id_token)

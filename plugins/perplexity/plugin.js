@@ -163,12 +163,6 @@
     return buckets
   }
 
-  function inferPlanLabel(recurringTotal) {
-    if (!Number.isFinite(recurringTotal) || recurringTotal <= 0) return null
-    if (recurringTotal >= 10000) return "Max"
-    return "Pro"
-  }
-
   function makeCreditsLine(ctx, label, bucket) {
     if (!bucket.present) return null
     const total = Number(bucket.total) || 0
@@ -245,8 +239,7 @@
       throw "Usage response missing credit pools. Try again later."
     }
 
-    const plan = inferPlanLabel(buckets.recurring.total)
-    return plan ? { plan, lines } : { lines }
+    return { lines }
   }
 
   globalThis.__openusage_plugin = { id: "perplexity", probe }

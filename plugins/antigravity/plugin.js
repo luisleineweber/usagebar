@@ -8,6 +8,8 @@
   var GOOGLE_OAUTH_URL = "https://oauth2.googleapis.com/token"
   var GOOGLE_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
   var GOOGLE_CLIENT_SECRET = "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"
+  var OAUTH_TOKEN_KEY = "antigravityUnifiedStateSync.oauthToken"
+  var OAUTH_TOKEN_SENTINEL = "oauthTokenInfoSentinelKey"
   var QUOTA_PERIOD_MS = 5 * 60 * 60 * 1000
   var LIVE_USAGE_CACHE_FILE = "last-live-usage.json"
   var BLACKLISTED_MODEL_IDS = {
@@ -88,12 +90,19 @@
         if (!value) break
         fields[fieldNum] = { type: 0, value: value.value }
         pos = value.pos
+      } else if (wireType === 1) {
+        if (pos + 8 > s.length) break
+        pos += 8
       } else if (wireType === 2) {
         var length = readVarint(s, pos)
         if (!length) break
         pos = length.pos
+        if (pos + length.value > s.length) break
         fields[fieldNum] = { type: 2, data: s.substring(pos, pos + length.value) }
         pos += length.value
+      } else if (wireType === 5) {
+        if (pos + 4 > s.length) break
+        pos += 4
       } else {
         break
       }
@@ -119,45 +128,48 @@
     return "macos"
   }
 
-  function loadApiKey(ctx) {
-    try {
-      var rows = ctx.host.sqlite.query(
-        stateDbPath(ctx),
-        "SELECT value FROM ItemTable WHERE key = 'antigravityAuthStatus' LIMIT 1"
-      )
-      var parsed = ctx.util.tryParseJson(rows)
-      if (!parsed || !parsed.length || !parsed[0].value) return null
-      var auth = ctx.util.tryParseJson(parsed[0].value)
-      return auth && auth.apiKey ? auth.apiKey : null
-    } catch (e) {
-      ctx.host.log.warn("failed to read auth from antigravity DB: " + String(e))
-      return null
-    }
+  // Antigravity wraps OAuth state in a double-base64 envelope:
+  //   b64(outer.f1 = wrapper{ f1=sentinel, f2=payload{ f1=b64(inner proto) } }).
+  // The inner base64 layer is a UTF-8 string field, not raw bytes.
+  function unwrapOAuthSentinel(ctx, base64Text) {
+    var trimmed = String(base64Text || "").replace(/^\s+|\s+$/g, "")
+    if (!trimmed) return null
+    var outer = ctx.base64.decode(trimmed)
+    var outerFields = readFields(outer)
+    if (!outerFields[1] || outerFields[1].type !== 2) return null
+    var wrapper = readFields(outerFields[1].data)
+    var sentinel = wrapper[1] && wrapper[1].type === 2 ? wrapper[1].data : null
+    var payload = wrapper[2] && wrapper[2].type === 2 ? wrapper[2].data : null
+    if (sentinel !== OAUTH_TOKEN_SENTINEL || !payload) return null
+    var payloadFields = readFields(payload)
+    if (!payloadFields[1] || payloadFields[1].type !== 2) return null
+    var innerText = payloadFields[1].data.replace(/^\s+|\s+$/g, "")
+    if (!innerText) return null
+    return ctx.base64.decode(innerText)
   }
 
-  function loadProtoTokens(ctx) {
+  function loadOAuthTokens(ctx) {
     try {
       var rows = ctx.host.sqlite.query(
         stateDbPath(ctx),
-        "SELECT value FROM ItemTable WHERE key = 'jetskiStateSync.agentManagerInitState' LIMIT 1"
+        "SELECT value FROM ItemTable WHERE key = '" + OAUTH_TOKEN_KEY + "' LIMIT 1"
       )
       var parsed = ctx.util.tryParseJson(rows)
       if (!parsed || !parsed.length || !parsed[0].value) return null
-      var raw = ctx.base64.decode(parsed[0].value)
-      var outer = readFields(raw)
-      if (!outer[6] || outer[6].type !== 2) return null
-      var inner = readFields(outer[6].data)
-      var accessToken = inner[1] && inner[1].type === 2 ? inner[1].data : null
-      var refreshToken = inner[3] && inner[3].type === 2 ? inner[3].data : null
+      var inner = unwrapOAuthSentinel(ctx, parsed[0].value)
+      if (!inner) return null
+      var fields = readFields(inner)
+      var accessToken = fields[1] && fields[1].type === 2 ? fields[1].data : null
+      var refreshToken = fields[3] && fields[3].type === 2 ? fields[3].data : null
       var expirySeconds = null
-      if (inner[4] && inner[4].type === 2) {
-        var ts = readFields(inner[4].data)
+      if (fields[4] && fields[4].type === 2) {
+        var ts = readFields(fields[4].data)
         if (ts[1] && ts[1].type === 0) expirySeconds = ts[1].value
       }
       if (!accessToken && !refreshToken) return null
       return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
     } catch (e) {
-      ctx.host.log.warn("failed to read proto tokens from antigravity DB: " + String(e))
+      ctx.host.log.warn("failed to read unified oauth token: " + String(e))
       return null
     }
   }
@@ -345,28 +357,45 @@
     return null
   }
 
-  function resolveCloudCodeData(ctx, cached, proto, apiKey) {
+  function resolveCloudCodeData(ctx, cached, dbTokens) {
+    var sawAuthFailure = false
     if (cached && cached.accessToken) {
       if (isCachedTokenUsable(cached)) {
-        var cachedData = tryCloudCodeToken(ctx, cached.accessToken, "cached Antigravity token")
-        if (cachedData) return cachedData
+        var cachedRawData = requestCloudCode(ctx, cached.accessToken)
+        if (cachedRawData && !cachedRawData.authFailed) return cachedRawData
+        if (cachedRawData && cachedRawData.authFailed) {
+          sawAuthFailure = true
+          ctx.host.log.warn("cached Antigravity token rejected by Cloud Code auth")
+        } else {
+          ctx.host.log.warn("cached Antigravity token did not yield usable Cloud Code data")
+        }
       } else {
         ctx.host.log.warn("cached Antigravity token expired; skipping direct Cloud Code attempt")
       }
     }
 
-    if (proto && proto.accessToken) {
-      if (isProtoAccessTokenUsable(proto)) {
-        var protoData = tryCloudCodeToken(ctx, proto.accessToken, "proto access token")
-        if (protoData) return protoData
+    if (dbTokens && dbTokens.accessToken) {
+      if (isProtoAccessTokenUsable(dbTokens)) {
+        var dbData = requestCloudCode(ctx, dbTokens.accessToken)
+        if (dbData && !dbData.authFailed) return dbData
+        if (dbData && dbData.authFailed) {
+          sawAuthFailure = true
+          ctx.host.log.warn("DB access token rejected by Cloud Code auth")
+        } else {
+          ctx.host.log.warn("DB access token did not yield usable Cloud Code data")
+        }
       } else {
-        ctx.host.log.warn("proto access token expired; skipping direct Cloud Code attempt")
+        ctx.host.log.warn("DB access token expired; skipping direct Cloud Code attempt")
       }
     }
 
-    if (proto && proto.refreshToken) {
+    var triedTokenCount = 0
+    if (cached && cached.accessToken && isCachedTokenUsable(cached)) triedTokenCount += 1
+    if (dbTokens && dbTokens.accessToken && isProtoAccessTokenUsable(dbTokens)) triedTokenCount += 1
+
+    if (dbTokens && dbTokens.refreshToken && (sawAuthFailure || triedTokenCount === 0)) {
       ctx.host.log.warn("attempting Antigravity refresh-token recovery")
-      var refreshed = refreshAccessToken(ctx, proto.refreshToken)
+      var refreshed = refreshAccessToken(ctx, dbTokens.refreshToken)
       if (refreshed && refreshed.accessToken) {
         var refreshedData = requestCloudCode(ctx, refreshed.accessToken)
         if (refreshedData && !refreshedData.authFailed) return refreshedData
@@ -378,13 +407,8 @@
       } else {
         ctx.host.log.warn("Antigravity refresh-token recovery failed")
       }
-    } else {
+    } else if (!(dbTokens && dbTokens.refreshToken)) {
       ctx.host.log.warn("no Antigravity refresh token available for offline recovery")
-    }
-
-    if (apiKey) {
-      var apiKeyData = tryCloudCodeToken(ctx, apiKey, "Antigravity apiKey")
-      if (apiKeyData) return apiKeyData
     }
 
     return null
@@ -456,7 +480,13 @@
     if (text.indexOf("gemini") !== -1 && text.indexOf("image") !== -1) return "gemini_image"
     if (text.indexOf("gemini") !== -1 && text.indexOf("pro") !== -1) return "gemini_pro"
     if (text.indexOf("gemini") !== -1 && text.indexOf("flash") !== -1) return "gemini_flash"
-    if (text.indexOf("claude") !== -1 || text.indexOf("gpt-oss") !== -1) return "claude"
+    if (
+      text.indexOf("claude") !== -1 ||
+      text.indexOf("sonnet") !== -1 ||
+      text.indexOf("opus") !== -1 ||
+      text.indexOf("haiku") !== -1 ||
+      text.indexOf("gpt-oss") !== -1
+    ) return "claude"
     return "other"
   }
 
@@ -487,12 +517,15 @@
       var modelId = modelIdKey(item, i)
       if (BLACKLISTED_MODEL_IDS[modelId]) continue
       var quotaInfo = item.quotaInfo || {}
+      var family = resolveFamily(modelId, label)
+      var remainingFraction = parseFraction(quotaInfo.remainingFraction)
+      var resetTime = parseResetTime(quotaInfo.resetTime)
       records.push({
         label: label,
         modelId: modelId,
-        family: resolveFamily(modelId, label),
-        remainingFraction: parseFraction(quotaInfo.remainingFraction),
-        resetTime: parseResetTime(quotaInfo.resetTime),
+        family: family,
+        remainingFraction: remainingFraction,
+        resetTime: resetTime,
         order: orderMap[orderKey(item)] !== undefined ? orderMap[orderKey(item)] : i,
       })
     }
@@ -549,6 +582,33 @@
         order: quota.firstOrder,
         priority: FAMILY_PRIORITY[family] !== undefined ? FAMILY_PRIORITY[family] : FAMILY_PRIORITY.other,
       })
+    }
+
+    var hasClaudeGroup = false
+    for (var g = 0; g < groups.length; g++) {
+      if (groups[g].label === FAMILY_LABELS.claude) {
+        hasClaudeGroup = true
+        break
+      }
+    }
+    if (groups.length > 0 && !hasClaudeGroup) {
+      var exhaustedClaude = null
+      for (var m = 0; m < models.length; m++) {
+        var model = models[m]
+        if (model.family !== "claude" || model.remainingFraction !== undefined || !model.resetTime) continue
+        if (!exhaustedClaude || model.order < exhaustedClaude.order) {
+          exhaustedClaude = model
+        }
+      }
+      if (exhaustedClaude) {
+        groups.push({
+          label: FAMILY_LABELS.claude,
+          remainingFraction: 0,
+          resetTime: exhaustedClaude.resetTime,
+          order: exhaustedClaude.order,
+          priority: FAMILY_PRIORITY.claude,
+        })
+      }
     }
 
     groups.sort(function (a, b) {
@@ -665,12 +725,11 @@
     )
   }
 
-  function probeLs(ctx, apiKey) {
+  function probeLs(ctx) {
     var discovery = discoverLs(ctx)
     if (!discovery) return null
 
     var metadata = { ideName: "antigravity", extensionName: "antigravity", ideVersion: "unknown", locale: "en" }
-    if (apiKey) metadata.apiKey = apiKey
 
     var candidates = lsCandidates(discovery)
     for (var i = 0; i < candidates.length; i++) {
@@ -733,9 +792,8 @@
   }
 
   function probe(ctx) {
-    var apiKey = loadApiKey(ctx)
-    var proto = loadProtoTokens(ctx)
-    var ls = probeLs(ctx, apiKey)
+    var dbTokens = loadOAuthTokens(ctx)
+    var ls = probeLs(ctx)
     if (ls && hasUsableQuota(ls.models)) {
       var liveOutput = { plan: ls.plan, lines: buildGroupedLines(ctx, ls.models) }
       cacheLiveUsage(ctx, liveOutput)
@@ -751,7 +809,7 @@
     }
 
     var cached = loadCachedToken(ctx)
-    var ccData = resolveCloudCodeData(ctx, cached, proto, apiKey)
+    var ccData = resolveCloudCodeData(ctx, cached, dbTokens)
     if (ccData && !ccData.authFailed) {
       var ccModels = parseCloudCodeModels(ccData)
       if (hasUsableQuota(ccModels)) return { plan: ls ? ls.plan : null, lines: buildGroupedLines(ctx, ccModels) }

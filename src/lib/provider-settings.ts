@@ -105,18 +105,30 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     connectHint: "Install OpenCode Go, sign in on this machine, then retry.",
   },
   codex: {
-    mode: "detected",
+    mode: "editable",
     title: "Codex Setup",
-    summary: "Tracks Codex CLI usage from local auth and now supports app-managed imported accounts.",
-    statusHint: "Import the current local Codex login into a managed profile when you want to pin UsageBar to a specific account.",
-    connectHint: "Install Codex CLI, sign in on this machine, then import the detected login into a managed profile if you want account pinning.",
+    summary: "Tracks Codex CLI usage from local auth, app-managed imported accounts, and optional OpenAI dashboard history from a signed-in dashboard Cookie header.",
+    statusHint: "Import the current local Codex login into a managed profile to pin an account, or add a dashboard cookie to show OpenAI web usage breakdown and credits history.",
+    connectHint: "Install Codex CLI and sign in on this machine. For dashboard history, open https://chatgpt.com/codex/cloud/settings/analytics while signed in, copy the Cookie request header from DevTools, paste it here, then retry.",
+    secretField: {
+      key: "cookieHeader",
+      label: "Dashboard Cookie header",
+      description: "Paste the full Cookie request header from a signed-in chatgpt.com Codex dashboard request. Do not paste Set-Cookie.",
+      placeholder: "__Secure-next-auth.session-token=...; cf_clearance=...;",
+    },
   },
   claude: {
-    mode: "detected",
+    mode: "editable",
     title: "Claude Setup",
-    summary: "Current plugin uses local Claude OAuth credentials and refresh flow.",
-    statusHint: "The app shows runtime status here before adding editable auth controls.",
-    connectHint: "Run `claude` CLI and sign in on this machine, then retry.",
+    summary: "Uses local Claude OAuth credentials first, then can fall back to a signed-in claude.ai web session Cookie header and local ccusage history.",
+    statusHint: "Local OAuth remains preferred. Add a Claude web cookie when CLI OAuth usage is unavailable but claude.ai is signed in.",
+    connectHint: "Run `claude` CLI and sign in on this machine. For web fallback, open https://claude.ai while signed in, copy the Cookie request header containing sessionKey from DevTools, paste it here, then retry.",
+    secretField: {
+      key: "cookieHeader",
+      label: "Claude web Cookie header",
+      description: "Paste the full Cookie request header from claude.ai. It must include sessionKey. Do not paste Set-Cookie.",
+      placeholder: "sessionKey=sk-ant-...;",
+    },
   },
   cursor: {
     mode: "detected",
@@ -483,8 +495,12 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   if (providerId === "perplexity") return "Manual cookie"
   if (providerId === "abacus") return "Manual cookie"
   if (providerId === "augment") return "Manual cookie"
+  if (providerId === "claude") return config?.secrets?.cookieHeader ? "OAuth + web cookie" : "Auto-detected"
   if (providerId === "codex") {
-    return config?.selectedAccountProfileId ? "Managed account" : "Auto-detected"
+    if (config?.selectedAccountProfileId && config?.secrets?.cookieHeader) return "Managed account + dashboard cookie"
+    if (config?.selectedAccountProfileId) return "Managed account"
+    if (config?.secrets?.cookieHeader) return "Auto-detected + dashboard cookie"
+    return "Auto-detected"
   }
   return "Auto-detected"
 }

@@ -95,7 +95,7 @@ describe("zed plugin", () => {
     expect(manifest.name).toBe("Zed");
     expect(manifest.platformSupport.windows.state).toBe("experimental");
     expect(manifest.lines).toEqual([
-      { type: "badge", label: "Source", scope: "overview" },
+      { type: "badge", label: "Source", scope: "detail" },
       { type: "progress", label: "Spend", scope: "overview", primaryOrder: 1 },
       { type: "text", label: "Limit", scope: "detail" },
       { type: "text", label: "Updated", scope: "detail" },

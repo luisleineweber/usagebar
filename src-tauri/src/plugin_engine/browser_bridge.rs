@@ -120,7 +120,7 @@ fn build_hidden_browser_request(
     let app_for_nav = app_handle.clone();
     let label_for_nav = label.to_string();
     let sender_for_nav = Arc::clone(&sender);
-    let init_script = build_fetch_bridge_script(target_url);
+    let init_script = build_fetch_bridge_script(source_url, target_url);
 
     let window = WebviewWindowBuilder::new(
         app_handle,
@@ -147,10 +147,10 @@ fn build_hidden_browser_request(
     .build()
     .map_err(|error| format!("failed to build hidden browser: {}", error))?;
 
-    for domain in ["dashboard.zed.dev", "cloud.zed.dev"] {
+    for domain in cookie_domains(&source_url, &target_url)? {
         for (name, value) in cookies {
             let cookie = Cookie::build((name.as_str(), value.as_str()))
-                .domain(domain)
+                .domain(domain.as_str())
                 .path("/")
                 .secure(true)
                 .http_only(true)
@@ -217,14 +217,41 @@ fn normalize_https_url(value: &str, label: &str) -> Result<String, String> {
     Ok(parsed.to_string())
 }
 
-fn build_fetch_bridge_script(target_url: &str) -> String {
+fn cookie_domains(source_url: &str, target_url: &str) -> Result<Vec<String>, String> {
+    let mut domains = Vec::new();
+    for value in [source_url, target_url] {
+        let parsed = value
+            .parse::<Url>()
+            .map_err(|error| format!("invalid cookie domain url: {}", error))?;
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| "cookie domain url missing host".to_string())?
+            .to_string();
+        if !domains.iter().any(|existing| existing == &host) {
+            domains.push(host);
+        }
+    }
+    Ok(domains)
+}
+
+fn build_fetch_bridge_script(source_url: &str, target_url: &str) -> String {
+    let source_origin = source_url
+        .parse::<Url>()
+        .ok()
+        .and_then(|url| {
+            url.host_str()
+                .map(|host| format!("{}://{}", url.scheme(), host))
+        })
+        .unwrap_or_else(|| "https://dashboard.zed.dev".to_string());
+    let source_origin_json =
+        serde_json::to_string(&source_origin).unwrap_or_else(|_| "\"\"".to_string());
     let target_url_json =
         serde_json::to_string(target_url).unwrap_or_else(|_| "\"\"".to_string());
     format!(
         r#"
 (() => {{
   if (window.__OPENUSAGE_BROWSER_FETCH_STARTED__) return;
-  if (window.location.origin !== "https://dashboard.zed.dev") return;
+  if (window.location.origin !== {source_origin_json}) return;
   window.__OPENUSAGE_BROWSER_FETCH_STARTED__ = true;
 
   const targetUrl = {target_url_json};
@@ -312,7 +339,7 @@ fn close_hidden_browser(app_handle: &AppHandle, label: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_fetch_bridge_script, normalize_https_url, parse_cookie_header};
+    use super::{build_fetch_bridge_script, cookie_domains, normalize_https_url, parse_cookie_header};
 
     #[test]
     fn parse_cookie_header_preserves_value_equals() {
@@ -342,9 +369,39 @@ mod tests {
 
     #[test]
     fn build_fetch_bridge_script_targets_dashboard_origin_and_bridge_scheme() {
-        let script = build_fetch_bridge_script("https://cloud.zed.dev/frontend/billing/usage");
+        let script = build_fetch_bridge_script(
+            "https://dashboard.zed.dev/account",
+            "https://cloud.zed.dev/frontend/billing/usage",
+        );
         assert!(script.contains("window.location.origin !== \"https://dashboard.zed.dev\""));
         assert!(script.contains("openusage-browser://result?payload="));
         assert!(script.contains("credentials: \"include\""));
+    }
+
+    #[test]
+    fn build_fetch_bridge_script_uses_requested_source_origin() {
+        let script = build_fetch_bridge_script(
+            "https://chatgpt.com/",
+            "https://chatgpt.com/codex/cloud/settings/analytics",
+        );
+        assert!(script.contains("window.location.origin !== \"https://chatgpt.com\""));
+        assert!(script.contains("https://chatgpt.com/codex/cloud/settings/analytics"));
+    }
+
+    #[test]
+    fn cookie_domains_include_source_and_target_hosts_once() {
+        let domains = cookie_domains(
+            "https://dashboard.zed.dev/account",
+            "https://cloud.zed.dev/frontend/billing/usage",
+        )
+        .expect("domains");
+        assert_eq!(
+            domains,
+            vec!["dashboard.zed.dev".to_string(), "cloud.zed.dev".to_string()]
+        );
+
+        let same = cookie_domains("https://chatgpt.com/", "https://chatgpt.com/codex")
+            .expect("same domain");
+        assert_eq!(same, vec!["chatgpt.com".to_string()]);
     }
 }

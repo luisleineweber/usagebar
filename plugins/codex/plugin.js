@@ -5,6 +5,7 @@
   const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
   const REFRESH_URL = "https://auth.openai.com/oauth/token"
   const USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+  const DASHBOARD_USAGE_URL = "https://chatgpt.com/codex/cloud/settings/analytics#usage"
   const REFRESH_AGE_MS = 8 * 24 * 60 * 60 * 1000
 
   function joinPath(base, leaf) {
@@ -185,13 +186,14 @@
     return false
   }
 
-  function loadAuth(ctx) {
+  function loadAuthCandidates(ctx) {
     const selectedProfileId = readSelectedAccountProfileId(ctx)
     if (selectedProfileId) {
-      return loadManagedProfileAuth(ctx, selectedProfileId)
+      return [loadManagedProfileAuth(ctx, selectedProfileId)]
     }
 
     const authPaths = resolveAuthPaths(ctx)
+    const candidates = []
     for (const authPath of authPaths) {
       if (!ctx.host.fs.exists(authPath)) continue
       try {
@@ -202,16 +204,16 @@
           continue
         }
         ctx.host.log.info("auth loaded from file: " + authPath)
-        return { auth, authPath, source: "file" }
+        candidates.push({ auth, authPath, source: "file" })
       } catch (e) {
         ctx.host.log.warn("auth file read failed: " + String(e))
       }
     }
 
     const keychainAuth = loadAuthFromKeychain(ctx)
-    if (keychainAuth) return keychainAuth
+    if (keychainAuth) candidates.push(keychainAuth)
 
-    if (authPaths.length > 0) {
+    if (candidates.length === 0 && authPaths.length > 0) {
       for (const authPath of authPaths) {
         if (!ctx.host.fs.exists(authPath)) {
           ctx.host.log.warn("auth file not found: " + authPath)
@@ -219,7 +221,7 @@
       }
     }
 
-    return null
+    return candidates
   }
 
   function needsRefresh(ctx, auth, nowMs) {
@@ -332,6 +334,30 @@
   function readNumber(value) {
     const n = Number(value)
     return Number.isFinite(n) ? n : null
+  }
+
+  function formatPlanType(ctx, planType) {
+    const rawPlan = typeof planType === "string" ? planType.trim() : ""
+    if (!rawPlan) return null
+    if (rawPlan.toLowerCase() === "prolite") return "Pro 5x"
+    if (rawPlan.toLowerCase() === "pro") return "Pro 20x"
+    return ctx.fmt.planLabel(rawPlan) || null
+  }
+
+  function readNonEmptyString(value) {
+    if (typeof value !== "string") return null
+    const trimmed = value.trim()
+    return trimmed || null
+  }
+
+  function readDashboardCookie(ctx) {
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    try {
+      return readNonEmptyString(ctx.host.providerSecrets.read("cookieHeader"))
+    } catch (e) {
+      ctx.host.log.info("codex dashboard cookie read failed: " + String(e))
+      return null
+    }
   }
 
   function getResetsAtIso(ctx, nowSec, window) {
@@ -459,6 +485,115 @@
     return parts.join(" · ")
   }
 
+  function formatCredits(n) {
+    const value = Number(n)
+    if (!Number.isFinite(value)) return null
+    return value.toFixed(value >= 10 ? 1 : 2).replace(/\.0+$/, "")
+  }
+
+  function dashboardDayKey(raw) {
+    if (typeof raw !== "string") return null
+    const trimmed = raw.trim()
+    if (!trimmed) return null
+    const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (iso) return iso[1] + "-" + iso[2] + "-" + iso[3]
+    const ms = Date.parse(trimmed)
+    if (!Number.isFinite(ms)) return null
+    return dayKeyFromDate(new Date(ms))
+  }
+
+  function readCreditsUsed(entry) {
+    if (!entry || typeof entry !== "object") return null
+    const keys = ["totalCreditsUsed", "creditsUsed", "credits_used", "amount", "used"]
+    for (let i = 0; i < keys.length; i++) {
+      const value = readNumber(entry[keys[i]])
+      if (value !== null) return value
+    }
+    return null
+  }
+
+  function dashboardBreakdownEntries(value) {
+    if (!Array.isArray(value)) return []
+    const out = []
+    for (let i = 0; i < value.length; i++) {
+      const entry = value[i]
+      if (!entry || typeof entry !== "object") continue
+      const day = dashboardDayKey(entry.day || entry.date)
+      const credits = readCreditsUsed(entry)
+      if (!day || credits === null) continue
+      out.push({ day, credits })
+    }
+    return out
+  }
+
+  function fetchDashboardSnapshot(ctx) {
+    const cookieHeader = readDashboardCookie(ctx)
+    if (!cookieHeader) return null
+    if (!ctx.host.browser || typeof ctx.host.browser.requestWithCookies !== "function") {
+      ctx.host.log.warn("codex dashboard cookie configured but browser request API is unavailable")
+      return null
+    }
+
+    let response
+    try {
+      response = ctx.host.browser.requestWithCookies({
+        url: DASHBOARD_USAGE_URL,
+        cookieHeader,
+        sourceUrl: "https://chatgpt.com/",
+        timeoutMs: 20000,
+      })
+    } catch (e) {
+      ctx.host.log.warn("codex dashboard request failed: " + String(e))
+      return null
+    }
+
+    if (ctx.util.isAuthStatus(response.status)) {
+      ctx.host.log.warn("codex dashboard session expired or rejected")
+      return null
+    }
+    if (response.status < 200 || response.status >= 300) {
+      ctx.host.log.warn("codex dashboard request returned HTTP " + String(response.status))
+      return null
+    }
+
+    const parsed = ctx.util.tryParseJson(response.bodyText)
+    if (!parsed || typeof parsed !== "object") {
+      ctx.host.log.warn("codex dashboard response did not expose JSON snapshot data")
+      return null
+    }
+    return parsed
+  }
+
+  function appendDashboardHistoryLines(lines, ctx, snapshot) {
+    if (!snapshot || typeof snapshot !== "object") return
+    const usage = dashboardBreakdownEntries(snapshot.usageBreakdown || snapshot.usage_breakdown)
+    const credits = dashboardBreakdownEntries(
+      snapshot.dailyBreakdown || snapshot.daily_breakdown || snapshot.creditHistory || snapshot.credit_history
+    )
+
+    const appendTotal = (label, entries) => {
+      let total = 0
+      for (let i = 0; i < entries.length; i++) total += entries[i].credits
+      if (total <= 0) return
+      const formatted = formatCredits(total)
+      if (formatted) lines.push(ctx.line.text({ label, value: formatted + " credits" }))
+    }
+
+    appendTotal("Dashboard Usage 30d", usage)
+    appendTotal("Credits History 30d", credits)
+
+    const remaining = readNumber(snapshot.creditsRemaining ?? snapshot.credits_remaining)
+    if (remaining !== null && !lines.find((line) => line.label === "Credits")) {
+      const limit = Math.max(1000, remaining)
+      lines.push(ctx.line.progress({
+        label: "Credits",
+        used: Math.max(0, limit - remaining),
+        limit: limit,
+        format: { kind: "count", suffix: "credits" },
+      }))
+    }
+  }
+
   function pushDayUsageLine(lines, ctx, label, dayEntry) {
     const tokens = Number(dayEntry && dayEntry.totalTokens) || 0
     const cost = usageCostUsd(dayEntry)
@@ -476,12 +611,7 @@
     }))
   }
 
-  function probe(ctx) {
-    const authState = loadAuth(ctx)
-    if (!authState || !authState.auth) {
-      ctx.host.log.error("probe failed: not logged in")
-      throw "Not logged in. Run `codex` to authenticate."
-    }
+  function probeWithAuthState(ctx, authState) {
     const auth = authState.auth
 
     if (auth.tokens && auth.tokens.access_token) {
@@ -666,7 +796,7 @@
 
       let plan = null
       if (data.plan_type) {
-        const planLabel = ctx.fmt.planLabel(data.plan_type)
+        const planLabel = formatPlanType(ctx, data.plan_type)
         if (planLabel) {
           plan = planLabel
         }
@@ -722,6 +852,8 @@
         }
       }
 
+      appendDashboardHistoryLines(lines, ctx, fetchDashboardSnapshot(ctx))
+
       if (lines.length === 0) {
         lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
       }
@@ -734,6 +866,31 @@
     }
 
     throw "Not logged in. Run `codex` to authenticate."
+  }
+
+  function probe(ctx) {
+    const authCandidates = loadAuthCandidates(ctx)
+    if (!authCandidates || authCandidates.length === 0) {
+      ctx.host.log.error("probe failed: not logged in")
+      throw "Not logged in. Run `codex` to authenticate."
+    }
+
+    let lastAuthError = null
+    for (let i = 0; i < authCandidates.length; i++) {
+      const authState = authCandidates[i]
+      try {
+        return probeWithAuthState(ctx, authState)
+      } catch (e) {
+        lastAuthError = e
+        if (i + 1 < authCandidates.length) {
+          ctx.host.log.warn("auth failed for " + authState.source + ", trying next auth source")
+          continue
+        }
+        throw e
+      }
+    }
+
+    throw lastAuthError || "Not logged in. Run `codex` to authenticate."
   }
 
   globalThis.__openusage_plugin = { id: "codex", probe }

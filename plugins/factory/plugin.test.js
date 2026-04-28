@@ -306,7 +306,7 @@ describe("factory plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Pro")
+    expect(result.plan).toBeNull()
     const standardLine = result.lines.find((line) => line.label === "Standard")
     expect(standardLine).toBeTruthy()
     expect(standardLine.used).toBe(5000000)
@@ -378,7 +378,7 @@ describe("factory plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Max")
+    expect(result.plan).toBeNull()
     const premiumLine = result.lines.find((line) => line.label === "Premium")
     expect(premiumLine).toBeTruthy()
     expect(premiumLine.used).toBe(1000000)
@@ -749,7 +749,7 @@ describe("factory plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
   })
 
-  it("infers Basic plan from low allowance", async () => {
+  it("does not infer plan from low allowance", async () => {
     const ctx = makeCtx()
     const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
     ctx.host.fs.writeText("~/.factory/auth.json", JSON.stringify({
@@ -778,7 +778,7 @@ describe("factory plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Basic")
+    expect(result.plan).toBeNull()
   })
 
   it("includes resetsAt and periodDurationMs from usage dates", async () => {

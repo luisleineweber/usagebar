@@ -17,7 +17,7 @@
     { "label": "Docs", "url": "https://zed.dev/docs" }
   ],
   "lines": [
-    { "type": "badge", "label": "Source", "scope": "overview" },
+    { "type": "badge", "label": "Source", "scope": "detail" },
     { "type": "progress", "label": "Spend", "scope": "overview", "primaryOrder": 1 },
     { "type": "text", "label": "Limit", "scope": "detail" },
     { "type": "text", "label": "Updated", "scope": "detail" },

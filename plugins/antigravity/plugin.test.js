@@ -6,6 +6,9 @@ const loadPlugin = async () => {
   return globalThis.__openusage_plugin
 }
 
+const OAUTH_TOKEN_KEY = "antigravityUnifiedStateSync.oauthToken"
+const OAUTH_TOKEN_SENTINEL = "oauthTokenInfoSentinelKey"
+
 function makeDiscovery(overrides) {
   return Object.assign(
     { pid: 12345, csrf: "test-csrf-token", ports: [42001], extensionPort: null },
@@ -97,7 +100,7 @@ function makeAuthStatusJson(overrides) {
 
 function setupSqliteMock(ctx, authJson, protoBase64) {
   ctx.host.sqlite.query.mockImplementation((db, sql) => {
-    if (sql.includes("agentManagerInitState") && protoBase64) return JSON.stringify([{ value: protoBase64 }])
+    if (sql.includes(OAUTH_TOKEN_KEY) && protoBase64) return JSON.stringify([{ value: protoBase64 }])
     if (sql.includes("antigravityAuthStatus") && authJson) return JSON.stringify([{ value: authJson }])
     return "[]"
   })
@@ -122,7 +125,9 @@ function makeProtobufBase64(ctx, accessToken, refreshToken, expirySeconds) {
   if (accessToken) inner += encodeField(1, 2, accessToken)
   if (refreshToken) inner += encodeField(3, 2, refreshToken)
   if (expirySeconds !== undefined && expirySeconds !== null) inner += encodeField(4, 2, encodeField(1, 0, expirySeconds))
-  return ctx.base64.encode(encodeField(6, 2, inner))
+  const payload = encodeField(1, 2, ctx.base64.encode(inner))
+  const wrapper = encodeField(1, 2, OAUTH_TOKEN_SENTINEL) + encodeField(2, 2, payload)
+  return ctx.base64.encode(encodeField(1, 2, wrapper))
 }
 
 function getProgressLabels(result) {
@@ -387,6 +392,114 @@ describe("antigravity plugin", () => {
     expect(getLine(result, "Claude").used).toBe(45)
   })
 
+  it("renders Claude as exhausted when Antigravity only reports a reset time", async () => {
+    const ctx = makeCtx()
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery())
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
+      return {
+        status: 200,
+        bodyText: JSON.stringify(makeUserStatusResponse({
+          userStatus: {
+            planStatus: { planInfo: { planName: "Pro" } },
+            cascadeModelConfigData: {
+              clientModelConfigs: [
+                {
+                  label: "Gemini 3.1 Pro (High)",
+                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                  quotaInfo: { remainingFraction: 1, resetTime: "2026-02-08T09:10:56Z" },
+                },
+                {
+                  label: "Gemini 3 Flash",
+                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M18" },
+                  quotaInfo: { remainingFraction: 1, resetTime: "2026-02-08T09:10:56Z" },
+                },
+                {
+                  label: "Claude Sonnet 4.6 (Thinking)",
+                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" },
+                  quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
+                },
+                {
+                  label: "Claude Opus 4.6 (Thinking)",
+                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M26" },
+                  quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
+                },
+                {
+                  label: "GPT-OSS 120B (Medium)",
+                  modelOrAlias: { model: "MODEL_OPENAI_GPT_OSS_120B_MEDIUM" },
+                  quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
+                },
+              ],
+              clientModelSorts: [
+                {
+                  groups: [
+                    {
+                      modelLabels: [
+                        "Gemini 3.1 Pro (High)",
+                        "Gemini 3 Flash",
+                        "Claude Sonnet 4.6 (Thinking)",
+                        "Claude Opus 4.6 (Thinking)",
+                        "GPT-OSS 120B (Medium)",
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        })),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Gemini Flash", "Claude"])
+    expect(getLine(result, "Gemini Pro").used).toBe(0)
+    expect(getLine(result, "Gemini Flash").used).toBe(0)
+    expect(getLine(result, "Claude").used).toBe(100)
+    expect(getLine(result, "Claude").resetsAt).toBe("2026-02-02T16:13:00Z")
+  })
+
+  it("groups Anthropic model labels without Claude in the name", async () => {
+    const ctx = makeCtx()
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery())
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
+      return {
+        status: 200,
+        bodyText: JSON.stringify(makeUserStatusResponse({
+          userStatus: {
+            planStatus: { planInfo: { planName: "Pro" } },
+            cascadeModelConfigData: {
+              clientModelConfigs: [
+                {
+                  label: "Gemini 3.1 Pro (High)",
+                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                  quotaInfo: { remainingFraction: 0.8, resetTime: "2026-02-08T09:10:56Z" },
+                },
+                {
+                  label: "Sonnet 4.6 (Thinking)",
+                  modelOrAlias: { model: "MODEL_PLACEHOLDER_NEW_SONNET" },
+                  quotaInfo: { remainingFraction: 0.55, resetTime: "2026-02-08T09:10:56Z" },
+                },
+              ],
+              clientModelSorts: [
+                { groups: [{ modelLabels: ["Gemini 3.1 Pro (High)", "Sonnet 4.6 (Thinking)"] }] },
+              ],
+            },
+          },
+        })),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
+    expect(getLine(result, "Claude").used).toBe(45)
+  })
+
   it("skips truly internal Cloud Code models", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
@@ -480,7 +593,7 @@ describe("antigravity plugin", () => {
     expect(calls.some((url) => url.includes("fetchAvailableModels"))).toBe(false)
   })
 
-  it("includes apiKey in LS metadata when available", async () => {
+  it("does not include apiKey in LS metadata", async () => {
     const ctx = makeCtx()
     setupSqliteMock(ctx, makeAuthStatusJson())
     ctx.host.ls.discover.mockReturnValue(makeDiscovery())
@@ -498,7 +611,8 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
     plugin.probe(ctx)
 
-    expect(metadata.apiKey).toBe("test-api-key-123")
+    expect(metadata.apiKey).toBeUndefined()
+    expect(metadata.ideName).toBe("antigravity")
   })
 
   it("decodes protobuf tokens and uses them for Cloud Code", async () => {
@@ -521,7 +635,7 @@ describe("antigravity plugin", () => {
     expect(authHeader).toBe("Bearer ya29.proto")
   })
 
-  it("prefers a valid cached token before protobuf refresh or apiKey fallback", async () => {
+  it("prefers a valid cached token before DB refresh", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
     setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry))
@@ -551,7 +665,7 @@ describe("antigravity plugin", () => {
     expect(authHeaders).toEqual(["Bearer ya29.cached"])
   })
 
-  it("refreshes before stale apiKey fallback when the protobuf access token is expired", async () => {
+  it("refreshes when the DB access token is expired", async () => {
     const ctx = makeCtx()
     const pastExpiry = Math.floor(Date.now() / 1000) - 60
     setupSqliteMock(ctx, makeAuthStatusJson({ apiKey: "ya29.apiKey" }), makeProtobufBase64(ctx, "ya29.expired", "1//refresh", pastExpiry))
@@ -578,11 +692,11 @@ describe("antigravity plugin", () => {
 
     expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
     expect(authHeaders).toEqual(["Bearer ya29.refreshed"])
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("proto access token expired; skipping direct Cloud Code attempt")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token expired; skipping direct Cloud Code attempt")
     expect(ctx.host.log.warn).toHaveBeenCalledWith("attempting Antigravity refresh-token recovery")
   })
 
-  it("refreshes after cached token auth failure before trying the apiKey fallback", async () => {
+  it("refreshes after cached and DB token auth failures", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
     setupSqliteMock(ctx, makeAuthStatusJson({ apiKey: "ya29.apiKey" }), makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry))
@@ -620,7 +734,7 @@ describe("antigravity plugin", () => {
     expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
     expect(authHeaders).toEqual(["Bearer ya29.cached", "Bearer ya29.proto", "Bearer ya29.refreshed"])
     expect(ctx.host.log.warn).toHaveBeenCalledWith("cached Antigravity token rejected by Cloud Code auth")
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("proto access token rejected by Cloud Code auth")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token rejected by Cloud Code auth")
   })
 
   it("refreshes and caches a token when initial Cloud Code auth fails", async () => {
@@ -668,9 +782,9 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
 
     expect(() => plugin.probe(ctx)).toThrow("Start Antigravity and try again.")
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("proto access token expired; skipping direct Cloud Code attempt")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token expired; skipping direct Cloud Code attempt")
     expect(ctx.host.log.warn).toHaveBeenCalledWith("no Antigravity refresh token available for offline recovery")
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("Antigravity apiKey rejected by Cloud Code auth")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
   it("tolerates cache write failures after a successful refresh", async () => {

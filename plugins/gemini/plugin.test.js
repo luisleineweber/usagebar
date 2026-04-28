@@ -5,6 +5,7 @@ const SETTINGS_PATH = "~/.gemini/settings.json"
 const CREDS_PATH = "~/.gemini/oauth_creds.json"
 const OAUTH2_PATH = "~/.bun/install/global/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js"
 const WINDOWS_NPM_OAUTH2_PATH = "~/AppData/Roaming/npm/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js"
+const HOMEBREW_BUNDLE_CHUNK = "/opt/homebrew/opt/gemini-cli/libexec/lib/node_modules/@google/gemini-cli/bundle/chunk-test.js"
 
 const LOAD_CODE_ASSIST_URL = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist"
 const QUOTA_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota"
@@ -158,6 +159,55 @@ describe("gemini plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.plan).toBe("Paid")
+    expect(result.lines.find((line) => line.label === "Pro")).toBeTruthy()
+  })
+
+  it("refreshes token from a Homebrew gemini-cli bundle chunk", async () => {
+    const ctx = makeCtx()
+    const nowMs = 1_700_000_000_000
+    vi.spyOn(Date, "now").mockReturnValue(nowMs)
+
+    ctx.host.fs.writeText(
+      CREDS_PATH,
+      JSON.stringify({
+        access_token: "old-token",
+        refresh_token: "refresh-token",
+        id_token: makeJwt({ email: "brew@example.com" }),
+        expiry_date: nowMs - 1000,
+      })
+    )
+    ctx.host.fs.writeText(
+      HOMEBREW_BUNDLE_CHUNK,
+      "const OAUTH_CLIENT_ID='brew-client'; const OAUTH_CLIENT_SECRET='brew-secret';"
+    )
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url === TOKEN_URL) {
+        expect(String(opts.bodyText)).toContain("client_id=brew-client")
+        expect(String(opts.bodyText)).toContain("client_secret=brew-secret")
+        return { status: 200, bodyText: JSON.stringify({ access_token: "brew-token", expires_in: 3600 }) }
+      }
+      if (url === LOAD_CODE_ASSIST_URL) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ tier: "standard-tier", cloudaicompanionProject: "gen-lang-client-brew" }),
+        }
+      }
+      if (url === QUOTA_URL) {
+        expect(opts.headers.Authorization).toBe("Bearer brew-token")
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            quotaBuckets: [{ modelId: "gemini-2.5-pro", remainingFraction: 0.4, resetTime: "2099-01-01T00:00:00Z" }],
+          }),
+        }
+      }
+      throw new Error("unexpected url: " + url)
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Pro")).toBeTruthy()
   })
 

@@ -10,20 +10,6 @@
   const CN_API_KEY_ENV_VARS = ["MINIMAX_CN_API_KEY", "MINIMAX_API_KEY", "MINIMAX_API_TOKEN"]
   const CODING_PLAN_WINDOW_MS = 5 * 60 * 60 * 1000
   const CODING_PLAN_WINDOW_TOLERANCE_MS = 10 * 60 * 1000
-  // GLOBAL plan tiers (based on prompt limits)
-  const GLOBAL_PROMPT_LIMIT_TO_PLAN = {
-    100: "Starter",
-    300: "Plus",
-    1000: "Max",
-    2000: "Ultra",
-  }
-  // CN plan tiers (based on model call counts = prompts × 15)
-  // Starter: 40 prompts = 600, Plus: 100 prompts = 1500, Max: 300 prompts = 4500
-  const CN_PROMPT_LIMIT_TO_PLAN = {
-    600: "Starter",
-    1500: "Plus",
-    4500: "Max",
-  }
   const MODEL_CALLS_PER_PROMPT = 15
 
   function readString(value) {
@@ -57,23 +43,6 @@
     if (withoutPrefix) return withoutPrefix
     if (/coding\s+plan/i.test(compact)) return "Coding Plan"
     return compact
-  }
-
-  function inferPlanNameFromLimit(totalCount, endpointSelection) {
-    const n = readNumber(totalCount)
-    if (n === null || n <= 0) return null
-
-    const normalized = Math.round(n)
-    if (endpointSelection === "CN") {
-      // CN totals are model-call counts; only exact known CN tiers should infer.
-      return CN_PROMPT_LIMIT_TO_PLAN[normalized] || null
-    }
-
-    if (GLOBAL_PROMPT_LIMIT_TO_PLAN[normalized]) return GLOBAL_PROMPT_LIMIT_TO_PLAN[normalized]
-
-    if (normalized % MODEL_CALLS_PER_PROMPT !== 0) return null
-    const inferredPromptLimit = normalized / MODEL_CALLS_PER_PROMPT
-    return GLOBAL_PROMPT_LIMIT_TO_PLAN[inferredPromptLimit] || null
   }
 
   function epochToMs(epoch) {
@@ -318,8 +287,7 @@
       payload.plan_name,
       payload.plan,
     ]))
-    const inferredPlanName = inferPlanNameFromLimit(total, endpointSelection)
-    const planName = explicitPlanName || inferredPlanName
+    const planName = explicitPlanName
 
     return {
       planName,

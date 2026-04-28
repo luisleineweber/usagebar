@@ -287,7 +287,7 @@ describe("minimax plugin", () => {
     expect(result.lines[0].limit).toBe(1500)
   })
 
-  it("infers Starter plan from 1500 model-call limit", async () => {
+  it("does not infer plan from model-call limit", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MINIMAX_API_KEY: "mini-key" })
     ctx.host.http.request.mockReturnValue({
@@ -308,7 +308,7 @@ describe("minimax plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Starter (GLOBAL)")
+    expect(result.plan).toBeUndefined()
     expect(result.lines[0].used).toBe(300)
     expect(result.lines[0].limit).toBe(1500)
   })
@@ -500,7 +500,7 @@ describe("minimax plugin", () => {
     expect(ctx.host.http.request.mock.calls[1][0].url).toBe(CN_FALLBACK_USAGE_URL)
   })
 
-  it("infers CN Starter plan from 600 model-call limit", async () => {
+  it("does not infer CN plan from 600 model-call limit", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MINIMAX_CN_API_KEY: "cn-key" })
     ctx.host.http.request.mockReturnValue({
@@ -525,12 +525,12 @@ describe("minimax plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Starter (CN)")
+    expect(result.plan).toBeUndefined()
     expect(result.lines[0].limit).toBe(40) // 600 / 15 = 40 prompts
     expect(result.lines[0].used).toBe(7) // (600-500) / 15 = 6.67 ≈ 7
   })
 
-  it("infers CN Plus plan from 1500 model-call limit", async () => {
+  it("does not infer CN plan from 1500 model-call limit", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MINIMAX_CN_API_KEY: "cn-key" })
     ctx.host.http.request.mockReturnValue({
@@ -555,12 +555,12 @@ describe("minimax plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Plus (CN)")
+    expect(result.plan).toBeUndefined()
     expect(result.lines[0].limit).toBe(100) // 1500 / 15 = 100 prompts
     expect(result.lines[0].used).toBe(20) // (1500-1200) / 15 = 20
   })
 
-  it("infers CN Max plan from 4500 model-call limit", async () => {
+  it("does not infer CN plan from 4500 model-call limit", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MINIMAX_CN_API_KEY: "cn-key" })
     ctx.host.http.request.mockReturnValue({
@@ -585,7 +585,7 @@ describe("minimax plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Max (CN)")
+    expect(result.plan).toBeUndefined()
     expect(result.lines[0].limit).toBe(300) // 4500 / 15 = 300 prompts
     expect(result.lines[0].used).toBe(120) // (4500-2700) / 15 = 120
   })

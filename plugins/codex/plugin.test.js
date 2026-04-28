@@ -107,6 +107,33 @@ describe("codex plugin", () => {
     plugin.probe(ctx)
   })
 
+  it("falls back to the next auth source when the first source is rejected", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.config/codex/auth.json", JSON.stringify({
+      tokens: { access_token: "stale-config-token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "legacy-token" },
+      last_refresh: new Date().toISOString(),
+    }))
+
+    const authHeaders = []
+    ctx.host.http.request.mockImplementation((opts) => {
+      authHeaders.push(opts.headers.Authorization)
+      if (opts.headers.Authorization === "Bearer stale-config-token") {
+        return { status: 401, headers: {}, bodyText: "{}" }
+      }
+      return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(authHeaders).toEqual(["Bearer stale-config-token", "Bearer legacy-token"])
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("auth failed for file, trying next auth source")
+  })
+
   it("does not fall back when CODEX_HOME is set but missing auth file", async () => {
     const ctx = makeCtx()
     ctx.host.env.get.mockImplementation((name) => (name === "CODEX_HOME" ? "/tmp/missing-codex-home" : null))
@@ -199,7 +226,7 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.plan).toBeTruthy()
+    expect(result.plan).toBe("Pro 20x")
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
     expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
     const credits = result.lines.find((line) => line.label === "Credits")
@@ -1217,5 +1244,41 @@ describe("codex plugin", () => {
     const saved = JSON.parse(ctx.host.fs.readText("~/.codex/auth.json"))
     expect(saved.tokens.refresh_token).toBe("new-refresh")
     expect(saved.tokens.id_token).toBe(idToken)
+  })
+
+  it("adds OpenAI dashboard usage and credits history from stored dashboard cookie", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: { "x-codex-primary-used-percent": "10" },
+      bodyText: JSON.stringify({}),
+    })
+    ctx.host.providerSecrets.read.mockImplementation((key) => (key === "cookieHeader" ? "session=abc" : null))
+    ctx.host.browser.requestWithCookies.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        usageBreakdown: [
+          { day: "2026-02-01", totalCreditsUsed: 12.5 },
+          { day: "2026-02-02", totalCreditsUsed: 7.5 },
+        ],
+        dailyBreakdown: [
+          { day: "2026-02-01", totalCreditsUsed: 3 },
+        ],
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(ctx.host.browser.requestWithCookies).toHaveBeenCalledWith(expect.objectContaining({
+      cookieHeader: "session=abc",
+      url: "https://chatgpt.com/codex/cloud/settings/analytics#usage",
+    }))
+    expect(result.lines.find((line) => line.label === "Dashboard Usage 30d")?.value).toBe("20 credits")
+    expect(result.lines.find((line) => line.label === "Credits History 30d")?.value).toBe("3 credits")
   })
 })

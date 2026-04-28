@@ -4,6 +4,7 @@
   const KEYCHAIN_SERVICE = "Claude Code-credentials"
   const USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
   const REFRESH_URL = "https://platform.claude.com/v1/oauth/token"
+  const CLAUDE_WEB_API_BASE = "https://claude.ai/api"
   const DEFAULT_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
   const DEFAULT_SCOPES = "user:profile user:inference user:sessions:claude_code user:mcp_servers"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
@@ -57,6 +58,82 @@
     const normalized = readNonEmptyString(value).replace(/[_-]+/g, " ").toLowerCase()
     if (!normalized) return ""
     return normalized.replace(/(^|\s)([a-z])/g, (match, prefix, letter) => prefix + letter.toUpperCase())
+  }
+
+  function loadStoredCookieHeader(ctx) {
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    try {
+      return readNonEmptyString(ctx.host.providerSecrets.read("cookieHeader"))
+    } catch (e) {
+      ctx.host.log.info("claude web cookie read failed: " + String(e))
+      return null
+    }
+  }
+
+  function cookiePairs(cookieHeader) {
+    const out = []
+    const parts = String(cookieHeader || "").split(";")
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim()
+      if (!part) continue
+      const idx = part.indexOf("=")
+      if (idx <= 0) continue
+      out.push({ name: part.slice(0, idx).trim(), value: part.slice(idx + 1).trim() })
+    }
+    return out
+  }
+
+  function sessionKeyFromCookieHeader(cookieHeader) {
+    const pairs = cookiePairs(cookieHeader)
+    for (let i = 0; i < pairs.length; i++) {
+      if (pairs[i].name === "sessionKey" && pairs[i].value.indexOf("sk-ant-") === 0) {
+        return pairs[i].value
+      }
+    }
+    return null
+  }
+
+  function requestClaudeWebJson(ctx, sessionKey, path, description) {
+    let response
+    try {
+      response = ctx.util.request({
+        method: "GET",
+        url: CLAUDE_WEB_API_BASE + path,
+        headers: {
+          Cookie: "sessionKey=" + sessionKey,
+          Accept: "application/json",
+          "User-Agent": "UsageBar",
+        },
+        timeoutMs: 15000,
+      })
+    } catch (e) {
+      ctx.host.log.warn("claude web " + description + " request failed: " + String(e))
+      return null
+    }
+    if (ctx.util.isAuthStatus(response.status)) {
+      throw "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
+    }
+    if (response.status < 200 || response.status >= 300) {
+      ctx.host.log.warn("claude web " + description + " returned HTTP " + String(response.status))
+      return null
+    }
+    const parsed = ctx.util.tryParseJson(response.bodyText)
+    return parsed && typeof parsed === "object" ? parsed : null
+  }
+
+  function selectWebOrganization(orgs) {
+    if (!Array.isArray(orgs)) return null
+    for (let i = 0; i < orgs.length; i++) {
+      const org = orgs[i]
+      if (org && Array.isArray(org.capabilities) && org.capabilities.map(String).map((v) => v.toLowerCase()).indexOf("chat") >= 0) {
+        return org
+      }
+    }
+    for (let i = 0; i < orgs.length; i++) {
+      const org = orgs[i]
+      if (org && org.uuid) return org
+    }
+    return null
   }
 
   function utf8DecodeBytes(bytes) {
@@ -624,9 +701,115 @@
     return { plan: null, lines: lines }
   }
 
+  function buildClaudeWebResult(ctx) {
+    const cookieHeader = loadStoredCookieHeader(ctx)
+    if (!cookieHeader) return null
+    const sessionKey = sessionKeyFromCookieHeader(cookieHeader)
+    if (!sessionKey) {
+      ctx.host.log.warn("claude web cookie configured but no sessionKey was found")
+      return null
+    }
+
+    const orgs = requestClaudeWebJson(ctx, sessionKey, "/organizations", "organizations")
+    const org = selectWebOrganization(orgs)
+    if (!org || !org.uuid) {
+      ctx.host.log.warn("claude web organization lookup returned no usable organization")
+      return null
+    }
+
+    const usage = requestClaudeWebJson(ctx, sessionKey, "/organizations/" + encodeURIComponent(org.uuid) + "/usage", "usage")
+    if (!usage) return null
+
+    const lines = []
+    if (usage.five_hour && typeof usage.five_hour.utilization === "number") {
+      lines.push(ctx.line.progress({
+        label: "Session",
+        used: usage.five_hour.utilization,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt: ctx.util.toIso(usage.five_hour.resets_at),
+        periodDurationMs: 5 * 60 * 60 * 1000
+      }))
+    }
+    if (usage.seven_day && typeof usage.seven_day.utilization === "number") {
+      lines.push(ctx.line.progress({
+        label: "Weekly",
+        used: usage.seven_day.utilization,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt: ctx.util.toIso(usage.seven_day.resets_at),
+        periodDurationMs: 7 * 24 * 60 * 60 * 1000
+      }))
+    }
+    if (usage.seven_day_sonnet && typeof usage.seven_day_sonnet.utilization === "number") {
+      lines.push(ctx.line.progress({
+        label: "Sonnet",
+        used: usage.seven_day_sonnet.utilization,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt: ctx.util.toIso(usage.seven_day_sonnet.resets_at),
+        periodDurationMs: 7 * 24 * 60 * 60 * 1000
+      }))
+    }
+    appendExtraRateWindow(lines, ctx, usage, "Designs", [
+      "seven_day_design",
+      "seven_day_claude_design",
+      "claude_design",
+      "design",
+      "seven_day_omelette",
+      "omelette",
+      "omelette_promotional",
+    ])
+    appendExtraRateWindow(lines, ctx, usage, "Daily Routines", [
+      "seven_day_routines",
+      "seven_day_claude_routines",
+      "claude_routines",
+      "routines",
+      "routine",
+      "seven_day_cowork",
+      "cowork",
+    ])
+
+    const overage = requestClaudeWebJson(
+      ctx,
+      sessionKey,
+      "/organizations/" + encodeURIComponent(org.uuid) + "/overage_spend_limit",
+      "overage"
+    )
+    if (overage && overage.is_enabled === true) {
+      const used = Number(overage.used_credits)
+      const limit = Number(overage.monthly_credit_limit)
+      if (Number.isFinite(used) && Number.isFinite(limit) && limit > 0) {
+        lines.push(ctx.line.progress({
+          label: "Extra usage spent",
+          used: ctx.fmt.dollars(used),
+          limit: ctx.fmt.dollars(limit),
+          format: { kind: "dollars" }
+        }))
+      }
+    }
+
+    const usageResult = queryTokenUsage(ctx)
+    if (usageResult.status === "ok") {
+      appendTokenUsageLines(lines, ctx, usageResult.data)
+    }
+
+    if (lines.length === 0) {
+      lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
+    }
+    const plan = readNonEmptyString(org.name)
+    return { plan: plan, lines: lines }
+  }
+
   function probe(ctx) {
     const creds = loadCredentials(ctx)
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
+      const webResult = buildClaudeWebResult(ctx)
+      if (webResult) {
+        ctx.host.log.info("using Claude web session fallback")
+        return webResult
+      }
+
       const localOnly = buildLocalUsageOnlyResult(ctx)
       if (localOnly) {
         if (creds && creds.account) {

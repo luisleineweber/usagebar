@@ -59,6 +59,7 @@ export type PluginMeta = {
   supportState?: PluginSupportState
   supportMessage?: string | null
   isSurfaced?: boolean
+  statusPageUrl?: string | null
   lines: ManifestLine[]
   links?: PluginLink[]
   /** Ordered list of primary metric candidates. Frontend picks first available. */
