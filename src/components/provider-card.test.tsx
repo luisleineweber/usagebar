@@ -110,51 +110,6 @@ describe("ProviderCard", () => {
     expect(screen.getByText("342 credits")).toBeInTheDocument()
   })
 
-  it("renders progress history from retained samples", () => {
-    const first = new Date("2026-02-02T00:00:00.000Z").getTime()
-    const second = new Date("2026-02-02T01:00:00.000Z").getTime()
-    render(
-      <ProviderCard
-        name="History"
-        displayMode="used"
-        lines={[
-          { type: "progress", label: "Weekly", used: 30, limit: 100, format: { kind: "percent" } },
-        ]}
-        history={{
-          points: [
-            { capturedAt: first, label: "Weekly", used: 10, limit: 100, format: { kind: "percent" } },
-            { capturedAt: second, label: "Weekly", used: 30, limit: 100, format: { kind: "percent" } },
-          ],
-        }}
-      />
-    )
-
-    expect(screen.getByRole("region", { name: "Usage history" })).toBeInTheDocument()
-    expect(screen.getByText("Usage trend")).toBeInTheDocument()
-    expect(screen.getByText("2 samples")).toBeInTheDocument()
-    expect(screen.getByText("10% -> 30%")).toBeInTheDocument()
-    expect(document.querySelector("polyline")).toBeTruthy()
-  })
-
-  it("hides progress history until there is a real trend", () => {
-    render(
-      <ProviderCard
-        name="History"
-        displayMode="used"
-        lines={[
-          { type: "progress", label: "Weekly", used: 30, limit: 100, format: { kind: "percent" } },
-        ]}
-        history={{
-          points: [
-            { capturedAt: 1, label: "Weekly", used: 30, limit: 100, format: { kind: "percent" } },
-          ],
-        }}
-      />
-    )
-
-    expect(screen.queryByRole("region", { name: "Usage history" })).toBeNull()
-  })
-
   it("renders quick links and opens URL", async () => {
     render(
       <ProviderCard

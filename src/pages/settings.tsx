@@ -72,70 +72,70 @@ export function SettingsPage({
   onProviderSecretDelete,
   onRetryProvider,
 }: SettingsPageProps) {
-  const isProvidersTab = settingsTab === "providers"
-
   return (
     <Tabs
       value={settingsTab}
-      className="gap-4 sm:gap-5"
+      className="gap-0"
       onValueChange={(value) => onSettingsTabChange(value as "general" | "providers")}
     >
-      <div className="shrink-0 py-2">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-2 md:max-w-xl">
-            <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              <span className="size-2 rounded-full bg-primary" />
-              UsageBar
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold tracking-[0.01em] sm:text-2xl">Settings</h1>
-              <p className="text-sm text-muted-foreground">
-                {isProvidersTab
-                  ? "Desktop provider management in a dedicated window."
-                  : "General app preferences for refresh, display, and startup."}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex w-full md:w-auto md:flex-1 md:justify-end">
-            <TabsList
-              variant="default"
-              className="grid h-auto w-full grid-cols-2 gap-1 rounded-lg border border-border/55 bg-transparent p-1 md:inline-flex md:w-auto"
-            >
-              <TabsTrigger value="general" className="gap-2 rounded-md px-3 py-2.5 sm:px-4">
-                <Settings2 className="size-4" />
-                General
-              </TabsTrigger>
-              <TabsTrigger value="providers" className="gap-2 rounded-md px-3 py-2.5 sm:px-4">
-                <Blocks className="size-4" />
-                Providers
-              </TabsTrigger>
-            </TabsList>
-          </div>
+      {/* Page header — title stacked above underline tabs, left-aligned */}
+      <div className="mb-1 pb-0">
+        <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <span className="size-2 rounded-full bg-primary" />
+          UsageBar
         </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage providers, refresh schedule, display, and system preferences.
+        </p>
+
+        {/* Underline tab bar — uses variant="line" so the built-in after: indicator fires on data-active */}
+        <TabsList
+          variant="line"
+          className="mt-4 h-auto w-fit gap-0 rounded-none border-b border-border/55 bg-transparent p-0 pb-0"
+        >
+          <TabsTrigger
+            value="general"
+            className="gap-2 rounded-none px-4 pb-2.5 pt-0.5 text-sm"
+          >
+            <Settings2 className="size-4" />
+            General
+          </TabsTrigger>
+          <TabsTrigger
+            value="providers"
+            className="gap-2 rounded-none px-4 pb-2.5 pt-0.5 text-sm"
+          >
+            <Blocks className="size-4" />
+            Providers
+          </TabsTrigger>
+        </TabsList>
       </div>
 
-      <TabsContent value="general" className="mt-0">
-        <GeneralSettingsPane
-          autoUpdateInterval={autoUpdateInterval}
-          onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
-          themeMode={themeMode}
-          onThemeModeChange={onThemeModeChange}
-          displayMode={displayMode}
-          onDisplayModeChange={onDisplayModeChange}
-          resetTimerDisplayMode={resetTimerDisplayMode}
-          onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
-          menubarIconStyle={menubarIconStyle}
-          onMenubarIconStyleChange={onMenubarIconStyleChange}
-          traySettingsPreview={traySettingsPreview}
-          globalShortcut={globalShortcut}
-          onGlobalShortcutChange={onGlobalShortcutChange}
-          startOnLogin={startOnLogin}
-          onStartOnLoginChange={onStartOnLoginChange}
-        />
+      {/* General — max-w-2xl keeps form controls readable on wide windows */}
+      <TabsContent value="general" className="mt-0 pt-5">
+        <div className="max-w-2xl">
+          <GeneralSettingsPane
+            autoUpdateInterval={autoUpdateInterval}
+            onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
+            themeMode={themeMode}
+            onThemeModeChange={onThemeModeChange}
+            displayMode={displayMode}
+            onDisplayModeChange={onDisplayModeChange}
+            resetTimerDisplayMode={resetTimerDisplayMode}
+            onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
+            menubarIconStyle={menubarIconStyle}
+            onMenubarIconStyleChange={onMenubarIconStyleChange}
+            traySettingsPreview={traySettingsPreview}
+            globalShortcut={globalShortcut}
+            onGlobalShortcutChange={onGlobalShortcutChange}
+            startOnLogin={startOnLogin}
+            onStartOnLoginChange={onStartOnLoginChange}
+          />
+        </div>
       </TabsContent>
 
-      <TabsContent value="providers" className="mt-0">
+      {/* Providers — full width for two-column layout */}
+      <TabsContent value="providers" className="mt-0 pt-5">
         <ProvidersSettingsPane
           providers={providers}
           selectedProviderId={selectedProviderId}

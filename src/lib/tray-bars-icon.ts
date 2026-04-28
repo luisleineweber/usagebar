@@ -1,6 +1,7 @@
 import { Image } from "@tauri-apps/api/image"
 import type { MenubarIconStyle } from "@/lib/settings"
 import type { TrayPrimaryBar } from "@/lib/tray-primary-progress"
+import type { ProviderStatusIndicator } from "@/lib/provider-status"
 
 const PROVIDER_ICON_SHRINK_PX = 1
 const PROVIDER_ICON_VERTICAL_NUDGE_PX = 0
@@ -182,9 +183,10 @@ export function makeTrayBarsSvg(args: {
   style?: MenubarIconStyle
   percentText?: string
   providerIconUrl?: string
+  statusIndicator?: ProviderStatusIndicator
 }): string {
   const { bars, sizePx, style = "provider", percentText, providerIconUrl } = args
-  const barsForStyle = style === "bars" ? bars : bars.slice(0, 1)
+  const barsForStyle = style === "bars" || style === "merged" ? bars : bars.slice(0, 1)
   // Intentionally render a single empty track when bars mode has no data yet
   // so the tray icon keeps a stable shape during loading/initialization.
   const n = Math.max(1, Math.min(4, barsForStyle.length || 1))
@@ -268,7 +270,7 @@ export function makeTrayBarsSvg(args: {
       }
     }
   } else {
-    // style === "bars"
+    // style === "bars" | "merged"
     const trackOpacity = BARS_TRACK_OPACITY
     const remainderOpacity = BARS_REMAINDER_OPACITY
     const fillOpacity = BARS_FILL_OPACITY
@@ -337,6 +339,17 @@ export function makeTrayBarsSvg(args: {
     )
   }
 
+  if (args.statusIndicator && args.statusIndicator !== "none") {
+    const r = Math.max(3, Math.round(sizePx * 0.16))
+    const cx = width - r - 1
+    const cy = height - r - 1
+    parts.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="black" opacity="1" />`)
+    if (args.statusIndicator === "major" || args.statusIndicator === "unknown") {
+      parts.push(`<rect x="${cx - 0.7}" y="${cy - r + 1.5}" width="1.4" height="${Math.max(2, r)}" rx="0.7" fill="white" opacity="0.95" />`)
+      parts.push(`<circle cx="${cx}" cy="${cy + r - 2}" r="0.8" fill="white" opacity="0.95" />`)
+    }
+  }
+
   parts.push(`</svg>`)
   return parts.join("")
 }
@@ -380,8 +393,9 @@ export async function renderTrayBarsIcon(args: {
   style?: MenubarIconStyle
   percentText?: string
   providerIconUrl?: string
+  statusIndicator?: ProviderStatusIndicator
 }): Promise<Image> {
-  const { bars, sizePx, style = "provider", percentText, providerIconUrl } = args
+  const { bars, sizePx, style = "provider", percentText, providerIconUrl, statusIndicator } = args
   const text = normalizePercentText(percentText)
   const svg = makeTrayBarsSvg({
     bars,
@@ -389,6 +403,7 @@ export async function renderTrayBarsIcon(args: {
     style,
     percentText: text,
     providerIconUrl,
+    statusIndicator,
   })
   const layout = getSvgLayout({
     sizePx,

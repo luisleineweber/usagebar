@@ -202,13 +202,10 @@ export function ProvidersSettingsPane({
         <div className="mb-4 border-b border-border/60 pb-4">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Providers</h3>
           <p className="mt-1 text-sm text-muted-foreground">Reorder your lineup and select a provider to manage.</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="text-muted-foreground">
-              {providers.filter((provider) => provider.enabled).length} enabled
-            </span>
-            <span className="text-muted-foreground">
-              {providers.filter((provider) => provider.supported).length} supported
-            </span>
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span>{providers.filter((provider) => provider.enabled).length} enabled</span>
+            <span aria-hidden className="text-border">·</span>
+            <span>{providers.filter((provider) => provider.supported).length} supported</span>
           </div>
         </div>
 

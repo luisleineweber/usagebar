@@ -1,5 +1,5 @@
 import { Fragment, useMemo } from "react"
-import { ExternalLink, Hourglass, RefreshCw } from "lucide-react"
+import { AlertCircle, ExternalLink, Hourglass, RefreshCw } from "lucide-react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -7,16 +7,16 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SkeletonLines } from "@/components/skeleton-lines"
-import { UsageHistoryChart } from "@/components/usage-history-chart"
 import { PluginError } from "@/components/plugin-error"
 import { useNowTicker } from "@/hooks/use-now-ticker"
 import { REFRESH_COOLDOWN_MS, type DisplayMode, type ResetTimerDisplayMode } from "@/lib/settings"
-import type { ManifestLine, MetricLine, PluginLink, ProviderUsageHistory, UsageHistoryPoint } from "@/lib/plugin-types"
+import type { ManifestLine, MetricLine, PluginLink } from "@/lib/plugin-types"
 import { groupLinesByType } from "@/lib/group-lines-by-type"
 import { clamp01, formatCountNumber, formatFixedPrecisionNumber } from "@/lib/utils"
 import { calculateDeficit, calculatePaceStatus, type PaceStatus } from "@/lib/pace-status"
 import { buildPaceDetailText, formatDeficitText, formatRunsOutText, getPaceStatusText } from "@/lib/pace-tooltip"
 import { formatResetAbsoluteLabel, formatResetRelativeLabel, formatResetTooltipText } from "@/lib/reset-tooltip"
+import { hasProviderStatusIssue, providerStatusLabel, type ProviderStatus } from "@/lib/provider-status"
 
 interface ProviderCardProps {
   name: string
@@ -26,14 +26,15 @@ interface ProviderCardProps {
   loading?: boolean
   error?: string | null
   lines?: MetricLine[]
-  history?: ProviderUsageHistory
   skeletonLines?: ManifestLine[]
   lastManualRefreshAt?: number | null
+  lastUpdatedAt?: number | null
   onRetry?: () => void
   scopeFilter?: "overview" | "all"
   displayMode: DisplayMode
   resetTimerDisplayMode?: ResetTimerDisplayMode
   onResetTimerDisplayModeToggle?: () => void
+  status?: ProviderStatus
 }
 
 const PACE_VISUALS: Record<PaceStatus, { dotClass: string }> = {
@@ -81,6 +82,17 @@ function PaceIndicator({
   )
 }
 
+function formatRelativeTime(diffMs: number): string {
+  const seconds = Math.floor(Math.max(0, diffMs) / 1000)
+  if (seconds < 60) return "just now"
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 export function ProviderCard({
   name,
   plan,
@@ -89,16 +101,18 @@ export function ProviderCard({
   loading = false,
   error = null,
   lines = [],
-  history,
   skeletonLines = [],
   lastManualRefreshAt,
+  lastUpdatedAt,
   onRetry,
   scopeFilter = "all",
   displayMode,
   resetTimerDisplayMode = "relative",
   onResetTimerDisplayModeToggle,
+  status,
 }: ProviderCardProps) {
   const hasRetainedContent = lines.length > 0
+  const isRefreshingWithData = loading && hasRetainedContent
   const cooldownRemainingMs = useMemo(() => {
     if (!lastManualRefreshAt) return 0
     const remaining = REFRESH_COOLDOWN_MS - (Date.now() - lastManualRefreshAt)
@@ -117,31 +131,20 @@ export function ProviderCard({
   const filteredLines = scopeFilter === "all"
     ? lines
     : lines.filter(line => overviewLabels.has(line.label))
-
   const hasResetCountdown = filteredLines.some(
     (line) => line.type === "progress" && Boolean(line.resetsAt)
   )
 
+  const tickerIntervalMs = cooldownRemainingMs > 0 ? 1000 : 30_000
   const now = useNowTicker({
     enabled: cooldownRemainingMs > 0 || hasResetCountdown,
-    intervalMs: cooldownRemainingMs > 0 ? 1000 : 30_000,
+    intervalMs: tickerIntervalMs,
     stopAfterMs: cooldownRemainingMs > 0 && !hasResetCountdown ? cooldownRemainingMs : null,
   })
 
   const inCooldown = lastManualRefreshAt
     ? now - lastManualRefreshAt < REFRESH_COOLDOWN_MS
     : false
-
-  const historyLines: UsageHistoryPoint[] = filteredLines
-    .filter((line) => line.type === "progress")
-    .map((line) => ({
-      capturedAt: now,
-      label: line.label,
-      used: line.used,
-      limit: line.limit,
-      format: line.format,
-      color: line.color,
-    }))
 
   const visibleLinks = useMemo(
     () =>
@@ -213,32 +216,61 @@ export function ProviderCard({
                   </TooltipContent>
                 </Tooltip>
               ) : (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Retry"
-                  onClick={(e) => {
-                    e.currentTarget.blur()
-                    onRetry()
-                  }}
-                  className="ml-1 opacity-0 hover:opacity-100 focus-visible:opacity-100"
-                  style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    className="ml-1"
+                    render={(props) => (
+                      <Button
+                        {...props}
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Retry"
+                        onClick={(e) => {
+                          e.currentTarget.blur()
+                          onRetry()
+                        }}
+                        className="opacity-0 hover:opacity-100 focus-visible:opacity-100"
+                        style={{ transform: "translateZ(0)", backfaceVisibility: "hidden" }}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                      </Button>
+                    )}
+                  />
+                  {lastUpdatedAt != null && (
+                    <TooltipContent side="top">
+                      Updated {formatRelativeTime(Date.now() - lastUpdatedAt)}
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               )
             )}
           </div>
+          <div className="flex max-w-[55%] shrink-0 items-center gap-1.5">
+          {hasProviderStatusIssue(status) ? (
+            <Badge
+              variant="outline"
+              className="border-destructive/55 text-destructive"
+              title={providerStatusLabel(status) ?? undefined}
+            >
+              Incident
+            </Badge>
+          ) : null}
           {plan && (
             <Badge
               variant="outline"
-              className="max-w-[55%] shrink-0 truncate whitespace-nowrap"
+              className="max-w-full shrink-0 truncate whitespace-nowrap"
               title={plan}
             >
               {plan}
             </Badge>
           )}
+          </div>
         </div>
+        {hasProviderStatusIssue(status) ? (
+          <div className="mb-2 rounded-md border border-destructive/25 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
+            {providerStatusLabel(status)}
+          </div>
+        ) : null}
         {visibleLinks.length > 0 && (
           <div className="mb-2 -mt-0.5 flex flex-wrap gap-1.5">
             {visibleLinks.map((link) => (
@@ -258,12 +290,30 @@ export function ProviderCard({
           </div>
         )}
         {error && !hasRetainedContent && <PluginError message={error} />}
+        {error && hasRetainedContent && (
+          <Tooltip>
+            <TooltipTrigger
+              render={(props) => (
+                <div
+                  {...props}
+                  className="mb-2 flex items-center gap-1.5 text-xs text-destructive"
+                >
+                  <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">{error}</span>
+                </div>
+              )}
+            />
+            <TooltipContent side="top" className="max-w-xs break-words text-xs">
+              {error}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         {loading && !hasRetainedContent && !error && (
           <SkeletonLines lines={filteredSkeletonLines} />
         )}
 
-        {(hasRetainedContent || !loading) && !error && (
+        {hasRetainedContent && (
           <div className="space-y-4">
             {groupLinesByType(filteredLines).map((group, gi) =>
               group.kind === "text" ? (
@@ -276,6 +326,7 @@ export function ProviderCard({
                       resetTimerDisplayMode={resetTimerDisplayMode}
                       onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
                       now={now}
+                      refreshing={isRefreshingWithData}
                     />
                   ))}
                 </div>
@@ -289,27 +340,18 @@ export function ProviderCard({
                       resetTimerDisplayMode={resetTimerDisplayMode}
                       onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
                       now={now}
+                      refreshing={isRefreshingWithData}
                     />
                   ))}
                 </Fragment>
               )
             )}
-            <UsageHistoryChart
-              history={history}
-              lines={historyLines}
-              compact={scopeFilter === "overview"}
-            />
           </div>
         )}
         {loading && hasRetainedContent && (
           <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
             <RefreshCw className="h-3 w-3 animate-spin" />
             Refreshing usage
-          </div>
-        )}
-        {error && hasRetainedContent && (
-          <div className="mt-3">
-            <PluginError message={error} />
           </div>
         )}
       </div>
@@ -324,12 +366,14 @@ function MetricLineRenderer({
   resetTimerDisplayMode,
   onResetTimerDisplayModeToggle,
   now,
+  refreshing,
 }: {
   line: MetricLine
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
   onResetTimerDisplayModeToggle?: () => void
   now: number
+  refreshing?: boolean
 }) {
   if (line.type === "text") {
     return (
@@ -472,6 +516,7 @@ function MetricLineRenderer({
           value={percent}
           indicatorColor={line.color}
           markerValue={paceMarkerValue}
+          refreshing={refreshing}
         />
         <div className="flex justify-between items-center mt-1.5">
           <span className="text-xs text-muted-foreground tabular-nums">
