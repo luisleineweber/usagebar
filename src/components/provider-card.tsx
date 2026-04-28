@@ -7,10 +7,11 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SkeletonLines } from "@/components/skeleton-lines"
+import { UsageHistoryChart } from "@/components/usage-history-chart"
 import { PluginError } from "@/components/plugin-error"
 import { useNowTicker } from "@/hooks/use-now-ticker"
 import { REFRESH_COOLDOWN_MS, type DisplayMode, type ResetTimerDisplayMode } from "@/lib/settings"
-import type { ManifestLine, MetricLine, PluginLink } from "@/lib/plugin-types"
+import type { ManifestLine, MetricLine, PluginLink, ProviderUsageHistory, UsageHistoryPoint } from "@/lib/plugin-types"
 import { groupLinesByType } from "@/lib/group-lines-by-type"
 import { clamp01, formatCountNumber, formatFixedPrecisionNumber } from "@/lib/utils"
 import { calculateDeficit, calculatePaceStatus, type PaceStatus } from "@/lib/pace-status"
@@ -25,6 +26,7 @@ interface ProviderCardProps {
   loading?: boolean
   error?: string | null
   lines?: MetricLine[]
+  history?: ProviderUsageHistory
   skeletonLines?: ManifestLine[]
   lastManualRefreshAt?: number | null
   onRetry?: () => void
@@ -87,6 +89,7 @@ export function ProviderCard({
   loading = false,
   error = null,
   lines = [],
+  history,
   skeletonLines = [],
   lastManualRefreshAt,
   onRetry,
@@ -128,6 +131,17 @@ export function ProviderCard({
   const inCooldown = lastManualRefreshAt
     ? now - lastManualRefreshAt < REFRESH_COOLDOWN_MS
     : false
+
+  const historyLines: UsageHistoryPoint[] = filteredLines
+    .filter((line) => line.type === "progress")
+    .map((line) => ({
+      capturedAt: now,
+      label: line.label,
+      used: line.used,
+      limit: line.limit,
+      format: line.format,
+      color: line.color,
+    }))
 
   const visibleLinks = useMemo(
     () =>
@@ -280,6 +294,11 @@ export function ProviderCard({
                 </Fragment>
               )
             )}
+            <UsageHistoryChart
+              history={history}
+              lines={historyLines}
+              compact={scopeFilter === "overview"}
+            />
           </div>
         )}
         {loading && hasRetainedContent && (

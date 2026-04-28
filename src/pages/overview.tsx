@@ -36,6 +36,7 @@ export function OverviewPage({
           loading={plugin.loading}
           error={plugin.error}
           lines={plugin.data?.lines ?? plugin.lastSettledData?.lines ?? []}
+          history={plugin.history}
           skeletonLines={plugin.meta.lines}
           lastManualRefreshAt={plugin.lastManualRefreshAt}
           onRetry={onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined}

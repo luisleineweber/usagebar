@@ -36,6 +36,19 @@ export type PluginOutput = {
   iconUrl: string
 }
 
+export type UsageHistoryPoint = {
+  capturedAt: number
+  label: string
+  used: number
+  limit: number
+  format: ProgressFormat
+  color?: string
+}
+
+export type ProviderUsageHistory = {
+  points: UsageHistoryPoint[]
+}
+
 export type PluginSupportState = "supported" | "experimental" | "comingSoonOnWindows"
 
 export type PluginMeta = {
@@ -56,6 +69,7 @@ export type PluginDisplayState = {
   meta: PluginMeta
   data: PluginOutput | null
   lastSettledData?: PluginOutput | null
+  history?: ProviderUsageHistory
   loading: boolean
   error: string | null
   lastManualRefreshAt: number | null
