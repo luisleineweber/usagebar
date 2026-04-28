@@ -1,6 +1,7 @@
 #[cfg(target_os = "macos")]
 mod app_nap;
 mod codex_account_store;
+mod local_http_api;
 mod panel;
 mod plugin_engine;
 mod provider_secret_store;
@@ -573,6 +574,7 @@ pub struct PluginMeta {
     pub support_state: String,
     pub support_message: Option<String>,
     pub is_surfaced: bool,
+    pub status_page_url: Option<String>,
     pub lines: Vec<ManifestLineDto>,
     pub links: Vec<PluginLinkDto>,
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
@@ -806,6 +808,7 @@ async fn start_probe_batch(
                             plugin_id,
                             output.lines.len()
                         );
+                        local_http_api::cache_successful_output(&output);
                     }
                     let _ = handle.emit(
                         "probe:result",
@@ -1237,6 +1240,12 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
                 support_state: support.support_state.to_string(),
                 support_message: support.support_message,
                 is_surfaced: support.is_surfaced,
+                status_page_url: plugin
+                    .manifest
+                    .links
+                    .iter()
+                    .find(|link| link.label.eq_ignore_ascii_case("status"))
+                    .map(|link| link.url.clone()),
                 lines: plugin
                     .manifest
                     .lines
@@ -1331,6 +1340,13 @@ pub fn run() {
             log::debug!("app_data_dir: {:?}", app_data_dir);
 
             let (_, plugins) = plugin_engine::initialize_plugins(&app_data_dir, &resource_dir);
+            let known_plugin_ids = plugins
+                .iter()
+                .map(|plugin| plugin.manifest.id.clone())
+                .collect();
+            local_http_api::init(&app_data_dir, known_plugin_ids);
+            local_http_api::start_server();
+
             app.manage(Mutex::new(AppState {
                 plugins,
                 app_data_dir,

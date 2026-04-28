@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -14,15 +14,33 @@ function quoteForPowerShell(value) {
   return `'${String(value).replace(/'/g, "''")}'`
 }
 
+function getWindowsDevExeNames() {
+  const names = new Set(["openusage"])
+  const configPath = path.join(repoRoot, "src-tauri", "tauri.conf.json")
+
+  try {
+    const config = JSON.parse(readFileSync(configPath, "utf8"))
+    if (typeof config.productName === "string" && config.productName.trim()) {
+      names.add(config.productName.trim().toLowerCase().replace(/\s+/g, "-"))
+    }
+  } catch {
+    // Fall back to the legacy executable name if the config cannot be read.
+  }
+
+  return [...names].map((name) => `${name}.exe`)
+}
+
 function stopStaleWindowsDevProcess() {
-  const exePath = path.join(repoRoot, "src-tauri", "target", "debug", "openusage.exe")
+  const exePaths = getWindowsDevExeNames().map((exeName) =>
+    path.join(repoRoot, "src-tauri", "target", "debug", exeName)
+  )
   const command = `
-$repoExe = [System.IO.Path]::GetFullPath(${quoteForPowerShell(exePath)})
-Get-CimInstance Win32_Process -Filter "Name = 'openusage.exe'" |
-  Where-Object { $_.ExecutablePath -and ([System.IO.Path]::GetFullPath($_.ExecutablePath) -eq $repoExe) } |
+$repoExes = @(${exePaths.map(quoteForPowerShell).join(", ")}) | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
+Get-CimInstance Win32_Process |
+  Where-Object { $_.ExecutablePath -and ($repoExes -contains [System.IO.Path]::GetFullPath($_.ExecutablePath)) } |
   ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force
-    Write-Output ("Stopped stale OpenUsage dev process PID " + $_.ProcessId)
+    Write-Output ("Stopped stale UsageBar dev process PID " + $_.ProcessId)
   }
 `.trim()
 

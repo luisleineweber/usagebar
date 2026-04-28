@@ -109,7 +109,7 @@ describe("perplexity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Pro")
+    expect(result.plan).toBeUndefined()
     expect(result.lines.map((line) => line.label)).toEqual([
       "Recurring credits",
       "Purchased credits",
@@ -121,7 +121,7 @@ describe("perplexity plugin", () => {
     expect(result.lines[2].used).toBe(50)
   })
 
-  it("aggregates nested grants and infers Max from recurring pool size", async () => {
+  it("aggregates nested grants without inferring a plan from recurring pool size", async () => {
     const ctx = makeCtx()
     ctx.host.providerSecrets.read.mockImplementation((key) => (key === "cookieHeader" ? "stored-cookie=1" : null))
     mockCreditsEndpoint(ctx, {
@@ -136,7 +136,7 @@ describe("perplexity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Max")
+    expect(result.plan).toBeUndefined()
     expect(result.lines).toHaveLength(1)
     expect(result.lines[0].label).toBe("Recurring credits")
     expect(result.lines[0].used).toBe(9000)

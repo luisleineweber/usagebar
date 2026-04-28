@@ -428,24 +428,11 @@
       }))
     }
 
-    // Infer plan from allowance
-    let plan = null
-    if (standard && typeof standard.totalAllowance === "number") {
-      const allowance = standard.totalAllowance
-      if (allowance >= 200000000) {
-        plan = "Max"
-      } else if (allowance >= 20000000) {
-        plan = "Pro"
-      } else if (allowance > 0) {
-        plan = "Basic"
-      }
-    }
-
     if (lines.length === 0) {
       lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     }
 
-    return { plan: plan, lines: lines }
+    return { plan: null, lines: lines }
   }
 
   globalThis.__openusage_plugin = { id: "factory", probe }

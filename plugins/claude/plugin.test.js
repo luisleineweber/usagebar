@@ -41,6 +41,40 @@ describe("claude plugin", () => {
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
+  it("uses Claude web session cookie fallback when OAuth credentials are missing", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => false
+    ctx.host.providerSecrets.read.mockImplementation((key) => (
+      key === "cookieHeader" ? "other=1; sessionKey=sk-ant-web-session" : null
+    ))
+    ctx.host.http.request.mockImplementation((opts) => {
+      expect(opts.headers.Cookie).toBe("sessionKey=sk-ant-web-session")
+      if (String(opts.url).endsWith("/organizations")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify([{ uuid: "org-1", name: "Claude Team", capabilities: ["chat"] }]),
+        }
+      }
+      if (String(opts.url).endsWith("/usage")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            five_hour: { utilization: 11, resets_at: "2099-01-01T00:00:00.000Z" },
+            seven_day: { utilization: 22, resets_at: "2099-01-02T00:00:00.000Z" },
+          }),
+        }
+      }
+      return { status: 404, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Claude Team")
+    expect(result.lines.find((line) => line.label === "Session")?.used).toBe(11)
+    expect(result.lines.find((line) => line.label === "Weekly")?.used).toBe(22)
+  })
+
   it("uses account-file oauth credentials when the legacy credentials file is missing", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = (path) => path === "~/.claude.json"
