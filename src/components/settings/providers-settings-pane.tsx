@@ -75,9 +75,9 @@ function SortableProviderRow({
       type="button"
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "flex w-full flex-wrap items-start gap-3 rounded-lg border px-3 py-3 text-left transition-colors sm:flex-nowrap sm:items-center",
+        "group flex w-full flex-wrap items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors sm:flex-nowrap sm:items-center",
         selected
-          ? "border-primary/30 bg-primary text-primary-foreground"
+          ? "border-border bg-muted/70 text-foreground shadow-sm"
           : "border-transparent bg-transparent hover:border-border/55 hover:bg-muted/35",
         isDragging && "opacity-50"
       )}
@@ -106,7 +106,7 @@ function SortableProviderRow({
         <span
           className={cn(
             "block text-sm font-medium",
-            selected ? "text-primary-foreground" : !plugin.enabled && "text-muted-foreground"
+            !plugin.enabled && "text-muted-foreground"
           )}
         >
           {plugin.name}
@@ -114,7 +114,7 @@ function SortableProviderRow({
         <span
           className={cn(
             "block text-xs leading-5 break-words",
-            selected ? "text-primary-foreground/75" : "text-muted-foreground"
+            "text-muted-foreground"
           )}
         >
           {getProviderSubtitle(plugin)}
@@ -127,8 +127,7 @@ function SortableProviderRow({
         disabled={!plugin.supported}
         className={cn(
           "self-start sm:self-auto",
-          selected
-            && "border-foreground/18 bg-foreground/6 data-checked:border-foreground data-checked:bg-foreground data-checked:text-background"
+          selected && "data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground"
         )}
         onCheckedChange={(checked) => {
           const nextEnabled = checked === true
@@ -204,7 +203,7 @@ export function ProvidersSettingsPane({
           <p className="mt-1 text-sm text-muted-foreground">Reorder your lineup and select a provider to manage.</p>
           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <span>{providers.filter((provider) => provider.enabled).length} enabled</span>
-            <span aria-hidden className="text-border">·</span>
+            <span aria-hidden className="text-border">/</span>
             <span>{providers.filter((provider) => provider.supported).length} supported</span>
           </div>
         </div>

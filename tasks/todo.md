@@ -1,3 +1,228 @@
+# Deep research hardening roadmap
+
+Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local `usagebar` tree.
+
+# Beta 6 release readiness
+
+## Acceptance Criteria
+- [x] Local branch is not behind `origin/main` and no merge commit is introduced.
+- [x] `0.1.0-beta.6` release metadata is consistent across package, Tauri, Cargo, changelog, and release preflight.
+- [x] Release-ready verification passes or blockers are recorded with exact commands.
+- [x] No release tag, commit, push, or GitHub release is created unless explicitly requested.
+
+## Plan
+- [x] Fetch `origin` and verify ahead/behind status.
+- [x] Confirm latest GitHub prerelease state with `gh release list`.
+- [x] Fill the beta6 changelog and keep Tauri build hooks on the repo-standard Bun path.
+- [x] Run release preflight, build/test checks, and a local Windows bundle build if time permits.
+- [x] Record final readiness result in this section before ending.
+
+## Verification Notes
+- `git fetch origin --prune` completed successfully.
+- `git rev-list --left-right --count HEAD...origin/main` -> `8 0`, so local `main` is 8 commits ahead and 0 behind; no merge or rebase was needed.
+- `gh release list --repo Loues000/usagebar --limit 10` shows latest published prerelease is `v0.1.0-beta.5`; no beta6 GitHub release exists yet.
+- Initial `npx bun run release:check -- --release-tag v0.1.0-beta.6` passed: package, Tauri, Cargo, updater endpoint, changelog section, and bundled plugin count are valid.
+- Updated `CHANGELOG.md` beta6 highlights from `Unreleased` to concrete release notes.
+- Updated `src-tauri/tauri.conf.json` build hooks to `bun run bundle:plugins && bun run dev/build`.
+- Re-ran `npx bun run release:check -- --release-tag v0.1.0-beta.6` after edits -> passed.
+- `npx bun install --frozen-lockfile` -> checked 190 installs across 264 packages, no changes.
+- `node -e "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json','utf8')); console.log('tauri.conf.json valid JSON')"` -> valid JSON.
+- `npx bun run build` -> TypeScript and Vite production build passed; Vite emitted the existing >500 kB chunk warning.
+- `npx bun run test -- --run` -> 71 files passed, 1040 tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml --no-run` -> Rust tests compiled successfully.
+- `node ./scripts/build-release.mjs --bundles nsis` -> produced unsigned local installer `src-tauri/target/release/bundle/nsis/UsageBar_0.1.0-beta.6_x64-setup.exe`.
+- `npx bun run test:coverage` -> all 71 files / 1040 tests passed, but global 90% thresholds still fail: statements 83.17%, branches 75.12%, functions 88.58%, lines 86.38%. This remains the known coverage-threshold blocker for PR policy, not a failing test.
+- Final readiness result: beta6 has a locally verified unsigned Windows artifact and is not behind `origin/main`; publishing still needs an explicit commit/tag/push/release action.
+
+## Acceptance Criteria
+- [ ] The highest-risk findings from the deep research report are represented as small, reviewable todo slices in priority order.
+- [ ] Each slice has concrete acceptance criteria and verification commands before implementation starts.
+- [ ] Existing in-flight provider/security work in the dirty worktree is not reverted or mixed into these planning changes.
+
+## Priority Order
+1. [x] Stabilize the JavaScript toolchain and package-manager path.
+2. [ ] Harden the WebView and plugin security boundaries.
+3. [ ] Make CI truthful, reproducible, and Windows-aware.
+4. [ ] Resolve the Aptabase/Tauri dependency mismatch.
+5. [ ] Add an enforceable lint/format contract.
+6. [ ] Finish UsageBar branding metadata cleanup.
+7. [ ] Improve keyboard accessibility for menu/reorder flows.
+8. [ ] Modularize the largest app/plugin-host hotspots.
+9. [ ] Expand contributor-facing architecture/security docs.
+
+## Verification Notes
+- Checked current repo state with `git status --short`; there is unrelated in-flight provider/security work in plugin and host files, so roadmap planning is intentionally isolated to this task file.
+- Confirmed `src-tauri/tauri.conf.json` still has `beforeDevCommand` / `beforeBuildCommand` using `npm run ...` and `security.csp` set to `null`.
+- Confirmed `.github/workflows/ci.yml` still runs only on `ubuntu-latest`, uses plain `bun install`, and does not run a lint or coverage command.
+- Confirmed the initial state had `vite@^8.0.0`, `vitest@^4.0.18`, `@tailwindcss/vite@^4.1.18`, and `@aptabase/tauri@^0.4.1`.
+- Completed the first P0 slice by keeping Vite 8 and updating Vite-facing Tailwind/Vitest packages to compatible versions; `@aptabase/tauri` remains the separate P1 dependency-mismatch slice.
+
+# P0 - Stabilize JavaScript toolchain and package manager
+
+## Acceptance Criteria
+- [x] Vite, Vitest, `@vitejs/plugin-react`, and `@tailwindcss/vite` are pinned to a mutually supported matrix.
+- [x] The lockfile is regenerated with Bun and installs reproducibly with `bun install --frozen-lockfile`.
+- [x] Tauri dev/build hooks use the repo-standard Bun commands instead of `npm run`.
+- [x] Frontend build and focused dependency verification pass before this slice is marked done.
+
+## Plan
+- [x] Decide the least-risk matrix: downgrade Vite to the latest supported Vite 7 line, unless official package metadata now proves every current Vite-facing dependency supports Vite 8.
+- [x] Update `package.json`, `bun.lock`, and Tauri `beforeDevCommand` / `beforeBuildCommand` together.
+- [x] Run `bun install --frozen-lockfile`, `bun run build`, and `bun run test -- --run` or the repo's current non-watch equivalent.
+- [x] Record the exact toolchain versions and commands in this section after verification.
+
+## Verification Notes
+- Verified current npm package metadata before editing: `@tailwindcss/vite@4.2.4` peers on `vite ^5.2.0 || ^6 || ^7 || ^8`; `vitest@4.1.5` peers on `vite ^6.0.0 || ^7.0.0 || ^8.0.0`; `@vitejs/plugin-react@6.0.1` peers on `vite ^8.0.0`.
+- Updated `package.json` / `bun.lock` to `@tailwindcss/vite@^4.2.4`, `tailwindcss@^4.2.4`, `vitest@^4.1.5`, and `@vitest/coverage-v8@^4.1.5` while keeping `vite@^8.0.0` and `@vitejs/plugin-react@^6.0.1`.
+- Removed the nested `vitest/vite@7.3.1` resolution from `bun.lock` by regenerating with Bun 1.3.13 via `npx bun install`.
+- Switched Tauri `beforeDevCommand` and `beforeBuildCommand` from `npm run ...` to `bun run ...`.
+- Verified reproducible install with `npx bun install --frozen-lockfile` -> checked 190 installs across 264 packages, no changes.
+- Verified production frontend build with `npx bun run build` -> `tsc` passed and Vite 8 production build completed.
+- Verified full non-watch frontend/plugin test suite with `npx bun run test -- --run` -> 71 files passed, 1037 tests passed.
+- Fixed one stale settings-layout test assertion during verification: the component no longer renders `.md:flex-row`, so the test now checks the responsive grid classes that still exist.
+
+# P0 - Harden WebView and plugin security boundaries
+
+## Acceptance Criteria
+- [x] `src-tauri/tauri.conf.json` no longer uses `security.csp: null`; it has a restrictive starter CSP validated against the app's real asset and IPC needs.
+- [ ] Plugin manifests or host policy support explicit HTTP domain allowlists before arbitrary network access is treated as normal.
+- [ ] Dangerous host APIs such as write-capable `sqlite.exec` are gated by explicit plugin capability metadata.
+- [ ] `ccusage` execution avoids dynamic registry fallback in packaged builds, or the remaining dynamic path is explicitly documented and guarded.
+- [ ] Focused Rust/JS tests cover at least one denied HTTP target and one denied write-capability path.
+
+## Plan
+- [x] Start with the smallest safe CSP change and run the app/build to catch broken local asset, IPC, font, image, and style paths.
+- [ ] Extend plugin schema/manifest parsing with optional `permissions.httpDomains` and `permissions.sqliteWrite` fields, preserving current bundled plugins through explicit declarations where needed.
+- [ ] Enforce the policy in `src-tauri/src/plugin_engine/host_api.rs` and add regression tests around allow/deny decisions.
+- [ ] Update `docs/plugins/api.md`, `docs/plugins/schema.md`, and `SECURITY.md` so plugin authors understand the new defaults.
+
+## Verification Notes
+- Added a restrictive starter CSP in `src-tauri/tauri.conf.json` using the object form from Tauri v2 CSP docs.
+- Verified config syntax with `node -e "JSON.parse(...)"` -> `tauri.conf.json valid JSON`.
+- Verified frontend compatibility with `npx bun run build` -> `tsc` passed and Vite 8 production build completed.
+- Verified Tauri accepts and reports the policy with `npx bun run tauri -- info` -> App CSP reported as `default-src 'self' customprotocol: asset:; connect-src 'self' ipc: http://ipc.localhost https:; img-src 'self' asset: http://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:`.
+- Did not edit the broader plugin capability implementation because the dirty worktree already contains changes in `docs/plugins/api.md`, `docs/plugins/schema.md`, `SECURITY.md`, `src-tauri/src/plugin_engine/host_api.rs`, `manifest.rs`, and `runtime.rs`.
+- Attempted focused Rust verification with `cargo test --manifest-path src-tauri/Cargo.toml capability -- --nocapture`; the crate compiled, then the local test binary exited with `STATUS_ENTRYPOINT_NOT_FOUND`, matching the existing Rust-test blocker noted elsewhere in this task file.
+
+# P1 - Make CI truthful, reproducible, and Windows-aware
+
+## Acceptance Criteria
+- [x] CI job names match the commands actually run.
+- [x] CI installs with `bun install --frozen-lockfile`.
+- [ ] CI runs typecheck/build, tests, and coverage in non-watch mode.
+- [x] CI includes `windows-latest` because UsageBar is Windows-first.
+- [ ] CI includes lint once the lint/format contract slice lands.
+
+## Plan
+- [x] Add a matrix over `ubuntu-latest` and `windows-latest` with `fail-fast: false`.
+- [ ] Split build/typecheck/test/coverage into clearly named steps.
+- [ ] Upload coverage artifacts from one OS only to keep workflow output compact.
+- [ ] After the lint slice lands, add `bun run lint` as a required CI step.
+
+## Verification Notes
+- Updated `.github/workflows/ci.yml` to run on `push` to `main` and `pull_request` to `main`.
+- Replaced the misleading `Lint, Type-check, Build, Test` job name with `Build and Test (${{ matrix.os }})`.
+- Added a `ubuntu-latest` / `windows-latest` matrix with `fail-fast: false`.
+- Switched CI install to `bun install --frozen-lockfile`.
+- Split CI into named `Type-check and build frontend` and `Run frontend and plugin tests` steps, using `bun run test -- --run` so CI does not enter watch mode.
+- Coverage enforcement is not wired into CI yet: `npx bun run test:coverage` passes all 71 test files / 1037 tests, but fails configured 90% global thresholds with statements 83.15%, branches 75.13%, functions 88.56%, and lines 86.34%.
+- Lint remains pending until the lint/format contract slice adds a `bun run lint` script.
+
+# P1 - Resolve Aptabase and Tauri dependency mismatch
+
+## Acceptance Criteria
+- [ ] `@aptabase/tauri` no longer pulls an incompatible Tauri v1 API surface into the frontend dependency graph, or the risk is explicitly accepted with documented isolation.
+- [ ] Rust analytics dependency is either a release-based crate, a reviewed pinned revision with rationale, or replaced by a local adapter.
+- [ ] Analytics initialization and opt-in/opt-out behavior still pass focused tests after the change.
+
+## Plan
+- [ ] Audit current frontend and Rust Aptabase usage sites.
+- [ ] Prefer a Tauri v2-compatible analytics package if available and healthy; otherwise isolate calls behind an internal analytics adapter.
+- [ ] Update tests around `src/lib/analytics.ts` and any Rust plugin initialization path affected.
+- [ ] Document the chosen analytics dependency strategy in repo notes if it is a deliberate exception.
+
+## Verification Notes
+- Pending.
+
+# P2 - Add enforceable lint and formatting contract
+
+## Acceptance Criteria
+- [ ] The repo has a single documented lint/format command for TS/JS/JSON files.
+- [ ] The initial config excludes generated/build output and avoids repo-wide churn.
+- [ ] CI can run the lint command without formatting files.
+- [ ] Existing plugin JavaScript is either covered directly or tracked as a follow-up if the initial rule set is too noisy.
+
+## Plan
+- [ ] Add the smallest lint/format toolchain that fits the repo; Biome is the preferred default unless existing project constraints argue for ESLint.
+- [ ] Configure ignores for `dist`, `src-tauri/target`, bundled/generated plugin copies, and coverage output.
+- [ ] Run lint once, fix only high-signal issues needed to pass, and defer style churn to separate tasks.
+- [ ] Add `lint` and `format` scripts to `package.json`.
+
+## Verification Notes
+- Pending.
+
+# P2 - Finish UsageBar branding metadata cleanup
+
+## Acceptance Criteria
+- [ ] User-facing bundle metadata consistently uses UsageBar.
+- [ ] Internal identifiers, executable names, updater metadata, keychain/secret namespaces, and support URLs are intentionally named and documented.
+- [ ] Any remaining `openusage` identifiers are deliberate compatibility shims with a short comment or migration note.
+- [ ] A local Windows build verifies the resulting artifact names.
+
+## Plan
+- [ ] Inventory `openusage`, `com.sunstory.openusage`, executable names, keychain targets, and docs/support links.
+- [ ] Separate safe user-facing renames from risky migration-sensitive identifiers.
+- [ ] Implement renames with migration tests where credential or data paths are affected.
+- [ ] Verify with `bun run build` and a local Windows bundle command.
+
+## Verification Notes
+- Pending. Some branding has already moved to UsageBar locally, but Tauri hooks still invoke npm and the binary may still be `openusage.exe`.
+
+# P2 - Improve keyboard accessibility for menu and reorder flows
+
+## Acceptance Criteria
+- [ ] Context menus move focus on open, support `Escape`, `ArrowUp`, `ArrowDown`, `Home`, and `End`, and return focus to the opener when closed.
+- [ ] Provider/sidebar reordering has a keyboard-accessible path or an explicit arrange mode with screenreader labels.
+- [ ] Focused React tests cover the keyboard behavior.
+
+## Plan
+- [ ] Patch `src/components/app/app-shell.tsx` context-menu focus handling first because it is the smallest user-visible gap.
+- [ ] Audit current dnd-kit usage and add keyboard sensor support or a non-drag keyboard reorder mode.
+- [ ] Add focused `@testing-library/user-event` regressions for menu navigation and reorder actions.
+
+## Verification Notes
+- Pending.
+
+# P3 - Modularize large app and plugin-host hotspots
+
+## Acceptance Criteria
+- [ ] `App.tsx`, `AppShell`, and the Rust plugin host have clearer ownership boundaries without behavior changes.
+- [ ] Each extraction is covered by existing or focused tests before further refactors build on it.
+- [ ] No broad style-only rewrites are mixed with behavior extraction.
+
+## Plan
+- [ ] Identify the next largest orchestration block that can be extracted behind an existing hook/store boundary.
+- [ ] Extract one concern per PR-sized slice, starting with code that already has test coverage.
+- [ ] After each extraction, run the nearest focused tests plus `bun run build`.
+
+## Verification Notes
+- Pending.
+
+# P3 - Expand architecture, security, and contributor docs
+
+## Acceptance Criteria
+- [ ] README includes a short architecture section, support matrix, security model, and telemetry/privacy summary.
+- [ ] CONTRIBUTING explains local prerequisites, expected test commands by change type, dependency policy, and plugin security review questions.
+- [ ] Provider/plugin docs reflect the hardened permission model once implemented.
+
+## Plan
+- [ ] Add docs only after the underlying security/toolchain decisions are settled, so the docs do not describe planned-but-missing behavior.
+- [ ] Keep README concise and move detailed plugin/security policy into docs pages.
+- [ ] Cross-link release, security, plugin API, and provider setup docs.
+
+## Verification Notes
+- Pending.
+
 # Remove false provider subscription labels
 
 ## Acceptance Criteria
@@ -1170,3 +1395,23 @@
 ## Verification Notes
 - Verified bootstrap ordering with `npx vitest run src/hooks/app/use-settings-bootstrap.test.ts src/hooks/app/use-panel.test.ts` -> 2 files passed, 17 tests passed.
 - Verified the cold-start tray-height regression with `npx vitest run src/App.test.tsx -t "raises the cold-start panel height for the full nav stack before slower bootstrap finishes"` -> 1 test passed.
+
+# Fix review findings for Copilot billing and Cursor sqlite capability
+
+## Acceptance Criteria
+- [x] Copilot premium-request billing requests use a supported GitHub REST API version.
+- [x] Copilot billing scope env vars are exposed by the real Tauri host env allowlist and covered by the focused host test.
+- [x] Cursor explicitly opts into `sqliteWrite` because it persists refreshed SQLite-sourced auth tokens.
+- [ ] Focused Copilot, Cursor, manifest, and host env verification passes.
+
+## Plan
+- [x] Replace the Copilot billing API version header with the supported compatibility version.
+- [x] Add `COPILOT_BILLING_SCOPE`, `COPILOT_BILLING_ENTERPRISE`, and `COPILOT_BILLING_ORG` to the host env allowlist and regression expectations.
+- [x] Add `capabilities.sqliteWrite: true` to Cursor's manifest and cover manifest parsing.
+- [x] Run focused JS/Rust tests and record results.
+
+## Verification Notes
+- Verified Copilot/Cursor plugin coverage with `npx vitest run plugins/copilot/plugin.test.js plugins/cursor/plugin.test.js` -> 2 files passed, 101 tests passed.
+- Verified Rust host/manifest test compilation with `cargo test --manifest-path src-tauri/Cargo.toml env_api_respects_allowlist_in_host_and_js --no-run` and `cargo test --manifest-path src-tauri/Cargo.toml capabilities_and_source_provenance_are_parsed_when_present --no-run` -> both compiled successfully.
+- Attempted full Rust test execution for both focused tests; both compiled, then the local test binary exited with `STATUS_ENTRYPOINT_NOT_FOUND`, matching the existing local Rust-test blocker recorded in this task file.
+- Synced bundled plugin output with `node ./copy-bundled.cjs` -> bundled 29 plugins.

@@ -9,7 +9,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Windows experimental. Use a stored OpenRouter API key or OPENROUTER_API_KEY to fetch credits and key-rate data."
+      "message": "Windows experimental. Use a stored OpenRouter management key or OPENROUTER_API_KEY to fetch credits and key-rate data."
     }
   },
   "lines": [

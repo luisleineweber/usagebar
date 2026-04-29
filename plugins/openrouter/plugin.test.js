@@ -46,7 +46,7 @@ describe("openrouter plugin", () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow(
-      "OpenRouter API key missing. Save it in Setup or set OPENROUTER_API_KEY."
+      "OpenRouter management key missing. Save it in Setup or set OPENROUTER_API_KEY."
     )
   })
 
@@ -192,7 +192,7 @@ describe("openrouter plugin", () => {
 
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow(
-      "OpenRouter API key invalid. Check Setup or OPENROUTER_API_KEY."
+      "OpenRouter credits requires a management key. Check Setup or OPENROUTER_API_KEY."
     )
   })
 

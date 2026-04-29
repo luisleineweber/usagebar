@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "opencode-go",
-  "name": "OpenCode Go",
+  "name": "OpenCode",
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
@@ -27,6 +27,11 @@
       "label": "5h",
       "scope": "overview",
       "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Zen balance",
+      "scope": "overview"
     },
     {
       "type": "progress",

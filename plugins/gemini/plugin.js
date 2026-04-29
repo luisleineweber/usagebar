@@ -145,6 +145,15 @@
     return Number.isFinite(n) ? n : null
   }
 
+  function firstNumber(value, keys) {
+    if (!value || typeof value !== "object") return null
+    for (let i = 0; i < keys.length; i += 1) {
+      const n = readNumber(value[keys[i]])
+      if (n !== null) return n
+    }
+    return null
+  }
+
   function decodeIdToken(ctx, token) {
     if (typeof token !== "string" || !token) return null
     try {
@@ -241,9 +250,30 @@
   function mapTierToPlan(tier, idTokenPayload) {
     if (!tier) return null
     const normalized = String(tier).trim().toLowerCase()
-    if (normalized === "standard-tier") return "Paid"
+    if (
+      normalized === "google-ai-pro" ||
+      normalized === "google_ai_pro" ||
+      normalized === "ai-pro" ||
+      normalized === "pro-tier"
+    ) return "Google AI Pro"
+    if (
+      normalized === "google-ai-ultra" ||
+      normalized === "google_ai_ultra" ||
+      normalized === "ai-ultra" ||
+      normalized === "ultra-tier"
+    ) return "Google AI Ultra"
+    if (
+      normalized === "enterprise-tier" ||
+      normalized === "code-assist-enterprise" ||
+      normalized === "code_assist_enterprise"
+    ) return "Code Assist Enterprise"
+    if (
+      normalized === "standard-tier" ||
+      normalized === "code-assist-standard" ||
+      normalized === "code_assist_standard"
+    ) return idTokenPayload && idTokenPayload.hd ? "Code Assist Standard" : "Google AI Pro"
     if (normalized === "legacy-tier") return "Legacy"
-    if (normalized === "free-tier") return idTokenPayload && idTokenPayload.hd ? "Workspace" : "Free"
+    if (normalized === "free-tier") return idTokenPayload && idTokenPayload.hd ? "Google Workspace" : "Individual"
     return null
   }
 
@@ -295,8 +325,30 @@
       out.push({
         modelId,
         remainingFraction: value.remainingFraction,
+        used: null,
+        limit: null,
         resetTime: value.resetTime || value.reset_time || null,
       })
+    } else {
+      const modelId =
+        typeof value.modelId === "string"
+          ? value.modelId
+          : typeof value.model_id === "string"
+            ? value.model_id
+            : null
+      const limit = firstNumber(value, ["limit", "quota", "total", "dailyLimit", "daily_limit", "max"])
+      const used = firstNumber(value, ["used", "usage", "consumed", "current", "count"])
+      const remaining = firstNumber(value, ["remaining", "remainingQuota", "remaining_quota"])
+      const computedUsed = used !== null ? used : limit !== null && remaining !== null ? limit - remaining : null
+      if (modelId && limit !== null && limit > 0 && computedUsed !== null) {
+        out.push({
+          modelId,
+          remainingFraction: Math.max(0, Math.min(1, (limit - computedUsed) / limit)),
+          used: computedUsed,
+          limit,
+          resetTime: value.resetTime || value.reset_time || null,
+        })
+      }
     }
 
     const nested = Object.values(value)
@@ -314,6 +366,18 @@
   }
 
   function toUsageLine(ctx, label, bucket) {
+    if (typeof bucket.used === "number" && typeof bucket.limit === "number" && bucket.limit > 0) {
+      const opts = {
+        label,
+        used: Math.max(0, bucket.used),
+        limit: bucket.limit,
+        format: { kind: "count", suffix: "requests" },
+      }
+      const resetsAt = ctx.util.toIso(bucket.resetTime)
+      if (resetsAt) opts.resetsAt = resetsAt
+      return ctx.line.progress(opts)
+    }
+
     const clampedRemaining = Math.max(0, Math.min(1, Number(bucket.remainingFraction)))
     const used = Math.round((1 - clampedRemaining) * 100)
     const resetsAt = ctx.util.toIso(bucket.resetTime)
@@ -334,11 +398,14 @@
 
     const proBuckets = []
     const flashBuckets = []
+    const flashLiteBuckets = []
     for (let i = 0; i < buckets.length; i += 1) {
       const bucket = buckets[i]
       const lower = String(bucket.modelId || "").toLowerCase()
       if (lower.indexOf("gemini") !== -1 && lower.indexOf("pro") !== -1) {
         proBuckets.push(bucket)
+      } else if (lower.indexOf("gemini") !== -1 && lower.indexOf("flash") !== -1 && lower.indexOf("lite") !== -1) {
+        flashLiteBuckets.push(bucket)
       } else if (lower.indexOf("gemini") !== -1 && lower.indexOf("flash") !== -1) {
         flashBuckets.push(bucket)
       }
@@ -349,6 +416,8 @@
     if (pro) lines.push(toUsageLine(ctx, "Pro", pro))
     const flash = pickLowestRemainingBucket(flashBuckets)
     if (flash) lines.push(toUsageLine(ctx, "Flash", flash))
+    const flashLite = pickLowestRemainingBucket(flashLiteBuckets)
+    if (flashLite) lines.push(toUsageLine(ctx, "Flash Lite", flashLite))
     return lines
   }
 
@@ -412,7 +481,14 @@
     const loadCodeAssistResult = fetchLoadCodeAssist(ctx, accessToken, creds)
     accessToken = loadCodeAssistResult.accessToken
 
-    const tier = readFirstStringDeep(loadCodeAssistResult.data, ["tier", "userTier", "subscriptionTier"])
+    const tier = readFirstStringDeep(loadCodeAssistResult.data, [
+      "tier",
+      "userTier",
+      "subscriptionTier",
+      "quotaTier",
+      "cloudaicompanionQuotaTier",
+      "cloudaicompanion-quota-tier",
+    ])
     const plan = mapTierToPlan(tier, idTokenPayload)
 
     const projectId = discoverProjectId(ctx, accessToken, loadCodeAssistResult.data)

@@ -78,7 +78,7 @@ export function SettingsPage({
       className="gap-0"
       onValueChange={(value) => onSettingsTabChange(value as "general" | "providers")}
     >
-      {/* Page header — title stacked above underline tabs, left-aligned */}
+      {/* Page header: title stacked above underline tabs, left-aligned */}
       <div className="mb-1 pb-0">
         <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           <span className="size-2 rounded-full bg-primary" />
@@ -89,7 +89,7 @@ export function SettingsPage({
           Manage providers, refresh schedule, display, and system preferences.
         </p>
 
-        {/* Underline tab bar — uses variant="line" so the built-in after: indicator fires on data-active */}
+        {/* Underline tab bar uses variant="line" so the built-in after: indicator fires on data-active */}
         <TabsList
           variant="line"
           className="mt-4 h-auto w-fit gap-0 rounded-none border-b border-border/55 bg-transparent p-0 pb-0"
@@ -111,30 +111,28 @@ export function SettingsPage({
         </TabsList>
       </div>
 
-      {/* General — max-w-2xl keeps form controls readable on wide windows */}
+      {/* General uses two columns on wide settings windows to avoid a narrow form in empty space. */}
       <TabsContent value="general" className="mt-0 pt-5">
-        <div className="max-w-2xl">
-          <GeneralSettingsPane
-            autoUpdateInterval={autoUpdateInterval}
-            onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
-            themeMode={themeMode}
-            onThemeModeChange={onThemeModeChange}
-            displayMode={displayMode}
-            onDisplayModeChange={onDisplayModeChange}
-            resetTimerDisplayMode={resetTimerDisplayMode}
-            onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
-            menubarIconStyle={menubarIconStyle}
-            onMenubarIconStyleChange={onMenubarIconStyleChange}
-            traySettingsPreview={traySettingsPreview}
-            globalShortcut={globalShortcut}
-            onGlobalShortcutChange={onGlobalShortcutChange}
-            startOnLogin={startOnLogin}
-            onStartOnLoginChange={onStartOnLoginChange}
-          />
-        </div>
+        <GeneralSettingsPane
+          autoUpdateInterval={autoUpdateInterval}
+          onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
+          themeMode={themeMode}
+          onThemeModeChange={onThemeModeChange}
+          displayMode={displayMode}
+          onDisplayModeChange={onDisplayModeChange}
+          resetTimerDisplayMode={resetTimerDisplayMode}
+          onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
+          menubarIconStyle={menubarIconStyle}
+          onMenubarIconStyleChange={onMenubarIconStyleChange}
+          traySettingsPreview={traySettingsPreview}
+          globalShortcut={globalShortcut}
+          onGlobalShortcutChange={onGlobalShortcutChange}
+          startOnLogin={startOnLogin}
+          onStartOnLoginChange={onStartOnLoginChange}
+        />
       </TabsContent>
 
-      {/* Providers — full width for two-column layout */}
+      {/* Providers: full width for two-column layout */}
       <TabsContent value="providers" className="mt-0 pt-5">
         <ProvidersSettingsPane
           providers={providers}

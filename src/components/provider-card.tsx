@@ -178,7 +178,7 @@ export function ProviderCard({
 
   return (
     <div>
-      <div className="py-3">
+      <div className="pt-1 pb-3">
         <div className="flex items-center gap-2 mb-2">
           <div className="relative flex min-w-0 flex-1 items-center">
             <h2 className="truncate text-lg font-semibold" style={{ transform: "translateZ(0)" }}>{name}</h2>

@@ -19,6 +19,14 @@ const cursorPlugin = {
   primaryCandidates: [],
 }
 
+const copilotPlugin = {
+  id: "copilot",
+  name: "Copilot",
+  iconUrl: "/copilot.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const ollamaPlugin = {
   id: "ollama",
   name: "Ollama",
@@ -37,7 +45,7 @@ const opencodePlugin = {
 
 const opencodeGoPlugin = {
   id: "opencode-go",
-  name: "OpenCode Go",
+  name: "OpenCode",
   iconUrl: "/opencode-go.svg",
   lines: [],
   primaryCandidates: [],
@@ -314,12 +322,14 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText("OpenCode Go")).toBeInTheDocument()
-    expect(screen.getByText(/Tracks OpenCode Go subscription limit usage from the local OpenCode auth file and SQLite history on this machine\./)).toBeInTheDocument()
-    expect(screen.getByText(/Install OpenCode Go, sign in on this machine, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText("OpenCode")).toBeInTheDocument()
+    expect(screen.getByText(/Tracks OpenCode Go subscription limit usage from local OpenCode history and can show the Zen pay-as-you-go balance/)).toBeInTheDocument()
+    expect(screen.getByText(/For Zen balance, open https:\/\/opencode.ai/i)).toBeInTheDocument()
+    expect(screen.getByLabelText("OpenCode Cookie header")).toBeInTheDocument()
+    expect(screen.getByLabelText("OpenCode Workspace ID")).toBeInTheDocument()
   })
 
-  it("shows explicit OpenRouter API-key guidance", () => {
+  it("shows explicit OpenRouter management-key guidance", () => {
     render(
       <ProviderSettingsDetail
         plugin={openrouterPlugin}
@@ -329,9 +339,24 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText(/Fetches OpenRouter credits and key-rate data from a stored API key or OPENROUTER_API_KEY\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create an API key at https:\/\/openrouter.ai\/settings\/keys/i)).toBeInTheDocument()
+    expect(screen.getByText(/Fetches OpenRouter credits and key-rate data from a stored management key or OPENROUTER_API_KEY\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a management key in the OpenRouter dashboard/i)).toBeInTheDocument()
     expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the credits and key endpoints\./)).toBeInTheDocument()
+  })
+
+  it("shows optional Copilot billing scope guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={copilotPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/optional organization or enterprise premium-request billing scope/i)).toBeInTheDocument()
+    expect(screen.getByText(/org:ORG or enterprise:SLUG/)).toBeInTheDocument()
+    expect(screen.getByLabelText("Copilot Billing scope")).toBeInTheDocument()
   })
 
   it("shows explicit Kimi K2 API-key guidance", () => {

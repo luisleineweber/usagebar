@@ -1,4 +1,5 @@
 use crate::plugin_engine::browser_bridge;
+use crate::plugin_engine::manifest::HostCapabilities;
 use crate::provider_secret_store;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -24,7 +25,7 @@ use windows_sys::Win32::Security::Credentials::{
     CRED_TYPE_GENERIC, CREDENTIALW, CredFree, CredReadW,
 };
 
-const WHITELISTED_ENV_VARS: [&str; 30] = [
+const WHITELISTED_ENV_VARS: [&str; 33] = [
     "CODEX_HOME",
     "GH_CONFIG_DIR",
     "ALIBABA_API_KEY",
@@ -34,6 +35,9 @@ const WHITELISTED_ENV_VARS: [&str; 30] = [
     "GOOGLE_CLOUD_PROJECT",
     "GCLOUD_PROJECT",
     "CLOUDSDK_CORE_PROJECT",
+    "COPILOT_BILLING_SCOPE",
+    "COPILOT_BILLING_ENTERPRISE",
+    "COPILOT_BILLING_ORG",
     "KILO_API_KEY",
     "KIMI_K2_API_KEY",
     "KIMI_API_KEY",
@@ -112,6 +116,19 @@ fn open_provider_secret_entry(spec: ProviderSecretEntrySpec<'_>) -> Result<Entry
 fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<String> {
     match (provider_id, secret_key) {
         ("opencode", "cookieHeader") => vec!["OpenCode Cookie Header".to_string()],
+        ("opencode-go", "cookieHeader") => vec![
+            provider_secret_service("opencode", "cookieHeader"),
+            "OpenCode Cookie Header".to_string(),
+        ],
+        _ => Vec::new(),
+    }
+}
+
+fn provider_config_aliases(provider_id: &str, key: &str) -> Vec<String> {
+    match (provider_id, key) {
+        ("opencode-go", "source") | ("opencode-go", "workspaceId") => {
+            vec!["opencode".to_string()]
+        }
         _ => Vec::new(),
     }
 }
@@ -560,12 +577,44 @@ fn redact_log_message(msg: &str) -> String {
     result
 }
 
+fn sanitize_allowed_domains(domains: &[String]) -> Vec<String> {
+    domains
+        .iter()
+        .map(|domain| domain.trim().trim_end_matches('.').to_ascii_lowercase())
+        .filter(|domain| !domain.is_empty())
+        .collect()
+}
+
+fn is_url_allowed_by_domains(url: &str, allowed_domains: &[String]) -> bool {
+    if allowed_domains.is_empty() {
+        return true;
+    }
+
+    let parsed = match reqwest::Url::parse(url) {
+        Ok(parsed) => parsed,
+        Err(_) => return false,
+    };
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+
+    allowed_domains.iter().any(|allowed| {
+        if let Some(suffix) = allowed.strip_prefix("*.") {
+            host.ends_with(&format!(".{}", suffix)) && host != suffix
+        } else {
+            host == *allowed
+        }
+    })
+}
+
 pub fn inject_host_api<'js>(
     ctx: &Ctx<'js>,
     plugin_id: &str,
     app_data_dir: &PathBuf,
     app_version: &str,
     app_handle: Option<AppHandle>,
+    capabilities: &HostCapabilities,
 ) -> rquickjs::Result<()> {
     let globals = ctx.globals();
     let probe_ctx = Object::new(ctx.clone())?;
@@ -592,18 +641,42 @@ pub fn inject_host_api<'js>(
 
     let host = Object::new(ctx.clone())?;
     inject_log(ctx, &host, plugin_id)?;
-    inject_fs(ctx, &host)?;
-    inject_crypto(ctx, &host)?;
-    inject_env(ctx, &host, plugin_id)?;
-    inject_provider_config(ctx, &host, plugin_id, app_data_dir)?;
-    inject_http(ctx, &host, plugin_id)?;
-    inject_browser(ctx, &host, plugin_id, app_handle)?;
-    inject_keychain(ctx, &host)?;
-    inject_gh(ctx, &host)?;
-    inject_provider_secrets(ctx, &host, plugin_id, app_data_dir)?;
-    inject_sqlite(ctx, &host)?;
-    inject_ls(ctx, &host, plugin_id)?;
-    inject_ccusage(ctx, &host, plugin_id)?;
+    if capabilities.fs {
+        inject_fs(ctx, &host)?;
+    }
+    if capabilities.crypto {
+        inject_crypto(ctx, &host)?;
+    }
+    if capabilities.env {
+        inject_env(ctx, &host, plugin_id)?;
+    }
+    if capabilities.provider_config {
+        inject_provider_config(ctx, &host, plugin_id, app_data_dir)?;
+    }
+    if capabilities.http {
+        inject_http(ctx, &host, plugin_id, &capabilities.http_domains)?;
+    }
+    if capabilities.browser {
+        inject_browser(ctx, &host, plugin_id, app_handle)?;
+    }
+    if capabilities.keychain {
+        inject_keychain(ctx, &host)?;
+    }
+    if capabilities.gh {
+        inject_gh(ctx, &host)?;
+    }
+    if capabilities.provider_secrets {
+        inject_provider_secrets(ctx, &host, plugin_id, app_data_dir)?;
+    }
+    if capabilities.sqlite_read || capabilities.sqlite_write {
+        inject_sqlite(ctx, &host, capabilities.sqlite_write)?;
+    }
+    if capabilities.ls {
+        inject_ls(ctx, &host, plugin_id)?;
+    }
+    if capabilities.ccusage {
+        inject_ccusage(ctx, &host, plugin_id)?;
+    }
 
     probe_ctx.set("host", host)?;
     globals.set("__openusage_ctx", probe_ctx)?;
@@ -797,10 +870,24 @@ fn inject_provider_config<'js>(
         "get",
         Function::new(ctx.clone(), move |key: String| -> Option<String> {
             let configs = load_provider_config_map(&data_dir);
-            let entry = configs.get(&pid)?;
-            let object = entry.as_object()?;
-            let value = object.get(&key)?;
-            value.as_str().map(str::to_string)
+            let mut provider_ids = vec![pid.clone()];
+            provider_ids.extend(provider_config_aliases(&pid, &key));
+
+            for provider_id in provider_ids {
+                let Some(entry) = configs.get(&provider_id) else {
+                    continue;
+                };
+                let Some(object) = entry.as_object() else {
+                    continue;
+                };
+                let Some(value) = object.get(&key) else {
+                    continue;
+                };
+                if let Some(value) = value.as_str() {
+                    return Some(value.to_string());
+                }
+            }
+            None
         })?,
     )?;
 
@@ -821,9 +908,15 @@ fn inject_provider_config<'js>(
     Ok(())
 }
 
-fn inject_http<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rquickjs::Result<()> {
+fn inject_http<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    plugin_id: &str,
+    allowed_domains: &[String],
+) -> rquickjs::Result<()> {
     let http_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
+    let allowed_domains = sanitize_allowed_domains(allowed_domains);
 
     // Load proxy config once at injection time
     let proxy_config = load_app_config().and_then(|c| c.proxy);
@@ -846,6 +939,15 @@ fn inject_http<'js>(ctx: &Ctx<'js>, host: &Object<'js>, plugin_id: &str) -> rqui
 
                 let method_str = req.method.as_deref().unwrap_or("GET");
                 let redacted_url = redact_url(&req.url);
+                if !is_url_allowed_by_domains(&req.url, &allowed_domains) {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        &format!(
+                            "http request blocked by plugin domain allowlist: {}",
+                            redacted_url
+                        ),
+                    ));
+                }
 
                 // Check if we should bypass proxy for this URL
                 let should_use_proxy = proxy_url.as_ref().map_or(false, |_| {
@@ -1038,6 +1140,7 @@ pub fn patch_http_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
         (function() {
+            if (!__openusage_ctx.host.http || !__openusage_ctx.host.http._requestRaw) return;
             var rawFn = __openusage_ctx.host.http._requestRaw;
             __openusage_ctx.host.http.request = function(req) {
                 var json = JSON.stringify({
@@ -1728,6 +1831,7 @@ pub fn patch_ls_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
         (function() {
+            if (!__openusage_ctx.host.ls || !__openusage_ctx.host.ls._discoverRaw) return;
             var rawFn = __openusage_ctx.host.ls._discoverRaw;
             __openusage_ctx.host.ls.discover = function(opts) {
                 var optsJson;
@@ -2532,6 +2636,7 @@ pub fn patch_ccusage_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
     ctx.eval::<(), _>(
         r#"
         (function() {
+            if (!__openusage_ctx.host.ccusage || !__openusage_ctx.host.ccusage._queryRaw) return;
             var rawFn = __openusage_ctx.host.ccusage._queryRaw;
             __openusage_ctx.host.ccusage.query = function(opts) {
                 var result = rawFn(JSON.stringify(opts || {}));
@@ -2713,15 +2818,25 @@ fn inject_provider_secrets<'js>(
             move |ctx_inner: Ctx<'_>, secret_key: String| -> rquickjs::Result<String> {
                 #[cfg(target_os = "windows")]
                 {
-                    match provider_secret_store::read_provider_secret(&data_dir, &pid, &secret_key)
-                    {
-                        Ok(Some(secret)) => return Ok(secret),
-                        Ok(None) => {}
-                        Err(error) => {
-                            return Err(Exception::throw_message(
-                                &ctx_inner,
-                                &format!("provider secret store read failed: {}", error),
-                            ));
+                    let mut provider_ids = vec![pid.clone()];
+                    if pid == "opencode-go" && secret_key == "cookieHeader" {
+                        provider_ids.push("opencode".to_string());
+                    }
+
+                    for provider_id in provider_ids {
+                        match provider_secret_store::read_provider_secret(
+                            &data_dir,
+                            &provider_id,
+                            &secret_key,
+                        ) {
+                            Ok(Some(secret)) => return Ok(secret),
+                            Ok(None) => {}
+                            Err(error) => {
+                                return Err(Exception::throw_message(
+                                    &ctx_inner,
+                                    &format!("provider secret store read failed: {}", error),
+                                ));
+                            }
                         }
                     }
                 }
@@ -2840,7 +2955,11 @@ fn sqlite_json_value(value: ValueRef<'_>) -> JsonValue {
     }
 }
 
-fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
+fn inject_sqlite<'js>(
+    ctx: &Ctx<'js>,
+    host: &Object<'js>,
+    allow_write: bool,
+) -> rquickjs::Result<()> {
     let sqlite_obj = Object::new(ctx.clone())?;
 
     sqlite_obj.set(
@@ -2904,6 +3023,13 @@ fn inject_sqlite<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, db_path: String, sql: String| -> rquickjs::Result<()> {
+                if !allow_write {
+                    log::warn!("blocked plugin sqlite write");
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "sqlite write requires sqliteWrite capability",
+                    ));
+                }
                 if sql.lines().any(|line| line.trim_start().starts_with('.')) {
                     return Err(Exception::throw_message(
                         &ctx_inner,
@@ -3120,7 +3246,15 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
+            inject_host_api(
+                &ctx,
+                "test",
+                &app_data,
+                "0.0.0",
+                None,
+                &HostCapabilities::default(),
+            )
+            .expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -3140,6 +3274,62 @@ mod tests {
 
             let gh: Object = host.get("gh").expect("gh");
             let _read_auth_token: Function = gh.get("readAuthToken").expect("readAuthToken");
+        });
+    }
+
+    #[test]
+    fn http_domain_allowlist_matches_exact_and_wildcard_hosts() {
+        let allowed = sanitize_allowed_domains(&[
+            " API.Example.com ".to_string(),
+            "*.example.net".to_string(),
+        ]);
+
+        assert!(is_url_allowed_by_domains(
+            "https://api.example.com/v1/usage",
+            &allowed
+        ));
+        assert!(is_url_allowed_by_domains(
+            "https://billing.example.net/v1/usage",
+            &allowed
+        ));
+        assert!(!is_url_allowed_by_domains(
+            "https://example.net/v1/usage",
+            &allowed
+        ));
+        assert!(!is_url_allowed_by_domains(
+            "https://evil.example/v1/usage",
+            &allowed
+        ));
+        assert!(!is_url_allowed_by_domains("not a url", &allowed));
+    }
+
+    #[test]
+    fn empty_http_domain_allowlist_allows_any_url_for_legacy_plugins() {
+        assert!(is_url_allowed_by_domains(
+            "https://api.example.com/v1/usage",
+            &[]
+        ));
+    }
+
+    #[test]
+    fn sqlite_write_defaults_to_blocked_without_capability() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            let app_data = std::env::temp_dir();
+            let capabilities = HostCapabilities {
+                sqlite_read: true,
+                sqlite_write: false,
+                ..HostCapabilities::default()
+            };
+            inject_host_api(&ctx, "test", &app_data, "0.0.0", None, &capabilities)
+                .expect("inject host api");
+
+            let result = ctx.eval::<(), _>(
+                r#"__openusage_ctx.host.sqlite.exec("ignored.db", "CREATE TABLE t (id INTEGER)")"#,
+            );
+
+            assert!(result.is_err(), "sqlite exec should be capability-gated");
         });
     }
 
@@ -3165,7 +3355,15 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
+            inject_host_api(
+                &ctx,
+                "test",
+                &app_data,
+                "0.0.0",
+                None,
+                &HostCapabilities::default(),
+            )
+            .expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -3194,7 +3392,15 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
+            inject_host_api(
+                &ctx,
+                "test",
+                &app_data,
+                "0.0.0",
+                None,
+                &HostCapabilities::default(),
+            )
+            .expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -3202,6 +3408,27 @@ mod tests {
             let _read: Function = provider_secrets.get("read").expect("read");
             let _write: Function = provider_secrets.get("write").expect("write");
         });
+    }
+
+    #[test]
+    fn opencode_go_reuses_legacy_opencode_zen_config_and_secret_aliases() {
+        assert_eq!(
+            provider_config_aliases("opencode-go", "workspaceId"),
+            vec!["opencode".to_string()]
+        );
+        assert_eq!(
+            provider_config_aliases("opencode-go", "source"),
+            vec!["opencode".to_string()]
+        );
+        assert!(provider_config_aliases("opencode-go", "selectedAccountProfileId").is_empty());
+
+        assert_eq!(
+            provider_secret_legacy_services("opencode-go", "cookieHeader"),
+            vec![
+                provider_secret_service("opencode", "cookieHeader"),
+                "OpenCode Cookie Header".to_string(),
+            ]
+        );
     }
 
     #[test]
@@ -3226,7 +3453,15 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
+            inject_host_api(
+                &ctx,
+                "test",
+                &app_data,
+                "0.0.0",
+                None,
+                &HostCapabilities::default(),
+            )
+            .expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");
@@ -3294,7 +3529,15 @@ mod tests {
         let ctx = Context::full(&rt).expect("context");
         ctx.with(|ctx| {
             let app_data = std::env::temp_dir();
-            inject_host_api(&ctx, "test", &app_data, "0.0.0", None).expect("inject host api");
+            inject_host_api(
+                &ctx,
+                "test",
+                &app_data,
+                "0.0.0",
+                None,
+                &HostCapabilities::default(),
+            )
+            .expect("inject host api");
             let globals = ctx.globals();
             let probe_ctx: Object = globals.get("__openusage_ctx").expect("probe ctx");
             let host: Object = probe_ctx.get("host").expect("host");

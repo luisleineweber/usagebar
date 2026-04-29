@@ -4,9 +4,9 @@
   "version": "0.1.0-beta.6",
   "identifier": "com.sunstory.usagebar",
   "build": {
-    "beforeDevCommand": "npm run bundle:plugins && npm run dev",
+    "beforeDevCommand": "bun run bundle:plugins && bun run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run bundle:plugins && npm run build",
+    "beforeBuildCommand": "bun run bundle:plugins && bun run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -24,7 +24,13 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self' customprotocol: asset:",
+        "connect-src": "'self' ipc: http://ipc.localhost https:",
+        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "style-src": "'self' 'unsafe-inline'",
+        "font-src": "'self' data:"
+      }
     },
     "macOSPrivateApi": false
   },

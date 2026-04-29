@@ -61,6 +61,74 @@ pub struct PlatformSupport {
     pub windows: WindowsSupportConfig,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostCapabilities {
+    #[serde(default = "default_true")]
+    pub fs: bool,
+    #[serde(default = "default_true")]
+    pub crypto: bool,
+    #[serde(default = "default_true")]
+    pub env: bool,
+    #[serde(default = "default_true")]
+    pub provider_config: bool,
+    #[serde(default = "default_true")]
+    pub http: bool,
+    #[serde(default)]
+    pub http_domains: Vec<String>,
+    #[serde(default = "default_true")]
+    pub browser: bool,
+    #[serde(default = "default_true")]
+    pub keychain: bool,
+    #[serde(default = "default_true")]
+    pub gh: bool,
+    #[serde(default = "default_true")]
+    pub provider_secrets: bool,
+    #[serde(default = "default_true")]
+    pub sqlite_read: bool,
+    #[serde(default)]
+    pub sqlite_write: bool,
+    #[serde(default = "default_true")]
+    pub ls: bool,
+    #[serde(default = "default_true")]
+    pub ccusage: bool,
+}
+
+impl Default for HostCapabilities {
+    fn default() -> Self {
+        Self {
+            fs: true,
+            crypto: true,
+            env: true,
+            provider_config: true,
+            http: true,
+            http_domains: Vec::new(),
+            browser: true,
+            keychain: true,
+            gh: true,
+            provider_secrets: true,
+            sqlite_read: true,
+            sqlite_write: false,
+            ls: true,
+            ccusage: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SourceProvenance {
+    OfficialApi,
+    OfficialLocalSource,
+    PrivateEndpoint,
+    CookieReplay,
+    HtmlScrape,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
@@ -76,6 +144,9 @@ pub struct PluginManifest {
     pub links: Vec<PluginLink>,
     #[serde(default)]
     pub platform_support: PlatformSupport,
+    #[serde(default)]
+    pub capabilities: HostCapabilities,
+    pub source_provenance: Option<SourceProvenance>,
 }
 
 #[derive(Debug, Clone)]
@@ -220,6 +291,11 @@ mod tests {
         assert_eq!(manifest.lines.len(), 1);
         assert!(manifest.lines[0].primary_order.is_none());
         assert!(manifest.links.is_empty());
+        assert!(manifest.capabilities.http);
+        assert!(manifest.capabilities.sqlite_read);
+        assert!(!manifest.capabilities.sqlite_write);
+        assert!(manifest.capabilities.http_domains.is_empty());
+        assert!(manifest.source_provenance.is_none());
     }
 
     #[test]
@@ -371,6 +447,49 @@ mod tests {
         assert_eq!(
             manifest.platform_support.windows.message.as_deref(),
             Some("Experimental on Windows.")
+        );
+    }
+
+    #[test]
+    fn capabilities_and_source_provenance_are_parsed_when_present() {
+        let manifest = parse_manifest(
+            r#"
+            {
+              "schemaVersion": 1,
+              "id": "x",
+              "name": "X",
+              "version": "0.0.1",
+              "entry": "plugin.js",
+              "icon": "icon.svg",
+              "brandColor": null,
+              "sourceProvenance": "officialApi",
+              "capabilities": {
+                "fs": false,
+                "http": true,
+                "httpDomains": ["api.example.com", "*.example.net"],
+                "sqliteRead": true,
+                "sqliteWrite": true,
+                "browser": false
+              },
+              "lines": [
+                { "type": "progress", "label": "A", "scope": "overview", "primaryOrder": 1 }
+              ]
+            }
+            "#,
+        );
+
+        assert!(!manifest.capabilities.fs);
+        assert!(manifest.capabilities.http);
+        assert_eq!(
+            manifest.capabilities.http_domains,
+            vec!["api.example.com", "*.example.net"]
+        );
+        assert!(manifest.capabilities.sqlite_read);
+        assert!(manifest.capabilities.sqlite_write);
+        assert!(!manifest.capabilities.browser);
+        assert_eq!(
+            manifest.source_provenance,
+            Some(SourceProvenance::OfficialApi)
         );
     }
 

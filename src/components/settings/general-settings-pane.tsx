@@ -27,7 +27,7 @@ const DENSE_SEGMENTED_GROUP_CLASS = "grid grid-cols-2 gap-2 lg:grid-cols-4"
 const TWO_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-2"
 const THREE_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-3"
 const FOUR_OPTION_GROUP_CLASS = "grid grid-cols-2 gap-2 sm:grid-cols-4"
-const SETTINGS_SECTION_CLASS = "border-t border-border/55 pt-4 first:border-t-0 first:pt-0"
+const SETTINGS_SECTION_CLASS = "border-t border-border/55 pt-4 first:border-t-0 first:pt-0 xl:first:border-t xl:first:pt-4"
 
 function getPreviewBarLayout(fraction: number): { fillPercent: number; remainderPercent: number } {
   const { fillW, remainderDrawW } = getBarFillLayout(PREVIEW_BAR_TRACK_PX, fraction)
@@ -200,10 +200,10 @@ export function GeneralSettingsPane({
   onStartOnLoginChange,
 }: GeneralSettingsPaneProps) {
   return (
-    <div className="space-y-5 py-1">
+    <div className="grid gap-x-10 gap-y-6 py-1 xl:grid-cols-2 xl:items-start">
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">Auto Refresh</h3>
-        <p className="mb-3 text-sm text-muted-foreground">How obsessive are you</p>
+        <p className="mb-3 text-sm text-muted-foreground">Choose how often UsageBar refreshes provider data.</p>
         <div className={DENSE_SEGMENTED_GROUP_CLASS} role="radiogroup" aria-label="Auto-update interval">
           {AUTO_UPDATE_OPTIONS.map((option) => {
             const isActive = option.value === autoUpdateInterval
@@ -227,7 +227,7 @@ export function GeneralSettingsPane({
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">Usage Mode</h3>
-        <p className="mb-3 text-sm text-muted-foreground">Glass half full or half empty</p>
+        <p className="mb-3 text-sm text-muted-foreground">Show quota as remaining usage or consumed usage.</p>
         <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Usage display mode">
           {DISPLAY_MODE_OPTIONS.map((option) => {
             const isActive = option.value === displayMode
@@ -251,7 +251,7 @@ export function GeneralSettingsPane({
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">Reset Timers</h3>
-        <p className="mb-3 text-sm text-muted-foreground">Countdown or clock time</p>
+        <p className="mb-3 text-sm text-muted-foreground">Choose whether reset times appear as countdowns or clock times.</p>
         <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Reset timer display mode">
           {RESET_TIMER_DISPLAY_OPTIONS.map((option) => {
             const isActive = option.value === resetTimerDisplayMode
@@ -283,7 +283,7 @@ export function GeneralSettingsPane({
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">Menubar Icon</h3>
-        <p className="mb-3 text-sm text-muted-foreground">What shows in the menu bar</p>
+        <p className="mb-3 text-sm text-muted-foreground">Choose what UsageBar shows in the menu bar.</p>
         <div className={FOUR_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Menubar icon style">
           {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
             const isActive = option.value === menubarIconStyle
@@ -308,7 +308,7 @@ export function GeneralSettingsPane({
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">App Theme</h3>
-        <p className="mb-3 text-sm text-muted-foreground">How it looks around here</p>
+        <p className="mb-3 text-sm text-muted-foreground">Choose the app appearance.</p>
         <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Theme mode">
           {THEME_OPTIONS.map((option) => {
             const isActive = option.value === themeMode
@@ -334,7 +334,7 @@ export function GeneralSettingsPane({
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">Start on Login</h3>
-        <p className="mb-3 text-sm text-muted-foreground">UsageBar starts when you sign in</p>
+        <p className="mb-3 text-sm text-muted-foreground">Open UsageBar automatically after you sign in.</p>
         <label className="flex select-none items-center gap-2 text-sm text-foreground">
           <Checkbox
             key={`start-on-login-${startOnLogin}`}

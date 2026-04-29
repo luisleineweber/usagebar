@@ -81,6 +81,7 @@ pub fn run_probe(
             &app_data,
             app_version,
             app_handle.cloned(),
+            &plugin.manifest.capabilities,
         )
         .is_err()
         {
@@ -487,7 +488,9 @@ fn error_line(message: String) -> MetricLine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_engine::manifest::{LoadedPlugin, PlatformSupport, PluginManifest};
+    use crate::plugin_engine::manifest::{
+        HostCapabilities, LoadedPlugin, PlatformSupport, PluginManifest,
+    };
     use serde_json::Value as JsonValue;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -505,6 +508,8 @@ mod tests {
                 lines: vec![],
                 links: vec![],
                 platform_support: PlatformSupport::default(),
+                capabilities: HostCapabilities::default(),
+                source_provenance: None,
             },
             plugin_dir: PathBuf::from("."),
             entry_script: entry_script.to_string(),

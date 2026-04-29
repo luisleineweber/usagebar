@@ -1406,7 +1406,8 @@ mod tests {
         take_pending_panel_view_inner, verify_provider_secret_write_with_fresh_lookup,
     };
     use crate::plugin_engine::manifest::{
-        PlatformSupport, PluginManifest, WindowsSupportConfig, WindowsSupportState,
+        HostCapabilities, PlatformSupport, PluginManifest, WindowsSupportConfig,
+        WindowsSupportState,
     };
 
     fn make_manifest(
@@ -1431,6 +1432,8 @@ mod tests {
                     message: message.map(|value| value.to_string()),
                 },
             },
+            capabilities: HostCapabilities::default(),
+            source_provenance: None,
         }
     }
 

@@ -98,7 +98,7 @@ describe("gemini plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.plan).toBe("Paid")
+    expect(result.plan).toBe("Google AI Pro")
 
     const pro = result.lines.find((line) => line.label === "Pro")
     const flash = result.lines.find((line) => line.label === "Flash")
@@ -158,7 +158,7 @@ describe("gemini plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.plan).toBe("Paid")
+    expect(result.plan).toBe("Google AI Pro")
     expect(result.lines.find((line) => line.label === "Pro")).toBeTruthy()
   })
 
@@ -251,7 +251,7 @@ describe("gemini plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.plan).toBe("Workspace")
+    expect(result.plan).toBe("Google Workspace")
     expect(result.lines.find((line) => line.label === "Pro")).toBeTruthy()
   })
 
@@ -494,7 +494,7 @@ describe("gemini plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.plan).toBe("Paid")
+    expect(result.plan).toBe("Google AI Pro")
     expect(result.lines.find((line) => line.label === "Pro")).toBeTruthy()
   })
 
@@ -660,7 +660,7 @@ describe("gemini plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.plan).toBe("Free")
+    expect(result.plan).toBe("Individual")
     const status = result.lines.find((line) => line.label === "Status")
     expect(status && status.text).toBe("No usage data")
   })
@@ -833,5 +833,55 @@ describe("gemini plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Pro")).toBeTruthy()
     expect(result.lines.find((line) => line.label === "Flash")).toBeTruthy()
+  })
+
+  it("maps granular quota tiers and renders request counts when available", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText(
+      CREDS_PATH,
+      JSON.stringify({
+        access_token: "token",
+        id_token: makeJwt({ email: "me@example.com" }),
+        expiry_date: Date.now() + 60_000,
+      })
+    )
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url === LOAD_CODE_ASSIST_URL) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            cloudaicompanionQuotaTier: "google-ai-ultra",
+            cloudaicompanionProject: "gen-lang-client-999",
+          }),
+        }
+      }
+      if (url === QUOTA_URL) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            quotaBuckets: [
+              { modelId: "gemini-2.5-pro", used: 250, limit: 2000, resetTime: "2099-01-01T00:00:00Z" },
+              { modelId: "gemini-2.5-flash-lite", remaining: 700, dailyLimit: 1000, resetTime: "2099-01-02T00:00:00Z" },
+            ],
+          }),
+        }
+      }
+      throw new Error("unexpected url: " + url)
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Google AI Ultra")
+    expect(result.lines.find((line) => line.label === "Pro")).toEqual({
+      type: "progress",
+      label: "Pro",
+      used: 250,
+      limit: 2000,
+      format: { kind: "count", suffix: "requests" },
+      resetsAt: "2099-01-01T00:00:00.000Z",
+    })
+    expect(result.lines.find((line) => line.label === "Flash Lite")?.used).toBe(300)
   })
 })

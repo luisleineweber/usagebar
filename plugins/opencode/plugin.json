@@ -9,6 +9,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
+      "surfaced": false,
       "message": "Experimental on Windows. Manual cookie mode is the supported setup path right now."
     }
   },
