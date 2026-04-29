@@ -25,7 +25,8 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 ## Plan
 - [x] Audit current README/release docs/changelog against the alpha gate and patch only factual gaps first.
 - [x] Document Windows install, uninstall, app data, log, settings, provider-secret, and legacy migration paths.
-- [ ] Audit the Settings/provider setup flow for remove-provider/key, connection test, and error-state visibility.
+- [x] Audit the Settings/provider setup flow for remove-provider/key, connection test, and error-state visibility.
+- [x] Add a repeatable Alpha 1 smoke-test checklist for install, first provider setup, failure states, secret handling, feedback, and release notes.
 - [ ] Verify one installable Windows artifact path, then document install, uninstall, and config/data locations.
 - [ ] Run focused provider/setup/update tests plus release preflight; record blockers instead of stretching scope.
 - [ ] Prepare release notes for the chosen prerelease label, without creating a tag or GitHub release unless explicitly requested.
@@ -40,6 +41,9 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Verified the docs slice with `rg -n "Alpha Readiness|Current Limitations|v0\\.1\\.0-alpha\\.1|Alpha Gate|Public-release default|first public alpha gate" README.md docs\\releasing.md docs\\choices.md docs\\breadcrumbs.md tasks\\todo.md`.
 - Reviewed the touched-file diff with `git --no-pager diff -- README.md docs/releasing.md tasks/todo.md docs/choices.md docs/breadcrumbs.md`; the diff includes earlier in-flight README/task edits in the dirty worktree, so only the alpha-gate additions are part of this slice.
 - Added `README.md` install/uninstall/data notes for Windows alpha users, expanded `docs/releasing.md` with the Alpha 1 release-note template plus Windows data locations, and corrected `docs/bug-reports.md` from the old OpenUsage roaming path to `%APPDATA%\\com.sunstory.usagebar`.
+- Audited `src/components/settings/provider-settings-detail.tsx`, `src/components/settings/provider-settings-detail.test.tsx`, `src/hooks/app/use-probe-refresh-actions.test.ts`, and `src/hooks/app/use-probe-state.test.ts`; existing coverage includes setup guidance, loading/runtime status, last success, retry, secret save/clear, retained data during refresh, error display from probe badges, and manual refresh cooldown behavior.
+- Added `docs/alpha-smoke-test.md` with a Codex-first provider smoke path, Cursor fallback, failure-state matrix, secret-handling checks, feedback checks, and release-note checks.
+- Verified the setup/status/refresh coverage with `npx bun run test -- src/components/settings/provider-settings-detail.test.tsx src/hooks/app/use-probe-refresh-actions.test.ts src/hooks/app/use-probe-state.test.ts --run` -> 3 files passed, 27 tests passed.
 
 # Refresh README for current beta/provider surface
 

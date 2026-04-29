@@ -70,6 +70,8 @@ Before publishing Alpha 1, verify and record:
 - README and release notes state privacy, telemetry, crash-log behavior, known limitations, and feedback/debug-info path.
 - `CHANGELOG.md` includes the exact release version with supported features and known limitations.
 
+Run the checklist in [alpha-smoke-test.md](alpha-smoke-test.md) for the final local artifact or GitHub release candidate before tagging.
+
 Suggested Alpha 1 release-note shape:
 
 ```md
