@@ -2,12 +2,22 @@
 
 This repo treats a release as a tagged, reproducible build with matching version metadata, current release notes, and a verified artifact path.
 
+The next stranger-facing milestone should be an alpha, not a full release, unless the installer, updater, provider setup, privacy/telemetry copy, error states, docs, feedback path, and recovery behavior have all been verified end to end.
+
+Suggested first-alpha label:
+
+```text
+v0.1.0-alpha.1
+```
+
+If the repo stays on the existing beta line instead, document the reason in `CHANGELOG.md` and release notes before tagging.
+
 ## Preflight
 
 Before cutting a tag:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-beta.3 --require-clean
+bun run release:check -- --release-tag v0.1.0-alpha.1 --require-clean
 ```
 
 The preflight currently verifies:
@@ -34,7 +44,7 @@ The publish workflow lives in [.github/workflows/publish.yml](../.github/workflo
 
 You can publish in two ways:
 
-1. Push a `v*` tag, for example `v0.1.0-beta.3`
+1. Push a `v*` tag, for example `v0.1.0-alpha.1`
 2. Trigger `Publish` manually with `workflow_dispatch` and provide `release_tag`
 
 The workflow runs the same release preflight, builds platform artifacts, and verifies that the GitHub release contains:
@@ -46,8 +56,19 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 Current updater channel note:
 
 - GitHub's `releases/latest` alias only resolves stable releases, not prereleases.
-- UsageBar currently keeps updater checks disabled for prerelease app versions like `0.1.0-beta.3`.
+- UsageBar currently keeps updater checks disabled for prerelease app versions like `0.1.0-alpha.1` and `0.1.0-beta.7`.
 - Re-enable prerelease auto-updates only after moving off the stable-only alias or after shipping a stable release channel.
+
+## Alpha Gate
+
+Before publishing Alpha 1, verify and record:
+
+- Windows installer exists as a GitHub release asset or local NSIS artifact.
+- Install, uninstall, config/data location, and first-run provider setup are documented.
+- At least one supported provider works from a fresh setup path.
+- Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states do not crash the app.
+- README and release notes state privacy, telemetry, crash-log behavior, known limitations, and feedback/debug-info path.
+- `CHANGELOG.md` includes the exact release version with supported features and known limitations.
 
 ## Release Checklist
 

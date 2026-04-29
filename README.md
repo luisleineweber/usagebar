@@ -8,17 +8,31 @@ UsageBar is a fork of [OpenUsage](https://github.com/robinebers/openusage), redi
 
 ## Download
 
-The first public Windows beta is prepared as a GitHub prerelease.
+Windows beta builds are published as GitHub prereleases.
 
 Release plan:
+- Next public milestone: Alpha 1, once the install/setup/privacy/error-state gate is verified
 - Windows: GitHub prerelease with a NSIS setup `.exe`
 - macOS: still secondary while the Windows fork stabilizes
 
-Until the beta tag is published:
-- Build from source (see "Build from source" below).
-- Or follow the upstream project releases if you just want something stable: [OpenUsage releases](https://github.com/robinebers/openusage/releases).
+For published betas:
+- Download the latest prerelease from [UsageBar releases](https://github.com/Loues000/usagebar/releases).
+
+To run the current branch before a release is tagged, build from source below. If you want the upstream stable app instead, follow [OpenUsage releases](https://github.com/robinebers/openusage/releases).
 
 Release process and preflight checks live in [docs/releasing.md](docs/releasing.md).
+
+## Alpha Readiness
+
+UsageBar is not a full release yet. The first public alpha should be treated as a testable Windows desktop build for people who accept rough edges and can report provider issues.
+
+Alpha 1 should ship only when:
+
+- A stranger can install the app from a GitHub release asset without cloning the repo.
+- At least one supported provider can be configured, refreshed, and removed through the app UI.
+- The panel shows usage/cost scope clearly, including date range, source, and last-updated state where the provider supplies enough data.
+- Invalid credentials, offline mode, provider API failures, empty data, and active refresh states are visible without crashing the app.
+- Privacy, telemetry, config/data storage, limitations, and issue-reporting paths are documented in this README and release notes.
 
 ## What It Does
 
@@ -39,6 +53,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 
 | Provider | Windows status | Scope |
 |---|---|---|
+| [**Abacus AI**](docs/providers/abacus.md) | Experimental | API-key usage and credit details |
 | [**Alibaba Coding Plan**](docs/providers/alibaba.md) | Experimental | Coding Plan daily/weekly quotas with region-aware auth |
 | [**Amp**](docs/providers/amp.md) | Experimental | Free tier, bonus, credits |
 | [**Antigravity**](docs/providers/antigravity.md) | Supported | All models |
@@ -55,6 +70,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Kimi K2**](docs/providers/kimi-k2.md) | Experimental | Credits, remaining, average tokens |
 | [**Kiro**](docs/providers/kiro.md) | Experimental | Credits, bonus credits, overages tracking |
 | [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding Plan session usage, explicit reported plan when available |
+| [**Mistral**](docs/providers/mistral.md) | Experimental | La Plateforme usage and billing details via signed-in session |
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
 | [**OpenCode Zen**](docs/providers/opencode.md) | Experimental | Pay-as-you-go billing usage from the signed-in workspace session |
 | [**OpenCode Go**](docs/providers/opencode-go.md) | Supported | Subscription 5h, weekly, monthly limit tracking from local CLI history |
@@ -68,6 +84,34 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches |
 
 Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/usagebar/issues/new)
+
+## Current Limitations
+
+- Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
+- Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
+- Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
+- Prerelease auto-updates are intentionally conservative because GitHub's `releases/latest` alias does not resolve prereleases. Prerelease builds may open the matching GitHub release page instead of installing in-app.
+- Signed release artifacts and full crash-recovery expectations are full-release work, not an alpha promise.
+
+## Architecture
+
+UsageBar is a Tauri v2 desktop app with a Rust host and a React/TypeScript frontend. Provider integrations live as JavaScript plugins under `plugins/` and are copied into the Tauri resource bundle for desktop execution.
+
+- **Rust host:** tray/window lifecycle, local HTTP API, updater, credential storage, SQLite access, and guarded plugin host APIs.
+- **React frontend:** tray panel, Settings window, provider setup, usage views, preferences, and update prompts.
+- **Plugin manifests:** provider identity, platform support, icons, docs links, and capability declarations.
+- **Bundled plugins:** generated by `bun run bundle:plugins` before dev/build so desktop resources match source plugins.
+
+## Privacy And Security
+
+UsageBar is local-first. Provider credentials are read from local app state, environment variables, browser/session cookies you explicitly provide, or OS credential storage depending on the provider.
+
+- Secrets stay on the machine unless a provider plugin must call that provider's API to read usage.
+- Plugin host APIs are allowlisted and capability-gated for sensitive operations such as write-capable SQLite access.
+- The WebView uses a restrictive starter content security policy.
+- The optional local HTTP API binds to `127.0.0.1:6736`.
+- Telemetry uses the app's analytics integration only for product diagnostics; provider usage payloads and credentials are not telemetry data.
+- Crash-log collection is not presented as a public guarantee yet; release notes must state the exact behavior before Alpha 1 is published.
 
 ## Fork Direction
 
@@ -121,7 +165,7 @@ Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](http
 For a Windows beta-style build on this machine:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-beta.3
+bun run release:check -- --release-tag v0.1.0-beta.7
 bun run build:release -- --bundles nsis
 ```
 
