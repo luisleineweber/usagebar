@@ -12,7 +12,7 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 ## Acceptance Criteria
 - [x] README answers the product promise in one glance: what UsageBar does, screenshots, supported providers, install path, privacy model, and current limitations.
 - [x] Release docs use a concrete alpha tag example such as `v0.1.0-alpha.1` or explicitly justify staying on the current beta line.
-- [ ] A Windows installer artifact path is verified locally or from GitHub Releases.
+- [x] A Windows installer artifact path is verified locally or from GitHub Releases.
 - [x] Install/uninstall/config-location notes are documented for Windows alpha users.
 - [ ] At least one supported provider can be added by a fresh user path, refreshed manually, and shown with date range plus last-updated state.
 - [ ] Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states are visible and do not crash the app.
@@ -27,7 +27,7 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - [x] Document Windows install, uninstall, app data, log, settings, provider-secret, and legacy migration paths.
 - [x] Audit the Settings/provider setup flow for remove-provider/key, connection test, and error-state visibility.
 - [x] Add a repeatable Alpha 1 smoke-test checklist for install, first provider setup, failure states, secret handling, feedback, and release notes.
-- [ ] Verify one installable Windows artifact path, then document install, uninstall, and config/data locations.
+- [x] Verify one installable Windows artifact path, then document install, uninstall, and config/data locations.
 - [ ] Run focused provider/setup/update tests plus release preflight; record blockers instead of stretching scope.
 - [ ] Prepare release notes for the chosen prerelease label, without creating a tag or GitHub release unless explicitly requested.
 
@@ -44,6 +44,9 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Audited `src/components/settings/provider-settings-detail.tsx`, `src/components/settings/provider-settings-detail.test.tsx`, `src/hooks/app/use-probe-refresh-actions.test.ts`, and `src/hooks/app/use-probe-state.test.ts`; existing coverage includes setup guidance, loading/runtime status, last success, retry, secret save/clear, retained data during refresh, error display from probe badges, and manual refresh cooldown behavior.
 - Added `docs/alpha-smoke-test.md` with a Codex-first provider smoke path, Cursor fallback, failure-state matrix, secret-handling checks, feedback checks, and release-note checks.
 - Verified the setup/status/refresh coverage with `npx bun run test -- src/components/settings/provider-settings-detail.test.tsx src/hooks/app/use-probe-refresh-actions.test.ts src/hooks/app/use-probe-state.test.ts --run` -> 3 files passed, 27 tests passed.
+- Verified current metadata is still `0.1.0-beta.7` across `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`; Alpha 1 version-label alignment remains pending before tagging.
+- Ran `npx bun run release:check -- --release-tag v0.1.0-beta.7` -> release preflight passed for the current beta-line version.
+- Ran `npx bun run build:release -- --bundles nsis` -> unsigned local Windows NSIS artifact built at `src-tauri\target\release\bundle\nsis\UsageBar_0.1.0-beta.7_x64-setup.exe` (`6,236,103` bytes, 2026-04-29 15:15 local time). The helper reported no `TAURI_SIGNING_PRIVATE_KEY`, added `--no-sign`, and skipped updater signing for this local artifact.
 
 # Refresh README for current beta/provider surface
 
