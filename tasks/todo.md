@@ -12,7 +12,8 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 ## Acceptance Criteria
 - [x] README answers the product promise in one glance: what UsageBar does, screenshots, supported providers, install path, privacy model, and current limitations.
 - [x] Release docs use a concrete alpha tag example such as `v0.1.0-alpha.1` or explicitly justify staying on the current beta line.
-- [ ] A Windows installer artifact path is verified locally or from GitHub Releases, with install/uninstall/config-location notes documented.
+- [ ] A Windows installer artifact path is verified locally or from GitHub Releases.
+- [x] Install/uninstall/config-location notes are documented for Windows alpha users.
 - [ ] At least one supported provider can be added by a fresh user path, refreshed manually, and shown with date range plus last-updated state.
 - [ ] Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states are visible and do not crash the app.
 - [ ] Provider support matrix distinguishes supported vs experimental providers and states when cost/usage is estimated, partial, or provider-reported.
@@ -23,6 +24,7 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 
 ## Plan
 - [x] Audit current README/release docs/changelog against the alpha gate and patch only factual gaps first.
+- [x] Document Windows install, uninstall, app data, log, settings, provider-secret, and legacy migration paths.
 - [ ] Audit the Settings/provider setup flow for remove-provider/key, connection test, and error-state visibility.
 - [ ] Verify one installable Windows artifact path, then document install, uninstall, and config/data locations.
 - [ ] Run focused provider/setup/update tests plus release preflight; record blockers instead of stretching scope.
@@ -37,6 +39,7 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Updated `docs/releasing.md` to recommend `v0.1.0-alpha.1`, document the alpha gate, and preserve the beta-line exception path if the version line is intentionally kept.
 - Verified the docs slice with `rg -n "Alpha Readiness|Current Limitations|v0\\.1\\.0-alpha\\.1|Alpha Gate|Public-release default|first public alpha gate" README.md docs\\releasing.md docs\\choices.md docs\\breadcrumbs.md tasks\\todo.md`.
 - Reviewed the touched-file diff with `git --no-pager diff -- README.md docs/releasing.md tasks/todo.md docs/choices.md docs/breadcrumbs.md`; the diff includes earlier in-flight README/task edits in the dirty worktree, so only the alpha-gate additions are part of this slice.
+- Added `README.md` install/uninstall/data notes for Windows alpha users, expanded `docs/releasing.md` with the Alpha 1 release-note template plus Windows data locations, and corrected `docs/bug-reports.md` from the old OpenUsage roaming path to `%APPDATA%\\com.sunstory.usagebar`.
 
 # Refresh README for current beta/provider surface
 
