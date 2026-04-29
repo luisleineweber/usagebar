@@ -56,6 +56,13 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
     }
   },
   "links": [{ "label": "Status", "url": "https://status.example.com" }],
+  "sourceProvenance": "officialApi",
+  "capabilities": {
+    "http": true,
+    "httpDomains": ["api.example.com"],
+    "sqliteRead": true,
+    "sqliteWrite": false
+  },
   "lines": [
     { "type": "badge", "label": "Plan", "scope": "overview" },
     { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
@@ -74,6 +81,8 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `icon`          | string | Yes      | Relative path to SVG icon file             |
 | `platformSupport` | object | No     | Optional per-platform support/surfacing metadata |
 | `links`         | array  | No       | Optional quick links shown on detail page  |
+| `sourceProvenance` | string | No    | Provider source class: `officialApi`, `officialLocalSource`, `privateEndpoint`, `cookieReplay`, or `htmlScrape` |
+| `capabilities`  | object | No       | Optional host API allowlist; omitted fields keep legacy defaults |
 | `lines`         | array  | Yes      | Output shape used for loading skeletons    |
 
 Validation rules:
@@ -83,6 +92,39 @@ Validation rules:
 - `id` must match `globalThis.__openusage_plugin.id`
 - `icon` must be relative and point to an SVG file (use `fill="currentColor"` for theme compatibility)
 - `links[].url` (if provided) must be an `http://` or `https://` URL
+
+### Source Provenance (Optional)
+
+`sourceProvenance` classifies the provider data source so the UI, docs, and release notes can distinguish stable official contracts from compatibility paths.
+
+| Value | Meaning |
+|-------|---------|
+| `officialApi` | Official remote provider API intended for this usage/status data |
+| `officialLocalSource` | Official local file, CLI, database, or app state produced by the provider |
+| `privateEndpoint` | Provider-owned endpoint that is not documented as a public usage API |
+| `cookieReplay` | Session or cookie reuse against web-backed endpoints |
+| `htmlScrape` | HTML parsing or scraping |
+
+### Host Capabilities (Optional)
+
+`capabilities` narrows the host surface injected into `ctx.host`. For existing plugins, omitted fields keep the previous permissive defaults except SQLite writes, which default to disabled. New plugins should declare only the APIs and domains they need.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `fs` | boolean | `true` | Expose `ctx.host.fs` |
+| `crypto` | boolean | `true` | Expose `ctx.host.crypto` |
+| `env` | boolean | `true` | Expose whitelisted environment lookup |
+| `providerConfig` | boolean | `true` | Expose provider config helpers |
+| `http` | boolean | `true` | Expose `ctx.host.http` |
+| `httpDomains` | string[] | `[]` | Optional HTTP hostname allowlist. Empty means no domain restriction. Supports exact hosts and `*.example.com`. |
+| `browser` | boolean | `true` | Expose browser/session bridge helpers |
+| `keychain` | boolean | `true` | Expose generic credential helpers |
+| `gh` | boolean | `true` | Expose GitHub auth helper |
+| `providerSecrets` | boolean | `true` | Expose app-owned provider secret storage |
+| `sqliteRead` | boolean | `true` | Expose read-only SQLite query access |
+| `sqliteWrite` | boolean | `false` | Enable SQLite write access; denied and logged unless explicitly true |
+| `ls` | boolean | `true` | Expose local language-server discovery |
+| `ccusage` | boolean | `true` | Expose ccusage runner integration |
 
 ### Platform Support (Optional)
 

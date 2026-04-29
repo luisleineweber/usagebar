@@ -60,6 +60,25 @@
     return normalized.replace(/(^|\s)([a-z])/g, (match, prefix, letter) => prefix + letter.toUpperCase())
   }
 
+  function formatClaudePlan(ctx, subscriptionType, rateLimitTier) {
+    const rawSubscriptionType = readNonEmptyString(subscriptionType)
+    if (!rawSubscriptionType) return null
+    const rawRateLimitTier = String(rateLimitTier || "")
+    const normalizedSubscriptionType = rawSubscriptionType.toLowerCase()
+    const normalizedRateLimitTier = rawRateLimitTier.toLowerCase()
+    const isUltra =
+      normalizedSubscriptionType === "ultra" ||
+      normalizedSubscriptionType === "max_ultra" ||
+      normalizedRateLimitTier.indexOf("ultra") !== -1
+
+    const basePlan = isUltra ? "Ultra" : ctx.fmt.planLabel(rawSubscriptionType)
+    if (!basePlan) return null
+    if (isUltra) return basePlan
+
+    const tierMatch = rawRateLimitTier.match(/(\d+)x/)
+    return basePlan + (tierMatch ? " " + tierMatch[1] + "x" : "")
+  }
+
   function loadStoredCookieHeader(ctx) {
     if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
     try {
@@ -891,16 +910,7 @@
     const lines = []
     let plan = null
     if (creds.oauth.subscriptionType) {
-      const basePlan = ctx.fmt.planLabel(creds.oauth.subscriptionType)
-      if (basePlan) {
-        let tierSuffix = ""
-        const rateLimitTier = String(creds.oauth.rateLimitTier || "")
-        const tierMatch = rateLimitTier.match(/(\d+)x/)
-        if (tierMatch) {
-          tierSuffix = " " + tierMatch[1] + "x"
-        }
-        plan = basePlan + tierSuffix
-      }
+      plan = formatClaudePlan(ctx, creds.oauth.subscriptionType, creds.oauth.rateLimitTier)
     }
 
     if (data.five_hour && typeof data.five_hour.utilization === "number") {

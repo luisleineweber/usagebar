@@ -14,6 +14,7 @@
   "lines": [
     { "type": "progress", "label": "Premium", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "Chat", "scope": "overview", "primaryOrder": 2 },
-    { "type": "progress", "label": "Completions", "scope": "overview" }
+    { "type": "progress", "label": "Completions", "scope": "overview" },
+    { "type": "text", "label": "Premium Requests", "scope": "detail" }
   ]
 }

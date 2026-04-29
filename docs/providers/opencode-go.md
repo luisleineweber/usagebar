@@ -1,4 +1,4 @@
-# OpenCode Go
+# OpenCode
 
 > Uses local OpenCode history from SQLite to track observed OpenCode Go subscription-limit usage on this machine.
 
@@ -40,7 +40,7 @@ WHERE json_valid(data)
   AND json_type(data, '$.cost') IN ('integer', 'real')
 ```
 
-Only assistant messages with numeric `cost` count. Missing remote or other-device usage is not estimated.
+Only assistant messages with numeric `cost` count for paid Go usage. Free-model assistant messages with `cost: 0` are counted as requests for the Free 5-hour request limit. Missing remote or other-device usage is not estimated.
 
 ## Limits
 
@@ -51,6 +51,12 @@ OpenUsage uses the current published OpenCode Go subscription limits from the of
 - `Monthly`: `$60`
 
 Bars show observed local spend as a percentage of those fixed limits and clamp at `100%`.
+
+For Free usage, OpenUsage uses the published Free 5-hour request limit:
+
+- `5h`: `200 requests`
+
+Free models have zero local dollar cost, so they are not mapped onto the `$12/$30/$60` Go dollar limits.
 
 ## Window Rules
 

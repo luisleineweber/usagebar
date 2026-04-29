@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -9,8 +11,12 @@ permissions:
 
 jobs:
   check:
-    name: Lint, Type-check, Build, Test
-    runs-on: ubuntu-latest
+    name: Build and Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -18,10 +24,11 @@ jobs:
         with:
           bun-version: latest
 
-      - run: bun install
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Type-check and build
+      - name: Type-check and build frontend
         run: bun run build
 
-      - name: Run tests
-        run: bun run test
+      - name: Run frontend and plugin tests
+        run: bun run test -- --run

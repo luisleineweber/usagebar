@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { makeCtx } from "../test-helpers.js"
 
 const loadPlugin = async () => {
@@ -17,6 +19,14 @@ describe("cursor plugin", () => {
   beforeEach(() => {
     delete globalThis.__openusage_plugin
     vi.resetModules()
+  })
+
+  it("declares sqlite write capability for token refresh persistence", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(process.cwd(), "plugins", "cursor", "plugin.json"), "utf8")
+    )
+
+    expect(manifest.capabilities.sqliteWrite).toBe(true)
   })
 
   it("throws when no token", async () => {
@@ -480,6 +490,48 @@ describe("cursor plugin", () => {
     const result = plugin.probe(ctx)
     expect(result.plan).toBeTruthy()
     expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "Included budget")).toEqual({
+      type: "text",
+      label: "Included budget",
+      value: "$12.00 / $24.00",
+    })
+    expect(result.lines.find((line) => line.label === "On-demand status")).toEqual({
+      type: "text",
+      label: "On-demand status",
+      value: "Enabled",
+    })
+  })
+
+  it("surfaces newer Cursor plan names and budget fields", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockReturnValue(JSON.stringify([{ value: "token" }]))
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("GetCurrentPeriodUsage")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            enabled: true,
+            billingCycleEnd: Date.now(),
+            planUsage: { totalSpend: 1450, limit: 7000, totalPercentUsed: 20.71 },
+            spendLimitUsage: { individualLimit: 10000, individualRemaining: 10000 },
+          }),
+        }
+      }
+      if (String(opts.url).includes("GetPlanInfo")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ planInfo: { planName: "Pro+", includedAmountCents: 7000 } }),
+        }
+      }
+      return { status: 200, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Pro+")
+    expect(result.lines.find((line) => line.label === "Included budget")?.value).toBe("$14.50 / $70.00")
+    expect(result.lines.find((line) => line.label === "On-demand status")?.value).toBe("Enabled")
   })
 
   it("omits plan badge for blank plan names", async () => {

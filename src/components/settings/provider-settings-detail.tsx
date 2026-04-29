@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, CheckCircle2, KeyRound, RefreshCw, ShieldCheck } from "lucide-react"
+import { AlertCircle, CheckCircle2, KeyRound, RefreshCw, ShieldCheck, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -117,6 +117,8 @@ export function ProviderSettingsDetail({
       ? `${plugin.supportMessage} ${baseSetupHint}`
       : baseSetupHint
   const hasEditableSettings = Boolean(definition.sourceOptions || definition.secretField || definition.textField)
+  const groupClass = "border-t border-border/55 py-4"
+  const groupTitleClass = "text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
 
   const handleSourceChange = async (value: string) => {
     if (!onConfigChange) return
@@ -211,7 +213,7 @@ export function ProviderSettingsDetail({
           </div>
         </div>
 
-        {/* Action row — separated from title to avoid cramped flex-wrap */}
+        {/* Action row separated from title to avoid cramped flex-wrap */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {onOpenInTray && (
             <Button type="button" variant="outline" size="xs" onClick={onOpenInTray}>
@@ -232,46 +234,41 @@ export function ProviderSettingsDetail({
       </div>
 
       <div className="mt-5 pr-1 text-sm">
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="border-t border-border/55 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Source</div>
-            <div className="mt-2 text-sm font-medium text-foreground">{getProviderSourceLabel(plugin.id, config)}</div>
+        <div className={groupClass}>
+          <h4 className={groupTitleClass}>Status</h4>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Source</div>
+              <div className="mt-2 text-sm font-medium text-foreground">{getProviderSourceLabel(plugin.id, config)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Last success</div>
+              <div className="mt-2 text-sm font-medium text-foreground">{lastSuccessText ?? "No successful probe yet"}</div>
+            </div>
           </div>
-          <div className="border-t border-border/55 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Last success</div>
-            <div className="mt-2 text-sm font-medium text-foreground">{lastSuccessText ?? "No successful probe yet"}</div>
-          </div>
-          <div className="border-t border-border/55 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Secret state</div>
-            <div className="mt-2 text-sm font-medium text-foreground">
-              {secretPresent ? `Stored${secretUpdatedText ? ` · ${secretUpdatedText}` : ""}` : "No secret stored"}
+
+          <div className="mt-4 flex items-start gap-2 rounded-md border border-border/55 bg-muted/25 px-3 py-3">
+            {probeStatus.tone === "error" ? (
+              <AlertCircle className="mt-0.5 size-4 text-destructive" />
+            ) : probeStatus.tone === "success" ? (
+              <CheckCircle2 className="mt-0.5 size-4 text-primary" />
+            ) : (
+              <ShieldCheck className="mt-0.5 size-4 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <div className="font-medium text-foreground">Runtime status</div>
+              <div className="text-muted-foreground">{probeStatus.label}</div>
             </div>
           </div>
         </div>
 
-        <div className="flex items-start gap-2 border-t border-border/55 py-3">
-          {probeStatus.tone === "error" ? (
-            <AlertCircle className="mt-0.5 size-4 text-destructive" />
-          ) : probeStatus.tone === "success" ? (
-            <CheckCircle2 className="mt-0.5 size-4 text-primary" />
-          ) : (
-            <ShieldCheck className="mt-0.5 size-4 text-muted-foreground" />
-          )}
-          <div className="min-w-0">
-            <div className="font-medium text-foreground">Runtime status</div>
-            <div className="text-muted-foreground">{probeStatus.label}</div>
-          </div>
+        <div className={groupClass}>
+          <h4 className={groupTitleClass}>{isConnected ? "Connection details" : "How to connect"}</h4>
+          <p className="mt-2 text-muted-foreground">{setupHint}</p>
         </div>
 
-        <div className="border-t border-border/55 py-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {isConnected ? "Connection details" : "How to connect"}
-          </div>
-          <p className="mt-1 text-muted-foreground">{setupHint}</p>
-        </div>
-
-        <div className="border-t border-border/55 py-4">
-          <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">Settings</h4>
+        <div className={groupClass}>
+          <h4 className={groupTitleClass}>Provider Settings</h4>
 
           <div className="mt-3 space-y-4">
             {definition.sourceOptions && (
@@ -299,7 +296,16 @@ export function ProviderSettingsDetail({
             )}
 
             {showManualFields && definition.secretField && (
-              <div className="space-y-2">
+              <div className="space-y-3">
+                <div className="rounded-md border border-border/55 bg-muted/25 px-3 py-2.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Secret state</div>
+                  <div className="mt-1 text-sm font-medium text-foreground">
+                    {secretPresent ? `Stored${secretUpdatedText ? ` / ${secretUpdatedText}` : ""}` : "No secret stored"}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Secrets are stored by the app and are not shown again after saving.
+                  </p>
+                </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     {definition.secretField.label}
@@ -320,7 +326,15 @@ export function ProviderSettingsDetail({
                     {secretPresent ? "Replace secret" : "Save secret"}
                   </Button>
                   {secretPresent && (
-                    <Button type="button" variant="outline" size="xs" onClick={() => void handleSecretDelete()} disabled={isSavingSecret}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => void handleSecretDelete()}
+                      disabled={isSavingSecret}
+                    >
+                      <Trash2 className="size-3" />
                       Clear secret
                     </Button>
                   )}

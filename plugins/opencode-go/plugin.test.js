@@ -18,6 +18,27 @@ function setAuth(ctx, value = "go-key") {
   );
 }
 
+function response(bodyText, status = 200) {
+  return { status, bodyText, headers: {} };
+}
+
+function setZenConfig(ctx, cookieHeader = "auth=test; __Host-auth=test2", workspaceId = "wrk_01TESTWORKSPACE") {
+  ctx.host.providerSecrets.read.mockImplementation((key) =>
+    key === "cookieHeader" ? cookieHeader : null,
+  );
+  ctx.host.providerConfig = {
+    get: vi.fn((key) => {
+      if (key === "source") return "manual";
+      if (key === "workspaceId") return workspaceId;
+      return null;
+    }),
+  };
+  ctx.host.http.request.mockReturnValue(
+    response(JSON.stringify({ billing: { currentBalance: 12.34 } })),
+  );
+  return workspaceId;
+}
+
 function setHistoryQuery(ctx, rows, options = {}) {
   const list = Array.isArray(rows) ? rows : [];
   ctx.host.sqlite.query.mockImplementation((dbPath, sql) => {
@@ -74,7 +95,7 @@ describe("opencode-go plugin", () => {
     );
 
     expect(manifest.id).toBe("opencode-go");
-    expect(manifest.name).toBe("OpenCode Go");
+    expect(manifest.name).toBe("OpenCode");
     expect(manifest.brandColor).toBe("#000000");
     expect(manifest.links).toEqual([
       { label: "Console", url: "https://opencode.ai/auth" },
@@ -82,6 +103,7 @@ describe("opencode-go plugin", () => {
     ]);
     expect(manifest.lines).toEqual([
       { type: "progress", label: "5h", scope: "overview", primaryOrder: 1 },
+      { type: "text", label: "Zen balance", scope: "overview" },
       { type: "progress", label: "Weekly", scope: "detail" },
       { type: "progress", label: "Monthly", scope: "detail" },
     ]);
@@ -174,6 +196,83 @@ describe("opencode-go plugin", () => {
 
     expect(result.plan).toBe("Go");
     expect(result.lines[0].used).toBe(10);
+  });
+
+  it("tracks free OpenCode usage by 5h request count instead of dollar cost", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-03-06T06:30:00.000Z"), modelId: "minimax-m2.5-free", cost: 0 },
+      { createdMs: Date.parse("2026-03-06T08:00:00.000Z"), modelId: "minimax-m2.5-free", cost: 0 },
+      { createdMs: Date.parse("2026-03-06T10:00:00.000Z"), modelId: "minimax-m2.5-free", cost: 0 },
+    ]);
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.plan).toBe("Free");
+    expect(result.lines).toEqual([
+      {
+        type: "progress",
+        label: "5h",
+        used: 2,
+        limit: 200,
+        format: { kind: "count", suffix: "requests" },
+        resetsAt: "2026-03-06T13:00:00.000Z",
+        periodDurationMs: 5 * 60 * 60 * 1000,
+      },
+    ]);
+  });
+
+  it("adds the Zen balance to the Go tab when a Zen cookie is configured", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    const workspaceId = setZenConfig(ctx);
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
+    ]);
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      headers: expect.objectContaining({
+        Cookie: "auth=test; __Host-auth=test2",
+        Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
+      }),
+    }));
+    expect(result.lines).toContainEqual({
+      type: "text",
+      label: "Zen balance",
+      value: "$12.34",
+      subtitle: "OpenCode Zen pay-as-you-go balance",
+    });
+  });
+
+  it("keeps Go usage visible when the optional Zen balance read fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    setZenConfig(ctx);
+    ctx.host.http.request.mockReturnValue(response("{}", 500));
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
+    ]);
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.lines[0]).toMatchObject({ type: "progress", label: "5h", used: 10 });
+    expect(result.lines.some((line) => line.label === "Zen balance")).toBe(false);
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("opencode-go zen balance read failed: OpenCode Zen request failed"),
+    );
   });
 
   it("uses row timestamp fallback when JSON timestamp is missing", async () => {

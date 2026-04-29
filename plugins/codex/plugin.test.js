@@ -226,12 +226,41 @@ describe("codex plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.plan).toBe("Pro 20x")
+    expect(result.plan).toBe("Pro")
+    expect(result.lines.find((line) => line.label === "Plan Multiplier")).toEqual({
+      type: "text",
+      label: "Plan Multiplier",
+      value: "20x",
+    })
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
     expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
     const credits = result.lines.find((line) => line.label === "Credits")
     expect(credits).toBeTruthy()
     expect(credits.used).toBe(900)
+  })
+
+  it("shows Pro Lite as the plan and keeps the multiplier as detail metadata", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
+      tokens: { access_token: "token" },
+      last_refresh: new Date().toISOString(),
+    }))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        plan_type: "prolite",
+        rate_limit: {
+          primary_window: { reset_after_seconds: 60, used_percent: 10 },
+        },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Pro Lite")
+    expect(result.lines.find((line) => line.label === "Plan Multiplier")?.value).toBe("5x")
   })
 
   it("refreshes keychain auth and writes back to keychain", async () => {

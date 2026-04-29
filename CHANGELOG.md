@@ -3,7 +3,12 @@
 ## 0.1.0-beta.6
 
 ### Highlights
-- Unreleased.
+- Renamed the fork's release metadata and user-facing bundle identity to UsageBar, including app version alignment for `0.1.0-beta.6`.
+- Added legacy OpenUsage app-data migration so existing local state can carry forward into the UsageBar-branded fork.
+- Added usage trend history charts and refreshed settings/provider surfaces for clearer provider status, setup, and tray handoff behavior.
+- Added local HTTP plumbing and hardened plugin/security boundaries, including a restrictive starter WebView CSP and explicit SQLite write capability metadata.
+- Improved Copilot, Cursor, Gemini, OpenCode Go, Claude, Codex, and OpenRouter provider behavior with focused regression coverage.
+- Stabilized the JavaScript toolchain on the current Bun/Vite/Vitest/Tailwind matrix and made CI more Windows-aware with frozen installs.
 
 ---
 

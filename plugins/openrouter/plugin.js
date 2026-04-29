@@ -88,7 +88,7 @@
         ctx.host.log.warn("request returned auth status " + resp.status + " (" + url + ")")
         return null
       }
-      throw "OpenRouter API key invalid. Check Setup or OPENROUTER_API_KEY."
+      throw "OpenRouter credits requires a management key. Check Setup or OPENROUTER_API_KEY."
     }
 
     if (resp.status < 200 || resp.status >= 300) {
@@ -156,7 +156,7 @@
   function probe(ctx) {
     const apiKey = loadApiKey(ctx)
     if (!apiKey) {
-      throw "OpenRouter API key missing. Save it in Setup or set OPENROUTER_API_KEY."
+      throw "OpenRouter management key missing. Save it in Setup or set OPENROUTER_API_KEY."
     }
 
     const baseUrl = loadBaseUrl(ctx)

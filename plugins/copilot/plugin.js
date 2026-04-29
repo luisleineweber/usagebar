@@ -3,6 +3,7 @@
   const GH_KEYCHAIN_SERVICE = "gh:github.com";
   const GH_HOST = "github.com";
   const USAGE_URL = "https://api.github.com/copilot_internal/user";
+  const API_BASE_URL = "https://api.github.com";
   const WINDOWS_GH_HOSTS_PATH = "~/AppData/Roaming/GitHub CLI/hosts.yml";
   const UNIX_GH_HOSTS_PATH = "~/.config/gh/hosts.yml";
 
@@ -259,6 +260,117 @@
     });
   }
 
+  function readProviderConfigString(ctx, key) {
+    if (!ctx.host.providerConfig || typeof ctx.host.providerConfig.get !== "function") return null;
+    try {
+      return readString(ctx.host.providerConfig.get(key));
+    } catch (e) {
+      ctx.host.log.warn("provider config read failed for " + key + ": " + String(e));
+      return null;
+    }
+  }
+
+  function readEnvString(ctx, key) {
+    if (!ctx.host.env || typeof ctx.host.env.get !== "function") return null;
+    try {
+      return readString(ctx.host.env.get(key));
+    } catch (e) {
+      ctx.host.log.warn("env read failed for " + key + ": " + String(e));
+      return null;
+    }
+  }
+
+  function parseBillingScope(rawScope, username) {
+    const raw = readString(rawScope);
+    if (!raw) return username ? { kind: "user", value: username } : null;
+
+    const lower = raw.toLowerCase();
+    if (lower.indexOf("org:") === 0) {
+      const value = readString(raw.slice(4));
+      return value ? { kind: "org", value } : null;
+    }
+    if (lower.indexOf("organization:") === 0) {
+      const value = readString(raw.slice("organization:".length));
+      return value ? { kind: "org", value } : null;
+    }
+    if (lower.indexOf("enterprise:") === 0) {
+      const value = readString(raw.slice("enterprise:".length));
+      return value ? { kind: "enterprise", value } : null;
+    }
+    return { kind: "org", value: raw };
+  }
+
+  function readBillingScope(ctx, username) {
+    return parseBillingScope(
+      readProviderConfigString(ctx, "workspaceId") ||
+        readEnvString(ctx, "COPILOT_BILLING_SCOPE") ||
+        (readEnvString(ctx, "COPILOT_BILLING_ENTERPRISE")
+          ? "enterprise:" + readEnvString(ctx, "COPILOT_BILLING_ENTERPRISE")
+          : null) ||
+        (readEnvString(ctx, "COPILOT_BILLING_ORG")
+          ? "org:" + readEnvString(ctx, "COPILOT_BILLING_ORG")
+          : null),
+      username,
+    );
+  }
+
+  function billingScopePath(scope) {
+    if (!scope) return null;
+    if (scope.kind === "enterprise") {
+      return "/enterprises/" + encodeURIComponent(scope.value) + "/settings/billing/premium_request/usage";
+    }
+    if (scope.kind === "org") {
+      return "/organizations/" + encodeURIComponent(scope.value) + "/settings/billing/premium_request/usage";
+    }
+    return "/users/" + encodeURIComponent(scope.value) + "/settings/billing/premium_request/usage";
+  }
+
+  function billingScopeLabel(scope) {
+    if (!scope) return null;
+    if (scope.kind === "enterprise") return "Enterprise: " + scope.value;
+    if (scope.kind === "org") return "Org: " + scope.value;
+    return "User: " + scope.value;
+  }
+
+  function fetchPremiumRequestUsage(ctx, token, scope, username) {
+    const path = billingScopePath(scope);
+    if (!path) return null;
+    const query = scope.kind !== "user" && username ? "?user=" + encodeURIComponent(username) : "";
+    return ctx.util.request({
+      method: "GET",
+      url: API_BASE_URL + path + query,
+      headers: {
+        Authorization: "token " + token,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "UsageBar",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      timeoutMs: 10000,
+    });
+  }
+
+  function readString(value) {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  function readNumber(value) {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    const text = readString(value);
+    if (!text) return null;
+    const n = Number(text);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function formatCount(value) {
+    return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  function formatMoney(value) {
+    return "$" + Number(value || 0).toFixed(2);
+  }
+
   function makeProgressLine(ctx, label, snapshot, resetDate) {
     if (!snapshot || typeof snapshot.percent_remaining !== "number")
       return null;
@@ -286,6 +398,106 @@
       resetsAt: ctx.util.toIso(resetDate),
       periodDurationMs: 30 * 24 * 60 * 60 * 1000,
     });
+  }
+
+  function summarizePremiumRequestUsage(data) {
+    if (!data || !Array.isArray(data.usageItems)) return null;
+
+    let quantity = 0;
+    let amount = 0;
+    let count = 0;
+    const models = {};
+
+    for (let i = 0; i < data.usageItems.length; i += 1) {
+      const item = data.usageItems[i];
+      if (!item || typeof item !== "object") continue;
+
+      const product = readString(item.product);
+      const sku = readString(item.sku);
+      const isCopilot =
+        (product && product.toLowerCase() === "copilot") ||
+        (sku && sku.toLowerCase().indexOf("copilot") !== -1);
+      if (!isCopilot) continue;
+
+      const itemQuantity =
+        readNumber(item.netQuantity) ??
+        readNumber(item.grossQuantity) ??
+        readNumber(item.quantity);
+      if (itemQuantity === null) continue;
+
+      quantity += itemQuantity;
+      amount +=
+        readNumber(item.netAmount) ??
+        readNumber(item.grossAmount) ??
+        readNumber(item.amount) ??
+        0;
+      count += 1;
+
+      const model = readString(item.model);
+      if (model) models[model] = (models[model] || 0) + itemQuantity;
+    }
+
+    if (count === 0) return null;
+
+    const modelNames = Object.keys(models).sort(function (a, b) {
+      return models[b] - models[a];
+    });
+    return {
+      quantity: quantity,
+      amount: amount,
+      topModel: modelNames.length > 0 ? modelNames[0] : null,
+    };
+  }
+
+  function makePremiumRequestUsageLine(ctx, summary) {
+    if (!summary) return null;
+    let value = formatCount(summary.quantity) + " requests";
+    if (summary.amount > 0) value += " (" + formatMoney(summary.amount) + ")";
+    if (summary.topModel) value += " - top: " + summary.topModel;
+    return ctx.line.text({
+      label: "Premium Requests",
+      value: value,
+    });
+  }
+
+  function tryFetchPremiumRequestUsage(ctx, token, username) {
+    const login = readString(username);
+    const scope = readBillingScope(ctx, login);
+    if (!scope) return null;
+
+    let resp;
+    try {
+      resp = fetchPremiumRequestUsage(ctx, token, scope, login);
+    } catch (e) {
+      ctx.host.log.warn("premium request usage exception: " + String(e));
+      return null;
+    }
+
+    if (resp.status === 403 || resp.status === 404) {
+      ctx.host.log.info(
+        "premium request usage unavailable for user billing endpoint (HTTP " +
+          String(resp.status) +
+          ")",
+      );
+      return ctx.line.text({
+        label: "Premium Requests",
+        value: "Unavailable for this billing account",
+      });
+    }
+
+    if (resp.status < 200 || resp.status >= 300) {
+      ctx.host.log.warn(
+        "premium request usage returned status " + String(resp.status),
+      );
+      return null;
+    }
+
+    const data = ctx.util.tryParseJson(resp.bodyText);
+    const summary = summarizePremiumRequestUsage(data);
+    const line = makePremiumRequestUsageLine(ctx, summary);
+    if (!line) return null;
+    if (scope.kind !== "user") line.subtitle = billingScopeLabel(scope);
+    return line;
   }
 
   function probe(ctx) {
@@ -394,6 +606,13 @@
       const completionsLine = makeLimitedProgressLine(ctx, "Completions", lq.completions, mq.completions, resetDate);
       if (completionsLine) lines.push(completionsLine);
     }
+
+    const premiumRequestLine = tryFetchPremiumRequestUsage(
+      ctx,
+      token,
+      activeLogin || cred.login,
+    );
+    if (premiumRequestLine) lines.push(premiumRequestLine);
 
     if (lines.length === 0) {
       lines.push(

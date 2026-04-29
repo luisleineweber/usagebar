@@ -342,6 +342,7 @@ Executes a write SQL statement against a SQLite database.
 
 **Behavior:**
 
+- **Capability-gated**: Only available when `capabilities.sqliteWrite` is explicitly `true` in `plugin.json`; otherwise calls are blocked and logged
 - **Read-write**: Database is opened with full write access
 - **Returns nothing**: Use for INSERT, UPDATE, DELETE, or other write operations
 - **Dot-commands blocked**: Commands like `.schema`, `.tables` are rejected

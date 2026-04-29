@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
@@ -68,6 +69,12 @@ describe("opencode plugin", () => {
         subtitle: "OpenCode Zen pay-as-you-go balance",
       },
     ])
+  })
+
+  it("keeps standalone Zen hidden because Zen balance is surfaced through OpenCode Go", () => {
+    const manifest = JSON.parse(readFileSync("plugins/opencode/plugin.json", "utf8"))
+
+    expect(manifest.platformSupport.windows.surfaced).toBe(false)
   })
 
   it("reads zero Zen balance from cent-denominated fields", async () => {

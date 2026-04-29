@@ -56,6 +56,12 @@ function setGhCliCommandToken(ctx, token) {
   });
 }
 
+function setProviderConfig(ctx, values) {
+  ctx.host.providerConfig = {
+    get: vi.fn((key) => Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null),
+  };
+}
+
 function setGhHosts(ctx, text) {
   ctx.host.fs.writeText("~/AppData/Roaming/GitHub CLI/hosts.yml", text);
 }
@@ -257,6 +263,138 @@ describe("copilot plugin", () => {
     expect(premium.limit).toBe(100);
     expect(chat).toBeTruthy();
     expect(chat.used).toBe(5); // 100 - 95
+  });
+
+  it("adds official premium request billing usage when a gh username is available", async () => {
+    const ctx = makePluginTestContext();
+    ctx.app.platform = "windows";
+    setGhHosts(ctx, ["github.com:", "    users:", "        work-user:", "    user: work-user"].join("\n"));
+    setGhCliAccountKeychain(ctx, "work-user", "gho_work_token");
+    ctx.host.http.request.mockImplementation((req) => {
+      if (req.url === "https://api.github.com/copilot_internal/user") {
+        return { status: 200, bodyText: JSON.stringify(makeUsageResponse()) };
+      }
+      if (req.url === "https://api.github.com/users/work-user/settings/billing/premium_request/usage") {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            usageItems: [
+              {
+                product: "Copilot",
+                sku: "Copilot Premium Request",
+                model: "GPT-5",
+                unitType: "requests",
+                netQuantity: 120,
+                netAmount: 4.8,
+              },
+              {
+                product: "Actions",
+                sku: "actions_linux",
+                netQuantity: 900,
+                netAmount: 7.2,
+              },
+            ],
+          }),
+        };
+      }
+      return { status: 404, bodyText: "{}" };
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.lines.find((l) => l.label === "Premium Requests")).toEqual({
+      type: "text",
+      label: "Premium Requests",
+      value: "120 requests ($4.80) - top: GPT-5",
+    });
+    const billingCall = ctx.host.http.request.mock.calls.find((call) =>
+      call[0].url.indexOf("/settings/billing/premium_request/usage") !== -1
+    )[0];
+    expect(billingCall.headers["X-GitHub-Api-Version"]).toBe("2022-11-28");
+  });
+
+  it("uses configured organization billing scope for premium request usage", async () => {
+    const ctx = makePluginTestContext();
+    ctx.app.platform = "windows";
+    setGhHosts(ctx, ["github.com:", "    users:", "        work-user:", "    user: work-user"].join("\n"));
+    setGhCliAccountKeychain(ctx, "work-user", "gho_work_token");
+    setProviderConfig(ctx, { workspaceId: "org:acme" });
+    ctx.host.http.request.mockImplementation((req) => {
+      if (req.url === "https://api.github.com/copilot_internal/user") {
+        return { status: 200, bodyText: JSON.stringify(makeUsageResponse()) };
+      }
+      if (req.url === "https://api.github.com/organizations/acme/settings/billing/premium_request/usage?user=work-user") {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            usageItems: [
+              { product: "Copilot", sku: "Copilot Premium Request", model: "GPT-5", netQuantity: 12, netAmount: 0.48 },
+            ],
+          }),
+        };
+      }
+      return { status: 404, bodyText: "{}" };
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    const line = result.lines.find((l) => l.label === "Premium Requests");
+
+    expect(line.value).toBe("12 requests ($0.48) - top: GPT-5");
+    expect(line.subtitle).toBe("Org: acme");
+  });
+
+  it("uses configured enterprise billing scope for premium request usage", async () => {
+    const ctx = makePluginTestContext();
+    ctx.app.platform = "windows";
+    setGhHosts(ctx, ["github.com:", "    users:", "        work-user:", "    user: work-user"].join("\n"));
+    setGhCliAccountKeychain(ctx, "work-user", "gho_work_token");
+    setProviderConfig(ctx, { workspaceId: "enterprise:octo-ent" });
+    ctx.host.http.request.mockImplementation((req) => {
+      if (req.url === "https://api.github.com/copilot_internal/user") {
+        return { status: 200, bodyText: JSON.stringify(makeUsageResponse()) };
+      }
+      if (req.url === "https://api.github.com/enterprises/octo-ent/settings/billing/premium_request/usage?user=work-user") {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            usageItems: [
+              { product: "Copilot", sku: "Copilot Premium Request", model: "GPT-5", netQuantity: 20 },
+            ],
+          }),
+        };
+      }
+      return { status: 404, bodyText: "{}" };
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    const line = result.lines.find((l) => l.label === "Premium Requests");
+
+    expect(line.value).toBe("20 requests - top: GPT-5");
+    expect(line.subtitle).toBe("Enterprise: octo-ent");
+  });
+
+  it("keeps private endpoint usage when official premium request usage is unavailable", async () => {
+    const ctx = makePluginTestContext();
+    ctx.app.platform = "windows";
+    setGhHosts(ctx, ["github.com:", "    users:", "        work-user:", "    user: work-user"].join("\n"));
+    setGhCliAccountKeychain(ctx, "work-user", "gho_work_token");
+    ctx.host.http.request.mockImplementation((req) => {
+      if (req.url === "https://api.github.com/copilot_internal/user") {
+        return { status: 200, bodyText: JSON.stringify(makeUsageResponse()) };
+      }
+      return { status: 403, bodyText: "" };
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+
+    expect(result.lines.find((l) => l.label === "Premium")).toBeTruthy();
+    expect(result.lines.find((l) => l.label === "Premium Requests")?.value).toBe(
+      "Unavailable for this billing account",
+    );
   });
 
   it("renders only Premium when Chat is missing", async () => {

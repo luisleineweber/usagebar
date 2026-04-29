@@ -98,11 +98,24 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     },
   },
   "opencode-go": {
-    mode: "automatic",
-    title: "OpenCode Go Setup",
-    summary: "Tracks OpenCode Go subscription limit usage from the local OpenCode auth file and SQLite history on this machine.",
-    statusHint: "No manual setup is required once the Go subscription has local auth or opencode.db history.",
-    connectHint: "Install OpenCode Go, sign in on this machine, then retry.",
+    mode: "editable",
+    title: "OpenCode Setup",
+    summary: "Tracks OpenCode Go subscription limit usage from local OpenCode history and can show the Zen pay-as-you-go balance from the same opencode.ai account.",
+    statusHint: "Local Go usage is auto-detected. Add the opencode.ai Cookie header here to include the Zen balance in this tab.",
+    connectHint: "Install OpenCode Go and sign in on this machine. For Zen balance, open https://opencode.ai, copy the Cookie request header from the workspace billing page or an opencode.ai/_server request, and paste it here.",
+    sourceOptions: OPENCODE_SOURCE_OPTIONS,
+    secretField: {
+      key: "cookieHeader",
+      label: "Cookie header",
+      description: "Optional. Paste the full Cookie request header from a signed-in opencode.ai/workspace/.../billing or opencode.ai/_server request to show Zen balance here. Do not paste Set-Cookie.",
+      placeholder: "auth=...; __Host-auth=...; other_cookie=...;",
+    },
+    textField: {
+      key: "workspaceId",
+      label: "Workspace ID",
+      description: "Optional override when workspace lookup fails or your account has multiple teams. Paste the wrk_... ID from the billing URL or an _server payload.",
+      placeholder: "wrk_...",
+    },
   },
   codex: {
     mode: "editable",
@@ -152,11 +165,17 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     connectHint: "Install Gemini CLI, run `gemini` and sign in, then retry.",
   },
   copilot: {
-    mode: "automatic",
+    mode: "editable",
     title: "Copilot Setup",
-    summary: "Detected from OpenUsage keychain cache or gh CLI auth.",
-    statusHint: "Run gh auth login if Copilot is missing.",
-    connectHint: "Run gh auth login or sign in to Copilot locally, then refresh.",
+    summary: "Detected from OpenUsage keychain cache or gh CLI auth, with optional organization or enterprise premium-request billing scope.",
+    statusHint: "Run gh auth login if Copilot is missing. For org-managed licenses, set a billing scope such as org:my-org or enterprise:my-enterprise.",
+    connectHint: "Run gh auth login or sign in to Copilot locally, then refresh. For organization or enterprise billing reports, save a billing scope and use a token with billing/admin read access.",
+    textField: {
+      key: "workspaceId",
+      label: "Billing scope",
+      description: "Optional. Use org:ORG or enterprise:SLUG to read official premium-request usage from that billing account. Leave blank for personal user billing.",
+      placeholder: "org:my-org",
+    },
   },
   amp: {
     mode: "automatic",
@@ -321,13 +340,13 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   openrouter: {
     mode: "editable",
     title: "OpenRouter Setup",
-    summary: "Fetches OpenRouter credits and key-rate data from a stored API key or OPENROUTER_API_KEY.",
-    statusHint: "Save an OpenRouter API key here or set OPENROUTER_API_KEY before launching UsageBar.",
-    connectHint: "Create an API key at https://openrouter.ai/settings/keys, save it here or set OPENROUTER_API_KEY, then retry.",
+    summary: "Fetches OpenRouter credits and key-rate data from a stored management key or OPENROUTER_API_KEY.",
+    statusHint: "Save an OpenRouter management key here or set OPENROUTER_API_KEY before launching UsageBar.",
+    connectHint: "Create a management key in the OpenRouter dashboard, save it here or set OPENROUTER_API_KEY, then retry.",
     secretField: {
       key: "apiKey",
-      label: "API key",
-      description: "Paste an OpenRouter API key. UsageBar stores it in the app credential vault and uses it for the credits and key endpoints.",
+      label: "Management key",
+      description: "Paste an OpenRouter management key. UsageBar stores it in the app credential vault and uses it for the credits and key endpoints.",
       placeholder: "sk-or-v1-...",
     },
   },
@@ -495,6 +514,7 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   if (providerId === "perplexity") return "Manual cookie"
   if (providerId === "abacus") return "Manual cookie"
   if (providerId === "augment") return "Manual cookie"
+  if (providerId === "copilot") return config?.workspaceId ? "GitHub auth + billing scope" : "GitHub auth"
   if (providerId === "claude") return config?.secrets?.cookieHeader ? "OAuth + web cookie" : "Auto-detected"
   if (providerId === "codex") {
     if (config?.selectedAccountProfileId && config?.secrets?.cookieHeader) return "Managed account + dashboard cookie"

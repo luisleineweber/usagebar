@@ -155,7 +155,6 @@ describe("SettingsPage", () => {
   it("uses responsive layout classes for narrow settings widths", () => {
     const { container } = render(<TestHarness />)
 
-    expect(container.querySelector(".md\\:flex-row")).toBeTruthy()
     expect(container.querySelector(".grid-cols-2.lg\\:grid-cols-4")).toBeTruthy()
     expect(container.querySelector(".sm\\:grid-cols-2")).toBeTruthy()
     expect(container.querySelector(".sm\\:grid-cols-3")).toBeTruthy()

@@ -253,6 +253,34 @@ describe("claude plugin", () => {
     await runCase("claude_max_subscription_5x", "Max 5x")
   })
 
+  it("recognizes Claude Ultra from subscription type or rate limit tier", async () => {
+    const runCase = async (subscriptionType, rateLimitTier) => {
+      const ctx = makeCtx()
+      ctx.host.fs.exists = () => true
+      ctx.host.fs.readText = () =>
+        JSON.stringify({
+          claudeAiOauth: {
+            accessToken: "token",
+            subscriptionType,
+            rateLimitTier,
+          },
+        })
+      ctx.host.http.request.mockReturnValue({
+        status: 200,
+        bodyText: JSON.stringify({
+          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+        }),
+      })
+
+      const plugin = await loadPlugin()
+      const result = plugin.probe(ctx)
+      expect(result.plan).toBe("Ultra")
+    }
+
+    await runCase("ultra", "")
+    await runCase("max", "claude_ultra_subscription")
+  })
+
   it("omits resetsAt when resets_at is missing", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>

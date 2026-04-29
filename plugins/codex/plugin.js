@@ -336,12 +336,13 @@
     return Number.isFinite(n) ? n : null
   }
 
-  function formatPlanType(ctx, planType) {
+  function formatPlanInfo(ctx, planType) {
     const rawPlan = typeof planType === "string" ? planType.trim() : ""
-    if (!rawPlan) return null
-    if (rawPlan.toLowerCase() === "prolite") return "Pro 5x"
-    if (rawPlan.toLowerCase() === "pro") return "Pro 20x"
-    return ctx.fmt.planLabel(rawPlan) || null
+    if (!rawPlan) return { label: null, multiplier: null }
+    const normalized = rawPlan.toLowerCase()
+    if (normalized === "prolite") return { label: "Pro Lite", multiplier: "5x" }
+    if (normalized === "pro") return { label: "Pro", multiplier: "20x" }
+    return { label: ctx.fmt.planLabel(rawPlan) || null, multiplier: null }
   }
 
   function readNonEmptyString(value) {
@@ -795,11 +796,16 @@
       }
 
       let plan = null
+      let planMultiplier = null
       if (data.plan_type) {
-        const planLabel = formatPlanType(ctx, data.plan_type)
-        if (planLabel) {
-          plan = planLabel
+        const planInfo = formatPlanInfo(ctx, data.plan_type)
+        if (planInfo.label) {
+          plan = planInfo.label
+          planMultiplier = planInfo.multiplier
         }
+      }
+      if (planMultiplier) {
+        lines.push(ctx.line.text({ label: "Plan Multiplier", value: planMultiplier }))
       }
 
       const tokenUsageResult = queryTokenUsage(ctx)

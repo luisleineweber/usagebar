@@ -11,6 +11,9 @@
       "state": "supported"
     }
   },
+  "capabilities": {
+    "sqliteWrite": true
+  },
   "links": [
     { "label": "Status", "url": "https://status.cursor.com/" },
     { "label": "Dashboard", "url": "https://www.cursor.com/dashboard" }
@@ -20,6 +23,8 @@
     { "type": "progress", "label": "Total usage", "scope": "overview", "primaryOrder": 2 },
     { "type": "progress", "label": "Requests", "scope": "overview", "primaryOrder": 3 },
     { "type": "progress", "label": "On-demand", "scope": "overview", "primaryOrder": 4 },
+    { "type": "text", "label": "Included budget", "scope": "detail" },
+    { "type": "text", "label": "On-demand status", "scope": "detail" },
     { "type": "progress", "label": "Auto usage", "scope": "detail" },
     { "type": "progress", "label": "API usage", "scope": "detail" }
   ]

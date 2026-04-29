@@ -286,6 +286,10 @@
     }
   }
 
+  function formatDollarsText(ctx, cents) {
+    return "$" + Number(ctx.fmt.dollars(cents)).toFixed(2)
+  }
+
   function buildRequestBasedResult(ctx, accessToken, planName, unavailableMessage) {
     var requestUsage = fetchRequestBasedUsage(ctx, accessToken)
     var lines = []
@@ -436,13 +440,17 @@
 
     // Fetch plan info early (needed for request-based fallback detection)
     let planName = ""
+    let planInfo = null
     let planInfoUnavailable = false
     try {
       const planResp = connectPost(ctx, PLAN_URL, accessToken)
       if (planResp.status >= 200 && planResp.status < 300) {
         const plan = ctx.util.tryParseJson(planResp.bodyText)
-        if (plan && plan.planInfo && plan.planInfo.planName) {
-          planName = plan.planInfo.planName
+        if (plan && plan.planInfo) {
+          planInfo = plan.planInfo
+          if (plan.planInfo.planName) {
+            planName = plan.planInfo.planName
+          }
         }
       } else {
         planInfoUnavailable = true
@@ -597,6 +605,18 @@
       }))
     }
 
+    if (hasFiniteLimit && planUsed !== null) {
+      lines.push(ctx.line.text({
+        label: "Included budget",
+        value: formatDollarsText(ctx, planUsed) + " / " + formatDollarsText(ctx, pu.limit),
+      }))
+    } else if (planInfo && typeof planInfo.includedAmountCents === "number" && Number.isFinite(planInfo.includedAmountCents)) {
+      lines.push(ctx.line.text({
+        label: "Included budget",
+        value: "$0.00 / " + formatDollarsText(ctx, planInfo.includedAmountCents),
+      }))
+    }
+
     if (typeof pu.autoPercentUsed === "number" && Number.isFinite(pu.autoPercentUsed)) {
       lines.push(ctx.line.progress({
         label: "Auto usage",
@@ -623,6 +643,10 @@
     if (su) {
       const limit = su.individualLimit ?? su.pooledLimit ?? 0
       const remaining = su.individualRemaining ?? su.pooledRemaining ?? 0
+      lines.push(ctx.line.text({
+        label: "On-demand status",
+        value: limit > 0 ? "Enabled" : "Disabled",
+      }))
       if (limit > 0) {
         const used = limit - remaining
         lines.push(ctx.line.progress({

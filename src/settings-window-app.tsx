@@ -309,8 +309,8 @@ export function SettingsWindowApp() {
   )
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(67,122,255,0.14),_transparent_32%),linear-gradient(180deg,_hsl(var(--background)),_hsl(var(--muted))/0.45)] px-6 py-6 text-foreground md:px-10 md:py-10">
-      <div className="mx-auto w-full max-w-5xl">
+    <div className="min-h-screen bg-background px-6 py-6 text-foreground md:px-10 md:py-10">
+      <div className="mx-auto w-full max-w-7xl">
         <SettingsPage
           providers={settingsPlugins}
           selectedProviderId={selectedProviderId}
