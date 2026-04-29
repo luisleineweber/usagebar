@@ -2,6 +2,101 @@
 
 Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local `usagebar` tree.
 
+# First public alpha readiness gate
+
+## Executive Summary
+- Ship the next public milestone as an alpha, not a full release.
+- Make the alpha safe to install, easy to understand, and honest about provider limits.
+- Prioritize trust, packaging, failure handling, privacy, and feedback over more UI experiments.
+
+## Acceptance Criteria
+- [x] README answers the product promise in one glance: what UsageBar does, screenshots, supported providers, install path, privacy model, and current limitations.
+- [x] Release docs use a concrete alpha tag example such as `v0.1.0-alpha.1` or explicitly justify staying on the current beta line.
+- [ ] A Windows installer artifact path is verified locally or from GitHub Releases, with install/uninstall/config-location notes documented.
+- [ ] At least one supported provider can be added by a fresh user path, refreshed manually, and shown with date range plus last-updated state.
+- [ ] Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states are visible and do not crash the app.
+- [ ] Provider support matrix distinguishes supported vs experimental providers and states when cost/usage is estimated, partial, or provider-reported.
+- [ ] Privacy copy states local credential/data handling, telemetry behavior, crash-log behavior, and whether anything is sent to UsageBar-owned services.
+- [ ] Feedback path includes GitHub issue/report action plus sanitized debug information expectations; no API keys or cookies in copied/logged diagnostics.
+- [ ] `CHANGELOG.md` has a matching alpha section with supported features, known limitations, privacy note, and feedback link before tagging.
+- [ ] Verification commands and manual checks are recorded before any alpha tag, push, or GitHub release action.
+
+## Plan
+- [x] Audit current README/release docs/changelog against the alpha gate and patch only factual gaps first.
+- [ ] Audit the Settings/provider setup flow for remove-provider/key, connection test, and error-state visibility.
+- [ ] Verify one installable Windows artifact path, then document install, uninstall, and config/data locations.
+- [ ] Run focused provider/setup/update tests plus release preflight; record blockers instead of stretching scope.
+- [ ] Prepare release notes for the chosen prerelease label, without creating a tag or GitHub release unless explicitly requested.
+
+## Verification Notes
+- Started from the user's release-readiness bar on 2026-04-29: public alpha is the next safer milestone unless installer, updater, provider setup, error handling, docs, privacy, and recovery are already boring.
+- Current local metadata still says `0.1.0-beta.7` in `package.json` and `src-tauri/tauri.conf.json`; release-label alignment is a pending decision before tagging.
+- Initial repo audit found README already has screenshot, provider table, architecture, privacy/security, releases link, and source-build commands, but not a dedicated known-limitations/alpha gate.
+- Existing `docs/releasing.md` still uses beta tag examples and notes prerelease updater limits.
+- Added README `Alpha Readiness` and `Current Limitations` sections, and clarified crash-log behavior is not a public guarantee until release notes state the exact behavior.
+- Updated `docs/releasing.md` to recommend `v0.1.0-alpha.1`, document the alpha gate, and preserve the beta-line exception path if the version line is intentionally kept.
+- Verified the docs slice with `rg -n "Alpha Readiness|Current Limitations|v0\\.1\\.0-alpha\\.1|Alpha Gate|Public-release default|first public alpha gate" README.md docs\\releasing.md docs\\choices.md docs\\breadcrumbs.md tasks\\todo.md`.
+- Reviewed the touched-file diff with `git --no-pager diff -- README.md docs/releasing.md tasks/todo.md docs/choices.md docs/breadcrumbs.md`; the diff includes earlier in-flight README/task edits in the dirty worktree, so only the alpha-gate additions are part of this slice.
+
+# Refresh README for current beta/provider surface
+
+## Acceptance Criteria
+- [x] README release/build commands match the current `0.1.0-beta.7` package/Tauri version.
+- [x] README provider table includes current visible provider docs and status changes from plugin manifests.
+- [x] README includes concise architecture, privacy/security, and telemetry notes for new users.
+- [x] Docs-only diff is reviewed before marking done.
+
+## Plan
+- [x] Compare README against `package.json`, `src-tauri/tauri.conf.json`, provider docs, and plugin manifests.
+- [x] Patch README only, keeping provider claims conservative and source-backed.
+- [x] Review the README diff and record verification.
+
+## Verification Notes
+- Checked `package.json` and `src-tauri/tauri.conf.json` -> current app version is `0.1.0-beta.7`.
+- Checked plugin manifests and provider docs -> README was missing `Abacus AI` and `Mistral`; both now have provider-table rows.
+- Verified README text with a targeted PowerShell check for `0.1.0-beta.7`, `docs/providers/abacus.md`, `docs/providers/mistral.md`, `Privacy And Security`, and `Architecture`.
+- Reviewed the docs-only diff with `git --no-pager diff -- README.md tasks/todo.md`.
+
+# User-controlled GitHub release updater
+
+## Acceptance Criteria
+- [x] UsageBar checks GitHub releases for a newer non-draft release, including prereleases such as `0.1.0-beta.7`.
+- [x] A found update is shown to the user before download/install starts.
+- [x] Signed Tauri updater installs still require an explicit user click before downloading.
+- [x] Prerelease builds that cannot use GitHub's stable-only `releases/latest` updater alias open the matching GitHub release page instead of failing silently.
+- [x] Focused updater hook and footer tests pass.
+
+## Plan
+- [x] Add a GitHub release metadata check and semver comparison to the updater hook.
+- [x] Change the Tauri updater path from auto-download to user-confirmed download/install.
+- [x] Update footer states/copy for available, downloading, ready, installing, and retry paths.
+- [x] Run focused verification and record results.
+
+## Verification Notes
+- Verified current GitHub release state with `gh release list --repo Loues000/usagebar --limit 5`: latest release is `v0.1.0-beta.6` as of 2026-04-29 11:55:17Z.
+- Verified focused updater/footer coverage with `npx bun run test -- src/hooks/use-app-update.test.ts src/components/panel-footer.test.tsx --run` -> 2 files passed, 30 tests passed.
+- Verified TypeScript and production frontend bundle with `npx bun run build` -> passed; existing Vite chunk-size warning remains.
+
+# Local dev and installed release side-by-side
+
+## Acceptance Criteria
+- [x] Starting the local Tauri dev app does not acquire the installed release single-instance mutex.
+- [x] The installed UsageBar EXE and local dev process can run at the same time on Windows.
+- [x] Verification covers the dev launcher environment marker and Rust compile/test path where practical.
+
+## Plan
+- [x] Inspect Windows single-instance and dev-launch behavior.
+- [x] Add an explicit dev-process marker in the local Tauri wrapper.
+- [x] Gate the release single-instance mutex on that marker.
+- [x] Run focused verification and record results.
+
+## Verification Notes
+- Found the collision path in `src-tauri/src/main.rs`: release builds acquire `Local\com.sunstory.usagebar.release-single-instance` whenever `productName` is `UsageBar`.
+- Updated `scripts/tauri/wrapper.mjs` to pass `USAGEBAR_TAURI_DEV=1` only for `tauri dev` launches.
+- Updated the Windows release mutex guard to skip release-single-instance acquisition when `USAGEBAR_TAURI_DEV` is present.
+- `node --test scripts\tauri\wrapper.test.mjs` -> 3 tests passed.
+- `cargo check --manifest-path src-tauri\Cargo.toml` -> passed.
+
 # Beta 6 release readiness
 
 ## Acceptance Criteria
