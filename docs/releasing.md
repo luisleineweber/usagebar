@@ -70,6 +70,44 @@ Before publishing Alpha 1, verify and record:
 - README and release notes state privacy, telemetry, crash-log behavior, known limitations, and feedback/debug-info path.
 - `CHANGELOG.md` includes the exact release version with supported features and known limitations.
 
+Suggested Alpha 1 release-note shape:
+
+```md
+## UsageBar Alpha 1
+
+This is a public alpha for Windows users who want to test UsageBar before a full release.
+
+### Supported
+- Windows NSIS installer
+- Provider setup for ...
+- Manual refresh
+- Local settings storage
+
+### Known limitations
+- Some providers are experimental and may need manual cookie/API-key setup
+- Some costs or usage buckets may be estimated or partial
+- Prerelease updates may open GitHub Releases instead of installing in-app
+- UI polish, crash recovery, and signed-build coverage are not final
+
+### Privacy
+UsageBar stores app settings and app-owned provider secrets locally under `%APPDATA%\com.sunstory.usagebar` on Windows. Provider secrets saved by UsageBar are encrypted with Windows DPAPI. Provider credentials and usage payloads are not intentionally sent to UsageBar-owned services.
+
+### Feedback
+Report bugs at https://github.com/Loues000/usagebar/issues/new and include app version, Windows version, provider, error text, timestamp, and sanitized logs. Do not include API keys, cookies, or raw credential files.
+```
+
+## Windows Data Locations
+
+Use these paths in alpha support docs and bug reports:
+
+- App data: `%APPDATA%\com.sunstory.usagebar`
+- Logs: `%APPDATA%\com.sunstory.usagebar\logs`
+- Settings store: `%APPDATA%\com.sunstory.usagebar\settings.json` or `%APPDATA%\com.sunstory.usagebar\.store\settings.json`
+- App-owned provider secrets: `%APPDATA%\com.sunstory.usagebar\provider-secrets.json`
+- Legacy migration source: `%APPDATA%\com.sunstory.openusage`
+
+Provider-specific local files such as CLI auth, IDE SQLite databases, browser cookies, or cloud SDK credentials must stay documented in the matching `docs/providers/*.md` page.
+
 ## Release Checklist
 
 1. Update version metadata in `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`

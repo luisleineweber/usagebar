@@ -22,6 +22,29 @@ To run the current branch before a release is tagged, build from source below. I
 
 Release process and preflight checks live in [docs/releasing.md](docs/releasing.md).
 
+## Install, Uninstall, And Data
+
+Alpha and beta Windows builds are distributed from GitHub Releases as a NSIS setup `.exe`.
+
+Install:
+
+1. Download the latest `UsageBar_*_x64-setup.exe` asset from [UsageBar releases](https://github.com/Loues000/usagebar/releases).
+2. Run the installer.
+3. Open UsageBar from the Start menu or tray.
+4. Open Settings, enable a provider, and follow that provider's setup instructions.
+
+Uninstall:
+
+- Use Windows Settings > Apps > Installed apps > UsageBar > Uninstall.
+- If a local test build was installed manually, rerun the same installer and choose uninstall if Windows does not list it yet.
+
+Local data:
+
+- App settings, provider order, display preferences, and app-owned provider secrets live under `%APPDATA%\com.sunstory.usagebar`.
+- Provider secrets saved by UsageBar on Windows are encrypted with Windows DPAPI in the app data directory.
+- Some providers also read their own local CLI, IDE, browser, or cloud SDK files. Those paths are documented in each provider page.
+- Legacy beta installs may still have old OpenUsage data under `%APPDATA%\com.sunstory.openusage`; do not delete it until migration is verified.
+
 ## Alpha Readiness
 
 UsageBar is not a full release yet. The first public alpha should be treated as a testable Windows desktop build for people who accept rough edges and can report provider issues.
@@ -126,7 +149,7 @@ Upstream lineage stays visible and upstream fixes can still be pulled in through
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
 - **Read usage locally.** See the [Local HTTP API](docs/local-http-api.md).
 - **Fix a bug.** Keep the change small, focused, and verified.
-- **Request a feature.** [Open an issue.](https://github.com/Loues000/usagebar/issues/new) Include the provider, auth source, and Windows-specific constraints.
+- **Request a feature or report a bug.** [Open an issue.](https://github.com/Loues000/usagebar/issues/new) Include the provider, auth source, Windows-specific constraints, app version, and sanitized logs. See [bug report notes](docs/bug-reports.md).
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 
