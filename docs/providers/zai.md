@@ -2,12 +2,14 @@
 
 Tracks [Z.ai](https://z.ai) (Zhipu AI) usage quotas for GLM coding plans.
 
-> These API endpoints are not documented in Z.ai's public API reference. They are used internally by the subscription management UI and work with both OAuth tokens and API keys.
+> Endpoint provenance: the host is legitimate (`api.z.ai`), but the usage endpoints used here are not documented in Z.ai's public API reference. Z.ai's public developer docs document the general API base `https://api.z.ai/api/paas/v4` and the GLM Coding base `https://api.z.ai/api/coding/paas/v4`; this plugin currently calls internal subscription/quota endpoints under the same host.
 
 ## Overview
 
 - **Protocol:** REST (plain JSON)
-- **Base URL:** `https://api.z.ai/`
+- **Public API base documented by Z.ai:** `https://api.z.ai/api/paas/v4`
+- **Public GLM Coding base documented by Z.ai:** `https://api.z.ai/api/coding/paas/v4`
+- **Usage host used by this plugin:** `https://api.z.ai/`
 - **Auth:** API key via environment variable (`ZAI_API_KEY`, fallback `GLM_API_KEY`)
 - **Session utilization:** percentage (0-100)
 - **Weekly utilization:** percentage (0-100)
@@ -29,11 +31,22 @@ PowerShell example:
 
 Use `GLM_API_KEY` only when you already manage the same token under that older variable name. A one-off `$env:ZAI_API_KEY=...` only affects the current shell and will not be visible to a normally launched desktop app.
 
-## Endpoints
+## Public API vs Usage Endpoints
+
+Z.ai's public API reference documents inference/chat-style endpoints under `/api/paas/v4` and `/api/coding/paas/v4`. It does not document a public usage-quota API equivalent to the two paths below.
+
+UsageBar keeps this provider `experimental` because the current implementation depends on these undocumented app/subscription surfaces. If Z.ai publishes an official usage endpoint later, this provider should move to that contract instead of continuing to depend on these paths.
+
+Sources:
+
+- [Z.ai API reference introduction](https://docs.z.ai/api-reference/introduction)
+- [Z.ai API error reference](https://docs.z.ai/api-reference/api-code)
+
+## Undocumented Endpoints Used
 
 ### GET /api/biz/subscription/list
 
-Returns the user's active subscription(s). Used to extract the plan name.
+Returns the user's active subscription(s). Used to extract the plan name. This path is not part of the public API reference above.
 
 #### Headers
 
@@ -78,7 +91,7 @@ Used fields:
 
 ### GET /api/monitor/usage/quota/limit
 
-Returns session token usage and web search quotas.
+Returns session token usage and web search quotas. This path is not part of the public API reference above.
 
 #### Headers
 

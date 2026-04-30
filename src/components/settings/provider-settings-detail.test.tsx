@@ -422,9 +422,9 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText(/Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars\./)).toBeInTheDocument()
+    expect(screen.getByText(/Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars through an undocumented app endpoint\./)).toBeInTheDocument()
     expect(screen.getByText(/Create a Warp API key in Warp Settings -> Platform -> API Keys, save it here or set WARP_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the request-limit GraphQL endpoint\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the undocumented request-limit GraphQL endpoint\./)).toBeInTheDocument()
   })
 
   it("shows explicit Zed local-telemetry guidance", () => {

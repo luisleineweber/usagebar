@@ -2,12 +2,12 @@
 
 > Uses local OpenCode history from SQLite to track observed OpenCode Go subscription-limit usage on this machine.
 
-OpenCode has two similarly named products, and UsageBar keeps them separate:
+OpenCode has two similarly named products, and UsageBar surfaces them in one provider:
 
 - `OpenCode Go`: subscription model access with 5-hour, weekly, and monthly dollar-value limits.
 - `OpenCode Zen`: pay-as-you-go model access. You add balance and are charged per request.
 
-This page is for Go. For the Zen pay-as-you-go provider, see [OpenCode Zen](./opencode.md).
+This page is for the visible OpenCode provider. Go usage is local-history based; Zen balance is optional and uses a signed-in `opencode.ai` billing session when configured.
 
 ## Overview
 
@@ -24,6 +24,12 @@ The plugin enables when either condition is true:
 - local OpenCode history already contains `opencode-go` or current `opencode` assistant messages with numeric `cost`
 
 If neither signal exists, the plugin stays hidden. If auth exists but no local Go usage history exists yet, UsageBar shows a neutral status instead of zero-filled allowance bars because the same local auth file can exist for Zen without proving an active Go subscription.
+
+## Optional Zen Balance
+
+OpenCode Zen used to exist as a separate experimental provider. It is now folded into this provider as an optional `Zen balance` line.
+
+To show Zen balance, paste a signed-in `opencode.ai` billing Cookie header in Settings and set a workspace ID only when auto-discovery chooses the wrong workspace.
 
 ## Data Source
 

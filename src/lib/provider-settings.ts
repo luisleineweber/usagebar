@@ -379,13 +379,13 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   warp: {
     mode: "editable",
     title: "Warp Setup",
-    summary: "Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars.",
+    summary: "Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars through an undocumented app endpoint.",
     statusHint: "Save a Warp token here or set WARP_API_KEY / WARP_TOKEN before launching UsageBar.",
     connectHint: "Create a Warp API key in Warp Settings -> Platform -> API Keys, save it here or set WARP_API_KEY, then retry.",
     secretField: {
       key: "token",
       label: "Token",
-      description: "Paste a Warp API key. UsageBar stores it in the app credential vault and uses it for the request-limit GraphQL endpoint.",
+      description: "Paste a Warp API key. UsageBar stores it in the app credential vault and uses it for the undocumented request-limit GraphQL endpoint.",
       placeholder: "wk-...",
     },
   },

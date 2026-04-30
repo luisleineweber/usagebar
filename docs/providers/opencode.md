@@ -1,13 +1,13 @@
-# OpenCode Zen
+# OpenCode Zen Legacy Provider
 
-Tracks OpenCode Zen pay-as-you-go billing usage from the authenticated workspace flow on `opencode.ai`.
+Legacy hidden provider. New setups should use [OpenCode](./opencode-go.md), which now includes optional OpenCode Zen pay-as-you-go balance.
 
-OpenCode has two similarly named products, and UsageBar keeps them separate:
+OpenCode has two similarly named products, and UsageBar now surfaces them in one provider:
 
 - `OpenCode Zen`: pay-as-you-go model access. You add balance and are charged per request.
 - `OpenCode Go`: subscription model access with 5-hour, weekly, and monthly dollar-value limits.
 
-This page is for Zen. For the Go subscription provider, see [OpenCode Go](./opencode-go.md).
+This provider is no longer surfaced separately in Settings. It remains only as a compatibility implementation for older local plugin state.
 
 ## Data source
 

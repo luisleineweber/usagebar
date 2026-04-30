@@ -1,5 +1,66 @@
 # Deep research hardening roadmap
 
+# Classify Z.ai and Warp endpoint provenance
+
+## Executive Summary
+- Keep Z.ai and Warp available as experimental providers.
+- Make the docs honest that the current usage paths are internal or undocumented, even though the domains are legitimate.
+- Separate public API docs from reverse-engineered app/subscription endpoints so users understand the support risk.
+
+## Acceptance Criteria
+- [x] Z.ai docs distinguish official public API base URLs from the undocumented subscription/quota endpoints used by the plugin.
+- [x] Warp docs distinguish official Oz API endpoints from the undocumented app GraphQL request-limit endpoint used by the plugin.
+- [x] Provider source-evaluation notes no longer call these integrations strong/public without naming the endpoint provenance risk.
+- [x] Focused docs checks and plugin tests pass.
+
+## Plan
+- [x] Verify current plugin endpoints and official docs.
+- [x] Patch provider docs, implementation notes, and source-evaluation wording.
+- [x] Record the default in choices/breadcrumbs.
+- [x] Run focused text checks and Z.ai/Warp plugin tests.
+
+## Verification Notes
+- Verified official docs by checking Z.ai's public API reference (`https://api.z.ai/api/paas/v4`, GLM Coding `https://api.z.ai/api/coding/paas/v4`) and Warp's public Oz API docs (`https://app.warp.dev/api/v1/agent/run` examples plus public API rate-limit docs).
+- Updated `docs/providers/zai.md`, `docs/providers/warp.md`, `README.md`, `docs/specs/provider-source-evaluation-2026-03-16.md`, `docs/provider-input-simulation.md`, `plugins/warp/IMPLEMENTATION.md`, and Warp setup copy in `src/lib/provider-settings.ts`.
+- Text check: `rg -n "undocumented|public API|api/paas/v4|api/coding/paas/v4|GetRequestLimitInfo|graphql/v2|endpoint provenance|documented public" README.md docs/providers/zai.md docs/providers/warp.md docs/specs/provider-source-evaluation-2026-03-16.md docs/provider-input-simulation.md plugins/warp/IMPLEMENTATION.md src/lib/provider-settings.ts docs/choices.md docs/breadcrumbs.md`.
+- Plugin tests: `npx bun run test -- plugins/zai/plugin.test.js plugins/warp/plugin.test.js --run` -> 2 files passed, 34 tests passed.
+- Settings copy test: `npx bun run test -- src/components/settings/provider-settings-detail.test.tsx --run` -> 1 file passed, 22 tests passed.
+
+# Fix tray display preference sync from Settings
+
+## Executive Summary
+- Make display preference changes from Settings reach the existing tray/bar window.
+- Preserve the current theme, used/left, reset timer, and menubar icon behavior.
+- Fix donut menubar icon style so it renders as one icon instead of two side-by-side symbols.
+- Keep the fix narrow: cross-window event sync plus focused tests.
+
+## Acceptance Criteria
+- [x] Settings publishes display preference changes across Tauri windows.
+- [x] The tray listens for display preference changes and updates visible state without reopening.
+- [x] The tray re-reads persisted display preferences on panel focus as a missed-event fallback.
+- [x] Donut menubar icon style renders as a single square icon.
+- [x] Focused App regression tests pass.
+
+## Plan
+- [x] Add a small display-preference event helper matching the existing plugin-settings event pattern.
+- [x] Emit the event from the shared display-settings action after local state updates.
+- [x] Listen for the event in the tray app and set the tray preference store values.
+- [x] Collapse donut icon rendering to one icon with the provider symbol inside the progress ring.
+- [x] Run focused Vitest coverage for the Settings-to-tray preference path and tray icon rendering.
+
+## Verification Notes
+- Added `src/lib/display-preference-events.ts`, wired `useSettingsDisplayActions` to publish `display-preferences:updated`, and wired `App` to apply theme, display mode, reset timer mode, and menubar icon style updates in the tray.
+- Added a panel-focus fallback in `App` that reloads persisted display preferences and reschedules the tray icon.
+- Changed donut tray icon rendering in `src/lib/tray-bars-icon.ts` from side-by-side provider plus donut to one square icon with the provider symbol inside the ring.
+- Updated `src/components/settings/general-settings-pane.tsx` so the menubar icon selector uses distinct previews plus compact labels; donut is shown as one overlaid ring/icon, and merged includes provider plus compact bars instead of matching bars-only.
+- Added `src/App.test.tsx` regressions for Settings publishing display preference changes and the tray applying them.
+- Added `src/lib/tray-bars-icon.test.ts` coverage that donut style keeps a square viewBox.
+- Captured the cross-window display-preference lesson in `tasks/lessons.md`.
+- Verified focused preference coverage with `npx bun run test -- src/App.test.tsx -t "display preference|provider settings" --run` -> 1 file passed, 4 tests passed.
+- Verified settings page coverage with `npx bun run test -- src/pages/settings.test.tsx --run` -> 1 file passed, 12 tests passed.
+- Verified tray icon rendering coverage with `npx bun run test -- src/lib/tray-bars-icon.test.ts --run` -> 1 file passed, 13 tests passed.
+- Verified frontend typecheck/build with `npx bun run build` -> passed; existing Vite chunk-size and Tailwind plugin timing warnings remain.
+
 Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local `usagebar` tree.
 
 # First public alpha readiness gate
@@ -15,12 +76,12 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - [x] A Windows installer artifact path is verified locally or from GitHub Releases.
 - [x] Install/uninstall/config-location notes are documented for Windows alpha users.
 - [ ] At least one supported provider can be added by a fresh user path, refreshed manually, and shown with date range plus last-updated state.
-- [ ] Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states are visible and do not crash the app.
-- [ ] Provider support matrix distinguishes supported vs experimental providers and states when cost/usage is estimated, partial, or provider-reported.
-- [ ] Privacy copy states local credential/data handling, telemetry behavior, crash-log behavior, and whether anything is sent to UsageBar-owned services.
-- [ ] Feedback path includes GitHub issue/report action plus sanitized debug information expectations; no API keys or cookies in copied/logged diagnostics.
-- [ ] `CHANGELOG.md` has a matching alpha section with supported features, known limitations, privacy note, and feedback link before tagging.
-- [ ] Verification commands and manual checks are recorded before any alpha tag, push, or GitHub release action.
+- [x] Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states are visible and do not crash the app.
+- [x] Provider support matrix distinguishes supported vs experimental providers and states when cost/usage is estimated, partial, or provider-reported.
+- [x] Privacy copy states local credential/data handling, telemetry behavior, crash-log behavior, and whether anything is sent to UsageBar-owned services.
+- [x] Feedback path includes GitHub issue/report action plus sanitized debug information expectations; no API keys or cookies in copied/logged diagnostics.
+- [x] `CHANGELOG.md` has a matching alpha section with supported features, known limitations, privacy note, and feedback link before tagging.
+- [x] Verification commands and manual checks are recorded before any alpha tag, push, or GitHub release action.
 
 ## Plan
 - [x] Audit current README/release docs/changelog against the alpha gate and patch only factual gaps first.
@@ -28,8 +89,8 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - [x] Audit the Settings/provider setup flow for remove-provider/key, connection test, and error-state visibility.
 - [x] Add a repeatable Alpha 1 smoke-test checklist for install, first provider setup, failure states, secret handling, feedback, and release notes.
 - [x] Verify one installable Windows artifact path, then document install, uninstall, and config/data locations.
-- [ ] Run focused provider/setup/update tests plus release preflight; record blockers instead of stretching scope.
-- [ ] Prepare release notes for the chosen prerelease label, without creating a tag or GitHub release unless explicitly requested.
+- [x] Run focused provider/setup/update tests plus release preflight; record blockers instead of stretching scope.
+- [x] Prepare release notes for the chosen prerelease label, without creating a tag or GitHub release unless explicitly requested.
 
 ## Verification Notes
 - Started from the user's release-readiness bar on 2026-04-29: public alpha is the next safer milestone unless installer, updater, provider setup, error handling, docs, privacy, and recovery are already boring.
@@ -47,6 +108,18 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Verified current metadata is still `0.1.0-beta.7` across `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`; Alpha 1 version-label alignment remains pending before tagging.
 - Ran `npx bun run release:check -- --release-tag v0.1.0-beta.7` -> release preflight passed for the current beta-line version.
 - Ran `npx bun run build:release -- --bundles nsis` -> unsigned local Windows NSIS artifact built at `src-tauri\target\release\bundle\nsis\UsageBar_0.1.0-beta.7_x64-setup.exe` (`6,236,103` bytes, 2026-04-29 15:15 local time). The helper reported no `TAURI_SIGNING_PRIVATE_KEY`, added `--no-sign`, and skipped updater signing for this local artifact.
+- Added README status meanings for `Supported` vs `Experimental` and source wording for provider-reported, estimated, partial, and telemetry-based usage. Existing OpenCode docs already fold optional Zen balance into the visible OpenCode provider, so the matrix keeps one OpenCode row instead of re-splitting a legacy hidden provider.
+- Added README privacy text that provider credentials/raw usage payloads are not sent to UsageBar-owned services, telemetry excludes provider payloads/secrets, and Alpha 1 crash logs remain local support artifacts unless the user attaches sanitized logs.
+- Expanded `docs/bug-reports.md` with provider setup source, last-success timestamp, explicit files/secrets not to attach, and safe diagnostic expectations.
+- Added draft `CHANGELOG.md` section `0.1.0-alpha.1` with supported features, known limitations, privacy note, and feedback link, without changing package/Tauri/Cargo version metadata.
+- Verified the docs slice with `rg -n "Status meanings|Provider-reported|UsageBar does not send provider credentials|Automatic crash upload|Provider setup source used|Do not include:|0\\.1\\.0-alpha\\.1|Feedback: report issues" README.md docs\\bug-reports.md CHANGELOG.md docs\\choices.md docs\\breadcrumbs.md`.
+- Reviewed the docs diff with `git --no-pager diff -- README.md docs/bug-reports.md CHANGELOG.md docs/choices.md docs/breadcrumbs.md`.
+- Verified focused provider/setup/update behavior with `npx bun run test -- src/components/settings/provider-settings-detail.test.tsx src/hooks/app/use-probe-refresh-actions.test.ts src/hooks/app/use-probe-state.test.ts src/hooks/use-app-update.test.ts src/components/panel-footer.test.tsx --run` -> 5 files passed, 58 tests passed.
+- Re-ran current-version release preflight with `npx bun run release:check -- --release-tag v0.1.0-beta.7` -> passed. Alpha tag preflight remains blocked until version metadata is intentionally changed from `0.1.0-beta.7` to the chosen alpha label.
+- Added focused provider-card coverage for `Updated 5m ago` last-updated display and retained usage content while refresh is in progress.
+- Verified supported-provider/failure-state contracts with `npx bun run test -- src/components/provider-card.test.tsx plugins/codex/plugin.test.js plugins/cursor/plugin.test.js --run` -> 3 files passed, 156 tests passed. Covered Codex/Cursor missing auth, HTTP 500/API failure, offline-style request failure, empty/no usage data, date/reset display, last-updated display, and refresh-in-progress retained data.
+- Verified app-level empty/disabled/retry/refresh behavior with `npx bun run test -- src/App.test.tsx -t "empty state|refresh|Retry|disabled|all plugins disabled" --run` -> 1 file passed, 9 tests passed, 77 skipped by filter.
+- Remaining alpha blocker: a real installed-app smoke still needs to prove one supported provider can be added by a fresh user path, manually refreshed, opened in the tray, and visually checked for date range plus last-updated state on the target artifact.
 
 # Refresh README for current beta/provider surface
 
