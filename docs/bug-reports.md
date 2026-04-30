@@ -12,6 +12,8 @@ What happened instead:
 When it happened (local time + timezone):
 Which provider was affected (Codex / Claude / Cursor / etc.):
 UsageBar version:
+Windows version:
+Error text shown in UsageBar:
 ```
 
 ## Capture logs
@@ -22,7 +24,7 @@ UsageBar version:
 2. Open File Explorer and paste this into the address bar:
 
 ```text
-%APPDATA%\com.sunstory.openusage
+%APPDATA%\com.sunstory.usagebar
 ```
 
 3. Open the `logs` folder.
@@ -33,12 +35,14 @@ UsageBar version:
 PowerShell:
 
 ```powershell
-$p = Join-Path $env:APPDATA "com.sunstory.openusage\logs"
+$p = Join-Path $env:APPDATA "com.sunstory.usagebar\logs"
 Write-Host $p
 Get-ChildItem $p | Sort-Object LastWriteTime -Descending | Select-Object -First 10
 ```
 
+Legacy beta builds may have logs under `%APPDATA%\com.sunstory.openusage\logs`.
+
 ## Privacy note
 
-Logs are redacted for common secrets, but still review before sharing in public.
+Logs are redacted for common secrets, but still review before sharing in public. Do not include API keys, cookies, raw credential files, or `provider-secrets.json`.
 
