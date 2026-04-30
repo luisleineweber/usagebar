@@ -61,7 +61,7 @@ const openrouterPlugin = {
 
 const kimiK2Plugin = {
   id: "kimi-k2",
-  name: "Kimi K2",
+  name: "Moonshot API Balance",
   iconUrl: "/kimi-k2.svg",
   lines: [],
   primaryCandidates: [],
@@ -81,6 +81,14 @@ const warpPlugin = {
   id: "warp",
   name: "Warp",
   iconUrl: "/warp.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const kimiPlugin = {
+  id: "kimi",
+  name: "Kimi Code (Moonshot)",
+  iconUrl: "/kimi.svg",
   lines: [],
   primaryCandidates: [],
 }
@@ -359,7 +367,7 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByLabelText("Copilot Billing scope")).toBeInTheDocument()
   })
 
-  it("shows explicit Kimi K2 API-key guidance", () => {
+  it("shows explicit Moonshot API balance guidance", () => {
     render(
       <ProviderSettingsDetail
         plugin={kimiK2Plugin}
@@ -369,9 +377,24 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText(/Fetches Kimi K2 credits from a stored API key or KIMI_K2_API_KEY-compatible env vars\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Kimi K2 API key at https:\/\/kimi\.moonshot\.cn, save it here or set KIMI_K2_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the credits endpoint\./)).toBeInTheDocument()
+    expect(screen.getByText(/Fetches official Kimi Open Platform API balance from Moonshot using a stored API key or MOONSHOT_API_KEY-compatible env vars\. This is separate from the Kimi Code subscription provider\./)).toBeInTheDocument()
+    expect(screen.getByText(/It calls https:\/\/api\.moonshot\.ai\/v1\/users\/me\/balance and does not read kimi\.com memberships or Kimi Code CLI quotas\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for https:\/\/api\.moonshot\.ai\/v1\/users\/me\/balance\./)).toBeInTheDocument()
+  })
+
+  it("shows unified Kimi Code and Moonshot API balance guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={kimiPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Tracks Kimi CLI \/ kimi\.com membership quota from local `kimi login` OAuth and can also show official Moonshot API billing balance from an API key\./)).toBeInTheDocument()
+    expect(screen.getByText(/Run `kimi login` for session and weekly quota; save a Moonshot API key only if you also want official API billing balance\./)).toBeInTheDocument()
+    expect(screen.getByLabelText("Kimi Code (Moonshot) Moonshot API key")).toBeInTheDocument()
   })
 
   it("shows explicit Kilo API-key guidance", () => {
