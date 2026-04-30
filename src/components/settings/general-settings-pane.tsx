@@ -101,13 +101,19 @@ function MenubarIconStylePreview({
     const trackClass = isActive ? "bg-primary-foreground/15" : "bg-foreground/15"
     const remainderClass = isActive ? "bg-primary-foreground/20" : "bg-foreground/15"
     const fillClass = isActive ? "bg-primary-foreground" : "bg-foreground"
-    const fractions = traySettingsPreview.bars.length > 0
-      ? traySettingsPreview.bars.map((b) => b.fraction ?? 0)
+    const sourceFractions = style === "merged"
+      ? traySettingsPreview.providerBars
+      : traySettingsPreview.bars
+    const fractions = sourceFractions.length > 0
+      ? sourceFractions.map((b) => b.fraction ?? 0)
       : [0.83, 0.7, 0.56]
 
     return (
-      <div className="flex items-center">
-        <div className="flex w-5 flex-col gap-0.5">
+      <div className="flex items-center gap-1.5">
+        {style === "merged" ? (
+          <ProviderIconMask iconUrl={traySettingsPreview.providerIconUrl} isActive={isActive} sizePx={13} />
+        ) : null}
+        <div className={cn("flex flex-col gap-0.5", style === "merged" ? "w-4" : "w-5")}>
           {fractions.map((fraction, i) => {
             const { fillPercent, remainderPercent } = getPreviewBarLayout(fraction)
             return (
@@ -141,9 +147,8 @@ function MenubarIconStylePreview({
   const fraction = traySettingsPreview.providerBars[0]?.fraction ?? 0
   const clamped = Math.max(0, Math.min(1, fraction))
   return (
-    <div className="inline-flex items-center gap-1">
-      <ProviderIconMask iconUrl={traySettingsPreview.providerIconUrl} isActive={isActive} sizePx={TRAY_PREVIEW_SIZE_PX} />
-      <svg aria-hidden viewBox="0 0 26 26" className={cn("shrink-0", textClass)} style={{ width: `${TRAY_PREVIEW_SIZE_PX}px`, height: `${TRAY_PREVIEW_SIZE_PX}px` }}>
+    <div className="relative inline-flex items-center justify-center" style={{ width: `${TRAY_PREVIEW_SIZE_PX}px`, height: `${TRAY_PREVIEW_SIZE_PX}px` }}>
+      <svg aria-hidden viewBox="0 0 26 26" className={cn("absolute inset-0", textClass)}>
         <circle cx="13" cy="13" r="9" fill="none" stroke="currentColor" strokeWidth="4" opacity={isActive ? 0.2 : 0.15} />
         {clamped > 0 && (
           <circle
@@ -160,6 +165,7 @@ function MenubarIconStylePreview({
           />
         )}
       </svg>
+      <ProviderIconMask iconUrl={traySettingsPreview.providerIconUrl} isActive={isActive} sizePx={12} />
     </div>
   )
 }
@@ -296,10 +302,11 @@ export function GeneralSettingsPane({
                 aria-checked={isActive}
                 variant={isActive ? "default" : "outline"}
                 size="sm"
-                className="flex h-10 w-full items-center justify-center"
+                className="flex h-12 w-full flex-col items-center justify-center gap-1"
                 onClick={() => onMenubarIconStyleChange(option.value)}
               >
                 <MenubarIconStylePreview style={option.value} isActive={isActive} traySettingsPreview={traySettingsPreview} />
+                <span className="text-[10px] font-medium leading-none">{option.label}</span>
               </Button>
             )
           })}

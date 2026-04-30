@@ -11,7 +11,15 @@ import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-action
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { track } from "@/lib/analytics"
-import { getProbeEligiblePluginIds, REFRESH_COOLDOWN_MS, savePluginSettings } from "@/lib/settings"
+import {
+  getProbeEligiblePluginIds,
+  loadDisplayMode,
+  loadMenubarIconStyle,
+  loadResetTimerDisplayMode,
+  loadThemeMode,
+  REFRESH_COOLDOWN_MS,
+  savePluginSettings,
+} from "@/lib/settings"
 import {
   clearProviderSecretMetadata,
   loadProviderConfigs,
@@ -27,6 +35,7 @@ import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
 import { listenPluginSettingsUpdated, notifyPluginSettingsUpdated } from "@/lib/plugin-settings-events"
+import { listenDisplayPreferenceUpdated } from "@/lib/display-preference-events"
 
 const TRAY_PROBE_DEBOUNCE_MS = 500
 const TRAY_SETTINGS_DEBOUNCE_MS = 2000
@@ -153,6 +162,42 @@ function App() {
       unlisten?.()
     }
   }, [scheduleTrayIconUpdate, setPluginSettings])
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    let disposed = false
+
+    void listenDisplayPreferenceUpdated((update) => {
+      if (update.key === "themeMode") {
+        setThemeMode(update.value)
+        return
+      }
+      if (update.key === "displayMode") {
+        setDisplayMode(update.value)
+        scheduleTrayIconUpdate("settings", 0)
+        return
+      }
+      if (update.key === "resetTimerDisplayMode") {
+        setResetTimerDisplayMode(update.value)
+        return
+      }
+      setMenubarIconStyle(update.value)
+      scheduleTrayIconUpdate("settings", 0)
+    }).then((dispose) => {
+      if (disposed) {
+        dispose()
+        return
+      }
+      unlisten = dispose
+    }).catch((error) => {
+      console.error("Failed to listen for display preference updates:", error)
+    })
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [scheduleTrayIconUpdate, setDisplayMode, setMenubarIconStyle, setResetTimerDisplayMode, setThemeMode])
 
   const { applyStartOnLogin } = useSettingsBootstrap({
     setPluginSettings,
@@ -289,6 +334,23 @@ function App() {
   }, [persistProviderConfigs])
 
   const handlePanelFocus = useCallback((targetView?: ActiveView) => {
+    void Promise.all([
+      loadThemeMode(),
+      loadDisplayMode(),
+      loadResetTimerDisplayMode(),
+      loadMenubarIconStyle(),
+    ])
+      .then(([nextThemeMode, nextDisplayMode, nextResetTimerDisplayMode, nextMenubarIconStyle]) => {
+        setThemeMode(nextThemeMode)
+        setDisplayMode(nextDisplayMode)
+        setResetTimerDisplayMode(nextResetTimerDisplayMode)
+        setMenubarIconStyle(nextMenubarIconStyle)
+        scheduleTrayIconUpdate("settings", 0)
+      })
+      .catch((error) => {
+        console.error("Failed to refresh display preferences on panel focus:", error)
+      })
+
     if (!pluginSettings) return
     const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
     const explicitTargetView = targetView?.trim()
@@ -307,7 +369,18 @@ function App() {
     for (const id of idsToRefresh) {
       handleRetryPlugin(id)
     }
-  }, [activeView, handleRetryPlugin, pluginSettings, pluginStates, pluginsMeta])
+  }, [
+    activeView,
+    handleRetryPlugin,
+    pluginSettings,
+    pluginStates,
+    pluginsMeta,
+    scheduleTrayIconUpdate,
+    setDisplayMode,
+    setMenubarIconStyle,
+    setResetTimerDisplayMode,
+    setThemeMode,
+  ])
 
   useEffect(() => {
     if (!pluginSettings) return
