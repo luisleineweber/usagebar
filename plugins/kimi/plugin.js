@@ -1,9 +1,11 @@
 (function () {
   const CRED_PATH = "~/.kimi/credentials/kimi-code.json"
   const USAGE_URL = "https://api.kimi.com/coding/v1/usages"
+  const BALANCE_URL = "https://api.moonshot.ai/v1/users/me/balance"
   const REFRESH_URL = "https://auth.kimi.com/api/oauth/token"
   const CLIENT_ID = "17e5f671-d194-4dfb-9706-5516cb48c098"
   const REFRESH_BUFFER_SEC = 5 * 60
+  const API_KEY_ENV_VARS = ["MOONSHOT_API_KEY", "KIMI_API_KEY", "KIMI_KEY"]
 
   function readNumber(value) {
     const n = Number(value)
@@ -17,6 +19,26 @@
       .replace(/\b[a-z]/g, function (c) {
         return c.toUpperCase()
       })
+  }
+
+  function readString(value) {
+    if (typeof value !== "string") return null
+    let trimmed = value.trim()
+    if (!trimmed) return null
+    if (
+      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+      trimmed = trimmed.slice(1, -1).trim()
+    }
+    return trimmed || null
+  }
+
+  function formatMoney(value) {
+    const n = Number(value || 0)
+    if (!Number.isFinite(n)) return "0"
+    if (Math.abs(n - Math.round(n)) < 0.000001) return String(Math.round(n))
+    return n.toFixed(2)
   }
 
   function parsePlanLabel(data) {
@@ -142,6 +164,72 @@
     })
   }
 
+  function loadApiKey(ctx) {
+    if (ctx.host.providerSecrets && typeof ctx.host.providerSecrets.read === "function") {
+      try {
+        const stored = readString(ctx.host.providerSecrets.read("apiKey"))
+        if (stored) return stored
+      } catch (e) {
+        ctx.host.log.warn("provider secret read failed: " + String(e))
+      }
+    }
+
+    if (ctx.host.env && typeof ctx.host.env.get === "function") {
+      for (let i = 0; i < API_KEY_ENV_VARS.length; i += 1) {
+        const name = API_KEY_ENV_VARS[i]
+        try {
+          const value = readString(ctx.host.env.get(name))
+          if (value) return value
+        } catch (e) {
+          ctx.host.log.warn("env read failed for " + name + ": " + String(e))
+        }
+      }
+    }
+
+    return null
+  }
+
+  function fetchBalance(ctx, apiKey) {
+    return ctx.util.request({
+      method: "GET",
+      url: BALANCE_URL,
+      headers: {
+        Authorization: "Bearer " + apiKey,
+        Accept: "application/json",
+      },
+      timeoutMs: 10000,
+    })
+  }
+
+  function parseBalance(payload) {
+    const data = payload && typeof payload === "object" ? payload.data : null
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null
+
+    const available = readNumber(data.available_balance)
+    const voucher = readNumber(data.voucher_balance) ?? 0
+    const cash = readNumber(data.cash_balance) ?? 0
+    if (available === null) return null
+
+    return {
+      available: Math.max(0, available),
+      voucher: Math.max(0, voucher),
+      cash: Math.max(0, cash),
+    }
+  }
+
+  function appendBalanceLines(ctx, lines, balance) {
+    lines.push(
+      ctx.line.progress({
+        label: "API Balance",
+        used: balance.available,
+        limit: Math.max(balance.available, 1),
+        format: { kind: "currency", currency: "USD" },
+      })
+    )
+    lines.push(ctx.line.text({ label: "Voucher balance", value: "$" + formatMoney(balance.voucher) }))
+    lines.push(ctx.line.text({ label: "Cash balance", value: "$" + formatMoney(balance.cash) }))
+  }
+
   function parseWindowPeriodMs(window) {
     if (!window || typeof window !== "object") return null
     const duration = readNumber(window.duration)
@@ -241,107 +329,131 @@
 
   function probe(ctx) {
     const creds = loadCredentials(ctx)
-    if (!creds) {
-      throw "Not logged in. Run `kimi login` to authenticate."
-    }
-
-    const nowSec = Date.now() / 1000
-    let accessToken = creds.access_token || ""
-
-    if (needsRefresh(creds, nowSec)) {
-      const refreshed = refreshToken(ctx, creds)
-      if (refreshed) {
-        accessToken = refreshed
-      } else if (!accessToken) {
-        throw "Not logged in. Run `kimi login` to authenticate."
-      }
-    }
-
-    let didRefresh = false
-    let resp
-    try {
-      resp = ctx.util.retryOnceOnAuth({
-        request: function (token) {
-          return fetchUsage(ctx, token || accessToken)
-        },
-        refresh: function () {
-          didRefresh = true
-          const refreshed = refreshToken(ctx, creds)
-          if (refreshed) accessToken = refreshed
-          return refreshed
-        },
-      })
-    } catch (e) {
-      if (typeof e === "string") throw e
-      if (didRefresh) {
-        throw "Usage request failed after refresh. Try again."
-      }
-      throw "Usage request failed. Check your connection."
-    }
-
-    if (ctx.util.isAuthStatus(resp.status)) {
-      throw "Token expired. Run `kimi login` to authenticate."
-    }
-    if (resp.status < 200 || resp.status >= 300) {
-      throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
-    }
-
-    const data = ctx.util.tryParseJson(resp.bodyText)
-    if (!data || typeof data !== "object") {
-      throw "Usage response invalid. Try again later."
+    const apiKey = loadApiKey(ctx)
+    if (!creds && !apiKey) {
+      throw "Not logged in. Run `kimi login` to authenticate, or save a Moonshot API key."
     }
 
     const lines = []
-    const candidates = collectLimitCandidates(ctx, data)
-    const sessionCandidate = pickSessionCandidate(candidates)
+    let plan = null
 
-    let weeklyCandidate = null
-    const usageQuota = parseQuota(data.usage, ctx)
-    if (usageQuota) {
-      weeklyCandidate = { quota: usageQuota, periodMs: null }
-    } else {
-      const withoutSession = candidates.filter(function (candidate) {
-        return candidate !== sessionCandidate
-      })
-      weeklyCandidate = pickLargestByPeriod(withoutSession)
+    if (creds) {
+      const nowSec = Date.now() / 1000
+      let accessToken = creds.access_token || ""
+
+      if (needsRefresh(creds, nowSec)) {
+        const refreshed = refreshToken(ctx, creds)
+        if (refreshed) {
+          accessToken = refreshed
+        } else if (!accessToken) {
+          throw "Not logged in. Run `kimi login` to authenticate."
+        }
+      }
+
+      let didRefresh = false
+      let resp
+      try {
+        resp = ctx.util.retryOnceOnAuth({
+          request: function (token) {
+            return fetchUsage(ctx, token || accessToken)
+          },
+          refresh: function () {
+            didRefresh = true
+            const refreshed = refreshToken(ctx, creds)
+            if (refreshed) accessToken = refreshed
+            return refreshed
+          },
+        })
+      } catch (e) {
+        if (typeof e === "string") throw e
+        if (didRefresh) {
+          throw "Usage request failed after refresh. Try again."
+        }
+        throw "Usage request failed. Check your connection."
+      }
+
+      if (ctx.util.isAuthStatus(resp.status)) {
+        throw "Token expired. Run `kimi login` to authenticate."
+      }
+      if (resp.status < 200 || resp.status >= 300) {
+        throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
+      }
+
+      const data = ctx.util.tryParseJson(resp.bodyText)
+      if (!data || typeof data !== "object") {
+        throw "Usage response invalid. Try again later."
+      }
+
+      const candidates = collectLimitCandidates(ctx, data)
+      const sessionCandidate = pickSessionCandidate(candidates)
+
+      let weeklyCandidate = null
+      const usageQuota = parseQuota(data.usage, ctx)
+      if (usageQuota) {
+        weeklyCandidate = { quota: usageQuota, periodMs: null }
+      } else {
+        const withoutSession = candidates.filter(function (candidate) {
+          return candidate !== sessionCandidate
+        })
+        weeklyCandidate = pickLargestByPeriod(withoutSession)
+      }
+
+      if (sessionCandidate) {
+        const sessionPercent = toPercentUsage(sessionCandidate.quota)
+        if (sessionPercent) {
+          lines.push(
+            ctx.line.progress({
+              label: "Session",
+              used: sessionPercent.used,
+              limit: sessionPercent.limit,
+              format: { kind: "percent" },
+              resetsAt: sessionPercent.resetsAt || undefined,
+              periodDurationMs:
+                typeof sessionCandidate.periodMs === "number"
+                  ? sessionCandidate.periodMs
+                  : undefined,
+            })
+          )
+        }
+      }
+
+      if (weeklyCandidate && !sameQuota(weeklyCandidate, sessionCandidate)) {
+        const weeklyPercent = toPercentUsage(weeklyCandidate.quota)
+        if (weeklyPercent) {
+          lines.push(
+            ctx.line.progress({
+              label: "Weekly",
+              used: weeklyPercent.used,
+              limit: weeklyPercent.limit,
+              format: { kind: "percent" },
+              resetsAt: weeklyPercent.resetsAt || undefined,
+              periodDurationMs:
+                typeof weeklyCandidate.periodMs === "number"
+                  ? weeklyCandidate.periodMs
+                  : undefined,
+            })
+          )
+        }
+      }
+
+      plan = parsePlanLabel(data)
     }
 
-    if (sessionCandidate) {
-      const sessionPercent = toPercentUsage(sessionCandidate.quota)
-      if (sessionPercent) {
-        lines.push(
-          ctx.line.progress({
-            label: "Session",
-            used: sessionPercent.used,
-            limit: sessionPercent.limit,
-            format: { kind: "percent" },
-            resetsAt: sessionPercent.resetsAt || undefined,
-            periodDurationMs:
-              typeof sessionCandidate.periodMs === "number"
-                ? sessionCandidate.periodMs
-                : undefined,
-          })
-        )
+    if (apiKey) {
+      const resp = fetchBalance(ctx, apiKey)
+      if (ctx.util.isAuthStatus(resp.status)) {
+        throw "Moonshot API key invalid. Check Setup or MOONSHOT_API_KEY."
       }
-    }
-
-    if (weeklyCandidate && !sameQuota(weeklyCandidate, sessionCandidate)) {
-      const weeklyPercent = toPercentUsage(weeklyCandidate.quota)
-      if (weeklyPercent) {
-        lines.push(
-          ctx.line.progress({
-            label: "Weekly",
-            used: weeklyPercent.used,
-            limit: weeklyPercent.limit,
-            format: { kind: "percent" },
-            resetsAt: weeklyPercent.resetsAt || undefined,
-            periodDurationMs:
-              typeof weeklyCandidate.periodMs === "number"
-                ? weeklyCandidate.periodMs
-                : undefined,
-          })
-        )
+      if (resp.status < 200 || resp.status >= 300) {
+        throw "Moonshot API balance request failed (HTTP " + String(resp.status) + "). Try again later."
       }
+      const data = ctx.util.tryParseJson(resp.bodyText)
+      const balance = parseBalance(data)
+      if (!balance) {
+        throw "Moonshot API balance response invalid. Try again later."
+      }
+      appendBalanceLines(ctx, lines, balance)
+      if (!plan) plan = "API balance $" + formatMoney(balance.available)
     }
 
     if (lines.length === 0) {
@@ -349,7 +461,7 @@
     }
 
     return {
-      plan: parsePlanLabel(data),
+      plan,
       lines,
     }
   }

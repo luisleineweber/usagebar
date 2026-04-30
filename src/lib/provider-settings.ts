@@ -205,11 +205,17 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     },
   },
   kimi: {
-    mode: "automatic",
-    title: "Kimi Setup",
-    summary: "Detected from the local Kimi Code credential file and refreshed automatically.",
-    statusHint: "Run `kimi login` so ~/.kimi/credentials/kimi-code.json exists before launching UsageBar.",
-    connectHint: "Run `kimi login` on this machine, restart UsageBar if needed, then retry the provider check.",
+    mode: "editable",
+    title: "Kimi Code (Moonshot) Setup",
+    summary: "Tracks Kimi CLI / kimi.com membership quota from local `kimi login` OAuth and can also show official Moonshot API billing balance from an API key.",
+    statusHint: "Run `kimi login` for Kimi Code membership quota. Optionally save a Moonshot/Kimi Open Platform API key here or set MOONSHOT_API_KEY to include API balance.",
+    connectHint: "Use this single provider for Kimi/Moonshot. Run `kimi login` for session and weekly quota; save a Moonshot API key only if you also want official API billing balance.",
+    secretField: {
+      key: "apiKey",
+      label: "Moonshot API key",
+      description: "Optional. Paste a Kimi Open Platform API key to include official API balance from https://api.moonshot.ai/v1/users/me/balance.",
+      placeholder: "sk-...",
+    },
   },
   minimax: {
     mode: "automatic",
@@ -319,15 +325,15 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   },
   "kimi-k2": {
     mode: "editable",
-    title: "Kimi K2 Setup",
-    summary: "Fetches Kimi K2 credits from a stored API key or KIMI_K2_API_KEY-compatible env vars.",
-    statusHint: "Save a Kimi K2 API key here or set KIMI_K2_API_KEY, KIMI_API_KEY, or KIMI_KEY before launching UsageBar.",
-    connectHint: "Create a Kimi K2 API key at https://kimi.moonshot.cn, save it here or set KIMI_K2_API_KEY, then retry.",
+    title: "Moonshot API Balance Setup",
+    summary: "Fetches official Kimi Open Platform API balance from Moonshot using a stored API key or MOONSHOT_API_KEY-compatible env vars. This is separate from the Kimi Code subscription provider.",
+    statusHint: "Save a Moonshot/Kimi Open Platform API key here or set MOONSHOT_API_KEY, KIMI_API_KEY, or KIMI_KEY before launching UsageBar.",
+    connectHint: "Use this provider for official Moonshot API billing balance only. It calls https://api.moonshot.ai/v1/users/me/balance and does not read kimi.com memberships or Kimi Code CLI quotas.",
     secretField: {
       key: "apiKey",
-      label: "API key",
-      description: "Paste a Kimi K2 API key. UsageBar stores it in the app credential vault and uses it for the credits endpoint.",
-      placeholder: "kimi_...",
+      label: "Moonshot API key",
+      description: "Paste a Kimi Open Platform API key. UsageBar stores it in the app credential vault and uses it for https://api.moonshot.ai/v1/users/me/balance.",
+      placeholder: "sk-...",
     },
   },
   kiro: {
@@ -514,6 +520,8 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   if (providerId === "perplexity") return "Manual cookie"
   if (providerId === "abacus") return "Manual cookie"
   if (providerId === "augment") return "Manual cookie"
+  if (providerId === "kimi") return config?.secrets?.apiKey ? "Kimi Code OAuth + Moonshot API key" : "Kimi Code OAuth"
+  if (providerId === "kimi-k2") return config?.secrets?.apiKey ? "Stored Moonshot API key" : "Moonshot API key/env"
   if (providerId === "copilot") return config?.workspaceId ? "GitHub auth + billing scope" : "GitHub auth"
   if (providerId === "claude") return config?.secrets?.cookieHeader ? "OAuth + web cookie" : "Auto-detected"
   if (providerId === "codex") {
