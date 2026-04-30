@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.0-alpha.1
+
+### Highlights
+- Draft Alpha 1 release notes for the first stranger-facing Windows test build. Do not tag until version metadata is aligned and the Alpha 1 smoke checklist passes.
+- Windows NSIS installer path documented for GitHub prerelease assets and local unsigned release builds.
+- README now states provider support levels, install/uninstall/data locations, current limitations, privacy boundaries, and feedback expectations.
+- Supported provider smoke target: Codex first, Cursor fallback when Codex auth is unavailable.
+- Known limitations: experimental providers can change setup/API shape, some usage/cost values are partial or estimated, prerelease updater behavior is conservative, and automatic crash upload is not part of the Alpha 1 promise.
+- Privacy note: provider credentials, raw usage payloads, API keys, cookies, and app-owned provider secret files are not intentionally sent to UsageBar-owned services.
+- Feedback: report issues at https://github.com/Loues000/usagebar/issues/new with app version, Windows version, provider, setup source, exact error text, timestamp, and sanitized logs.
+
+---
+
 ## 0.1.0-beta.7
 
 ### Highlights

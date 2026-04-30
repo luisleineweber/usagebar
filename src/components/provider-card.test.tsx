@@ -88,6 +88,45 @@ describe("ProviderCard", () => {
     expect(container.querySelector("svg.animate-spin")).toBeTruthy()
   })
 
+  it("shows last-updated state on retry tooltip", () => {
+    vi.useFakeTimers()
+    const now = new Date("2026-02-02T12:00:00.000Z")
+    vi.setSystemTime(now)
+
+    render(
+      <ProviderCard
+        name="Updated Provider"
+        displayMode="used"
+        lastUpdatedAt={now.getTime() - 5 * 60 * 1000}
+        onRetry={() => {}}
+        lines={[{ type: "text", label: "Today", value: "$1.00" }]}
+      />
+    )
+
+    expect(screen.getByText("Updated 5m ago")).toBeInTheDocument()
+    vi.useRealTimers()
+  })
+
+  it("keeps visible usage while refresh is in progress", () => {
+    render(
+      <ProviderCard
+        name="Refreshing Provider"
+        displayMode="used"
+        loading
+        onRetry={() => {}}
+        lines={[
+          { type: "text", label: "Today", value: "$1.00" },
+          { type: "progress", label: "Session", used: 25, limit: 100, format: { kind: "percent" } },
+        ]}
+      />
+    )
+
+    expect(screen.getByText("Today")).toBeInTheDocument()
+    expect(screen.getByText("$1.00")).toBeInTheDocument()
+    expect(screen.getByText("Session")).toBeInTheDocument()
+    expect(screen.getByText("Refreshing usage")).toBeInTheDocument()
+  })
+
   it("renders metric lines + progress formats", () => {
     render(
       <ProviderCard

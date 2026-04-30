@@ -42,7 +42,7 @@ Safety:
 | `perplexity` | stored provider secret `cookieHeader`, `PERPLEXITY_COOKIE_HEADER`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN` | Works partially | Cookie/env replay can fake signed-in billing auth, but credit data still comes from Perplexity HTTP. |
 | `synthetic` | stored provider secret `apiKey`, `SYNTHETIC_API_KEY` | Works partially | Secret/env replay can fake auth setup, but quota data still comes from Synthetic HTTP. |
 | `vertex-ai` | `~/AppData/Roaming/gcloud/application_default_credentials.json`, `~/.config/gcloud/application_default_credentials.json`, `CLOUDSDK_CONFIG`, `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`, `CLOUDSDK_CORE_PROJECT` | Works partially | ADC/project replay can fake auth setup and parser paths, but quota data still comes from Google Cloud Monitoring HTTP. |
-| `warp` | stored provider secret `token`, `WARP_API_KEY`, `WARP_TOKEN` | Works partially | Secret/env replay can fake auth setup, but request limits still come from Warp HTTP. |
+| `warp` | stored provider secret `token`, `WARP_API_KEY`, `WARP_TOKEN` | Works partially | Secret/env replay can fake auth setup, but request limits still come from Warp's undocumented app GraphQL endpoint. |
 | `windsurf` | `~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb`, `~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb` | Works partially | SQLite replay can fake account discovery; quota still comes from Windsurf HTTP. |
 | `zed` | stored provider secret `cookieHeader`, external Windows credential target `zed:url=https://zed.dev`, `~/AppData/Local/Zed/logs/telemetry.log` | Works partially | Embedded-browser cookie replay can cover billing auth, while local replay covers sign-in detection and telemetry fallback. |
 | `zai` | `ZAI_API_KEY`, `GLM_API_KEY` env vars | Works partially | No file path today; auth is env-only and usage comes from HTTP. |
@@ -291,7 +291,7 @@ Safety:
 - What to fake:
 - Save a Warp token through the app settings or expose `WARP_API_KEY` / `WARP_TOKEN` before launching UsageBar.
 - Limitation:
-- The provider still fetches request limits over HTTP.
+- The provider still fetches request limits over Warp's undocumented app GraphQL endpoint.
 - Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `windsurf`

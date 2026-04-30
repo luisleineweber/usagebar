@@ -74,6 +74,12 @@ UsageBar lives in your Windows tray and shows you how much of your AI coding sub
 
 Current Windows rollout status comes from each provider's `plugin.json` manifest in this fork.
 
+Status meanings:
+
+- **Supported:** intended to work on Windows from the documented setup path.
+- **Experimental:** visible and testable on Windows, but setup, API shape, or live-account validation can still change.
+- **Scope:** names the usage source. Provider-reported means the provider API or local provider database supplies the number directly. Estimated or telemetry-based means UsageBar derives it from local logs, quota counters, known pools, or manually supplied sessions. Each provider page contains the exact source and limitations.
+
 | Provider | Windows status | Scope |
 |---|---|---|
 | [**Abacus AI**](docs/providers/abacus.md) | Experimental | API-key usage and credit details |
@@ -94,15 +100,15 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding Plan session usage, explicit reported plan when available |
 | [**Mistral**](docs/providers/mistral.md) | Experimental | La Plateforme usage and billing details via signed-in session |
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
-| [**OpenCode**](docs/providers/opencode-go.md) / [**OpenCode Zen**](docs/providers/opencode.md) | Supported / Experimental | OpenCode Go subscription 5h, weekly, and monthly local CLI history; OpenCode Zen pay-as-you-go billing from a signed-in workspace session |
+| [**OpenCode**](docs/providers/opencode-go.md) | Supported | OpenCode Go subscription 5h, weekly, and monthly local CLI history; optional OpenCode Zen pay-as-you-go balance from a signed-in workspace session |
 | [**OpenRouter**](docs/providers/openrouter.md) | Experimental | Credits, balance, request-rate detail |
 | [**Perplexity**](docs/providers/perplexity.md) | Experimental | Recurring, purchased, and bonus credit pools via manual cookie/env auth |
 | [**Synthetic**](docs/providers/synthetic.md) | Experimental | Direct API-key quota endpoint |
 | [**Vertex AI**](docs/providers/vertex-ai.md) | Experimental | gcloud ADC OAuth plus Cloud Monitoring quota usage |
-| [**Warp**](docs/providers/warp.md) | Experimental | Request limits, plan badge |
+| [**Warp**](docs/providers/warp.md) | Experimental | Request limits and plan badge from an undocumented app GraphQL operation |
 | [**Windsurf**](docs/providers/windsurf.md) | Experimental | Daily quota, weekly quota, extra usage balance |
 | [**Zed**](docs/providers/zed.md) | Experimental | Dashboard token spend via browser-backed cookie replay, with local telemetry fallback |
-| [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches |
+| [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches from undocumented subscription/quota endpoints |
 
 Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/usagebar/issues/new)
 
@@ -128,11 +134,12 @@ UsageBar is a Tauri v2 desktop app with a Rust host and a React/TypeScript front
 UsageBar is local-first. Provider credentials are read from local app state, environment variables, browser/session cookies you explicitly provide, or OS credential storage depending on the provider.
 
 - Secrets stay on the machine unless a provider plugin must call that provider's API to read usage.
+- UsageBar does not send provider credentials, raw usage payloads, API keys, cookies, or app-owned provider secret files to UsageBar-owned services.
 - Plugin host APIs are allowlisted and capability-gated for sensitive operations such as write-capable SQLite access.
 - The WebView uses a restrictive starter content security policy.
 - The optional local HTTP API binds to `127.0.0.1:6736`.
 - Telemetry uses the app's analytics integration only for product diagnostics; provider usage payloads and credentials are not telemetry data.
-- Crash-log collection is not presented as a public guarantee yet; release notes must state the exact behavior before Alpha 1 is published.
+- Crash logs are local support artifacts under the app data logs directory unless a user explicitly attaches sanitized logs to a report. Automatic crash upload is not part of the Alpha 1 promise.
 
 ## Fork Direction
 
@@ -148,6 +155,7 @@ Upstream lineage stays visible and upstream fixes can still be pulled in through
 - **Read usage locally.** See the [Local HTTP API](docs/local-http-api.md).
 - **Fix a bug.** Keep the change small, focused, and verified.
 - **Request a feature or report a bug.** [Open an issue.](https://github.com/Loues000/usagebar/issues/new) Include the provider, auth source, Windows-specific constraints, app version, and sanitized logs. See [bug report notes](docs/bug-reports.md).
+- **Share diagnostics safely.** Include exact error text and timestamps, but do not attach API keys, cookies, raw credential files, or `provider-secrets.json`.
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.
 
