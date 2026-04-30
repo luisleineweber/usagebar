@@ -1,6 +1,8 @@
-# Kimi Code
+# Kimi Code (Moonshot)
 
 > Reverse-engineered, undocumented API. May change without notice.
+
+This is the single Kimi/Moonshot provider. It reads Kimi CLI / kimi.com membership quota from local `kimi login` OAuth and can also show official Kimi Open Platform API billing balance from `api.moonshot.ai` when a Moonshot API key is configured.
 
 ## Overview
 
@@ -9,6 +11,8 @@
 - **Auth provider:** `https://auth.kimi.com` (OAuth 2.0)
 - **Client ID:** `17e5f671-d194-4dfb-9706-5516cb48c098`
 - **Token store:** `~/.kimi/credentials/kimi-code.json`
+- **Optional API balance URL:** `https://api.moonshot.ai/v1/users/me/balance`
+- **Optional API key env vars:** `MOONSHOT_API_KEY`, `KIMI_API_KEY`, `KIMI_KEY`
 
 ## Endpoints
 
@@ -98,7 +102,8 @@ refresh_token=<refresh_token>
 1. Run `kimi login` on this machine.
 2. Confirm the CLI created `~/.kimi/credentials/kimi-code.json`.
 3. Restart `UsageBar` if it was already open.
-4. Enable the Kimi provider in Settings and refresh.
+4. Enable the Kimi Code (Moonshot) provider in Settings and refresh.
+5. Optional: paste a Moonshot/Kimi Open Platform API key in Settings to include API billing balance.
 
 Current local evidence on this machine: `~/.kimi/credentials/kimi-code.json` is not present yet, so this rollout stays `experimental` until a real signed-in Windows validation pass is captured.
 
@@ -107,3 +112,4 @@ Current local evidence on this machine: `~/.kimi/credentials/kimi-code.json` is 
 - The plugin refreshes tokens when near expiry (5-minute buffer).
 - If refresh is rejected (401/403), user must run `kimi login` again.
 - `limits[0].window.duration=300` and `TIME_UNIT_MINUTE` maps to the 5-hour session window.
+- API balance is separate from Kimi Code membership quota and comes from Moonshot's official Open Platform balance endpoint, not `kimi-k2.ai`.

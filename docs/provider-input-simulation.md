@@ -31,7 +31,7 @@ Safety:
 | `jetbrains-ai-assistant` | IDE quota XML under `~/AppData/Roaming/JetBrains/.../options/AIAssistantQuotaManager2.xml` or `~/AppData/Roaming/Google/...` | Works fully | This plugin is local-file driven. Replaying the XML is the main test path. |
 | `kilo` | stored provider secret `apiKey`, `KILO_API_KEY` | Works partially | Secret/env replay can fake auth setup, but usage still comes from the Kilo HTTP API. CLI auth fallback is not wired yet. |
 | `kimi` | `~/.kimi/credentials/kimi-code.json` | Works partially | Local credential replay can fake login; usage still comes from HTTP. |
-| `kimi-k2` | stored provider secret `apiKey`, `KIMI_K2_API_KEY`, `KIMI_API_KEY`, `KIMI_KEY` | Works partially | Secret/env replay can fake auth setup, but credits still come from Kimi K2 HTTP. |
+| `kimi-k2` | stored provider secret `apiKey`, `MOONSHOT_API_KEY`, `KIMI_API_KEY`, `KIMI_KEY` | Works partially | Secret/env replay can fake auth setup, but balance still comes from the official Moonshot API HTTP endpoint. |
 | `kiro` | None | No current path | Placeholder plugin only. |
 | `minimax` | `MINIMAX_API_KEY`, `MINIMAX_API_TOKEN`, `MINIMAX_CN_API_KEY` env vars | Works partially | No file path today; you can only fake env-based auth locally. Usage still comes from HTTP. |
 | `mock` | None | Works fully | Built-in self-test provider. Data is hardcoded in the plugin. |
@@ -182,13 +182,13 @@ Safety:
 ### `kimi-k2`
 - Local inputs read:
 - provider secret `apiKey`
-- `KIMI_K2_API_KEY`
+- `MOONSHOT_API_KEY`
 - `KIMI_API_KEY`
 - `KIMI_KEY`
 - What to fake:
 - Save an API key through the app settings or expose one of the supported env vars before launching UsageBar.
 - Limitation:
-- The provider still fetches credits over HTTP.
+- The provider still fetches balance over HTTP from Moonshot's official API.
 - Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `kiro`

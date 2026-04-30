@@ -8,6 +8,26 @@ const loadPlugin = async () => {
   return globalThis.__openusage_plugin
 }
 
+function setEnv(ctx, envValues) {
+  ctx.host.env.get.mockImplementation((name) =>
+    Object.prototype.hasOwnProperty.call(envValues, name) ? envValues[name] : null
+  )
+}
+
+function balancePayload(overrides = {}) {
+  return {
+    code: 0,
+    data: {
+      available_balance: 49.58894,
+      voucher_balance: 46.58893,
+      cash_balance: 3.00001,
+      ...overrides,
+    },
+    scode: "0x0",
+    status: true,
+  }
+}
+
 describe("kimi plugin", () => {
   beforeEach(() => {
     delete globalThis.__openusage_plugin
@@ -18,6 +38,67 @@ describe("kimi plugin", () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
+  })
+
+  it("renders Moonshot API balance when only an API key is configured", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { MOONSHOT_API_KEY: "moonshot-key" })
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify(balancePayload()) })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("API balance $49.59")
+    expect(ctx.host.http.request.mock.calls[0][0].url).toBe("https://api.moonshot.ai/v1/users/me/balance")
+    expect(result.lines.find((line) => line.label === "API Balance")).toEqual({
+      type: "progress",
+      label: "API Balance",
+      used: 49.58894,
+      limit: 49.58894,
+      format: { kind: "currency", currency: "USD" },
+    })
+    expect(result.lines.find((line) => line.label === "Voucher balance")?.value).toBe("$46.59")
+    expect(result.lines.find((line) => line.label === "Cash balance")?.value).toBe("$3.00")
+  })
+
+  it("renders Kimi Code quota and Moonshot API balance together", async () => {
+    const ctx = makeCtx()
+    const nowSec = Math.floor(Date.now() / 1000)
+    ctx.host.fs.writeText(
+      CRED_PATH,
+      JSON.stringify({
+        access_token: "token",
+        expires_at: nowSec + 3600,
+      })
+    )
+    ctx.host.providerSecrets.read.mockImplementation((key) => (key === "apiKey" ? "moonshot-secret" : null))
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("/users/me/balance")) {
+        return { status: 200, bodyText: JSON.stringify(balancePayload({ available_balance: 10 })) }
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          usage: { limit: "100", remaining: "74", resetTime: "2099-02-11T17:32:50Z" },
+          limits: [
+            {
+              window: { duration: 300, timeUnit: "TIME_UNIT_MINUTE" },
+              detail: { limit: "100", remaining: "85", resetTime: "2099-02-07T12:32:50Z" },
+            },
+          ],
+          user: { membership: { level: "LEVEL_INTERMEDIATE" } },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Intermediate")
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "API Balance")).toBeTruthy()
   })
 
   it("refreshes token and renders session + weekly usage", async () => {

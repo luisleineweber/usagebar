@@ -1,6 +1,6 @@
 (function () {
-  const CREDITS_URL = "https://kimi-k2.ai/api/user/credits"
-  const API_KEY_ENV_VARS = ["KIMI_K2_API_KEY", "KIMI_API_KEY", "KIMI_KEY"]
+  const BALANCE_URL = "https://api.moonshot.ai/v1/users/me/balance"
+  const API_KEY_ENV_VARS = ["MOONSHOT_API_KEY", "KIMI_API_KEY", "KIMI_KEY"]
 
   function readString(value) {
     if (typeof value !== "string") return null
@@ -55,12 +55,12 @@
     return null
   }
 
-  function requestCredits(ctx, apiKey) {
+  function requestBalance(ctx, apiKey) {
     let resp
     try {
       resp = ctx.util.request({
         method: "GET",
-        url: CREDITS_URL,
+        url: BALANCE_URL,
         headers: {
           Authorization: "Bearer " + apiKey,
           Accept: "application/json",
@@ -68,151 +68,73 @@
         timeoutMs: 15000,
       })
     } catch (e) {
-      ctx.host.log.error("request failed (" + CREDITS_URL + "): " + String(e))
-      throw "Kimi K2 request failed. Check your connection."
+      ctx.host.log.error("request failed (" + BALANCE_URL + "): " + String(e))
+      throw "Moonshot API balance request failed. Check your connection."
     }
 
     if (ctx.util.isAuthStatus(resp.status)) {
-      throw "Kimi K2 API key invalid. Check Setup or KIMI_K2_API_KEY."
+      throw "Moonshot API key invalid. Check Setup or MOONSHOT_API_KEY."
     }
 
     if (resp.status < 200 || resp.status >= 300) {
-      throw "Kimi K2 request failed (HTTP " + String(resp.status) + "). Try again later."
+      throw "Moonshot API balance request failed (HTTP " + String(resp.status) + "). Try again later."
     }
 
     const data = ctx.util.tryParseJson(resp.bodyText)
     if (!data || typeof data !== "object") {
-      throw "Kimi K2 response invalid. Try again later."
+      throw "Moonshot API balance response invalid. Try again later."
     }
 
-    return { data, headers: resp.headers || {} }
+    return data
   }
 
-  function collectContexts(root) {
-    const contexts = []
-    function addContext(value) {
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        contexts.push(value)
-      }
-    }
+  function parseSummary(payload) {
+    const data = payload && typeof payload === "object" ? payload.data : null
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null
 
-    addContext(root)
-    addContext(root.data)
-    addContext(root.result)
-    addContext(root.usage)
-    addContext(root.credits)
-    if (root.data) {
-      addContext(root.data.usage)
-      addContext(root.data.credits)
-    }
-    if (root.result) {
-      addContext(root.result.usage)
-      addContext(root.result.credits)
-    }
-    return contexts
-  }
-
-  function readPath(contexts, paths) {
-    for (let i = 0; i < paths.length; i += 1) {
-      const path = paths[i]
-      for (let j = 0; j < contexts.length; j += 1) {
-        let value = contexts[j]
-        let valid = true
-        for (let k = 0; k < path.length; k += 1) {
-          const key = path[k]
-          if (!value || typeof value !== "object" || Array.isArray(value) || !(key in value)) {
-            valid = false
-            break
-          }
-          value = value[key]
-        }
-        if (valid) return value
-      }
-    }
-    return null
-  }
-
-  function readHeaderNumber(headers, targetName) {
-    if (!headers || typeof headers !== "object") return null
-    const names = Object.keys(headers)
-    for (let i = 0; i < names.length; i += 1) {
-      const name = names[i]
-      if (String(name).toLowerCase() !== targetName.toLowerCase()) continue
-      return readNumber(headers[name])
-    }
-    return null
-  }
-
-  function parseSummary(payload, headers) {
-    const contexts = collectContexts(payload)
-    const consumed = readNumber(readPath(contexts, [
-      ["total_credits_consumed"],
-      ["totalCreditsConsumed"],
-      ["total_credits_used"],
-      ["totalCreditsUsed"],
-      ["credits_consumed"],
-      ["creditsConsumed"],
-      ["consumedCredits"],
-      ["usedCredits"],
-      ["total"],
-      ["usage", "total"],
-      ["usage", "consumed"],
-    ])) ?? 0
-
-    const remaining = readNumber(readPath(contexts, [
-      ["credits_remaining"],
-      ["creditsRemaining"],
-      ["remaining_credits"],
-      ["remainingCredits"],
-      ["available_credits"],
-      ["availableCredits"],
-      ["credits_left"],
-      ["creditsLeft"],
-      ["usage", "credits_remaining"],
-      ["usage", "remaining"],
-    ])) ?? readHeaderNumber(headers, "x-credits-remaining") ?? 0
-
-    const averageTokens = readNumber(readPath(contexts, [
-      ["average_tokens_per_request"],
-      ["averageTokensPerRequest"],
-      ["average_tokens"],
-      ["averageTokens"],
-      ["avg_tokens"],
-      ["avgTokens"],
-    ]))
+    const available = readNumber(data.available_balance)
+    const voucher = readNumber(data.voucher_balance) ?? 0
+    const cash = readNumber(data.cash_balance) ?? 0
+    if (available === null) return null
 
     return {
-      consumed: Math.max(0, consumed),
-      remaining: Math.max(0, remaining),
-      averageTokens,
+      available: Math.max(0, available),
+      voucher: Math.max(0, voucher),
+      cash: Math.max(0, cash),
     }
   }
 
   function probe(ctx) {
     const apiKey = loadApiKey(ctx)
     if (!apiKey) {
-      throw "Kimi K2 API key missing. Save it in Setup or set KIMI_K2_API_KEY."
+      throw "Moonshot API key missing. Save it in Setup or set MOONSHOT_API_KEY."
     }
 
-    const response = requestCredits(ctx, apiKey)
-    const summary = parseSummary(response.data, response.headers)
-    const total = summary.consumed + summary.remaining
+    const response = requestBalance(ctx, apiKey)
+    const summary = parseSummary(response)
+    if (!summary) {
+      throw "Moonshot API balance response invalid. Try again later."
+    }
 
     const lines = [
       ctx.line.progress({
-        label: "Credits",
-        used: summary.consumed,
-        limit: Math.max(total, summary.consumed, 1),
-        format: { kind: "count", suffix: "credits" },
+        label: "Balance",
+        used: summary.available,
+        limit: Math.max(summary.available, 1),
+        format: { kind: "currency", currency: "USD" },
       }),
       ctx.line.text({
-        label: "Average tokens",
-        value: summary.averageTokens === null ? "Unavailable" : formatCount(summary.averageTokens),
+        label: "Voucher balance",
+        value: "$" + formatCount(summary.voucher),
+      }),
+      ctx.line.text({
+        label: "Cash balance",
+        value: "$" + formatCount(summary.cash),
       }),
     ]
 
     return {
-      plan: "Remaining: " + formatCount(summary.remaining),
+      plan: "Available: $" + formatCount(summary.available),
       lines,
     }
   }
