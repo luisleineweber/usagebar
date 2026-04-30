@@ -51,8 +51,7 @@ Current Windows rollout status comes from each provider's `plugin.json` manifest
 | [**Gemini**](docs/providers/gemini.md) | Experimental | Gemini quota buckets and reported Code Assist tier |
 | [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
 | [**Kilo**](docs/providers/kilo.md) | Experimental | Direct API-key usage endpoint |
-| [**Kimi**](docs/providers/kimi.md) | Experimental | Session, weekly |
-| [**Kimi K2**](docs/providers/kimi-k2.md) | Experimental | Credits, remaining, average tokens |
+| [**Kimi Code (Moonshot)**](docs/providers/kimi.md) | Experimental | Kimi CLI, kimi.com membership, session and weekly quota from local `kimi login` OAuth; optional official Moonshot API balance via `https://api.moonshot.ai/v1/users/me/balance` |
 | [**Kiro**](docs/providers/kiro.md) | Experimental | Credits, bonus credits, overages tracking |
 | [**MiniMax**](docs/providers/minimax.md) | Experimental | Coding Plan session usage, explicit reported plan when available |
 | [**Ollama**](docs/providers/ollama.md) | Supported | Plan, session, weekly |
