@@ -1499,6 +1499,67 @@ describe("App", () => {
     )
   })
 
+  it("publishes display preference changes from the settings window", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    renderSettingsWindow()
+
+    await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
+    await userEvent.click(await screen.findByRole("radio", { name: "Used" }))
+    await userEvent.click(await screen.findByRole("radio", { name: /Absolute/ }))
+    await userEvent.click(await screen.findByRole("radio", { name: "Donut" }))
+
+    await waitFor(() =>
+      expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
+        key: "themeMode",
+        value: "light",
+      })
+    )
+    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
+      key: "displayMode",
+      value: "used",
+    })
+    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
+      key: "resetTimerDisplayMode",
+      value: "absolute",
+    })
+    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
+      key: "menubarIconStyle",
+      value: "donut",
+    })
+  })
+
+  it("applies display preference updates from the settings window to the tray", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    state.loadThemeModeMock.mockResolvedValue("dark")
+    render(<App />)
+
+    await waitFor(() => expect(document.documentElement.classList.contains("dark")).toBe(true))
+    await waitFor(() => expect(eventState.handlers.has("display-preferences:updated")).toBe(true))
+
+    await act(async () => {
+      eventState.handlers.get("display-preferences:updated")?.({
+        payload: { key: "themeMode", value: "light" },
+      })
+      eventState.handlers.get("display-preferences:updated")?.({
+        payload: { key: "displayMode", value: "used" },
+      })
+      eventState.handlers.get("display-preferences:updated")?.({
+        payload: { key: "resetTimerDisplayMode", value: "absolute" },
+      })
+      eventState.handlers.get("display-preferences:updated")?.({
+        payload: { key: "menubarIconStyle", value: "donut" },
+      })
+    })
+
+    await waitFor(() => expect(document.documentElement.classList.contains("dark")).toBe(false))
+    await waitFor(() => expect(useAppPreferencesStore.getState().displayMode).toBe("used"))
+    expect(useAppPreferencesStore.getState().resetTimerDisplayMode).toBe("absolute")
+    expect(useAppPreferencesStore.getState().menubarIconStyle).toBe("donut")
+    expect(state.renderTrayBarsIconMock).toHaveBeenCalledWith(expect.objectContaining({
+      style: "donut",
+    }))
+  })
+
   it("applies provider settings updates from the settings window to the tray", async () => {
     state.isTauriMock.mockReturnValue(true)
     state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: ["b"] })
@@ -1515,6 +1576,52 @@ describe("App", () => {
     })
 
     expect(await screen.findByRole("button", { name: "Beta" })).toBeInTheDocument()
+  })
+
+  it("enables a provider from settings, refreshes it, and renders reset context", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: ["b"] })
+    render(<App />)
+
+    await screen.findByRole("button", { name: "Alpha" })
+    await waitFor(() => expect(eventState.handlers.has("plugin-settings:updated")).toBe(true))
+
+    await act(async () => {
+      eventState.handlers.get("plugin-settings:updated")?.({
+        payload: { order: ["a", "b"], disabled: [] },
+      })
+    })
+
+    state.startBatchMock.mockClear()
+    const refreshAction = await triggerPluginContextAction("Beta", "b", "reload")
+    refreshAction()
+    await waitFor(() =>
+      expect(state.startBatchMock).toHaveBeenCalledWith(["b"], { manual: true })
+    )
+
+    const resetsAt = new Date(Date.now() + 65 * 60 * 1000).toISOString()
+    await act(async () => {
+      state.probeHandlers?.onResult({
+        providerId: "b",
+        displayName: "Beta",
+        iconUrl: "icon-b",
+        lines: [
+          {
+            type: "progress",
+            label: "Session",
+            used: 25,
+            limit: 100,
+            format: { kind: "percent" },
+            resetsAt,
+            periodDurationMs: 5 * 60 * 60 * 1000,
+          },
+        ],
+      })
+    })
+
+    await screen.findByText("Session")
+    expect(screen.getByText("25%")).toBeInTheDocument()
+    expect(screen.getByText("Resets in 1h 5m")).toBeInTheDocument()
   })
 
   it("opens the tray panel from the explicit provider action button", async () => {
