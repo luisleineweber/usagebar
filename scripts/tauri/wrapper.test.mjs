@@ -7,6 +7,7 @@ import test from "node:test"
 import {
   cleanupStaleDebugBuildMetadata,
   findStaleDebugBuildMetadata,
+  getTauriChildEnv,
 } from "./wrapper-lib.mjs"
 
 function createRepoFixture() {
@@ -47,4 +48,9 @@ test("cleanupStaleDebugBuildMetadata removes copied debug metadata from another 
   assert.equal(result.staleEntries.length, 1)
   assert.equal(existsSync(buildDir), false)
   assert.equal(existsSync(fingerprintDir), false)
+})
+
+test("getTauriChildEnv marks only local dev launches", () => {
+  assert.equal(getTauriChildEnv(["dev"], {}).USAGEBAR_TAURI_DEV, "1")
+  assert.equal(getTauriChildEnv(["build"], {}).USAGEBAR_TAURI_DEV, undefined)
 })

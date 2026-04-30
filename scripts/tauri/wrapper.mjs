@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { cleanupStaleDebugBuildMetadata } from "./wrapper-lib.mjs"
+import { cleanupStaleDebugBuildMetadata, getTauriChildEnv } from "./wrapper-lib.mjs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -113,6 +113,7 @@ if (process.platform === "win32" && args[0] === "dev") {
 const tauriCli = resolveTauriCli()
 const child = spawn(tauriCli.command, tauriCli.args, {
   cwd: repoRoot,
+  env: getTauriChildEnv(args),
   stdio: "inherit",
   ...(tauriCli.spawnOptions ?? {}),
 })

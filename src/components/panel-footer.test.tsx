@@ -100,6 +100,22 @@ describe("PanelFooter", () => {
     expect(screen.getByText("Downloading update...")).toBeTruthy()
   })
 
+  it("shows explicit update action when an update is available", async () => {
+    const onInstall = vi.fn()
+    render(
+      <PanelFooter
+        version="0.0.0"
+        autoUpdateNextAt={null}
+        updateStatus={{ status: "available", version: "0.1.0-beta.7" }}
+        onUpdateInstall={onInstall}
+        {...footerProps}
+      />
+    )
+    const button = screen.getByRole("button", { name: "Update to 0.1.0-beta.7" })
+    await userEvent.click(button)
+    expect(onInstall).toHaveBeenCalledTimes(1)
+  })
+
   it("shows restart button when ready", async () => {
     const onInstall = vi.fn()
     render(

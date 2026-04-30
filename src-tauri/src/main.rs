@@ -19,6 +19,10 @@ impl Drop for ReleaseSingleInstanceGuard {
 
 #[cfg(all(target_os = "windows", not(debug_assertions)))]
 fn is_released_product() -> bool {
+    if std::env::var_os("USAGEBAR_TAURI_DEV").is_some() {
+        return false;
+    }
+
     let conf: serde_json::Value =
         serde_json::from_str(include_str!("../tauri.conf.json")).expect("valid tauri.conf.json");
     conf["productName"].as_str() == Some("UsageBar")
