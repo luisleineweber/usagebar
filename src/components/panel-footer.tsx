@@ -31,6 +31,17 @@ function VersionDisplay({
   onVersionClick: () => void;
 }) {
   switch (updateStatus.status) {
+    case "available":
+      return (
+        <Button
+          variant="secondary"
+          size="xs"
+          onClick={onUpdateInstall}
+          title={updateStatus.url ? "Open GitHub release" : "Download update"}
+        >
+          Update to {updateStatus.version}
+        </Button>
+      );
     case "downloading":
       return (
         <span className="text-xs text-muted-foreground">

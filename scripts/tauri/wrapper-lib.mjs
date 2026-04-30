@@ -68,3 +68,10 @@ export function cleanupStaleDebugBuildMetadata(repoRoot) {
     fingerprintDir,
   }
 }
+
+export function getTauriChildEnv(args, baseEnv = process.env) {
+  return {
+    ...baseEnv,
+    ...(args[0] === "dev" ? { USAGEBAR_TAURI_DEV: "1" } : {}),
+  }
+}
