@@ -3,7 +3,7 @@
 ## 0.1.0-alpha.1
 
 ### Highlights
-- Draft Alpha 1 release notes for the first stranger-facing Windows test build. Do not tag until version metadata is aligned and the Alpha 1 smoke checklist passes.
+- Published Alpha 1 release notes for the first stranger-facing Windows test build after version metadata alignment and Alpha 1 smoke checklist verification.
 - Windows NSIS installer path documented for GitHub prerelease assets and local unsigned release builds.
 - README now states provider support levels, install/uninstall/data locations, current limitations, privacy boundaries, and feedback expectations.
 - Supported provider smoke target: Codex first, Cursor fallback when Codex auth is unavailable.
