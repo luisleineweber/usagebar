@@ -11,6 +11,8 @@ use crate::panel::{
 use crate::settings_window;
 
 const LOG_LEVEL_STORE_KEY: &str = "logLevel";
+const TEMPLATE_TRAY_ICON_RESOURCE: &str = "icons/tray-icon.png";
+const COLORED_TRAY_ICON_RESOURCE: &str = "icons/icon.png";
 
 fn get_stored_log_level(app_handle: &AppHandle) -> log::LevelFilter {
     let store = match app_handle.store("settings.json") {
@@ -47,9 +49,14 @@ fn set_stored_log_level(app_handle: &AppHandle, level: log::LevelFilter) {
 }
 
 pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
+    let tray_icon_resource = if cfg!(target_os = "macos") {
+        TEMPLATE_TRAY_ICON_RESOURCE
+    } else {
+        COLORED_TRAY_ICON_RESOURCE
+    };
     let tray_icon_path = app_handle
         .path()
-        .resolve("icons/tray-icon.png", BaseDirectory::Resource)?;
+        .resolve(tray_icon_resource, BaseDirectory::Resource)?;
     let icon = Image::from_path(tray_icon_path)?;
 
     // Load persisted log level
@@ -140,7 +147,7 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("tray")
         .icon(icon)
-        .icon_as_template(true)
+        .icon_as_template(cfg!(target_os = "macos"))
         .tooltip("UsageBar")
         .menu(&menu)
         .show_menu_on_left_click(false)

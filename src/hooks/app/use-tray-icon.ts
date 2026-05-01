@@ -4,11 +4,10 @@ import { TrayIcon } from "@tauri-apps/api/tray"
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { DisplayMode, MenubarIconStyle, PluginSettings } from "@/lib/settings"
 import { getProbeEligiblePluginIds } from "@/lib/settings"
-import { getTrayIconSizePx, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
 import { getTrayPrimaryBars, type TrayPrimaryBar } from "@/lib/tray-primary-progress"
 import { formatTrayPercentText, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { PluginState } from "@/hooks/app/types"
-import { hasProviderStatusIssue, type ProviderStatus } from "@/lib/provider-status"
+import type { ProviderStatus } from "@/lib/provider-status"
 
 type TrayUpdateReason = "probe" | "settings" | "init"
 
@@ -35,6 +34,12 @@ const EMPTY_TRAY_SETTINGS_PREVIEW: TraySettingsPreview = {
   providerPercentText: "--%",
 }
 
+export function shouldUseTemplateTrayIcon(): boolean {
+  const platform = navigator.platform.toLowerCase()
+  const userAgent = navigator.userAgent.toLowerCase()
+  return platform.includes("mac") || userAgent.includes("mac os")
+}
+
 function isSameTraySettingsPreview(a: TraySettingsPreview, b: TraySettingsPreview): boolean {
   if (a.providerIconUrl !== b.providerIconUrl) return false
   if (a.providerPercentText !== b.providerPercentText) return false
@@ -56,9 +61,9 @@ export function useTrayIcon({
   pluginSettings,
   pluginStates,
   displayMode,
-  menubarIconStyle,
+  menubarIconStyle: _menubarIconStyle,
   activeView,
-  providerStatuses = {},
+  providerStatuses: _providerStatuses = {},
 }: UseTrayIconArgs) {
   const trayRef = useRef<TrayIcon | null>(null)
   const trayGaugeIconPathRef = useRef<string | null>(null)
@@ -74,10 +79,9 @@ export function useTrayIcon({
   const pluginSettingsRef = useRef(pluginSettings)
   const pluginStatesRef = useRef(pluginStates)
   const displayModeRef = useRef(displayMode)
-  const menubarIconStyleRef = useRef(menubarIconStyle)
   const activeViewRef = useRef(activeView)
-  const providerStatusesRef = useRef(providerStatuses)
   const lastTrayProviderIdRef = useRef<string | null>(null)
+  const useTemplateIconRef = useRef(shouldUseTemplateTrayIcon())
 
   useEffect(() => {
     pluginsMetaRef.current = pluginsMeta
@@ -96,16 +100,8 @@ export function useTrayIcon({
   }, [displayMode])
 
   useEffect(() => {
-    menubarIconStyleRef.current = menubarIconStyle
-  }, [menubarIconStyle])
-
-  useEffect(() => {
     activeViewRef.current = activeView
   }, [activeView])
-
-  useEffect(() => {
-    providerStatusesRef.current = providerStatuses
-  }, [providerStatuses])
 
   const scheduleTrayIconUpdate = useCallback((
     _reason: TrayUpdateReason,
@@ -157,17 +153,17 @@ export function useTrayIcon({
         return Promise.resolve()
       }
 
-      const restoreGaugeIcon = () => {
+      const setStableTrayIcon = (tooltip = "UsageBar", title = "") => {
         const gaugePath = trayGaugeIconPathRef.current
         if (gaugePath) {
           Promise.all([
             tray.setIcon(gaugePath),
-            tray.setIconAsTemplate(true),
-            setTrayTitle(""),
-            setTrayTooltip("UsageBar"),
+            tray.setIconAsTemplate(useTemplateIconRef.current),
+            setTrayTitle(title),
+            setTrayTooltip(tooltip),
           ])
             .catch((e) => {
-              console.error("Failed to restore tray gauge icon:", e)
+              console.error("Failed to update stable tray icon:", e)
             })
             .finally(() => {
               finalizeUpdate()
@@ -180,19 +176,17 @@ export function useTrayIcon({
       const currentSettings = pluginSettingsRef.current
       if (!currentSettings) {
         setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
-        restoreGaugeIcon()
+        setStableTrayIcon()
         return
       }
 
       const enabledPluginIds = getProbeEligiblePluginIds(currentSettings, pluginsMetaRef.current)
       if (enabledPluginIds.length === 0) {
         setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
-        restoreGaugeIcon()
+        setStableTrayIcon()
         return
       }
 
-      const style = menubarIconStyleRef.current
-      const sizePx = getTrayIconSizePx(window.devicePixelRatio)
       const nextActiveView = activeViewRef.current
       const activeProviderId = nextActiveView !== "home" ? nextActiveView : null
 
@@ -243,79 +237,13 @@ export function useTrayIcon({
         isSameTraySettingsPreview(prev, nextPreview) ? prev : nextPreview
       )
 
-      const hasIncident = enabledPluginIds.some((id) => hasProviderStatusIssue(providerStatusesRef.current[id]))
-
-      if (style === "bars" || style === "merged") {
-        renderTrayBarsIcon({
-          bars: barsForPreview,
-          sizePx,
-          style,
-          statusIndicator: hasIncident ? "major" : "none",
-        })
-          .then(async (img) => {
-            await tray.setIcon(img)
-            await tray.setIconAsTemplate(true)
-            await setTrayTitle("")
-            await setTrayTooltip(tooltipText)
-          })
-          .catch((e) => {
-            console.error("Failed to update tray icon:", e)
-          })
-          .finally(() => {
-            finalizeUpdate()
-          })
-        return
-      }
-
       if (!trayProviderId) {
-        restoreGaugeIcon()
+        setStableTrayIcon(tooltipText)
         return
       }
       lastTrayProviderIdRef.current = trayProviderId
 
-      if (style === "donut") {
-        renderTrayBarsIcon({
-          bars: providerBars,
-          sizePx,
-          style: "donut",
-          providerIconUrl,
-          statusIndicator: hasProviderStatusIssue(providerStatusesRef.current[trayProviderId]) ? "major" : "none",
-        })
-          .then(async (img) => {
-            await tray.setIcon(img)
-            await tray.setIconAsTemplate(true)
-            await setTrayTitle("")
-            await setTrayTooltip(tooltipText)
-          })
-          .catch((e) => {
-            console.error("Failed to update tray icon:", e)
-          })
-          .finally(() => {
-            finalizeUpdate()
-          })
-        return
-      }
-
-      renderTrayBarsIcon({
-        bars: providerBars,
-        sizePx,
-        style: "provider",
-        percentText: supportsNativeTrayTitle ? undefined : providerPercentText,
-        providerIconUrl,
-        statusIndicator: hasProviderStatusIssue(providerStatusesRef.current[trayProviderId]) ? "major" : "none",
-      })
-        .then(async (img) => {
-          await tray.setIcon(img)
-          await tray.setIconAsTemplate(true)
-          await setTrayTitle(providerPercentText)
-          await setTrayTooltip(tooltipText)
-        })
-        .catch((e) => {
-          console.error("Failed to update tray icon:", e)
-        })
-        .finally(() => {
-          finalizeUpdate()
-        })
+      setStableTrayIcon(tooltipText, supportsNativeTrayTitle ? providerPercentText : "")
     }, delayMs)
   }, [])
 
@@ -332,7 +260,9 @@ export function useTrayIcon({
         trayInitializedRef.current = true
 
         try {
-          trayGaugeIconPathRef.current = await resolveResource("icons/tray-icon.png")
+          trayGaugeIconPathRef.current = await resolveResource(
+            useTemplateIconRef.current ? "icons/tray-icon.png" : "icons/icon.png"
+          )
         } catch (e) {
           console.error("Failed to resolve tray gauge icon resource:", e)
         }
@@ -359,7 +289,7 @@ export function useTrayIcon({
   useEffect(() => {
     if (!trayReady) return
     scheduleTrayIconUpdate("settings", 0)
-  }, [activeView, menubarIconStyle, providerStatuses, scheduleTrayIconUpdate, trayReady])
+  }, [activeView, _providerStatuses, scheduleTrayIconUpdate, trayReady])
 
   useEffect(() => {
     return () => {

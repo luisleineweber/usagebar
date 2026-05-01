@@ -3,14 +3,12 @@ import { GeneralSettingsPane } from "@/components/settings/general-settings-pane
 import { ProvidersSettingsPane } from "@/components/settings/providers-settings-pane"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
-import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import type { ProviderConfig } from "@/lib/provider-settings"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import type {
   AutoUpdateIntervalMinutes,
   DisplayMode,
   GlobalShortcut,
-  MenubarIconStyle,
   ResetTimerDisplayMode,
   ThemeMode,
 } from "@/lib/settings"
@@ -31,9 +29,6 @@ interface SettingsPageProps {
   onDisplayModeChange: (value: DisplayMode) => void
   resetTimerDisplayMode: ResetTimerDisplayMode
   onResetTimerDisplayModeChange: (value: ResetTimerDisplayMode) => void
-  menubarIconStyle: MenubarIconStyle
-  onMenubarIconStyleChange: (value: MenubarIconStyle) => void
-  traySettingsPreview: TraySettingsPreview
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
@@ -60,9 +55,6 @@ export function SettingsPage({
   onDisplayModeChange,
   resetTimerDisplayMode,
   onResetTimerDisplayModeChange,
-  menubarIconStyle,
-  onMenubarIconStyleChange,
-  traySettingsPreview,
   globalShortcut,
   onGlobalShortcutChange,
   startOnLogin,
@@ -122,9 +114,6 @@ export function SettingsPage({
           onDisplayModeChange={onDisplayModeChange}
           resetTimerDisplayMode={resetTimerDisplayMode}
           onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
-          menubarIconStyle={menubarIconStyle}
-          onMenubarIconStyleChange={onMenubarIconStyleChange}
-          traySettingsPreview={traySettingsPreview}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={onGlobalShortcutChange}
           startOnLogin={startOnLogin}
