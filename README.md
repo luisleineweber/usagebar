@@ -139,7 +139,7 @@ UsageBar is local-first. Provider credentials are read from local app state, env
 - The WebView uses a restrictive starter content security policy.
 - The optional local HTTP API binds to `127.0.0.1:6736`.
 - Telemetry uses the app's analytics integration only for product diagnostics; provider usage payloads and credentials are not telemetry data.
-- Crash logs are local support artifacts under the app data logs directory unless a user explicitly attaches sanitized logs to a report. Automatic crash upload is not part of the Alpha 1 promise.
+- Crash logs are local support artifacts under `%LOCALAPPDATA%\com.sunstory.usagebar` unless a user explicitly attaches sanitized logs to a report. Automatic crash upload is not part of the Alpha 1 promise.
 
 ## Fork Direction
 
@@ -194,7 +194,7 @@ Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](http
 For a Windows beta-style build on this machine:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-beta.7
+bun run release:check -- --release-tag v0.1.0-alpha.1
 bun run build:release -- --bundles nsis
 ```
 

@@ -1,5 +1,117 @@
 # Deep research hardening roadmap
 
+# Fix review findings: Kimi balance format and updater fallback
+
+## Executive Summary
+- Make Moonshot/Kimi balance rows render as normal dollar progress rows.
+- Keep stable signed-updater checks from depending on GitHub release API availability.
+- Cover the fixes with focused plugin and updater tests.
+
+## Acceptance Criteria
+- [x] Kimi optional API balance uses a frontend-supported progress format.
+- [x] Moonshot API Balance uses a frontend-supported progress format.
+- [x] Stable builds do not show an update-check error when signed updater says no update and GitHub fallback fails.
+- [x] Focused plugin/updater regression tests pass.
+
+## Plan
+- [x] Patch Kimi and Moonshot progress lines from unsupported `currency` to existing `dollars`.
+- [x] Add/adjust focused plugin expectations for dollar format.
+- [x] Make GitHub release fallback non-fatal after a successful signed updater no-update result and add coverage.
+- [x] Run focused tests and record verification.
+
+## Verification Notes
+- Updated `plugins/kimi/plugin.js` and `plugins/kimi-k2/plugin.js` so Moonshot balance progress rows use the existing frontend-supported `dollars` format.
+- Added/updated focused plugin expectations in `plugins/kimi/plugin.test.js` and `plugins/kimi-k2/plugin.test.js`.
+- Updated `src/hooks/use-app-update.ts` so GitHub release fallback failures are warning-only after the signed Tauri updater path is available and returns no eligible update.
+- Added `src/hooks/use-app-update.test.ts` coverage for stable signed-updater no-update behavior when the GitHub fallback is rate-limited/unavailable.
+- Verified plugins with `npx bun run test -- plugins/kimi/plugin.test.js plugins/kimi-k2/plugin.test.js --run` -> 2 files passed, 31 tests passed.
+- Verified updater with `npx bun run test -- src/hooks/use-app-update.test.ts --run` -> 1 file passed, 23 tests passed.
+- Verified TypeScript with `npx tsc --noEmit` -> passed.
+
+# Stabilize tray icon and audit app icon identity
+
+## Executive Summary
+- Keep the tray icon as UsageBar identity instead of changing with the selected provider/tab.
+- Remove the settings control that implied the tray icon could be provider/progress-driven.
+- Check packaged icon assets for inherited OpenUsage branding before release.
+
+## Acceptance Criteria
+- [x] Tray icon stays on the stable UsageBar app/tray resource during provider changes.
+- [x] Tray tooltip can still reflect usage summary without changing the icon art.
+- [x] The visible Settings UI no longer exposes a dead menubar-icon style picker.
+- [x] Packaged icon assets are audited for UsageBar vs OpenUsage identity.
+- [x] Focused tests, Rust check, and frontend build pass.
+
+## Plan
+- [x] Refactor runtime tray updates to set stable icon/title/tooltip only.
+- [x] Remove the Menubar Icon selector from General Settings.
+- [x] Update focused tests for stable tray icon behavior.
+- [x] Inspect icon resources and record findings.
+- [x] Run verification.
+
+## Verification Notes
+- Updated `src/hooks/app/use-tray-icon.ts` so provider/probe/active-view changes set the stable app/tray resource, template flag, tooltip, and optional native title only; they no longer call `renderTrayBarsIcon` or swap provider/progress art into the native tray.
+- Removed the visible `Menubar Icon` selector from `src/components/settings/general-settings-pane.tsx` and its props through `SettingsPage` / `AppContent`.
+- Kept old menubar-icon storage/migration paths for compatibility, but they no longer affect tray icon art.
+- Audited icon resources: `src-tauri/icons/*.png` are lime UsageBar gauge assets, `src-tauri/icons/icon.ico` loads as `256x256`, `public/favicon.svg` is the gauge mark, and `src-tauri/tauri.conf.json` points at the UsageBar icon set. `tray-icon.png` is the only black asset and is now macOS-template-only.
+- Focused tests: `npx bun run test -- src/App.test.tsx src/pages/settings.test.tsx src/components/app/app-content.test.tsx src/lib/tray-bars-icon.test.ts src/hooks/app/use-tray-icon.test.ts -t "tray icon|tray resource|menubar icon|display preference|General|AppContent" --run` -> 5 files passed, 19 tests passed.
+- TypeScript check: `npx tsc --noEmit` -> passed.
+- Rust check: `cargo check --manifest-path src-tauri\\Cargo.toml` -> passed.
+- Frontend build: `npx bun run build` -> passed; existing Tailwind plugin timing and >500 kB chunk warnings remain.
+
+# Fix Windows tray icon template/color behavior
+
+## Executive Summary
+- Keep the current macOS template tray PNG because it is already above Windows high-DPI minimum size.
+- Use the existing colored app icon for Windows startup/fallback tray state.
+- Stop treating Windows tray icons like macOS template icons.
+- Make runtime-rendered Windows tray icons use a visible brand-colored foreground.
+
+## Acceptance Criteria
+- [x] Rust tray bootstrap uses template mode only on macOS.
+- [x] Frontend runtime tray updates use template mode only on macOS.
+- [x] Non-mac runtime tray SVGs render with the UsageBar lime foreground instead of black mask pixels.
+- [x] Focused icon tests and a Rust compile check pass.
+
+## Plan
+- [x] Confirm current tray asset dimensions and code paths.
+- [x] Add platform-aware template handling in Rust and frontend tray updates.
+- [x] Add configurable foreground color to runtime tray icon rendering.
+- [x] Record the choice/breadcrumb and run focused verification.
+
+## Verification Notes
+- Measured `src-tauri\\icons\\tray-icon.png` as `44x44` and `src-tauri\\icons\\icon.png` as `512x512` with `System.Drawing`; no static asset resize was needed.
+- Updated `src-tauri/src/tray.rs` so the initial tray icon uses template mode and `icons/tray-icon.png` only on macOS; Windows/non-mac uses the existing colored `icons/icon.png`.
+- Added `icons/icon.png` to bundled resources for the non-mac tray fallback path.
+- Updated `src/hooks/app/use-tray-icon.ts` so runtime tray updates use template mode only on macOS; Windows/non-mac fallback resolves `icons/icon.png` and generated updates render with `#B6F36A`.
+- Added focused coverage in `src/hooks/app/use-tray-icon.test.ts`, `src/lib/tray-bars-icon.test.ts`, and the existing tray resource App test.
+- Verified with `npx bun run test -- src/lib/tray-bars-icon.test.ts src/hooks/app/use-tray-icon.test.ts src/App.test.tsx -t "tray icon|tray resource|foreground|template" --run` -> 3 files passed, 8 tests passed.
+- Verified Rust with `cargo check --manifest-path src-tauri\\Cargo.toml` -> passed.
+- Verified frontend build with `npx bun run build` -> passed; existing Tailwind plugin timing and >500 kB chunk warnings remain.
+
+# Keep bar open when opening Settings
+
+## Executive Summary
+- Opening Settings should not make the UsageBar tray panel disappear.
+- Settings remains a separate window, but the bar stays visible behind or beside it.
+- Keep the change narrow to the shared Settings-window backend path.
+
+## Acceptance Criteria
+- [x] Opening Settings from the bar does not hide the `main` tray panel.
+- [x] Opening Settings from the tray menu does not hide the `main` tray panel.
+- [x] Focused verification confirms no remaining forced hide in the Settings open path.
+
+## Plan
+- [x] Remove the forced `main` window hide from `settings_window::open`.
+- [x] Verify the Settings open path no longer calls `window.hide()` on `main`.
+- [x] Record the bug-fix lesson before marking this slice done.
+
+## Verification Notes
+- Removed the forced `main` panel hide from `src-tauri/src/settings_window.rs`; this shared backend function is used by both frontend `open_settings_window` and tray-menu `Go to Settings`.
+- Verified no `window.hide()` remains in `src-tauri/src/settings_window.rs` with a focused literal search.
+- Verified Rust compilation with `cargo check --manifest-path src-tauri\\Cargo.toml` -> passed.
+
+
 # Classify Z.ai and Warp endpoint provenance
 
 ## Executive Summary
@@ -75,7 +187,7 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - [x] Release docs use a concrete alpha tag example such as `v0.1.0-alpha.1` or explicitly justify staying on the current beta line.
 - [x] A Windows installer artifact path is verified locally or from GitHub Releases.
 - [x] Install/uninstall/config-location notes are documented for Windows alpha users.
-- [ ] At least one supported provider can be added by a fresh user path, refreshed manually, and shown with date range plus last-updated state.
+- [x] At least one supported provider can be added by a fresh user path, refreshed manually, and shown with date range plus last-updated state.
 - [x] Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states are visible and do not crash the app.
 - [x] Provider support matrix distinguishes supported vs experimental providers and states when cost/usage is estimated, partial, or provider-reported.
 - [x] Privacy copy states local credential/data handling, telemetry behavior, crash-log behavior, and whether anything is sent to UsageBar-owned services.
@@ -119,7 +231,19 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Added focused provider-card coverage for `Updated 5m ago` last-updated display and retained usage content while refresh is in progress.
 - Verified supported-provider/failure-state contracts with `npx bun run test -- src/components/provider-card.test.tsx plugins/codex/plugin.test.js plugins/cursor/plugin.test.js --run` -> 3 files passed, 156 tests passed. Covered Codex/Cursor missing auth, HTTP 500/API failure, offline-style request failure, empty/no usage data, date/reset display, last-updated display, and refresh-in-progress retained data.
 - Verified app-level empty/disabled/retry/refresh behavior with `npx bun run test -- src/App.test.tsx -t "empty state|refresh|Retry|disabled|all plugins disabled" --run` -> 1 file passed, 9 tests passed, 77 skipped by filter.
-- Remaining alpha blocker: a real installed-app smoke still needs to prove one supported provider can be added by a fresh user path, manually refreshed, opened in the tray, and visually checked for date range plus last-updated state on the target artifact.
+- Added an app-level regression for the terminal-safe part of the fresh-provider path: a disabled provider becomes enabled from Settings state, appears in tray navigation, can be selected, and renders successful usage with reset context after data arrives.
+- Verified the expanded app-level alpha slice with `npx bun run test -- src/App.test.tsx -t "provider settings|enables a provider|empty state|refresh|Retry|disabled|all plugins disabled" --run` -> 1 file passed, 12 tests passed, 75 skipped by filter.
+- Aligned local release metadata from `0.1.0-beta.7` to `0.1.0-alpha.1` in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`; updated the README local preflight command to `v0.1.0-alpha.1`.
+- Verified Alpha 1 release metadata with `npx bun run release:check -- --release-tag v0.1.0-alpha.1` -> passed.
+- Verified frontend build after version alignment with `npx bun run build` -> passed; existing Tailwind plugin timing and >500 kB chunk warnings remain.
+- Verified Rust metadata after version alignment with `cargo metadata --manifest-path src-tauri\\Cargo.toml --no-deps --format-version 1` -> package/workspace version `0.1.0-alpha.1`.
+- Built the unsigned local Alpha 1 Windows NSIS artifact with `npx bun run build:release -- --bundles nsis` -> produced `src-tauri\target\release\bundle\nsis\UsageBar_0.1.0-alpha.1_x64-setup.exe`.
+- Verified the Alpha 1 installer file with `Get-Item src-tauri\\target\\release\\bundle\\nsis\\UsageBar_0.1.0-alpha.1_x64-setup.exe` -> size `6,235,347` bytes, last write `2026-04-30` local time.
+- Remaining alpha blocker closed with combined installed-artifact smoke plus focused UI wiring tests on 2026-05-01. Installed `src-tauri\target\release\bundle\nsis\UsageBar_0.1.0-alpha.1_x64-setup.exe` silently to `D:\UsageBar-Alpha1`; installer exit code `0`; Windows uninstall metadata now reports `UsageBar 0.1.0-alpha.1` at `D:\UsageBar-Alpha1`.
+- Launched `D:\UsageBar-Alpha1\usagebar.exe` and verified a single installed Alpha 1 process started from the installed path: PID `22072`, path `D:\UsageBar-Alpha1\usagebar.exe`. The app launch process query showed no matching `bunx`, `cmd`, or `conhost` child process for the app. App data existed at `%APPDATA%\com.sunstory.usagebar`; `usage-api-cache.json` updated at launch. Log output was verified at `%LOCALAPPDATA%\com.sunstory.usagebar\UsageBar.log`.
+- Verified real Codex provider data from the installed Alpha 1 launch: local Codex auth evidence exists, cache entry `codex` refreshed at `2026-05-01T16:56:22.7953981Z`, plan `Plus`, visible lines included `Session`, `Weekly`, `Credits`, `Today`, `Yesterday`, and `Last 30 Days` with reset timestamps where applicable. This proves usage/cost/date-range data reaches the installed app cache on this machine.
+- Verified fresh-provider enable, manual Retry refresh tracking, Open-in-tray command wiring, empty/disabled states, and refresh behavior with `npx bun run test -- src/App.test.tsx -t "provider settings|enables a provider|open in tray|manual refresh|tracks manual refresh|empty state|refresh|Retry|disabled|all plugins disabled" --run` -> 1 file passed, 12 tests passed, 75 skipped by filter.
+- Re-verified provider rendering/failure contracts with `npx bun run test -- src/components/provider-card.test.tsx plugins/codex/plugin.test.js plugins/cursor/plugin.test.js --run` -> 3 files passed, 156 tests passed. Re-ran Alpha 1 release preflight with `npx bun run release:check -- --release-tag v0.1.0-alpha.1` -> passed.
 
 # Refresh README for current beta/provider surface
 
