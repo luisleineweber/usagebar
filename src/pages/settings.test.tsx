@@ -107,14 +107,6 @@ const defaultProps = {
   onDisplayModeChange: vi.fn(),
   resetTimerDisplayMode: "relative" as const,
   onResetTimerDisplayModeChange: vi.fn(),
-  menubarIconStyle: "provider" as const,
-  onMenubarIconStyleChange: vi.fn(),
-  traySettingsPreview: {
-    bars: [{ id: "a", fraction: 0.7 }],
-    providerBars: [{ id: "a", fraction: 0.7 }],
-    providerIconUrl: "icon-a",
-    providerPercentText: "70%",
-  },
   globalShortcut: null,
   onGlobalShortcutChange: vi.fn(),
   startOnLogin: false,
@@ -177,7 +169,7 @@ describe("SettingsPage", () => {
   it("renders global settings on the General tab", () => {
     render(<TestHarness />)
     expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
-    expect(screen.getByText("Menubar Icon")).toBeInTheDocument()
+    expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
     expect(screen.queryByText("Reorder your lineup and select a provider to manage.")).not.toBeInTheDocument()
   })

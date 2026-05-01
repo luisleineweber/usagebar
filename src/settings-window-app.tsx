@@ -103,7 +103,7 @@ export function SettingsWindowApp() {
     autoUpdateInterval,
   })
 
-  const { scheduleTrayIconUpdate, traySettingsPreview } = useTrayIcon({
+  const { scheduleTrayIconUpdate } = useTrayIcon({
     pluginsMeta,
     pluginSettings,
     pluginStates,
@@ -133,7 +133,6 @@ export function SettingsWindowApp() {
     handleThemeModeChange,
     handleDisplayModeChange,
     handleResetTimerDisplayModeChange,
-    handleMenubarIconStyleChange,
   } = useSettingsDisplayActions({
     setThemeMode,
     setDisplayMode,
@@ -327,9 +326,6 @@ export function SettingsWindowApp() {
           onDisplayModeChange={handleDisplayModeChange}
           resetTimerDisplayMode={resetTimerDisplayMode}
           onResetTimerDisplayModeChange={handleResetTimerDisplayModeChange}
-          menubarIconStyle={menubarIconStyle}
-          onMenubarIconStyleChange={handleMenubarIconStyleChange}
-          traySettingsPreview={traySettingsPreview}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={handleGlobalShortcutChange}
           startOnLogin={startOnLogin}

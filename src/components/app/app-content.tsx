@@ -3,7 +3,6 @@ import { useShallow } from "zustand/react/shallow"
 import { OverviewPage } from "@/pages/overview"
 import { ProviderDetailPage } from "@/pages/provider-detail"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
-import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
 import type { ProviderConfig } from "@/lib/provider-settings"
@@ -11,7 +10,6 @@ import type {
   AutoUpdateIntervalMinutes,
   DisplayMode,
   GlobalShortcut,
-  MenubarIconStyle,
   ResetTimerDisplayMode,
   ThemeMode,
 } from "@/lib/settings"
@@ -36,8 +34,6 @@ export type AppContentActionProps = {
   onDisplayModeChange: (mode: DisplayMode) => void
   onResetTimerDisplayModeChange: (mode: ResetTimerDisplayMode) => void
   onResetTimerDisplayModeToggle: () => void
-  onMenubarIconStyleChange: (value: MenubarIconStyle) => void
-  traySettingsPreview: TraySettingsPreview
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   onStartOnLoginChange: (value: boolean) => void
 }

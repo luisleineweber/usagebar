@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/image", () => ({
   },
 }))
 
-import { getTrayIconSizePx, makeTrayBarsSvg, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
+import { TRAY_BRAND_FOREGROUND, getTrayIconSizePx, makeTrayBarsSvg, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
 
 describe("tray-bars-icon", () => {
   it("getTrayIconSizePx renders 18px at 1x and 36px at 2x", () => {
@@ -83,6 +83,18 @@ describe("tray-bars-icon", () => {
     if (viewBox) {
       expect(Number(viewBox[1])).toBe(Number(viewBox[2]))
     }
+  })
+
+  it("supports a brand foreground for non-template tray icons", () => {
+    const svg = makeTrayBarsSvg({
+      bars: [{ id: "a", fraction: 0.5 }],
+      sizePx: 36,
+      style: "bars",
+      foregroundColor: TRAY_BRAND_FOREGROUND,
+    })
+
+    expect(svg).toContain(`fill="${TRAY_BRAND_FOREGROUND}"`)
+    expect(svg).not.toContain('fill="black"')
   })
 
   it("style=donut falls back to center glyph when provider icon is missing", () => {
