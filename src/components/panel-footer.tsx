@@ -17,6 +17,17 @@ interface PanelFooterProps {
   onCloseAbout: () => void;
 }
 
+function formatFooterVersionLabel(version: string): string {
+  const normalized = version.trim().replace(/^v/i, "")
+  const prerelease = normalized.split("-", 2)[1]
+  const match = prerelease?.match(/^([a-z]+)\.(\d+)$/i)
+  if (!match) return `${APP_NAME} ${version}`
+
+  const [, channel, number] = match
+  const titleChannel = channel.charAt(0).toUpperCase() + channel.slice(1).toLowerCase()
+  return `${APP_NAME} ${titleChannel} ${number}`
+}
+
 function VersionDisplay({
   version,
   updateStatus,
@@ -89,8 +100,9 @@ function VersionDisplay({
           type="button"
           onClick={onVersionClick}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          title={`${APP_NAME} ${version}`}
         >
-          {APP_NAME} {version}
+          {formatFooterVersionLabel(version)}
         </button>
       );
   }

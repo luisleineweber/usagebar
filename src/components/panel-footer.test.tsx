@@ -74,6 +74,20 @@ describe("PanelFooter", () => {
     expect(screen.getByText("Paused")).toBeTruthy()
   })
 
+  it("shows a readable alpha label instead of raw semver in idle state", () => {
+    render(
+      <PanelFooter
+        version="0.1.0-alpha.1"
+        autoUpdateNextAt={null}
+        updateStatus={idle}
+        onUpdateInstall={noop}
+        {...footerProps}
+      />
+    )
+    const button = screen.getByRole("button", { name: "UsageBar Alpha 1" })
+    expect(button).toHaveAttribute("title", "UsageBar 0.1.0-alpha.1")
+  })
+
   it("shows downloading state", () => {
     render(
       <PanelFooter
