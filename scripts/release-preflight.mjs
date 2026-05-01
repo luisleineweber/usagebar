@@ -102,8 +102,8 @@ if (tauriConf.productName !== "UsageBar") {
 }
 
 const updaterEndpoints = tauriConf.plugins?.updater?.endpoints ?? []
-if (!updaterEndpoints.some((endpoint) => String(endpoint).includes("github.com/Loues000/usagebar/releases"))) {
-  fail("Updater endpoint is not pointed at Loues000/usagebar releases")
+if (!updaterEndpoints.some((endpoint) => String(endpoint).includes("github.com/luisleineweber/usagebar/releases"))) {
+  fail("Updater endpoint is not pointed at luisleineweber/usagebar releases")
 }
 
 if (!changelog.includes(`## ${version}`)) {

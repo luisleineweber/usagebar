@@ -24,7 +24,7 @@ The preflight currently verifies:
 
 - `package.json`, [src-tauri/tauri.conf.json](../src-tauri/tauri.conf.json), and [src-tauri/Cargo.toml](../src-tauri/Cargo.toml) agree on the same version
 - the release tag matches that version
-- the Tauri product branding and updater endpoint still point at `UsageBar` and `Loues000/usagebar`
+- the Tauri product branding and updater endpoint still point at `UsageBar` and `luisleineweber/usagebar`
 - [CHANGELOG.md](../CHANGELOG.md) contains a section for the version being released
 - bundled plugins exist under `src-tauri/resources/bundled_plugins`
 
@@ -95,7 +95,7 @@ This is a public alpha for Windows users who want to test UsageBar before a full
 UsageBar stores app settings and app-owned provider secrets locally under `%APPDATA%\com.sunstory.usagebar` on Windows. Provider secrets saved by UsageBar are encrypted with Windows DPAPI. Provider credentials and usage payloads are not intentionally sent to UsageBar-owned services.
 
 ### Feedback
-Report bugs at https://github.com/Loues000/usagebar/issues/new and include app version, Windows version, provider, error text, timestamp, and sanitized logs. Do not include API keys, cookies, or raw credential files.
+Report bugs at https://github.com/luisleineweber/usagebar/issues/new and include app version, Windows version, provider, error text, timestamp, and sanitized logs. Do not include API keys, cookies, or raw credential files.
 ```
 
 ## Windows Data Locations

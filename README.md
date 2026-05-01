@@ -16,9 +16,9 @@ Release plan:
 - macOS: still secondary while the Windows fork stabilizes
 
 For published betas:
-- Download the latest prerelease from [UsageBar releases](https://github.com/Loues000/usagebar/releases).
+- Download the latest prerelease from [UsageBar releases](https://github.com/luisleineweber/usagebar/releases).
 
-To run the current branch before a release is tagged, build from source below. If you want the upstream stable app instead, follow [UsageBar releases](https://github.com/Loues000/usagebar/releases).
+To run the current branch before a release is tagged, build from source below. If you want the upstream stable app instead, follow [UsageBar releases](https://github.com/luisleineweber/usagebar/releases).
 
 Release process and preflight checks live in [docs/releasing.md](docs/releasing.md).
 
@@ -28,7 +28,7 @@ Alpha and beta Windows builds are distributed from GitHub Releases as a NSIS set
 
 Install:
 
-1. Download the latest `UsageBar_*_x64-setup.exe` asset from [UsageBar releases](https://github.com/Loues000/usagebar/releases).
+1. Download the latest `UsageBar_*_x64-setup.exe` asset from [UsageBar releases](https://github.com/luisleineweber/usagebar/releases).
 2. Run the installer.
 3. Open UsageBar from the Start menu or tray.
 4. Open Settings, enable a provider, and follow that provider's setup instructions.
@@ -110,7 +110,7 @@ Status meanings:
 | [**Zed**](docs/providers/zed.md) | Experimental | Dashboard token spend via browser-backed cookie replay, with local telemetry fallback |
 | [**Z.ai**](docs/providers/zai.md) | Experimental | Session, weekly, web searches from undocumented subscription/quota endpoints |
 
-Want a provider that's not listed? [Open an issue.](https://github.com/Loues000/usagebar/issues/new)
+Want a provider that's not listed? [Open an issue.](https://github.com/luisleineweber/usagebar/issues/new)
 
 ## Current Limitations
 
@@ -154,7 +154,7 @@ Upstream lineage stays visible and upstream fixes can still be pulled in through
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
 - **Read usage locally.** See the [Local HTTP API](docs/local-http-api.md).
 - **Fix a bug.** Keep the change small, focused, and verified.
-- **Request a feature or report a bug.** [Open an issue.](https://github.com/Loues000/usagebar/issues/new) Include the provider, auth source, Windows-specific constraints, app version, and sanitized logs. See [bug report notes](docs/bug-reports.md).
+- **Request a feature or report a bug.** [Open an issue.](https://github.com/luisleineweber/usagebar/issues/new) Include the provider, auth source, Windows-specific constraints, app version, and sanitized logs. See [bug report notes](docs/bug-reports.md).
 - **Share diagnostics safely.** Include exact error text and timestamps, but do not attach API keys, cookies, raw credential files, or `provider-secrets.json`.
 
 Keep it simple. No feature creep, no AI-generated commit messages, test your changes.

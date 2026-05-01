@@ -135,4 +135,4 @@ Bug-report docs explicitly forbid API keys, cookies, raw credential files, and p
 - [x] Release notes list supported providers tested in this smoke pass.
 - [x] Release notes list known limitations and experimental providers honestly.
 - [x] Privacy note matches current code behavior.
-- [x] Feedback link points to `https://github.com/Loues000/usagebar/issues/new`.
+- [x] Feedback link points to `https://github.com/luisleineweber/usagebar/issues/new`.
