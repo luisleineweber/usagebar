@@ -74,9 +74,5 @@ pub fn open(
             .map_err(|error| format!("failed to focus settings window: {}", error))?;
     }
 
-    if let Some(window) = app_handle.get_webview_window("main") {
-        let _ = window.hide();
-    }
-
     Ok(())
 }
