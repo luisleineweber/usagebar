@@ -83,7 +83,7 @@ describe("kimi-k2 plugin", () => {
       label: "Balance",
       used: 49.58894,
       limit: 49.58894,
-      format: { kind: "currency", currency: "USD" },
+      format: { kind: "dollars" },
     })
     expect(result.lines.find((line) => line.label === "Voucher balance")).toEqual({
       type: "text",

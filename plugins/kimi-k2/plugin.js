@@ -121,7 +121,7 @@
         label: "Balance",
         used: summary.available,
         limit: Math.max(summary.available, 1),
-        format: { kind: "currency", currency: "USD" },
+        format: { kind: "dollars" },
       }),
       ctx.line.text({
         label: "Voucher balance",
