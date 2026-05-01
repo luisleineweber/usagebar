@@ -103,7 +103,7 @@ Report bugs at https://github.com/Loues000/usagebar/issues/new and include app v
 Use these paths in alpha support docs and bug reports:
 
 - App data: `%APPDATA%\com.sunstory.usagebar`
-- Logs: `%APPDATA%\com.sunstory.usagebar\logs`
+- Logs: `%LOCALAPPDATA%\com.sunstory.usagebar\UsageBar.log` and rotated files under `%LOCALAPPDATA%\com.sunstory.usagebar\logs`
 - Settings store: `%APPDATA%\com.sunstory.usagebar\settings.json` or `%APPDATA%\com.sunstory.usagebar\.store\settings.json`
 - App-owned provider secrets: `%APPDATA%\com.sunstory.usagebar\provider-secrets.json`
 - Legacy migration source: `%APPDATA%\com.sunstory.openusage`

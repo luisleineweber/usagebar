@@ -20,29 +20,28 @@ Last successful refresh time, if shown:
 
 ## Capture logs
 
-### Option A: from the app folder (recommended)
+### Option A: from the app log folder (recommended)
 
 1. Close UsageBar (to ensure logs flush to disk).
 2. Open File Explorer and paste this into the address bar:
 
 ```text
-%APPDATA%\com.sunstory.usagebar
+%LOCALAPPDATA%\com.sunstory.usagebar
 ```
 
-3. Open the `logs` folder.
-4. Attach `openusage.log` and, if present, rotated logs like `openusage.log.1`.
+3. Attach `UsageBar.log` and, if present, rotated logs from the `logs` folder.
 
 ### Option B: from the command line
 
 PowerShell:
 
 ```powershell
-$p = Join-Path $env:APPDATA "com.sunstory.usagebar\logs"
+$p = Join-Path $env:LOCALAPPDATA "com.sunstory.usagebar"
 Write-Host $p
 Get-ChildItem $p | Sort-Object LastWriteTime -Descending | Select-Object -First 10
 ```
 
-Legacy beta builds may have logs under `%APPDATA%\com.sunstory.openusage\logs`.
+Legacy beta builds may have logs under `%APPDATA%\com.sunstory.openusage\logs` or `%LOCALAPPDATA%\com.sunstory.openusage`.
 
 ## Privacy note
 
@@ -60,5 +59,5 @@ Good diagnostics:
 - Exact error text shown in UsageBar.
 - Local timestamp and timezone.
 - Provider name and setup source.
-- Sanitized `openusage.log` lines around the failure.
+- Sanitized `UsageBar.log` lines around the failure.
 
