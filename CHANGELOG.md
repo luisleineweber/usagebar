@@ -9,7 +9,7 @@
 - Supported provider smoke target: Codex first, Cursor fallback when Codex auth is unavailable.
 - Known limitations: experimental providers can change setup/API shape, some usage/cost values are partial or estimated, prerelease updater behavior is conservative, and automatic crash upload is not part of the Alpha 1 promise.
 - Privacy note: provider credentials, raw usage payloads, API keys, cookies, and app-owned provider secret files are not intentionally sent to UsageBar-owned services.
-- Feedback: report issues at https://github.com/Loues000/usagebar/issues/new with app version, Windows version, provider, setup source, exact error text, timestamp, and sanitized logs.
+- Feedback: report issues at https://github.com/luisleineweber/usagebar/issues/new with app version, Windows version, provider, setup source, exact error text, timestamp, and sanitized logs.
 
 ---
 
@@ -61,7 +61,7 @@
 - First public UsageBar beta target for Windows with GitHub prerelease packaging and NSIS setup output.
 - Standalone Settings window, improved tray handoff, and smoother tray sizing and anchoring behavior.
 - Expanded Windows provider coverage, including supported and experimental integrations tailored to this fork.
-- Release tooling and repo metadata updated for the `Loues000/usagebar` fork path.
+- Release tooling and repo metadata updated for the `luisleineweber/usagebar` fork path.
 - GitHub publish workflow reduced to the Windows release target and hardened for Tauri updater signing on this fork.
 - Tauri CLI launch path now resolves directly through the installed package entrypoint so Windows CI does not depend on `npx` or `.cmd` shim layout.
 
