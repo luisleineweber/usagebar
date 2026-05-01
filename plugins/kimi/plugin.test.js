@@ -55,7 +55,7 @@ describe("kimi plugin", () => {
       label: "API Balance",
       used: 49.58894,
       limit: 49.58894,
-      format: { kind: "currency", currency: "USD" },
+      format: { kind: "dollars" },
     })
     expect(result.lines.find((line) => line.label === "Voucher balance")?.value).toBe("$46.59")
     expect(result.lines.find((line) => line.label === "Cash balance")?.value).toBe("$3.00")

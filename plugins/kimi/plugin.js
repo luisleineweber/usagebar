@@ -223,7 +223,7 @@
         label: "API Balance",
         used: balance.available,
         limit: Math.max(balance.available, 1),
-        format: { kind: "currency", currency: "USD" },
+        format: { kind: "dollars" },
       })
     )
     lines.push(ctx.line.text({ label: "Voucher balance", value: "$" + formatMoney(balance.voucher) }))
