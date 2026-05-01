@@ -33,7 +33,7 @@ vi.mock("@/lib/analytics", () => ({
   track: trackMock,
 }))
 
-import { compareVersions, useAppUpdate } from "@/hooks/use-app-update"
+import { compareVersions, isEligibleUpdateCandidate, useAppUpdate } from "@/hooks/use-app-update"
 
 declare global {
   // eslint-disable-next-line no-var
@@ -80,6 +80,15 @@ describe("useAppUpdate", () => {
     expect(compareVersions("0.1.0-beta.7", "0.1.0-beta.6")).toBe(1)
     expect(compareVersions("0.1.0", "0.1.0-beta.7")).toBe(1)
     expect(compareVersions("0.1.0-beta.6", "0.1.0")).toBe(-1)
+  })
+
+  it("only treats same-channel prereleases, stable releases, or higher cores as eligible updates", () => {
+    expect(isEligibleUpdateCandidate("0.1.0-alpha.2", "0.1.0-alpha.1")).toBe(true)
+    expect(isEligibleUpdateCandidate("0.1.0", "0.1.0-alpha.1")).toBe(true)
+    expect(isEligibleUpdateCandidate("0.1.1-beta.1", "0.1.0-alpha.1")).toBe(true)
+    expect(isEligibleUpdateCandidate("0.1.0-beta.6", "0.1.0-alpha.1")).toBe(false)
+    expect(isEligibleUpdateCandidate("0.1.0-alpha.1", "0.1.0-alpha.1")).toBe(false)
+    expect(isEligibleUpdateCandidate("0.0.9", "0.1.0-alpha.1")).toBe(false)
   })
 
   it("skips updater checks in dev", async () => {
@@ -188,11 +197,64 @@ describe("useAppUpdate", () => {
     expect(result.current.updateStatus).toEqual({ status: "ready" })
   })
 
+  it("ignores older same-core beta releases for an alpha build", async () => {
+    getVersionMock.mockResolvedValue("0.1.0-alpha.1")
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          draft: false,
+          tag_name: "v0.1.0-beta.6",
+          html_url: "https://github.com/Loues000/usagebar/releases/tag/v0.1.0-beta.6",
+        },
+      ],
+    } as Response)
+
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+
+    await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
+
+    expect(checkMock).not.toHaveBeenCalled()
+    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
+  })
+
+  it("ignores signed updater candidates that are equal to the current version", async () => {
+    getVersionMock.mockResolvedValue("1.0.0")
+    checkMock.mockResolvedValue({ version: "1.0.0", download: vi.fn(), install: vi.fn() })
+
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+    await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
+
+    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
+  })
+
+  it("ignores signed updater candidates that are lower than the current version", async () => {
+    getVersionMock.mockResolvedValue("1.0.0")
+    checkMock.mockResolvedValue({ version: "0.9.9", download: vi.fn(), install: vi.fn() })
+
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+    await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
+
+    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
+  })
+
+  it("keeps stable signed updater checks up-to-date when GitHub fallback fails", async () => {
+    getVersionMock.mockResolvedValue("1.0.0")
+    checkMock.mockResolvedValue(null)
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("rate limited"))
+
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+    await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
+
+    expect(checkMock).toHaveBeenCalled()
+    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
+  })
+
   it("does not check again when already ready", async () => {
     const downloadMock = vi.fn(async (onEvent: (event: any) => void) => {
       onEvent({ event: "Finished", data: {} })
     })
-    checkMock.mockResolvedValue({ version: "1.0.0", download: downloadMock, install: vi.fn() })
+    checkMock.mockResolvedValue({ version: "1.1.0", download: downloadMock, install: vi.fn() })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await act(() => Promise.resolve())
@@ -232,7 +294,7 @@ describe("useAppUpdate", () => {
       onEvent({ event: "Started", data: { contentLength: null } })
       return new Promise<void>((resolve) => { resolveDownload = resolve })
     })
-    checkMock.mockResolvedValue({ version: "1.0.0", download: downloadMock, install: vi.fn() })
+    checkMock.mockResolvedValue({ version: "1.1.0", download: downloadMock, install: vi.fn() })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
@@ -247,7 +309,7 @@ describe("useAppUpdate", () => {
 
   it("transitions to error on download failure", async () => {
     const downloadMock = vi.fn().mockRejectedValue(new Error("download failed"))
-    checkMock.mockResolvedValue({ version: "1.0.0", download: downloadMock, install: vi.fn() })
+    checkMock.mockResolvedValue({ version: "1.1.0", download: downloadMock, install: vi.fn() })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
@@ -262,7 +324,7 @@ describe("useAppUpdate", () => {
       onEvent({ event: "Finished", data: {} })
     })
     relaunchMock.mockResolvedValue(undefined)
-    checkMock.mockResolvedValue({ version: "1.0.0", download: downloadMock, install: installMock })
+    checkMock.mockResolvedValue({ version: "1.1.0", download: downloadMock, install: installMock })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
@@ -280,7 +342,7 @@ describe("useAppUpdate", () => {
     const downloadMock = vi.fn(async (onEvent: (event: any) => void) => {
       onEvent({ event: "Finished", data: {} })
     })
-    checkMock.mockResolvedValue({ version: "1.0.0", download: downloadMock, install: installMock })
+    checkMock.mockResolvedValue({ version: "1.1.0", download: downloadMock, install: installMock })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
@@ -322,7 +384,7 @@ describe("useAppUpdate", () => {
       onEvent({ event: "Started", data: { contentLength: 100 } })
       return new Promise<void>((resolve) => { resolveDownload = resolve })
     })
-    checkMock.mockResolvedValue({ version: "1.0.0", download: downloadMock, install: installMock })
+    checkMock.mockResolvedValue({ version: "1.1.0", download: downloadMock, install: installMock })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
@@ -344,7 +406,7 @@ describe("useAppUpdate", () => {
       onEvent({ event: "Finished", data: {} })
     })
     relaunchMock.mockResolvedValue(undefined)
-    checkMock.mockResolvedValue({ version: "1.0.0", download: downloadMock, install: installMock })
+    checkMock.mockResolvedValue({ version: "1.1.0", download: downloadMock, install: installMock })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))

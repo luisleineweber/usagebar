@@ -41,11 +41,13 @@ function parseVersion(version: string) {
   const normalized = normalizeVersion(version)
   const [core = "", prerelease = ""] = normalized.split("-", 2)
   const [major = "0", minor = "0", patch = "0"] = core.split(".")
+  const [channel = ""] = prerelease.split(".", 1)
   return {
     major: Number.parseInt(major, 10) || 0,
     minor: Number.parseInt(minor, 10) || 0,
     patch: Number.parseInt(patch, 10) || 0,
     prerelease,
+    channel,
   }
 }
 
@@ -88,13 +90,39 @@ export function compareVersions(left: string, right: string): number {
   return comparePrerelease(parsedLeft.prerelease, parsedRight.prerelease)
 }
 
+export function isEligibleUpdateCandidate(candidateVersion: string, currentVersion: string): boolean {
+  const candidate = parseVersion(candidateVersion)
+  const current = parseVersion(currentVersion)
+  const coreDelta = compareVersions(
+    `${candidate.major}.${candidate.minor}.${candidate.patch}`,
+    `${current.major}.${current.minor}.${current.patch}`,
+  )
+
+  if (coreDelta > 0) return true
+  if (coreDelta < 0) return false
+
+  if (candidate.prerelease && current.prerelease && candidate.channel !== current.channel) {
+    return false
+  }
+
+  return compareVersions(candidateVersion, currentVersion) > 0
+}
+
 type GitHubRelease = {
   tag_name?: string
   html_url?: string
   draft?: boolean
 }
 
-async function findNewerGitHubRelease(repo: string, currentVersion: string) {
+type GitHubReleaseCandidate = {
+  version: string
+  url: string
+}
+
+async function findNewerGitHubRelease(
+  repo: string,
+  currentVersion: string,
+): Promise<GitHubReleaseCandidate | null> {
   const response = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=20`, {
     headers: { Accept: "application/vnd.github+json" },
   })
@@ -109,7 +137,7 @@ async function findNewerGitHubRelease(repo: string, currentVersion: string) {
       version: normalizeVersion(release.tag_name ?? ""),
       url: release.html_url ?? "",
     }))
-    .filter((release) => compareVersions(release.version, currentVersion) > 0)
+    .filter((release) => isEligibleUpdateCandidate(release.version, currentVersion))
     .sort((left, right) => compareVersions(right.version, left.version))[0] ?? null
 }
 
@@ -194,14 +222,27 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
       }
       if (!mountedRef.current) return
       if (update) {
-        inFlightRef.current.checking = false
-        updateRef.current = update
-        externalReleaseUrlRef.current = null
-        setStatus({ status: "available", version: update.version })
-        return
+        const updateVersion = normalizeVersion(update.version)
+        if (isEligibleUpdateCandidate(updateVersion, currentVersion)) {
+          inFlightRef.current.checking = false
+          updateRef.current = update
+          externalReleaseUrlRef.current = null
+          setStatus({ status: "available", version: updateVersion })
+          return
+        }
+        console.warn(`Ignoring updater candidate ${update.version}; current version is ${currentVersion}.`)
       }
 
-      const release = await findNewerGitHubRelease(repo, currentVersion)
+      let release: GitHubReleaseCandidate | null = null
+      try {
+        release = await findNewerGitHubRelease(repo, currentVersion)
+      } catch (error) {
+        if (canUseSignedUpdater) {
+          console.warn("GitHub release fallback failed after signed updater check:", error)
+        } else {
+          throw error
+        }
+      }
       if (!mountedRef.current) return
       inFlightRef.current.checking = false
       if (release) {
