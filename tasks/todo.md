@@ -1717,3 +1717,23 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Verified Rust host/manifest test compilation with `cargo test --manifest-path src-tauri/Cargo.toml env_api_respects_allowlist_in_host_and_js --no-run` and `cargo test --manifest-path src-tauri/Cargo.toml capabilities_and_source_provenance_are_parsed_when_present --no-run` -> both compiled successfully.
 - Attempted full Rust test execution for both focused tests; both compiled, then the local test binary exited with `STATUS_ENTRYPOINT_NOT_FOUND`, matching the existing local Rust-test blocker recorded in this task file.
 - Synced bundled plugin output with `node ./copy-bundled.cjs` -> bundled 29 plugins.
+
+# Harden Antigravity plugin errors and capabilities
+
+## Acceptance Criteria
+- [x] `plugins/antigravity/plugin.json` explicitly declares `http`, `httpDomains`, `sqliteRead`, `ls`, and `fs`, with `sqliteWrite: false`.
+- [x] Antigravity plan parsing prefers `userStatus.userTier.name` before `userStatus.planStatus.planInfo.planName`.
+- [x] Final Antigravity probe errors distinguish not running, signed out, expired/revoked token, unreachable local port, and quota unavailable.
+- [x] Focused tests cover transient Cloud Code failures and refresh-token-only recovery.
+- [x] Bundled Antigravity plugin files match the source plugin files.
+
+## Plan
+- [x] Patch the Antigravity manifest contract and parser/error classification.
+- [x] Add focused Antigravity plugin tests adapted from existing token/retry patterns.
+- [x] Sync bundled plugins and run targeted verification.
+
+## Verification Notes
+- Verified Antigravity plugin behavior with `npx bun run test -- plugins/antigravity/plugin.test.js --run` -> 1 file passed, 30 tests passed.
+- Verified source and bundled Antigravity manifest JSON parsing with `node -e ...` -> both parsed successfully.
+- Verified source/bundled Antigravity `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match after targeted `Copy-Item` sync.
+- Verified whitespace with `git --no-pager diff --check -- ...` -> passed; only existing CRLF conversion warnings were reported.

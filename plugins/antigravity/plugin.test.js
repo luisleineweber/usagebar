@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { readFileSync } from "node:fs"
 import { makeCtx } from "../test-helpers.js"
 
 const loadPlugin = async () => {
@@ -149,7 +150,26 @@ describe("antigravity plugin", () => {
     ctx.host.ls.discover.mockReturnValue(null)
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity and try again.")
+    expect(() => plugin.probe(ctx)).toThrow("Antigravity is not running and no stored sign-in was found.")
+  })
+
+  it("declares explicit read-only host capabilities", () => {
+    const manifest = JSON.parse(readFileSync("plugins/antigravity/plugin.json", "utf8"))
+
+    expect(manifest.capabilities).toMatchObject({
+      http: true,
+      sqliteRead: true,
+      sqliteWrite: false,
+      ls: true,
+      fs: true,
+    })
+    expect(manifest.capabilities.httpDomains).toEqual([
+      "127.0.0.1",
+      "localhost",
+      "daily-cloudcode-pa.googleapis.com",
+      "cloudcode-pa.googleapis.com",
+      "oauth2.googleapis.com",
+    ])
   })
 
   it("renders grouped-only LS quota lines", async () => {
@@ -168,6 +188,28 @@ describe("antigravity plugin", () => {
     expect(result.lines).toHaveLength(2)
     expect(getLine(result, "Gemini Pro").used).toBe(20)
     expect(getLine(result, "Claude").used).toBe(40)
+  })
+
+  it("prefers userTier.name over legacy planInfo.planName", async () => {
+    const ctx = makeCtx()
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery())
+    ctx.host.http.request.mockImplementation(() => {
+      return {
+        status: 200,
+        bodyText: JSON.stringify(makeUserStatusResponse({
+          userStatus: {
+            userTier: { name: "Google AI Ultra" },
+            planStatus: { planInfo: { planName: "Legacy Pro" } },
+            cascadeModelConfigData: makeUserStatusResponse().userStatus.cascadeModelConfigData,
+          },
+        })),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Google AI Ultra")
   })
 
   it("falls back to Cloud Code when LS has no usable fractions", async () => {
@@ -277,7 +319,7 @@ describe("antigravity plugin", () => {
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.http.request.mockClear()
 
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity and try again.")
+    expect(() => plugin.probe(ctx)).toThrow("Antigravity is not running and no stored sign-in was found.")
     expect(ctx.host.fs.remove).toHaveBeenCalledWith("/tmp/openusage-test/plugin/last-live-usage.json")
     expect(ctx.host.log.warn).toHaveBeenCalledWith(
       "deleted cached live Antigravity usage: cached reset window elapsed"
@@ -696,6 +738,32 @@ describe("antigravity plugin", () => {
     expect(ctx.host.log.warn).toHaveBeenCalledWith("attempting Antigravity refresh-token recovery")
   })
 
+  it("recovers with only a refresh token when Cloud Code auth is offline-first", async () => {
+    const ctx = makeCtx()
+    setupSqliteMock(ctx, null, makeProtobufBase64(ctx, null, "1//refresh", null))
+    ctx.host.ls.discover.mockReturnValue(null)
+
+    const authHeaders = []
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("oauth2.googleapis.com")) {
+        return { status: 200, bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }) }
+      }
+      if (url.includes("fetchAvailableModels")) {
+        authHeaders.push(opts.headers.Authorization)
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
+    expect(authHeaders).toEqual(["Bearer ya29.refreshed"])
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("attempting Antigravity refresh-token recovery")
+  })
+
   it("refreshes after cached and DB token auth failures", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
@@ -781,10 +849,74 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
 
-    expect(() => plugin.probe(ctx)).toThrow("Start Antigravity and try again.")
+    expect(() => plugin.probe(ctx)).toThrow("Antigravity token expired and could not be refreshed.")
     expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token expired; skipping direct Cloud Code attempt")
     expect(ctx.host.log.warn).toHaveBeenCalledWith("no Antigravity refresh token available for offline recovery")
     expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("reports a discovered but unreachable local port", async () => {
+    const ctx = makeCtx()
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery())
+    ctx.host.http.request.mockReturnValue({ status: 404, bodyText: "" })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Antigravity local port was discovered but could not be reached.")
+  })
+
+  it("reports signed out when the local server responds without usable account data", async () => {
+    const ctx = makeCtx()
+    ctx.host.ls.discover.mockReturnValue(makeDiscovery())
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ userStatus: {} }) })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Antigravity is signed out.")
+  })
+
+  it("reports expired sign-in when Cloud Code rejects stored tokens", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, null, makeProtobufBase64(ctx, "ya29.rejected", null, futureExpiry))
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("fetchAvailableModels")) return { status: 401, bodyText: "{}" }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Antigravity sign-in expired or was revoked.")
+  })
+
+  it("tries the backup Cloud Code host after a transient primary failure", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, null, makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry))
+    ctx.host.ls.discover.mockReturnValue(null)
+
+    const urls = []
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      urls.push(url)
+      if (url.startsWith("https://daily-cloudcode-pa.googleapis.com")) {
+        throw new Error("connection reset")
+      }
+      if (url.startsWith("https://cloudcode-pa.googleapis.com")) {
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
+    expect(urls).toEqual([
+      "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+      "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+    ])
   })
 
   it("tolerates cache write failures after a successful refresh", async () => {

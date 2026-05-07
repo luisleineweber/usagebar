@@ -357,34 +357,42 @@
     return null
   }
 
-  function resolveCloudCodeData(ctx, cached, dbTokens) {
+  function resolveCloudCodeData(ctx, cached, dbTokens, status) {
     var sawAuthFailure = false
     if (cached && cached.accessToken) {
       if (isCachedTokenUsable(cached)) {
+        status.triedCloudCode = true
         var cachedRawData = requestCloudCode(ctx, cached.accessToken)
         if (cachedRawData && !cachedRawData.authFailed) return cachedRawData
         if (cachedRawData && cachedRawData.authFailed) {
           sawAuthFailure = true
+          status.sawAuthFailure = true
           ctx.host.log.warn("cached Antigravity token rejected by Cloud Code auth")
         } else {
+          status.sawCloudCodeTransientFailure = true
           ctx.host.log.warn("cached Antigravity token did not yield usable Cloud Code data")
         }
       } else {
+        status.sawExpiredToken = true
         ctx.host.log.warn("cached Antigravity token expired; skipping direct Cloud Code attempt")
       }
     }
 
     if (dbTokens && dbTokens.accessToken) {
       if (isProtoAccessTokenUsable(dbTokens)) {
+        status.triedCloudCode = true
         var dbData = requestCloudCode(ctx, dbTokens.accessToken)
         if (dbData && !dbData.authFailed) return dbData
         if (dbData && dbData.authFailed) {
           sawAuthFailure = true
+          status.sawAuthFailure = true
           ctx.host.log.warn("DB access token rejected by Cloud Code auth")
         } else {
+          status.sawCloudCodeTransientFailure = true
           ctx.host.log.warn("DB access token did not yield usable Cloud Code data")
         }
       } else {
+        status.sawExpiredToken = true
         ctx.host.log.warn("DB access token expired; skipping direct Cloud Code attempt")
       }
     }
@@ -394,17 +402,22 @@
     if (dbTokens && dbTokens.accessToken && isProtoAccessTokenUsable(dbTokens)) triedTokenCount += 1
 
     if (dbTokens && dbTokens.refreshToken && (sawAuthFailure || triedTokenCount === 0)) {
+      status.attemptedRefresh = true
       ctx.host.log.warn("attempting Antigravity refresh-token recovery")
       var refreshed = refreshAccessToken(ctx, dbTokens.refreshToken)
       if (refreshed && refreshed.accessToken) {
+        status.triedCloudCode = true
         var refreshedData = requestCloudCode(ctx, refreshed.accessToken)
         if (refreshedData && !refreshedData.authFailed) return refreshedData
         if (refreshedData && refreshedData.authFailed) {
+          status.sawAuthFailure = true
           ctx.host.log.warn("refresh succeeded but Cloud Code still rejected the refreshed token")
         } else {
+          status.sawCloudCodeTransientFailure = true
           ctx.host.log.warn("refresh succeeded but refreshed token did not yield usable Cloud Code data")
         }
       } else {
+        status.refreshFailed = true
         ctx.host.log.warn("Antigravity refresh-token recovery failed")
       }
     } else if (!(dbTokens && dbTokens.refreshToken)) {
@@ -650,8 +663,9 @@
     var configs = cascade.clientModelConfigs || []
     var orderMap = parseLabelOrderFromSorts(cascade.clientModelSorts || [], "modelLabels")
     var planInfo = hasUserStatus ? ((container.planStatus || {}).planInfo || {}) : {}
+    var userTier = hasUserStatus ? (container.userTier || {}) : {}
     return {
-      plan: planInfo.planName || null,
+      plan: userTier.name || planInfo.planName || null,
       models: parseModelRecords(
         configs,
         orderMap,
@@ -725,9 +739,10 @@
     )
   }
 
-  function probeLs(ctx) {
+  function probeLs(ctx, status) {
     var discovery = discoverLs(ctx)
     if (!discovery) return null
+    status.lsDiscovered = true
 
     var metadata = { ideName: "antigravity", extensionName: "antigravity", ideVersion: "unknown", locale: "en" }
 
@@ -738,6 +753,7 @@
       try {
         data = callLs(ctx, candidate.port, candidate.scheme, discovery.csrf, "GetUserStatus", { metadata: metadata })
       } catch (e) {
+        status.lsPortUnreachable = true
         ctx.host.log.warn(
           "GetUserStatus threw on " +
             candidate.kind +
@@ -753,6 +769,7 @@
         try {
           data = callLs(ctx, candidate.port, candidate.scheme, discovery.csrf, "GetCommandModelConfigs", { metadata: metadata })
         } catch (e) {
+          status.lsPortUnreachable = true
           ctx.host.log.warn(
             "GetCommandModelConfigs threw on " +
               candidate.kind +
@@ -766,9 +783,11 @@
         }
       }
       if (!data) continue
+      status.lsReturnedData = true
       var parsed = parseLsResult(data)
       if (parsed.models.length > 0 || parsed.plan) return parsed
     }
+    if (!status.lsReturnedData) status.lsPortUnreachable = true
     return null
   }
 
@@ -791,9 +810,44 @@
     return null
   }
 
+  function finalErrorMessage(status, cached, dbTokens) {
+    var hasAnyToken = !!(
+      (cached && cached.accessToken) ||
+      (dbTokens && (dbTokens.accessToken || dbTokens.refreshToken))
+    )
+    if (status.sawAuthFailure) {
+      return "Antigravity sign-in expired or was revoked. Open Antigravity, sign in again, then refresh UsageBar."
+    }
+    if (status.refreshFailed || (status.sawExpiredToken && !status.attemptedRefresh)) {
+      return "Antigravity token expired and could not be refreshed. Open Antigravity, sign in again, then refresh UsageBar."
+    }
+    if (status.sawCloudCodeTransientFailure) {
+      return "Antigravity quota is temporarily unavailable from Cloud Code. Check your connection and try again."
+    }
+    if (status.lsPortUnreachable) {
+      return "Antigravity local port was discovered but could not be reached. Restart Antigravity and try again."
+    }
+    if (!hasAnyToken) {
+      if (status.lsDiscovered) return "Antigravity is signed out. Sign in to Antigravity, then refresh UsageBar."
+      return "Antigravity is not running and no stored sign-in was found. Open Antigravity, sign in, then refresh UsageBar."
+    }
+    return "Antigravity quota is unavailable. Try refreshing again later."
+  }
+
   function probe(ctx) {
+    var status = {
+      lsDiscovered: false,
+      lsReturnedData: false,
+      lsPortUnreachable: false,
+      triedCloudCode: false,
+      sawCloudCodeTransientFailure: false,
+      sawAuthFailure: false,
+      sawExpiredToken: false,
+      attemptedRefresh: false,
+      refreshFailed: false,
+    }
     var dbTokens = loadOAuthTokens(ctx)
-    var ls = probeLs(ctx)
+    var ls = probeLs(ctx, status)
     if (ls && hasUsableQuota(ls.models)) {
       var liveOutput = { plan: ls.plan, lines: buildGroupedLines(ctx, ls.models) }
       cacheLiveUsage(ctx, liveOutput)
@@ -809,7 +863,7 @@
     }
 
     var cached = loadCachedToken(ctx)
-    var ccData = resolveCloudCodeData(ctx, cached, dbTokens)
+    var ccData = resolveCloudCodeData(ctx, cached, dbTokens, status)
     if (ccData && !ccData.authFailed) {
       var ccModels = parseCloudCodeModels(ccData)
       if (hasUsableQuota(ccModels)) return { plan: ls ? ls.plan : null, lines: buildGroupedLines(ctx, ccModels) }
@@ -817,7 +871,7 @@
     }
 
     if (ls && (ls.models.length > 0 || ls.plan)) return { plan: ls.plan, lines: unavailableLines(ctx) }
-    throw "Start Antigravity and try again."
+    throw finalErrorMessage(status, cached, dbTokens)
   }
 
   globalThis.__openusage_plugin = { id: "antigravity", probe: probe }

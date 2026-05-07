@@ -11,6 +11,20 @@
       "state": "supported"
     }
   },
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "127.0.0.1",
+      "localhost",
+      "daily-cloudcode-pa.googleapis.com",
+      "cloudcode-pa.googleapis.com",
+      "oauth2.googleapis.com"
+    ],
+    "sqliteRead": true,
+    "sqliteWrite": false,
+    "ls": true,
+    "fs": true
+  },
   "lines": [
     { "type": "progress", "label": "Gemini Pro", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "Gemini Flash", "scope": "overview", "primaryOrder": 2 },
