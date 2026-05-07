@@ -1,5 +1,109 @@
 # Deep research hardening roadmap
 
+# Fix Windows setup executable publisher
+
+## Executive Summary
+- Stop shipped Windows setup executables from launching as `Unknown publisher`.
+- Sign the installer artifact itself after release builds when Windows signing material is configured.
+- Require Windows signing material by default, with an explicit escape hatch for disposable unsigned smoke builds.
+
+## Acceptance Criteria
+- [x] `bun run build:release -- --bundles nsis` refuses to create an unsigned setup `.exe` unless `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` is set.
+- [x] The release helper signs the generated setup `.exe` when `WINDOWS_CERTIFICATE_*` or `WINDOWS_CERTIFICATE_THUMBPRINT` is configured.
+- [x] The release helper does not rely on Tauri updater signing to decide whether the Windows setup executable can be Authenticode-signed.
+- [x] Focused script/config verification passes.
+
+## Plan
+- [x] Trace the Windows publisher path through Tauri config, signing script, and release helper.
+- [x] Add an explicit post-build signing pass for NSIS/MSI installer artifacts.
+- [x] Verify script syntax/config and record results.
+
+## Verification Notes
+- Verified Tauri/Tauri docs: Windows setup publisher comes from Authenticode signing on the Windows executable artifact, while updater signatures are separate.
+- `node --check scripts\build-release.mjs` -> passed.
+- `node -e "JSON.parse(... tauri.conf.json ...)"` -> passed.
+- `bun run build:release -- --bundles nsis` without Windows Authenticode material -> refused before build with `it would launch as Unknown publisher`.
+- Existing local artifact `src-tauri\target\release\bundle\nsis\UsageBar_0.1.0-alpha.1_x64-setup.exe` is still `NotSigned`; it must be rebuilt or signed with certificate material to change the Windows publisher prompt.
+
+# Replace Abacus icon SVG
+
+## Executive Summary
+- Update the Abacus provider icon to the supplied artwork.
+- Keep the provider manifest path unchanged.
+- Sync the bundled plugin asset so the desktop app uses the same icon.
+
+## Acceptance Criteria
+- [x] `plugins/abacus/icon.svg` contains the updated Abacus SVG.
+- [x] Bundled Abacus plugin asset matches the source plugin asset.
+- [x] Focused asset verification passes.
+
+## Plan
+- [x] Replace the source Abacus SVG.
+- [x] Run the plugin bundle sync.
+- [x] Verify source and bundled assets match.
+
+## Verification Notes
+- Synced bundled plugin output with `node ./copy-bundled.cjs` -> bundled 29 plugins, including `abacus`.
+- Verified XML parsing and embedded PNG base64 decoding with PowerShell.
+- Verified source/bundled hash match with `Get-FileHash` -> `0AFF58E09A4F6018F5FC09555CC6DF897865D6B73202943D9F7D9FB81522EAE7`.
+
+# Set local version to Alpha 2
+
+## Executive Summary
+- Move local app metadata from Alpha 1 to Alpha 2.
+- Keep package, Tauri, Cargo, changelog, and local release command examples aligned.
+- Verify the Alpha 2 release preflight.
+
+## Acceptance Criteria
+- [x] `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock` use `0.1.0-alpha.2`.
+- [x] `CHANGELOG.md` has a `0.1.0-alpha.2` section.
+- [x] Local release-check docs point at `v0.1.0-alpha.2`.
+- [x] Release preflight passes for `v0.1.0-alpha.2`.
+
+## Plan
+- [x] Patch version metadata and changelog.
+- [x] Patch local release-check example.
+- [x] Run focused version searches and release preflight.
+
+## Verification Notes
+- Updated version metadata to `0.1.0-alpha.2` in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock`.
+- Added `CHANGELOG.md` section `0.1.0-alpha.2`.
+- Updated the README local release-check command to `v0.1.0-alpha.2`.
+- Verified active version references with `rg -n "0\\.1\\.0-alpha\\.2|v0\\.1\\.0-alpha\\.2" package.json src-tauri\\tauri.conf.json src-tauri\\Cargo.toml src-tauri\\Cargo.lock CHANGELOG.md README.md`.
+- Verified no active metadata still points at Alpha 1; only the historical changelog section remains.
+- Verified release preflight with `bun run release:check -- --release-tag v0.1.0-alpha.2` -> passed.
+- Verified Rust metadata with `cargo metadata --manifest-path src-tauri\\Cargo.toml --no-deps --format-version 1` -> package/workspace version `0.1.0-alpha.2`.
+
+# Fix Windows installer SmartScreen signing path
+
+## Executive Summary
+- Add real Windows Authenticode signing to public release builds.
+- Keep local unsigned builds possible, but clearly separate them from public release candidates.
+- Document why SmartScreen reputation can still require an EV certificate or Microsoft reputation even after signing.
+
+## Acceptance Criteria
+- [x] Tauri Windows bundling invokes a repo-owned Authenticode signing script for Windows artifacts.
+- [x] CI release builds fail fast when Windows signing secrets are missing.
+- [x] Release docs explain updater signing vs Windows code signing and the remaining SmartScreen reputation constraint.
+- [x] Focused config/script verification passes.
+
+## Plan
+- [x] Add a Windows signing script and wire it through `bundle.windows.signCommand`.
+- [x] Pass and validate Windows signing secrets in the GitHub publish workflow.
+- [x] Update release/README docs for signed vs unsigned installer behavior.
+- [x] Run focused verification and record results.
+
+## Verification Notes
+- Added `scripts/sign-windows.ps1`, which imports a base64 `.pfx` from `WINDOWS_CERTIFICATE_BASE64` or `WINDOWS_CERTIFICATE`, signs with `signtool`, timestamps with `WINDOWS_TIMESTAMP_URL` or `http://timestamp.digicert.com`, and verifies the signed target. It can also use `WINDOWS_CERTIFICATE_THUMBPRINT` when the runner already has the certificate installed.
+- Wired Tauri Windows bundling through `bundle.windows.signCommand` in `src-tauri/tauri.conf.json`.
+- Updated `.github/workflows/publish.yml` so Windows release jobs require Authenticode signing secrets and pass them to `tauri-action`, separate from the existing Tauri updater signing key.
+- Updated `docs/releasing.md` and `README.md` to distinguish local unsigned installers from public signed release artifacts and to document the remaining SmartScreen reputation constraint.
+- Verified local no-certificate behavior with `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sign-windows.ps1 -TargetPath package.json` -> no-op unsigned path, exit 0.
+- Verified `src-tauri/tauri.conf.json` JSON parsing with `node -e ...` -> passed.
+- Verified release preflight with `bun run release:check -- --release-tag v0.1.0-alpha.1` -> passed.
+- Verified Tauri environment/config loading with `bun run tauri -- info` -> passed; it reports minor Tauri package updates available.
+- Verified diff whitespace with `git diff --check` -> only existing CRLF conversion warnings for touched text files.
+
 # Fix review findings: Kimi balance format and updater fallback
 
 ## Executive Summary
