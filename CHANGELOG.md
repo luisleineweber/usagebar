@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-alpha.2
+
+### Highlights
+- Local Alpha 2 version metadata.
+- Windows release workflow now requires Authenticode signing material for public installer builds.
+- Tauri Windows bundling now calls the repo-owned Authenticode signing script for signed release artifacts.
+
+### Notes
+- Local builds without signing secrets can still produce unsigned installers for smoke testing.
+- SmartScreen reputation can still require EV certificate reputation or Microsoft review even after Authenticode signing.
+
 ## 0.1.0-alpha.1
 
 ### Highlights

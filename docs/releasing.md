@@ -4,10 +4,10 @@ This repo treats a release as a tagged, reproducible build with matching version
 
 The next stranger-facing milestone should be an alpha, not a full release, unless the installer, updater, provider setup, privacy/telemetry copy, error states, docs, feedback path, and recovery behavior have all been verified end to end.
 
-Suggested first-alpha label:
+Current alpha label:
 
 ```text
-v0.1.0-alpha.1
+v0.1.0-alpha.2
 ```
 
 If the repo stays on the existing beta line instead, document the reason in `CHANGELOG.md` and release notes before tagging.
@@ -17,7 +17,7 @@ If the repo stays on the existing beta line instead, document the reason in `CHA
 Before cutting a tag:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-alpha.1 --require-clean
+bun run release:check -- --release-tag v0.1.0-alpha.2 --require-clean
 ```
 
 The preflight currently verifies:
@@ -36,7 +36,26 @@ Build the Windows installer locally before the first publish of a version:
 bun run build:release -- --bundles nsis
 ```
 
-If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local beta builds can still complete.
+If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local builds can still complete without Tauri updater signatures. Windows installer builds require Authenticode material by default. When that material is configured, the helper signs the final NSIS/MSI artifact after the build so the setup executable has a real publisher.
+
+For disposable local smoke builds only, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`. Local artifacts without Windows Authenticode material can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and should not be treated as public release candidates.
+
+## Windows Code Signing
+
+Windows release artifacts need two separate signatures:
+
+- Tauri updater signatures: `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+- Windows Authenticode signatures: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, or an already-installed certificate selected by `WINDOWS_CERTIFICATE_THUMBPRINT`.
+
+`src-tauri/tauri.conf.json` calls [scripts/sign-windows.ps1](../scripts/sign-windows.ps1) through Tauri's Windows `signCommand`. `scripts/build-release.mjs` also runs the same script over generated NSIS/MSI artifacts after local builds when Windows signing material exists. In CI, the script fails if no Authenticode signing material is configured. Locally, `build-release.mjs` blocks Windows installer builds without certificate material unless `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` is set.
+
+Recommended GitHub secrets:
+
+- `WINDOWS_CERTIFICATE_BASE64`: base64-encoded `.pfx` code-signing certificate.
+- `WINDOWS_CERTIFICATE_PASSWORD`: `.pfx` export password.
+- `WINDOWS_TIMESTAMP_URL`: optional timestamp server; defaults to `http://timestamp.digicert.com`.
+
+SmartScreen note: Authenticode signing is necessary but not always sufficient. EV certificates usually get immediate SmartScreen reputation. OV certificates and new certificates can still warn until Microsoft has enough reputation for the certificate or submitted binary.
 
 ## GitHub Publish
 
@@ -44,7 +63,7 @@ The publish workflow lives in [.github/workflows/publish.yml](../.github/workflo
 
 You can publish in two ways:
 
-1. Push a `v*` tag, for example `v0.1.0-alpha.1`
+1. Push a `v*` tag, for example `v0.1.0-alpha.2`
 2. Trigger `Publish` manually with `workflow_dispatch` and provide `release_tag`
 
 The workflow runs the same release preflight, builds platform artifacts, and verifies that the GitHub release contains:
@@ -52,6 +71,8 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 - `latest.json`
 - updater signature files (`.sig`)
 - a Windows setup executable ending in `setup.exe`
+
+The Windows job also fails before packaging if updater signing or Authenticode signing secrets are missing.
 
 Current updater channel note:
 

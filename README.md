@@ -194,11 +194,13 @@ Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](http
 For a Windows beta-style build on this machine:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-alpha.1
+bun run release:check -- --release-tag v0.1.0-alpha.2
 bun run build:release -- --bundles nsis
 ```
 
-If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` for an unsigned local build. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
+If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so the local build can skip Tauri updater signatures. Windows installer builds require Authenticode material by default: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, `WINDOWS_CERTIFICATE`, or `WINDOWS_CERTIFICATE_THUMBPRINT`. The helper signs the final setup executable after the build so the Windows launch prompt can show the certificate publisher. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
+
+For disposable local smoke builds only, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; those installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Public Windows release builds should be Authenticode-signed with the GitHub release workflow; see [docs/releasing.md](docs/releasing.md).
 
 Before pushing a release tag, run the same preflight with `--require-clean` so the tag is cut from a clean worktree.
 
