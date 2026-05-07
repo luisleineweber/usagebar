@@ -1,5 +1,4 @@
 import { useCallback } from "react"
-import { track } from "@/lib/analytics"
 import {
   saveDisplayMode,
   saveMenubarIconStyle,
@@ -32,7 +31,6 @@ export function useSettingsDisplayActions({
   scheduleTrayIconUpdate,
 }: UseSettingsDisplayActionsArgs) {
   const handleThemeModeChange = useCallback((mode: ThemeMode) => {
-    track("setting_changed", { setting: "theme", value: mode })
     setThemeMode(mode)
     void notifyDisplayPreferenceUpdated({ key: "themeMode", value: mode }).catch((error) => {
       console.error("Failed to publish theme mode update:", error)
@@ -43,7 +41,6 @@ export function useSettingsDisplayActions({
   }, [setThemeMode])
 
   const handleDisplayModeChange = useCallback((mode: DisplayMode) => {
-    track("setting_changed", { setting: "display_mode", value: mode })
     setDisplayMode(mode)
     scheduleTrayIconUpdate("settings", 0)
     void notifyDisplayPreferenceUpdated({ key: "displayMode", value: mode }).catch((error) => {
@@ -55,7 +52,6 @@ export function useSettingsDisplayActions({
   }, [scheduleTrayIconUpdate, setDisplayMode])
 
   const handleResetTimerDisplayModeChange = useCallback((mode: ResetTimerDisplayMode) => {
-    track("setting_changed", { setting: "reset_timer_display_mode", value: mode })
     setResetTimerDisplayMode(mode)
     void notifyDisplayPreferenceUpdated({ key: "resetTimerDisplayMode", value: mode }).catch((error) => {
       console.error("Failed to publish reset timer display mode update:", error)
@@ -71,7 +67,6 @@ export function useSettingsDisplayActions({
   }, [handleResetTimerDisplayModeChange, resetTimerDisplayMode])
 
   const handleMenubarIconStyleChange = useCallback((style: MenubarIconStyle) => {
-    track("setting_changed", { setting: "menubar_icon_style", value: style })
     setMenubarIconStyle(style)
     scheduleTrayIconUpdate("settings", 0)
     void notifyDisplayPreferenceUpdated({ key: "menubarIconStyle", value: style }).catch((error) => {

@@ -9,10 +9,6 @@ const { checkMock, openUrlMock, relaunchMock } = vi.hoisted(() => ({
 const { getVersionMock } = vi.hoisted(() => ({
   getVersionMock: vi.fn(),
 }))
-const { trackMock } = vi.hoisted(() => ({
-  trackMock: vi.fn(),
-}))
-
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: getVersionMock,
 }))
@@ -27,10 +23,6 @@ vi.mock("@tauri-apps/plugin-opener", () => ({
 
 vi.mock("@tauri-apps/plugin-process", () => ({
   relaunch: relaunchMock,
-}))
-
-vi.mock("@/lib/analytics", () => ({
-  track: trackMock,
 }))
 
 import { compareVersions, isEligibleUpdateCandidate, useAppUpdate } from "@/hooks/use-app-update"
@@ -48,7 +40,6 @@ describe("useAppUpdate", () => {
     openUrlMock.mockReset()
     relaunchMock.mockReset()
     getVersionMock.mockReset()
-    trackMock.mockReset()
     getVersionMock.mockResolvedValue("1.0.0")
     checkMock.mockResolvedValue(null)
     vi.stubGlobal("fetch", vi.fn(async () => ({
@@ -146,7 +137,6 @@ describe("useAppUpdate", () => {
 
     await act(() => result.current.triggerInstall())
     expect(openUrlMock).toHaveBeenCalledWith("https://github.com/Loues000/usagebar/releases/tag/v0.1.0-beta.6")
-    expect(trackMock).toHaveBeenCalledWith("update_accepted", { version: "0.1.0-beta.6" })
   })
 
   it("clears a pending up-to-date timeout on re-check", async () => {

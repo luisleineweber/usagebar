@@ -10,7 +10,6 @@ import { useSettingsPluginActions } from "@/hooks/app/use-settings-plugin-action
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
-import { track } from "@/lib/analytics"
 import {
   getProbeEligiblePluginIds,
   loadDisplayMode,
@@ -427,7 +426,6 @@ function App() {
         return
       }
       if (action === "arrange") {
-        track("providers_arrange_started", { provider_id: pluginId })
         return
       }
 
@@ -436,7 +434,6 @@ function App() {
       const alreadyDisabled = currentSettings.disabled.includes(pluginId)
       if (alreadyDisabled) return
 
-      track("provider_toggled", { provider_id: pluginId, enabled: "false" })
       const nextSettings = {
         ...currentSettings,
         disabled: [...currentSettings.disabled, pluginId],

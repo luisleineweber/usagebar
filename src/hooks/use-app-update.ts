@@ -4,7 +4,6 @@ import { isTauri } from "@tauri-apps/api/core"
 import { check, type Update } from "@tauri-apps/plugin-updater"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { relaunch } from "@tauri-apps/plugin-process"
-import { track } from "@/lib/analytics"
 
 export type UpdateStatus =
   | { status: "idle" }
@@ -290,7 +289,6 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
     const update = updateRef.current
     const releaseUrl = externalReleaseUrlRef.current
     if (statusRef.current.status === "available" && releaseUrl) {
-      track("update_accepted", { version: statusRef.current.version })
       await openUrl(releaseUrl)
       return
     }
@@ -299,7 +297,6 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
     if (statusRef.current.status === "available") {
       if (inFlightRef.current.downloading || inFlightRef.current.installing) return
 
-      track("update_accepted", { version: update.version })
       inFlightRef.current.downloading = true
       setStatus({ status: "downloading", progress: -1 })
 

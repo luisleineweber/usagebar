@@ -983,14 +983,12 @@ describe("App", () => {
       lines: [{ type: "text", label: "Now", value: "OK" }],
     })
     state.startBatchMock.mockClear()
-    state.trackMock.mockClear()
 
     const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
     expect(screen.getByRole("menuitem", { name: "Refresh provider" })).not.toBeDisabled()
     reloadAction()
 
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
-    expect(state.trackMock).toHaveBeenCalledWith("provider_refreshed", { provider_id: "b" })
   })
 
   it("respects manual refresh cooldown for sidebar context menu reload", async () => {
@@ -1011,7 +1009,6 @@ describe("App", () => {
     })
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
     state.startBatchMock.mockClear()
-    state.trackMock.mockClear()
 
     const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
     expect(screen.getByRole("menuitem", { name: "Refresh provider" })).not.toBeDisabled()
@@ -1027,13 +1024,11 @@ describe("App", () => {
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(1))
 
     state.startBatchMock.mockClear()
-    state.trackMock.mockClear()
     const cooldownReloadAction = await triggerPluginContextAction("Beta", "b", "reload")
     expect(screen.getByRole("menuitem", { name: "Refresh provider" })).toBeDisabled()
     cooldownReloadAction()
 
     expect(state.startBatchMock).not.toHaveBeenCalled()
-    expect(state.trackMock).not.toHaveBeenCalled()
   })
 
   it("renders custom sidebar context menu actions", async () => {
@@ -1056,7 +1051,6 @@ describe("App", () => {
     render(<App />)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
     state.startBatchMock.mockClear()
-    state.trackMock.mockClear()
     state.savePluginSettingsMock.mockClear()
 
     const removeAction = await triggerPluginContextAction("Beta", "b", "remove")
@@ -1065,7 +1059,6 @@ describe("App", () => {
     await waitFor(() =>
       expect(state.savePluginSettingsMock).toHaveBeenCalledWith({ order: ["a", "b"], disabled: ["b"] })
     )
-    expect(state.trackMock).toHaveBeenCalledWith("provider_toggled", { provider_id: "b", enabled: "false" })
     expect(state.startBatchMock).not.toHaveBeenCalled()
   })
 
@@ -1073,7 +1066,6 @@ describe("App", () => {
     state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
     render(<App />)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    state.trackMock.mockClear()
     state.savePluginSettingsMock.mockClear()
 
     const removeAction = await triggerPluginContextAction("Beta", "b", "remove")
@@ -1084,12 +1076,10 @@ describe("App", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Beta" })).not.toBeInTheDocument()
     )
-    state.trackMock.mockClear()
     state.savePluginSettingsMock.mockClear()
 
     removeAction()
     expect(state.savePluginSettingsMock).not.toHaveBeenCalled()
-    expect(state.trackMock).not.toHaveBeenCalled()
   })
 
   it("returns to home when removing the active plugin from context menu", async () => {
@@ -1798,7 +1788,7 @@ describe("App", () => {
     }
   })
 
-  it("tracks manual refresh and clears cooldown flag on result", async () => {
+  it("clears manual refresh cooldown flag on result", async () => {
     render(<App />)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
 

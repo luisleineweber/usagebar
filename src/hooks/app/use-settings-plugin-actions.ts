@@ -1,5 +1,4 @@
 import { useCallback } from "react"
-import { track } from "@/lib/analytics"
 import { savePluginSettings, type PluginSettings } from "@/lib/settings"
 
 const TRAY_SETTINGS_DEBOUNCE_MS = 2000
@@ -34,7 +33,6 @@ export function useSettingsPluginActions({
 
   const handleReorder = useCallback((orderedIds: string[]) => {
     if (!pluginSettings) return
-    track("providers_reordered", { count: orderedIds.length })
     const savedOrder = pluginSettings.order ?? []
     const orderedSet = new Set(orderedIds)
     const missingIds = savedOrder.filter((id) => !orderedSet.has(id))
@@ -70,7 +68,6 @@ export function useSettingsPluginActions({
   const handleToggle = useCallback((id: string) => {
     if (!pluginSettings) return
     const wasDisabled = pluginSettings.disabled.includes(id)
-    track("provider_toggled", { provider_id: id, enabled: wasDisabled ? "true" : "false" })
     const disabled = new Set(pluginSettings.disabled)
 
     if (wasDisabled) {
