@@ -1,26 +1,43 @@
-import { render, screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
-import { OverviewPage } from "@/pages/overview"
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+import { OverviewPage } from "@/pages/overview";
 
 describe("OverviewPage", () => {
   it("renders empty state", () => {
-    render(<OverviewPage plugins={[]} displayMode="used" resetTimerDisplayMode="relative" />)
-    expect(screen.getByText("No active providers")).toBeInTheDocument()
-  })
+    render(
+      <OverviewPage
+        plugins={[]}
+        displayMode="used"
+        resetTimerDisplayMode="relative"
+      />,
+    );
+    expect(screen.getByText("No active providers yet.")).toBeInTheDocument();
+  });
 
   it("renders provider cards", () => {
     const plugins = [
       {
         meta: { id: "a", name: "Alpha", iconUrl: "icon", lines: [] },
-        data: { providerId: "a", displayName: "Alpha", lines: [], iconUrl: "icon" },
+        data: {
+          providerId: "a",
+          displayName: "Alpha",
+          lines: [],
+          iconUrl: "icon",
+        },
         loading: false,
         error: null,
         lastManualRefreshAt: null,
       },
-    ]
-    render(<OverviewPage plugins={plugins} displayMode="used" resetTimerDisplayMode="relative" />)
-    expect(screen.getByText("Alpha")).toBeInTheDocument()
-  })
+    ];
+    render(
+      <OverviewPage
+        plugins={plugins}
+        displayMode="used"
+        resetTimerDisplayMode="relative"
+      />,
+    );
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+  });
 
   it("only shows overview-scoped lines", () => {
     const plugins = [
@@ -30,8 +47,16 @@ describe("OverviewPage", () => {
           name: "Test",
           iconUrl: "icon",
           lines: [
-            { type: "text" as const, label: "Primary", scope: "overview" as const },
-            { type: "text" as const, label: "Secondary", scope: "detail" as const },
+            {
+              type: "text" as const,
+              label: "Primary",
+              scope: "overview" as const,
+            },
+            {
+              type: "text" as const,
+              label: "Secondary",
+              scope: "detail" as const,
+            },
           ],
         },
         data: {
@@ -47,13 +72,19 @@ describe("OverviewPage", () => {
         error: null,
         lastManualRefreshAt: null,
       },
-    ]
-    render(<OverviewPage plugins={plugins} displayMode="used" resetTimerDisplayMode="relative" />)
-    expect(screen.getByText("Primary")).toBeInTheDocument()
-    expect(screen.getByText("Shown")).toBeInTheDocument()
-    expect(screen.queryByText("Secondary")).not.toBeInTheDocument()
-    expect(screen.queryByText("Hidden")).not.toBeInTheDocument()
-  })
+    ];
+    render(
+      <OverviewPage
+        plugins={plugins}
+        displayMode="used"
+        resetTimerDisplayMode="relative"
+      />,
+    );
+    expect(screen.getByText("Primary")).toBeInTheDocument();
+    expect(screen.getByText("Shown")).toBeInTheDocument();
+    expect(screen.queryByText("Secondary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hidden")).not.toBeInTheDocument();
+  });
 
   it("does not show provider quick links in combined view", () => {
     const plugins = [
@@ -65,14 +96,25 @@ describe("OverviewPage", () => {
           lines: [],
           links: [{ label: "Status", url: "https://status.example.com" }],
         },
-        data: { providerId: "alpha", displayName: "Alpha", lines: [], iconUrl: "icon" },
+        data: {
+          providerId: "alpha",
+          displayName: "Alpha",
+          lines: [],
+          iconUrl: "icon",
+        },
         loading: false,
         error: null,
         lastManualRefreshAt: null,
       },
-    ]
+    ];
 
-    render(<OverviewPage plugins={plugins} displayMode="used" resetTimerDisplayMode="relative" />)
-    expect(screen.queryByRole("button", { name: /status/i })).toBeNull()
-  })
-})
+    render(
+      <OverviewPage
+        plugins={plugins}
+        displayMode="used"
+        resetTimerDisplayMode="relative"
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /status/i })).toBeNull();
+  });
+});

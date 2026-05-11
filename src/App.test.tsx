@@ -1,7 +1,14 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import type { ReactNode } from "react"
-import userEvent from "@testing-library/user-event"
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const state = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -30,42 +37,56 @@ const state = vi.hoisted(() => ({
   saveStartOnLoginMock: vi.fn(),
   loadProviderConfigsMock: vi.fn(),
   saveProviderConfigsMock: vi.fn(),
-  closeRequestedHandler: null as null | ((event: { preventDefault: () => void }) => void | Promise<void>),
+  closeRequestedHandler: null as
+    | null
+    | ((event: { preventDefault: () => void }) => void | Promise<void>),
   autostartEnableMock: vi.fn(),
   autostartDisableMock: vi.fn(),
   autostartIsEnabledMock: vi.fn(),
   renderTrayBarsIconMock: vi.fn(),
-  probeHandlers: null as null | { onResult: (output: any) => void; onBatchComplete: () => void },
+  probeHandlers: null as null | {
+    onResult: (output: any) => void;
+    onBatchComplete: () => void;
+  },
   trayGetByIdMock: vi.fn(),
   traySetIconMock: vi.fn(),
   traySetIconAsTemplateMock: vi.fn(),
   traySetTitleMock: vi.fn(),
   resolveResourceMock: vi.fn(),
-}))
+}));
 
 const dndState = vi.hoisted(() => ({
   latestOnDragEnd: null as null | ((event: any) => void),
-}))
+}));
 
 const updaterState = vi.hoisted(() => ({
   checkMock: vi.fn(async () => null),
   relaunchMock: vi.fn(async () => undefined),
-}))
+}));
 
 const eventState = vi.hoisted(() => {
-  const handlers = new Map<string, (event: any) => void>()
+  const handlers = new Map<string, (event: any) => void>();
   return {
     handlers,
     emitMock: vi.fn(async () => undefined),
-    listenMock: vi.fn(async (eventName: string, handler: (event: any) => void) => {
-      handlers.set(eventName, handler)
-      return () => { handlers.delete(eventName) }
-    }),
-  }
-})
+    listenMock: vi.fn(
+      async (eventName: string, handler: (event: any) => void) => {
+        handlers.set(eventName, handler);
+        return () => {
+          handlers.delete(eventName);
+        };
+      },
+    ),
+  };
+});
 
 const menuState = vi.hoisted(() => ({
-  iconMenuItemConfigs: [] as Array<{ id: string; action?: () => void; enabled?: boolean; icon?: unknown }>,
+  iconMenuItemConfigs: [] as Array<{
+    id: string;
+    action?: () => void;
+    enabled?: boolean;
+    icon?: unknown;
+  }>,
   iconMenuItemNewMock: vi.fn(),
   iconMenuItemCloseMock: vi.fn(async () => undefined),
   predefinedMenuItemNewMock: vi.fn(),
@@ -73,28 +94,39 @@ const menuState = vi.hoisted(() => ({
   menuNewMock: vi.fn(),
   menuPopupMock: vi.fn(async () => undefined),
   menuCloseMock: vi.fn(async () => undefined),
-}))
+}));
 
 vi.mock("@dnd-kit/core", () => ({
-  DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd?: (event: any) => void }) => {
-    dndState.latestOnDragEnd = onDragEnd ?? null
-    return <div>{children}</div>
+  DndContext: ({
+    children,
+    onDragEnd,
+  }: {
+    children: ReactNode;
+    onDragEnd?: (event: any) => void;
+  }) => {
+    dndState.latestOnDragEnd = onDragEnd ?? null;
+    return <div>{children}</div>;
   },
   closestCenter: vi.fn(),
   PointerSensor: class {},
   KeyboardSensor: class {},
-  useSensor: vi.fn((_sensor: any, options?: any) => ({ sensor: _sensor, options })),
+  useSensor: vi.fn((_sensor: any, options?: any) => ({
+    sensor: _sensor,
+    options,
+  })),
   useSensors: vi.fn((...sensors: any[]) => sensors),
-}))
+}));
 
 vi.mock("@dnd-kit/sortable", () => ({
   arrayMove: (items: any[], from: number, to: number) => {
-    const next = [...items]
-    const [moved] = next.splice(from, 1)
-    next.splice(to, 0, moved)
-    return next
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return next;
   },
-  SortableContext: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  SortableContext: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
   sortableKeyboardCoordinates: vi.fn(),
   useSortable: () => ({
     attributes: {},
@@ -105,133 +137,143 @@ vi.mock("@dnd-kit/sortable", () => ({
     isDragging: false,
   }),
   verticalListSortingStrategy: vi.fn(),
-}))
+}));
 
 vi.mock("@dnd-kit/utilities", () => ({
   CSS: { Transform: { toString: () => "" } },
-}))
+}));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: state.invokeMock,
   isTauri: state.isTauriMock,
-}))
+}));
 
 vi.mock("@/lib/analytics", () => ({
   track: state.trackMock,
-}))
+}));
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: eventState.listenMock,
   emit: eventState.emitMock,
-}))
+}));
 
 vi.mock("@tauri-apps/api/menu", () => ({
   IconMenuItem: {
     new: async (config: { id: string; action?: () => void }) => {
-      menuState.iconMenuItemConfigs.push(config)
-      menuState.iconMenuItemNewMock(config)
+      menuState.iconMenuItemConfigs.push(config);
+      menuState.iconMenuItemNewMock(config);
       return {
         ...config,
         close: menuState.iconMenuItemCloseMock,
-      }
+      };
     },
   },
   MenuItem: {
     new: async (config: { id: string; action?: () => void }) => {
-      menuState.iconMenuItemConfigs.push(config)
-      menuState.iconMenuItemNewMock(config)
+      menuState.iconMenuItemConfigs.push(config);
+      menuState.iconMenuItemNewMock(config);
       return {
         ...config,
         close: menuState.iconMenuItemCloseMock,
-      }
+      };
     },
   },
   PredefinedMenuItem: {
     new: async (config: unknown) => {
-      menuState.predefinedMenuItemNewMock(config)
+      menuState.predefinedMenuItemNewMock(config);
       return {
-        ...((typeof config === "object" && config !== null ? config : {}) as Record<string, unknown>),
+        ...((typeof config === "object" && config !== null
+          ? config
+          : {}) as Record<string, unknown>),
         close: menuState.predefinedMenuItemCloseMock,
-      }
+      };
     },
   },
   Menu: {
     new: async (config: unknown) => {
-      menuState.menuNewMock(config)
+      menuState.menuNewMock(config);
       return {
         popup: menuState.menuPopupMock,
         close: menuState.menuCloseMock,
-      }
+      };
     },
   },
-}))
+}));
 
 vi.mock("@tauri-apps/api/tray", () => ({
   TrayIcon: {
     getById: state.trayGetByIdMock,
   },
-}))
+}));
 
 vi.mock("@tauri-apps/api/path", () => ({
   resolveResource: state.resolveResourceMock,
-}))
+}));
 
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     setSize: state.setSizeMock,
     hide: state.hideWindowMock,
-    onCloseRequested: async (handler: (event: { preventDefault: () => void }) => void | Promise<void>) => {
-      state.closeRequestedHandler = handler
-      return vi.fn()
+    onCloseRequested: async (
+      handler: (event: { preventDefault: () => void }) => void | Promise<void>,
+    ) => {
+      state.closeRequestedHandler = handler;
+      return vi.fn();
     },
   }),
   PhysicalSize: class {
-    width: number
-    height: number
+    width: number;
+    height: number;
     constructor(width: number, height: number) {
-      this.width = width
-      this.height = height
+      this.width = width;
+      this.height = height;
     }
   },
   currentMonitor: state.currentMonitorMock,
-}))
+}));
 
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: () => Promise.resolve("0.0.0-test"),
-}))
+}));
 
 vi.mock("@tauri-apps/plugin-updater", () => ({
   check: updaterState.checkMock,
-}))
+}));
 
 vi.mock("@tauri-apps/plugin-process", () => ({
   relaunch: updaterState.relaunchMock,
-}))
+}));
 
 vi.mock("@tauri-apps/plugin-autostart", () => ({
   enable: state.autostartEnableMock,
   disable: state.autostartDisableMock,
   isEnabled: state.autostartIsEnabledMock,
-}))
+}));
 
 vi.mock("@/lib/tray-bars-icon", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/tray-bars-icon")>("@/lib/tray-bars-icon")
+  const actual = await vi.importActual<typeof import("@/lib/tray-bars-icon")>(
+    "@/lib/tray-bars-icon",
+  );
   return {
     ...actual,
     getTrayIconSizePx: () => 36,
     renderTrayBarsIcon: state.renderTrayBarsIconMock,
-  }
-})
+  };
+});
 
 vi.mock("@/hooks/use-probe-events", () => ({
-  useProbeEvents: (handlers: { onResult: (output: any) => void; onBatchComplete: () => void }) => {
-    state.probeHandlers = handlers
-    return { startBatch: state.startBatchMock }
+  useProbeEvents: (handlers: {
+    onResult: (output: any) => void;
+    onBatchComplete: () => void;
+  }) => {
+    state.probeHandlers = handlers;
+    return { startBatch: state.startBatchMock };
   },
-}))
+}));
 
 vi.mock("@/lib/settings", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/settings")>("@/lib/settings")
+  const actual =
+    await vi.importActual<typeof import("@/lib/settings")>("@/lib/settings");
   return {
     ...actual,
     loadPluginSettings: state.loadPluginSettingsMock,
@@ -251,251 +293,319 @@ vi.mock("@/lib/settings", async () => {
     saveGlobalShortcut: state.saveGlobalShortcutMock,
     loadStartOnLogin: state.loadStartOnLoginMock,
     saveStartOnLogin: state.saveStartOnLoginMock,
-  }
-})
+  };
+});
 
 vi.mock("@/lib/provider-settings", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/provider-settings")>("@/lib/provider-settings")
+  const actual = await vi.importActual<
+    typeof import("@/lib/provider-settings")
+  >("@/lib/provider-settings");
   return {
     ...actual,
     loadProviderConfigs: state.loadProviderConfigsMock,
     saveProviderConfigs: state.saveProviderConfigsMock,
-  }
-})
+  };
+});
 
-import { App } from "@/App"
-import { SettingsWindowApp } from "@/settings-window-app"
-import { APP_NAME } from "@/lib/project-metadata"
-import { useAppPluginStore } from "@/stores/app-plugin-store"
-import { useAppPreferencesStore } from "@/stores/app-preferences-store"
-import { useAppUiStore } from "@/stores/app-ui-store"
+import { App } from "@/App";
+import { SettingsWindowApp } from "@/settings-window-app";
+import { APP_NAME } from "@/lib/project-metadata";
+import { useAppPluginStore } from "@/stores/app-plugin-store";
+import { useAppPreferencesStore } from "@/stores/app-preferences-store";
+import { useAppUiStore } from "@/stores/app-ui-store";
 
 describe("App", () => {
   beforeEach(() => {
-    useAppUiStore.getState().resetState()
-    useAppPluginStore.getState().resetState()
-    useAppPreferencesStore.getState().resetState()
+    useAppUiStore.getState().resetState();
+    useAppPluginStore.getState().resetState();
+    useAppPreferencesStore.getState().resetState();
 
-    state.probeHandlers = null
-    state.invokeMock.mockReset()
-    state.isTauriMock.mockReset()
-    state.isTauriMock.mockReturnValue(false)
-    state.trackMock.mockReset()
-    state.setSizeMock.mockReset()
-    state.hideWindowMock.mockReset()
-    state.currentMonitorMock.mockReset()
-    state.startBatchMock.mockReset()
-    state.savePluginSettingsMock.mockReset()
-    state.loadPluginSettingsMock.mockReset()
-    state.loadAutoUpdateIntervalMock.mockReset()
-    state.saveAutoUpdateIntervalMock.mockReset()
-    state.loadThemeModeMock.mockReset()
-    state.saveThemeModeMock.mockReset()
-    state.loadDisplayModeMock.mockReset()
-    state.saveDisplayModeMock.mockReset()
-    state.loadResetTimerDisplayModeMock.mockReset()
-    state.saveResetTimerDisplayModeMock.mockReset()
-    state.loadMenubarIconStyleMock.mockReset()
-    state.saveMenubarIconStyleMock.mockReset()
-    state.migrateLegacyTraySettingsMock.mockReset()
-    state.loadGlobalShortcutMock.mockReset()
-    state.saveGlobalShortcutMock.mockReset()
-    state.loadStartOnLoginMock.mockReset()
-    state.saveStartOnLoginMock.mockReset()
-    state.loadProviderConfigsMock.mockReset()
-    state.saveProviderConfigsMock.mockReset()
-    state.closeRequestedHandler = null
-    state.autostartEnableMock.mockReset()
-    state.autostartDisableMock.mockReset()
-    state.autostartIsEnabledMock.mockReset()
-    state.renderTrayBarsIconMock.mockReset()
-    state.trayGetByIdMock.mockReset()
-    state.traySetIconMock.mockReset()
-    state.traySetIconAsTemplateMock.mockReset()
-    state.traySetTitleMock.mockReset()
-    state.resolveResourceMock.mockReset()
-    menuState.iconMenuItemConfigs.length = 0
-    menuState.iconMenuItemNewMock.mockReset()
-    menuState.iconMenuItemCloseMock.mockReset()
-    menuState.predefinedMenuItemNewMock.mockReset()
-    menuState.predefinedMenuItemCloseMock.mockReset()
-    menuState.menuNewMock.mockReset()
-    menuState.menuPopupMock.mockReset()
-    menuState.menuCloseMock.mockReset()
-    eventState.emitMock.mockReset()
-    eventState.emitMock.mockResolvedValue(undefined)
-    eventState.handlers.clear()
-    eventState.listenMock.mockReset()
-    eventState.listenMock.mockImplementation(async (eventName: string, handler: (event: any) => void) => {
-      eventState.handlers.set(eventName, handler)
-      return () => { eventState.handlers.delete(eventName) }
-    })
-    updaterState.checkMock.mockReset()
-    updaterState.relaunchMock.mockReset()
-    updaterState.checkMock.mockResolvedValue(null)
-    state.savePluginSettingsMock.mockResolvedValue(undefined)
-    state.saveAutoUpdateIntervalMock.mockResolvedValue(undefined)
-    state.loadThemeModeMock.mockResolvedValue("system")
-    state.saveThemeModeMock.mockResolvedValue(undefined)
-    state.loadDisplayModeMock.mockResolvedValue("left")
-    state.saveDisplayModeMock.mockResolvedValue(undefined)
-    state.loadResetTimerDisplayModeMock.mockResolvedValue("relative")
-    state.saveResetTimerDisplayModeMock.mockResolvedValue(undefined)
-    state.loadMenubarIconStyleMock.mockResolvedValue("provider")
-    state.saveMenubarIconStyleMock.mockResolvedValue(undefined)
-    state.migrateLegacyTraySettingsMock.mockResolvedValue(undefined)
-    state.loadGlobalShortcutMock.mockResolvedValue(null)
-    state.saveGlobalShortcutMock.mockResolvedValue(undefined)
-    state.loadStartOnLoginMock.mockResolvedValue(false)
-    state.saveStartOnLoginMock.mockResolvedValue(undefined)
-    state.loadProviderConfigsMock.mockResolvedValue({})
-    state.saveProviderConfigsMock.mockResolvedValue(undefined)
-    state.autostartEnableMock.mockResolvedValue(undefined)
-    state.autostartDisableMock.mockResolvedValue(undefined)
-    state.autostartIsEnabledMock.mockResolvedValue(false)
-    state.renderTrayBarsIconMock.mockResolvedValue({})
+    state.probeHandlers = null;
+    state.invokeMock.mockReset();
+    state.isTauriMock.mockReset();
+    state.isTauriMock.mockReturnValue(false);
+    state.trackMock.mockReset();
+    state.setSizeMock.mockReset();
+    state.hideWindowMock.mockReset();
+    state.currentMonitorMock.mockReset();
+    state.startBatchMock.mockReset();
+    state.savePluginSettingsMock.mockReset();
+    state.loadPluginSettingsMock.mockReset();
+    state.loadAutoUpdateIntervalMock.mockReset();
+    state.saveAutoUpdateIntervalMock.mockReset();
+    state.loadThemeModeMock.mockReset();
+    state.saveThemeModeMock.mockReset();
+    state.loadDisplayModeMock.mockReset();
+    state.saveDisplayModeMock.mockReset();
+    state.loadResetTimerDisplayModeMock.mockReset();
+    state.saveResetTimerDisplayModeMock.mockReset();
+    state.loadMenubarIconStyleMock.mockReset();
+    state.saveMenubarIconStyleMock.mockReset();
+    state.migrateLegacyTraySettingsMock.mockReset();
+    state.loadGlobalShortcutMock.mockReset();
+    state.saveGlobalShortcutMock.mockReset();
+    state.loadStartOnLoginMock.mockReset();
+    state.saveStartOnLoginMock.mockReset();
+    state.loadProviderConfigsMock.mockReset();
+    state.saveProviderConfigsMock.mockReset();
+    state.closeRequestedHandler = null;
+    state.autostartEnableMock.mockReset();
+    state.autostartDisableMock.mockReset();
+    state.autostartIsEnabledMock.mockReset();
+    state.renderTrayBarsIconMock.mockReset();
+    state.trayGetByIdMock.mockReset();
+    state.traySetIconMock.mockReset();
+    state.traySetIconAsTemplateMock.mockReset();
+    state.traySetTitleMock.mockReset();
+    state.resolveResourceMock.mockReset();
+    menuState.iconMenuItemConfigs.length = 0;
+    menuState.iconMenuItemNewMock.mockReset();
+    menuState.iconMenuItemCloseMock.mockReset();
+    menuState.predefinedMenuItemNewMock.mockReset();
+    menuState.predefinedMenuItemCloseMock.mockReset();
+    menuState.menuNewMock.mockReset();
+    menuState.menuPopupMock.mockReset();
+    menuState.menuCloseMock.mockReset();
+    eventState.emitMock.mockReset();
+    eventState.emitMock.mockResolvedValue(undefined);
+    eventState.handlers.clear();
+    eventState.listenMock.mockReset();
+    eventState.listenMock.mockImplementation(
+      async (eventName: string, handler: (event: any) => void) => {
+        eventState.handlers.set(eventName, handler);
+        return () => {
+          eventState.handlers.delete(eventName);
+        };
+      },
+    );
+    updaterState.checkMock.mockReset();
+    updaterState.relaunchMock.mockReset();
+    updaterState.checkMock.mockResolvedValue(null);
+    state.savePluginSettingsMock.mockResolvedValue(undefined);
+    state.saveAutoUpdateIntervalMock.mockResolvedValue(undefined);
+    state.loadThemeModeMock.mockResolvedValue("system");
+    state.saveThemeModeMock.mockResolvedValue(undefined);
+    state.loadDisplayModeMock.mockResolvedValue("left");
+    state.saveDisplayModeMock.mockResolvedValue(undefined);
+    state.loadResetTimerDisplayModeMock.mockResolvedValue("relative");
+    state.saveResetTimerDisplayModeMock.mockResolvedValue(undefined);
+    state.loadMenubarIconStyleMock.mockResolvedValue("provider");
+    state.saveMenubarIconStyleMock.mockResolvedValue(undefined);
+    state.migrateLegacyTraySettingsMock.mockResolvedValue(undefined);
+    state.loadGlobalShortcutMock.mockResolvedValue(null);
+    state.saveGlobalShortcutMock.mockResolvedValue(undefined);
+    state.loadStartOnLoginMock.mockResolvedValue(false);
+    state.saveStartOnLoginMock.mockResolvedValue(undefined);
+    state.loadProviderConfigsMock.mockResolvedValue({});
+    state.saveProviderConfigsMock.mockResolvedValue(undefined);
+    state.autostartEnableMock.mockResolvedValue(undefined);
+    state.autostartDisableMock.mockResolvedValue(undefined);
+    state.autostartIsEnabledMock.mockResolvedValue(false);
+    state.renderTrayBarsIconMock.mockResolvedValue({});
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
       configurable: true,
       get() {
-        return 100
+        return 100;
       },
-    })
-    state.hideWindowMock.mockResolvedValue(undefined)
-    state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 } })
-    state.startBatchMock.mockResolvedValue(["a"])
+    });
+    state.hideWindowMock.mockResolvedValue(undefined);
+    state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 } });
+    state.startBatchMock.mockResolvedValue(["a"]);
     state.trayGetByIdMock.mockResolvedValue({
       setIcon: state.traySetIconMock.mockResolvedValue(undefined),
-      setIconAsTemplate: state.traySetIconAsTemplateMock.mockResolvedValue(undefined),
+      setIconAsTemplate:
+        state.traySetIconAsTemplateMock.mockResolvedValue(undefined),
       setTitle: state.traySetTitleMock.mockResolvedValue(undefined),
-    })
-    state.resolveResourceMock.mockResolvedValue("/resource/icons/icon.png")
+    });
+    state.resolveResourceMock.mockResolvedValue("/resource/icons/icon.png");
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
-          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [{ type: "text", label: "Now", scope: "overview" }] },
-          { id: "b", name: "Beta", iconUrl: "icon-b", primaryProgressLabel: null, lines: [] },
-        ]
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryProgressLabel: null,
+            lines: [{ type: "text", label: "Now", scope: "overview" }],
+          },
+          {
+            id: "b",
+            name: "Beta",
+            iconUrl: "icon-b",
+            primaryProgressLabel: null,
+            lines: [],
+          },
+        ];
       }
-      return null
-    })
-    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a"], disabled: [] })
-    state.loadAutoUpdateIntervalMock.mockResolvedValue(15)
-  })
+      return null;
+    });
+    state.loadPluginSettingsMock.mockResolvedValue({
+      order: ["a"],
+      disabled: [],
+    });
+    state.loadAutoUpdateIntervalMock.mockResolvedValue(15);
+  });
 
   afterEach(() => {
-    delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollHeight
-  })
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>)
+      .scrollHeight;
+  });
 
   const triggerPluginContextAction = async (
     pluginName: string,
     _pluginId: string,
-    action: "reload" | "remove" | "arrange"
+    action: "reload" | "remove" | "arrange",
   ) => {
-    const pluginButton = await screen.findByRole("button", { name: pluginName })
-    fireEvent.contextMenu(pluginButton)
+    const pluginButton = await screen.findByRole("button", {
+      name: pluginName,
+    });
+    fireEvent.contextMenu(pluginButton);
     const labels = {
       reload: "Refresh provider",
       remove: "Hide provider",
       arrange: "Arrange providers",
-    }
-    const contextAction = await screen.findByRole("menuitem", { name: labels[action] })
-    expect(contextAction).toBeDefined()
-    return () => fireEvent.click(contextAction)
-  }
+    };
+    const contextAction = await screen.findByRole("menuitem", {
+      name: labels[action],
+    });
+    expect(contextAction).toBeDefined();
+    return () => fireEvent.click(contextAction);
+  };
 
   const openSettings = async () => {
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-  }
+    const settingsButtons = await screen.findAllByRole("button", {
+      name: "Settings",
+    });
+    await userEvent.click(settingsButtons[0]);
+  };
 
-  const renderSettingsWindow = () => render(<SettingsWindowApp />)
+  const renderSettingsWindow = () => render(<SettingsWindowApp />);
 
   it("applies theme mode changes to document", async () => {
     const mq = {
       matches: false,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
-    } as unknown as MediaQueryList
-    const mmSpy = vi.spyOn(window, "matchMedia").mockReturnValue(mq)
+    } as unknown as MediaQueryList;
+    const mmSpy = vi.spyOn(window, "matchMedia").mockReturnValue(mq);
 
-    renderSettingsWindow()
+    renderSettingsWindow();
 
     // Dark
-    await userEvent.click(await screen.findByRole("radio", { name: "Dark" }))
-    expect(document.documentElement.classList.contains("dark")).toBe(true)
+    await userEvent.click(await screen.findByRole("radio", { name: "Dark" }));
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
 
     // Light
-    await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
-    expect(document.documentElement.classList.contains("dark")).toBe(false)
+    await userEvent.click(await screen.findByRole("radio", { name: "Light" }));
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
 
     // Back to system should subscribe to matchMedia changes
-    await userEvent.click(await screen.findByRole("radio", { name: "System" }))
-    expect(mq.addEventListener).toHaveBeenCalled()
+    await userEvent.click(await screen.findByRole("radio", { name: "System" }));
+    expect(mq.addEventListener).toHaveBeenCalled();
 
-    mmSpy.mockRestore()
-  }, 10000)
+    mmSpy.mockRestore();
+  }, 10000);
 
   it("loads plugins, normalizes settings, and renders overview", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    render(<App />)
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
-    await waitFor(() => expect(state.savePluginSettingsMock).toHaveBeenCalled())
-    await waitFor(() => expect(state.migrateLegacyTraySettingsMock).toHaveBeenCalled())
+    state.isTauriMock.mockReturnValue(true);
+    render(<App />);
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"),
+    );
+    await waitFor(() =>
+      expect(state.savePluginSettingsMock).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(state.migrateLegacyTraySettingsMock).toHaveBeenCalled(),
+    );
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "apply_panel_bounds",
-        expect.objectContaining({ panelHeightPx: expect.any(Number) })
-      )
-    )
-    expect(screen.getByText("Alpha")).toBeInTheDocument()
-  })
+        expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+      ),
+    );
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+  });
 
   it("raises the cold-start panel height for the full nav stack before slower bootstrap finishes", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    let resolveStartOnLogin: ((value: boolean) => void) | null = null
+    state.isTauriMock.mockReturnValue(true);
+    let resolveStartOnLogin: ((value: boolean) => void) | null = null;
     state.loadStartOnLoginMock.mockReturnValueOnce(
       new Promise<boolean>((resolve) => {
-        resolveStartOnLogin = resolve
-      })
-    )
+        resolveStartOnLogin = resolve;
+      }),
+    );
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
-          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [{ type: "text", label: "Now", scope: "overview" }] },
-          { id: "b", name: "Beta", iconUrl: "icon-b", primaryProgressLabel: null, lines: [] },
-          { id: "c", name: "Gamma", iconUrl: "icon-c", primaryProgressLabel: null, lines: [] },
-          { id: "d", name: "Delta", iconUrl: "icon-d", primaryProgressLabel: null, lines: [] },
-        ]
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryProgressLabel: null,
+            lines: [{ type: "text", label: "Now", scope: "overview" }],
+          },
+          {
+            id: "b",
+            name: "Beta",
+            iconUrl: "icon-b",
+            primaryProgressLabel: null,
+            lines: [],
+          },
+          {
+            id: "c",
+            name: "Gamma",
+            iconUrl: "icon-c",
+            primaryProgressLabel: null,
+            lines: [],
+          },
+          {
+            id: "d",
+            name: "Delta",
+            iconUrl: "icon-d",
+            primaryProgressLabel: null,
+            lines: [],
+          },
+        ];
       }
-      return null
-    })
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b", "c", "d"], disabled: [] })
+      return null;
+    });
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b", "c", "d"],
+      disabled: [],
+    });
 
-    render(<App />)
+    render(<App />);
 
     await waitFor(() => {
       expect(state.invokeMock).toHaveBeenCalledWith(
         "apply_panel_bounds",
-        expect.objectContaining({ panelHeightPx: expect.any(Number) })
-      )
+        expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+      );
       const raisedNavHeightCall = state.invokeMock.mock.calls.find(
         ([command, payload]) =>
-          command === "apply_panel_bounds"
-          && typeof payload?.panelHeightPx === "number"
-          && payload.panelHeightPx >= 332
-      )
-      expect(raisedNavHeightCall).toBeTruthy()
-      expect(state.loadMenubarIconStyleMock).not.toHaveBeenCalled()
-    })
+          command === "apply_panel_bounds" &&
+          typeof payload?.panelHeightPx === "number" &&
+          payload.panelHeightPx >= 332,
+      );
+      expect(raisedNavHeightCall).toBeTruthy();
+      expect(state.loadMenubarIconStyleMock).not.toHaveBeenCalled();
+    });
 
-    resolveStartOnLogin?.(false)
-  })
+    resolveStartOnLogin?.(false);
+  });
 
   it("keeps surfaced OpenCode in the plugin list and preserves saved settings", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
-          { id: "codex", name: "Codex", iconUrl: "icon-codex", primaryCandidates: [], lines: [] },
+          {
+            id: "codex",
+            name: "Codex",
+            iconUrl: "icon-codex",
+            primaryCandidates: [],
+            lines: [],
+          },
           {
             id: "opencode",
             name: "OpenCode Zen",
@@ -506,23 +616,37 @@ describe("App", () => {
             primaryCandidates: [],
             lines: [],
           },
-        ]
+        ];
       }
-      return null
-    })
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["opencode", "codex"], disabled: [] })
+      return null;
+    });
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["opencode", "codex"],
+      disabled: [],
+    });
 
-    render(<App />)
+    render(<App />);
 
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
-    expect(state.savePluginSettingsMock).not.toHaveBeenCalledWith({ order: ["codex"], disabled: [] })
-  })
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"),
+    );
+    expect(state.savePluginSettingsMock).not.toHaveBeenCalledWith({
+      order: ["codex"],
+      disabled: [],
+    });
+  });
 
   it("filters hidden providers from surfaced plugins and rewrites saved settings", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
-          { id: "codex", name: "Codex", iconUrl: "icon-codex", primaryCandidates: [], lines: [] },
+          {
+            id: "codex",
+            name: "Codex",
+            iconUrl: "icon-codex",
+            primaryCandidates: [],
+            lines: [],
+          },
           {
             id: "factory",
             name: "Factory",
@@ -531,62 +655,84 @@ describe("App", () => {
             primaryCandidates: [],
             lines: [],
           },
-        ]
+        ];
       }
-      return null
-    })
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["factory", "codex"], disabled: [] })
+      return null;
+    });
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["factory", "codex"],
+      disabled: [],
+    });
 
-    render(<App />)
+    render(<App />);
 
     await waitFor(() =>
-      expect(state.savePluginSettingsMock).toHaveBeenCalledWith({ order: ["codex"], disabled: [] })
-    )
-  })
+      expect(state.savePluginSettingsMock).toHaveBeenCalledWith({
+        order: ["codex"],
+        disabled: [],
+      }),
+    );
+  });
 
   it("calls migrateLegacyTraySettings before loadMenubarIconStyle during bootstrap", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    render(<App />)
-    await waitFor(() => expect(state.migrateLegacyTraySettingsMock).toHaveBeenCalled())
-    await waitFor(() => expect(state.loadMenubarIconStyleMock).toHaveBeenCalled())
+    state.isTauriMock.mockReturnValue(true);
+    render(<App />);
+    await waitFor(() =>
+      expect(state.migrateLegacyTraySettingsMock).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(state.loadMenubarIconStyleMock).toHaveBeenCalled(),
+    );
 
-    const migrateOrder = state.migrateLegacyTraySettingsMock.mock.invocationCallOrder[0]
-    const loadOrder = state.loadMenubarIconStyleMock.mock.invocationCallOrder[0]
-    expect(migrateOrder).toBeLessThan(loadOrder)
-  })
+    const migrateOrder =
+      state.migrateLegacyTraySettingsMock.mock.invocationCallOrder[0];
+    const loadOrder =
+      state.loadMenubarIconStyleMock.mock.invocationCallOrder[0];
+    expect(migrateOrder).toBeLessThan(loadOrder);
+  });
 
   it("does not track page_viewed on startup or navigation", async () => {
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
+    const settingsButtons = await screen.findAllByRole("button", {
+      name: "Settings",
+    });
+    await userEvent.click(settingsButtons[0]);
 
-    expect(state.trackMock).not.toHaveBeenCalledWith("page_viewed", expect.anything())
-    expect(state.trackMock).not.toHaveBeenCalledWith("page_viewed", undefined)
-  })
+    expect(state.trackMock).not.toHaveBeenCalledWith(
+      "page_viewed",
+      expect.anything(),
+    );
+    expect(state.trackMock).not.toHaveBeenCalledWith("page_viewed", undefined);
+  });
 
   it("skips saving settings when already normalized", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
-    expect((await screen.findAllByText("Alpha")).length).toBeGreaterThan(0)
-    expect(state.savePluginSettingsMock).not.toHaveBeenCalled()
-  })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"),
+    );
+    expect((await screen.findAllByText("Alpha")).length).toBeGreaterThan(0);
+    expect(state.savePluginSettingsMock).not.toHaveBeenCalled();
+  });
 
   it("handles probe results", async () => {
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    expect(state.probeHandlers).not.toBeNull()
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
+    expect(state.probeHandlers).not.toBeNull();
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "Later" }],
-    })
-    state.probeHandlers?.onBatchComplete()
-    await screen.findByText("Now")
-  })
+    });
+    state.probeHandlers?.onBatchComplete();
+    await screen.findByText("Now");
+  });
 
   it("keeps stable tray icon on probe results while updating tooltip/title", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
@@ -599,26 +745,39 @@ describe("App", () => {
             primaryCandidates: ["Session"],
             lines: [{ type: "progress", label: "Session", scope: "overview" }],
           },
-        ]
+        ];
       }
-      return null
-    })
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+      return null;
+    });
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a"],
+      disabled: [],
+    });
 
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
-      lines: [{ type: "progress", label: "Session", used: 50, limit: 100, format: { kind: "percent" } }],
-    })
+      lines: [
+        {
+          type: "progress",
+          label: "Session",
+          used: 50,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+      ],
+    });
 
-    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalled())
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("50%"))
-  })
+    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalled());
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.traySetTitleMock).toHaveBeenCalledWith("50%"),
+    );
+  });
 
   it("keeps stable tray icon on launch before probe data", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
@@ -638,21 +797,26 @@ describe("App", () => {
             primaryCandidates: ["Session"],
             lines: [{ type: "progress", label: "Session", scope: "overview" }],
           },
-        ]
+        ];
       }
-      return null
-    })
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+      return null;
+    });
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
 
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("--%"))
-  })
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.traySetTitleMock).toHaveBeenCalledWith("--%"),
+    );
+  });
 
   it("ignores persisted menubar icon style for native tray icon art", async () => {
-    state.loadMenubarIconStyleMock.mockResolvedValue("bars")
+    state.loadMenubarIconStyleMock.mockResolvedValue("bars");
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
@@ -670,30 +834,38 @@ describe("App", () => {
             primaryCandidates: ["Session"],
             lines: [{ type: "progress", label: "Session", scope: "overview" }],
           },
-        ]
+        ];
       }
-      return null
-    })
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+      return null;
+    });
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
 
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalledWith("/resource/icons/icon.png"))
-  })
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.traySetIconMock).toHaveBeenCalledWith(
+        "/resource/icons/icon.png",
+      ),
+    );
+  });
 
   it("omits tray title when native title is unavailable", async () => {
     state.trayGetByIdMock.mockResolvedValueOnce({
       setIcon: state.traySetIconMock.mockResolvedValue(undefined),
-      setIconAsTemplate: state.traySetIconAsTemplateMock.mockResolvedValue(undefined),
-    })
+      setIconAsTemplate:
+        state.traySetIconAsTemplateMock.mockResolvedValue(undefined),
+    });
 
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-    expect(state.traySetTitleMock).not.toHaveBeenCalled()
-  })
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    expect(state.traySetTitleMock).not.toHaveBeenCalled();
+  });
 
   it("keeps stable tray icon when selected provider changes", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
@@ -713,626 +885,810 @@ describe("App", () => {
             primaryCandidates: ["Session"],
             lines: [{ type: "progress", label: "Session", scope: "overview" }],
           },
-        ]
+        ];
       }
-      return null
-    })
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
+      return null;
+    });
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
 
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
-      lines: [{ type: "progress", label: "Session", used: 50, limit: 100, format: { kind: "percent" } }],
-    })
+      lines: [
+        {
+          type: "progress",
+          label: "Session",
+          used: 50,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+      ],
+    });
     state.probeHandlers?.onResult({
       providerId: "b",
       displayName: "Beta",
       iconUrl: "icon-b",
-      lines: [{ type: "progress", label: "Session", used: 30, limit: 100, format: { kind: "percent" } }],
-    })
+      lines: [
+        {
+          type: "progress",
+          label: "Session",
+          used: 30,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+      ],
+    });
 
-    await userEvent.click(screen.getByRole("button", { name: "Beta" }))
+    await userEvent.click(screen.getByRole("button", { name: "Beta" }));
 
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"))
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"),
+    );
 
-    await userEvent.click(screen.getByRole("button", { name: "Home" }))
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"))
+    await userEvent.click(screen.getByRole("button", { name: "Home" }));
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"),
+    );
 
-    const settingsButtons = await screen.findAllByRole("button", { name: "Settings" })
-    await userEvent.click(settingsButtons[0])
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"))
-  })
+    const settingsButtons = await screen.findAllByRole("button", {
+      name: "Settings",
+    });
+    await userEvent.click(settingsButtons[0]);
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"),
+    );
+  });
 
   it("covers about open/close callbacks", async () => {
-    render(<App />)
+    render(<App />);
 
     // Open about via version button in footer
-    await userEvent.click(await screen.findByRole("button", { name: new RegExp(APP_NAME, "i") }))
-    await screen.findByRole("button", { name: "Luis Leineweber" })
+    await userEvent.click(
+      await screen.findByRole("button", { name: new RegExp(APP_NAME, "i") }),
+    );
+    await screen.findByRole("button", { name: "Luis Leineweber" });
 
     // Close about via ESC key
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Luis Leineweber" })).not.toBeInTheDocument()
-    })
-  })
+      expect(
+        screen.queryByRole("button", { name: "Luis Leineweber" }),
+      ).not.toBeInTheDocument();
+    });
+  });
 
   it("updates display mode in settings", async () => {
-    renderSettingsWindow()
+    renderSettingsWindow();
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Used" }))
-    expect(state.saveDisplayModeMock).toHaveBeenCalledWith("used")
-  })
+    await userEvent.click(await screen.findByRole("radio", { name: "Used" }));
+    expect(state.saveDisplayModeMock).toHaveBeenCalledWith("used");
+  });
 
   it("does not render menubar icon style controls in settings", async () => {
-    renderSettingsWindow()
-    expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
-    expect(screen.queryByRole("radio", { name: "Bars" })).not.toBeInTheDocument()
-    expect(screen.queryByRole("radio", { name: "Donut" })).not.toBeInTheDocument()
-  })
+    renderSettingsWindow();
+    expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radio", { name: "Bars" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("radio", { name: "Donut" }),
+    ).not.toBeInTheDocument();
+  });
 
   it("logs when saving display mode fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.saveDisplayModeMock.mockRejectedValueOnce(new Error("save display mode"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.saveDisplayModeMock.mockRejectedValueOnce(
+      new Error("save display mode"),
+    );
 
-    renderSettingsWindow()
+    renderSettingsWindow();
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Used" }))
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    await userEvent.click(await screen.findByRole("radio", { name: "Used" }));
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
 
-    errorSpy.mockRestore()
-  })
+    errorSpy.mockRestore();
+  });
 
   it("does not render legacy bar icon controls in settings", async () => {
-    renderSettingsWindow()
-    expect(screen.queryByText("Bar Icon")).not.toBeInTheDocument()
-    expect(screen.queryByText("Show percentage")).not.toBeInTheDocument()
-  })
+    renderSettingsWindow();
+    expect(screen.queryByText("Bar Icon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Show percentage")).not.toBeInTheDocument();
+  });
 
   it("shows provider not found when tray navigates to unknown view", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    render(<App />)
+    state.isTauriMock.mockReturnValue(true);
+    render(<App />);
 
     await waitFor(() => {
-      expect(eventState.handlers.has("tray:navigate")).toBe(true)
-    })
-    const handler = eventState.handlers.get("tray:navigate")
+      expect(eventState.handlers.has("tray:navigate")).toBe(true);
+    });
+    const handler = eventState.handlers.get("tray:navigate");
     await act(async () => {
-      handler?.({ payload: "nope" })
-    })
+      handler?.({ payload: "nope" });
+    });
 
-    await screen.findByText("Provider not found")
-  })
+    await screen.findByText("Provider not found");
+  });
 
   it("keeps the provider detail content mounted when a loaded provider later errors", async () => {
-    render(<App />)
+    render(<App />);
 
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "42%" }],
-    })
+    });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }))
-    await screen.findByText("Now")
+    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }));
+    await screen.findByText("Now");
 
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "badge", label: "Error", text: "Not signed in" }],
-    })
+    });
 
-    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument()
-    expect(screen.getByText("Now")).toBeInTheDocument()
-    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
-  })
+    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument();
+    expect(screen.getByText("Now")).toBeInTheDocument();
+    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument();
+  });
 
   it("keeps sidebar buttons mounted while switching between providers", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    render(<App />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "Beta" }))
+    await userEvent.click(await screen.findByRole("button", { name: "Beta" }));
 
-    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Beta" })).toBeInTheDocument()
-    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
-  })
+    expect(screen.getByRole("button", { name: "Alpha" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Beta" })).toBeInTheDocument();
+    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument();
+  });
 
   it("hides the panel on Escape when running in Tauri", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    render(<App />)
+    state.isTauriMock.mockReturnValue(true);
+    render(<App />);
 
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"),
+    );
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
 
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("hide_panel"))
-  })
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("hide_panel"),
+    );
+  });
 
   it("applies start on login state on startup in tauri", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    state.loadStartOnLoginMock.mockResolvedValueOnce(true)
-    state.autostartIsEnabledMock.mockResolvedValueOnce(false)
+    state.isTauriMock.mockReturnValue(true);
+    state.loadStartOnLoginMock.mockResolvedValueOnce(true);
+    state.autostartIsEnabledMock.mockResolvedValueOnce(false);
 
-    render(<App />)
+    render(<App />);
 
-    await waitFor(() => expect(state.autostartIsEnabledMock).toHaveBeenCalled())
-    await waitFor(() => expect(state.autostartEnableMock).toHaveBeenCalled())
-    expect(state.autostartDisableMock).not.toHaveBeenCalled()
-  })
+    await waitFor(() =>
+      expect(state.autostartIsEnabledMock).toHaveBeenCalled(),
+    );
+    await waitFor(() => expect(state.autostartEnableMock).toHaveBeenCalled());
+    expect(state.autostartDisableMock).not.toHaveBeenCalled();
+  });
 
   it("logs when saving start on login fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.saveStartOnLoginMock.mockRejectedValueOnce(new Error("save start on login failed"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.saveStartOnLoginMock.mockRejectedValueOnce(
+      new Error("save start on login failed"),
+    );
 
-    renderSettingsWindow()
-    await userEvent.click(await screen.findByText("Start on login"))
+    renderSettingsWindow();
+    await userEvent.click(await screen.findByText("Start on login"));
 
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to save start on login:", expect.any(Error))
-    )
-    errorSpy.mockRestore()
-  })
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to save start on login:",
+        expect.any(Error),
+      ),
+    );
+    errorSpy.mockRestore();
+  });
 
   it("logs when applying start on login setting fails on startup", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.isTauriMock.mockReturnValue(true)
-    state.loadStartOnLoginMock.mockResolvedValueOnce(true)
-    state.autostartIsEnabledMock.mockRejectedValueOnce(new Error("autostart status failed"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.isTauriMock.mockReturnValue(true);
+    state.loadStartOnLoginMock.mockResolvedValueOnce(true);
+    state.autostartIsEnabledMock.mockRejectedValueOnce(
+      new Error("autostart status failed"),
+    );
 
-    render(<App />)
+    render(<App />);
 
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to apply start on login setting:", expect.any(Error))
-    )
-    errorSpy.mockRestore()
-  })
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to apply start on login setting:",
+        expect.any(Error),
+      ),
+    );
+    errorSpy.mockRestore();
+  });
 
   it("logs when updating start on login fails from settings", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.isTauriMock.mockReturnValue(true)
-    state.loadStartOnLoginMock.mockResolvedValueOnce(false)
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.isTauriMock.mockReturnValue(true);
+    state.loadStartOnLoginMock.mockResolvedValueOnce(false);
     state.autostartIsEnabledMock
       .mockResolvedValueOnce(false)
-      .mockRejectedValueOnce(new Error("toggle failed"))
+      .mockRejectedValueOnce(new Error("toggle failed"));
 
-    renderSettingsWindow()
-    await userEvent.click(await screen.findByText("Start on login"))
+    renderSettingsWindow();
+    await userEvent.click(await screen.findByText("Start on login"));
 
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to update start on login:", expect.any(Error))
-    )
-    errorSpy.mockRestore()
-  })
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to update start on login:",
+        expect.any(Error),
+      ),
+    );
+    errorSpy.mockRestore();
+  });
 
   it("logs when loading display mode fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.loadDisplayModeMock.mockRejectedValueOnce(new Error("load display mode"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.loadDisplayModeMock.mockRejectedValueOnce(
+      new Error("load display mode"),
+    );
 
-    render(<App />)
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"),
+    );
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
 
-    errorSpy.mockRestore()
-  })
+    errorSpy.mockRestore();
+  });
 
   it("logs error when loading menubar icon style fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.loadMenubarIconStyleMock.mockRejectedValueOnce(new Error("load menubar icon style failed"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.loadMenubarIconStyleMock.mockRejectedValueOnce(
+      new Error("load menubar icon style failed"),
+    );
 
-    render(<App />)
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
+    render(<App />);
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to load menubar icon style:", expect.any(Error))
-    )
+      expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"),
+    );
+    await waitFor(() =>
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to load menubar icon style:",
+        expect.any(Error),
+      ),
+    );
 
-    errorSpy.mockRestore()
-  })
+    errorSpy.mockRestore();
+  });
 
   it("logs when migrating legacy tray settings fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.migrateLegacyTraySettingsMock.mockRejectedValueOnce(new Error("migrate legacy tray"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.migrateLegacyTraySettingsMock.mockRejectedValueOnce(
+      new Error("migrate legacy tray"),
+    );
 
-    render(<App />)
-    await waitFor(() => expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"))
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() =>
+      expect(state.invokeMock).toHaveBeenCalledWith("list_plugins"),
+    );
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
 
-    errorSpy.mockRestore()
-  })
+    errorSpy.mockRestore();
+  });
 
   it("logs when saving theme mode fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.saveThemeModeMock.mockRejectedValueOnce(new Error("save theme"))
-    renderSettingsWindow()
-    await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
-    errorSpy.mockRestore()
-  })
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.saveThemeModeMock.mockRejectedValueOnce(new Error("save theme"));
+    renderSettingsWindow();
+    await userEvent.click(await screen.findByRole("radio", { name: "Light" }));
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    errorSpy.mockRestore();
+  });
 
   it("retries a plugin on error", async () => {
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "badge", label: "Error", text: "Bad" }],
-    })
-    const retry = await screen.findByRole("button", { name: "Retry" })
-    await userEvent.click(retry)
-    expect(state.startBatchMock).toHaveBeenCalledWith(["a"])
-  })
+    });
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    await userEvent.click(retry);
+    expect(state.startBatchMock).toHaveBeenCalledWith(["a"]);
+  });
 
   it("reloads plugin from sidebar context menu", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
     state.probeHandlers?.onResult({
       providerId: "b",
       displayName: "Beta",
       iconUrl: "icon-b",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
-    state.startBatchMock.mockClear()
+    });
+    state.startBatchMock.mockClear();
 
-    const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    expect(screen.getByRole("menuitem", { name: "Refresh provider" })).not.toBeDisabled()
-    reloadAction()
+    const reloadAction = await triggerPluginContextAction(
+      "Beta",
+      "b",
+      "reload",
+    );
+    expect(
+      screen.getByRole("menuitem", { name: "Refresh provider" }),
+    ).not.toBeDisabled();
+    reloadAction();
 
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
-  })
+    await waitFor(() =>
+      expect(state.startBatchMock).toHaveBeenCalledWith(["b"]),
+    );
+  });
 
   it("respects manual refresh cooldown for sidebar context menu reload", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
+    });
     state.probeHandlers?.onResult({
       providerId: "b",
       displayName: "Beta",
       iconUrl: "icon-b",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
-    state.startBatchMock.mockClear()
+    });
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2),
+    );
+    state.startBatchMock.mockClear();
 
-    const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    expect(screen.getByRole("menuitem", { name: "Refresh provider" })).not.toBeDisabled()
-    reloadAction()
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
+    const reloadAction = await triggerPluginContextAction(
+      "Beta",
+      "b",
+      "reload",
+    );
+    expect(
+      screen.getByRole("menuitem", { name: "Refresh provider" }),
+    ).not.toBeDisabled();
+    reloadAction();
+    await waitFor(() =>
+      expect(state.startBatchMock).toHaveBeenCalledWith(["b"]),
+    );
 
     state.probeHandlers?.onResult({
       providerId: "b",
       displayName: "Beta",
       iconUrl: "icon-b",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(1))
+    });
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(1),
+    );
 
-    state.startBatchMock.mockClear()
-    const cooldownReloadAction = await triggerPluginContextAction("Beta", "b", "reload")
-    expect(screen.getByRole("menuitem", { name: "Refresh provider" })).toBeDisabled()
-    cooldownReloadAction()
+    state.startBatchMock.mockClear();
+    const cooldownReloadAction = await triggerPluginContextAction(
+      "Beta",
+      "b",
+      "reload",
+    );
+    expect(
+      screen.getByRole("menuitem", { name: "Refresh provider" }),
+    ).toBeDisabled();
+    cooldownReloadAction();
 
-    expect(state.startBatchMock).not.toHaveBeenCalled()
-  })
+    expect(state.startBatchMock).not.toHaveBeenCalled();
+  });
 
   it("renders custom sidebar context menu actions", async () => {
-    render(<App />)
+    render(<App />);
 
-    const pluginButton = await screen.findByRole("button", { name: "Alpha" })
-    fireEvent.contextMenu(pluginButton)
-    const menu = await screen.findByRole("menu", { name: "UsageBar context menu" })
-    expect(within(menu).getByRole("menuitem", { name: "Refresh provider" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Refresh all providers" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Arrange providers" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Settings" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Provider settings" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Hide provider" })).toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: "Close" })).toBeInTheDocument()
-  })
+    const pluginButton = await screen.findByRole("button", { name: "Alpha" });
+    fireEvent.contextMenu(pluginButton);
+    const menu = await screen.findByRole("menu", {
+      name: "UsageBar context menu",
+    });
+    expect(
+      within(menu).getByRole("menuitem", { name: "Refresh provider" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Refresh all providers" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Arrange providers" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Settings" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Provider settings" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Hide provider" }),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Close" }),
+    ).toBeInTheDocument();
+  });
 
   it("removes plugin from sidebar context menu", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    state.startBatchMock.mockClear()
-    state.savePluginSettingsMock.mockClear()
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
+    state.startBatchMock.mockClear();
+    state.savePluginSettingsMock.mockClear();
 
-    const removeAction = await triggerPluginContextAction("Beta", "b", "remove")
-    removeAction()
+    const removeAction = await triggerPluginContextAction(
+      "Beta",
+      "b",
+      "remove",
+    );
+    removeAction();
 
     await waitFor(() =>
-      expect(state.savePluginSettingsMock).toHaveBeenCalledWith({ order: ["a", "b"], disabled: ["b"] })
-    )
-    expect(state.startBatchMock).not.toHaveBeenCalled()
-  })
+      expect(state.savePluginSettingsMock).toHaveBeenCalledWith({
+        order: ["a", "b"],
+        disabled: ["b"],
+      }),
+    );
+    expect(state.startBatchMock).not.toHaveBeenCalled();
+  });
 
   it("ignores removing an already disabled plugin from context menu", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    state.savePluginSettingsMock.mockClear()
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
+    state.savePluginSettingsMock.mockClear();
 
-    const removeAction = await triggerPluginContextAction("Beta", "b", "remove")
-    removeAction()
+    const removeAction = await triggerPluginContextAction(
+      "Beta",
+      "b",
+      "remove",
+    );
+    removeAction();
     await waitFor(() =>
-      expect(state.savePluginSettingsMock).toHaveBeenCalledWith({ order: ["a", "b"], disabled: ["b"] })
-    )
+      expect(state.savePluginSettingsMock).toHaveBeenCalledWith({
+        order: ["a", "b"],
+        disabled: ["b"],
+      }),
+    );
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Beta" })).not.toBeInTheDocument()
-    )
-    state.savePluginSettingsMock.mockClear()
+      expect(
+        screen.queryByRole("button", { name: "Beta" }),
+      ).not.toBeInTheDocument(),
+    );
+    state.savePluginSettingsMock.mockClear();
 
-    removeAction()
-    expect(state.savePluginSettingsMock).not.toHaveBeenCalled()
-  })
+    removeAction();
+    expect(state.savePluginSettingsMock).not.toHaveBeenCalled();
+  });
 
   it("returns to home when removing the active plugin from context menu", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-    state.savePluginSettingsMock.mockClear()
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
+    state.savePluginSettingsMock.mockClear();
 
-    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }))
-    const removeAction = await triggerPluginContextAction("Alpha", "a", "remove")
-    removeAction()
+    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }));
+    const removeAction = await triggerPluginContextAction(
+      "Alpha",
+      "a",
+      "remove",
+    );
+    removeAction();
 
     await waitFor(() =>
       expect(state.savePluginSettingsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ disabled: expect.arrayContaining(["a"]) })
-      )
-    )
-    await screen.findByText("No active providers")
-    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
-  })
+        expect.objectContaining({ disabled: expect.arrayContaining(["a"]) }),
+      ),
+    );
+    await screen.findByText("No active providers yet.");
+    expect(screen.queryByText("Provider not found")).not.toBeInTheDocument();
+  });
 
   it("shows empty state when all plugins disabled", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: ["a", "b"] })
-    render(<App />)
-    await screen.findByText("No active providers")
-    expect(screen.getByText("Paused")).toBeInTheDocument()
-  })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: ["a", "b"],
+    });
+    render(<App />);
+    await screen.findByText("No active providers yet.");
+    expect(screen.getByText("Paused")).toBeInTheDocument();
+  });
 
   it("handles plugin list load failure", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
-        throw new Error("boom")
+        throw new Error("boom");
       }
-      return null
-    })
-    render(<App />)
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
-    errorSpy.mockRestore()
-  })
+      return null;
+    });
+    render(<App />);
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    errorSpy.mockRestore();
+  });
 
   it("handles initial batch failure", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.startBatchMock.mockRejectedValueOnce(new Error("fail"))
-    render(<App />)
-    const errors = await screen.findAllByText("Failed to start probe")
-    expect(errors.length).toBeGreaterThan(0)
-    errorSpy.mockRestore()
-  })
-
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.startBatchMock.mockRejectedValueOnce(new Error("fail"));
+    render(<App />);
+    const errors = await screen.findAllByText("Failed to start probe");
+    expect(errors.length).toBeGreaterThan(0);
+    errorSpy.mockRestore();
+  });
 
   it("uses fallback monitor sizing when monitor missing", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    state.currentMonitorMock.mockResolvedValueOnce(null)
-    render(<App />)
+    state.isTauriMock.mockReturnValue(true);
+    state.currentMonitorMock.mockResolvedValueOnce(null);
+    render(<App />);
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "apply_panel_bounds",
-        expect.objectContaining({ panelHeightPx: expect.any(Number) })
-      )
-    )
-  })
+        expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+      ),
+    );
+  });
 
   it("applies the final panel height through one backend bounds update", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    render(<App />)
+    state.isTauriMock.mockReturnValue(true);
+    render(<App />);
 
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "apply_panel_bounds",
-        expect.objectContaining({ panelHeightPx: expect.any(Number) })
-      )
-    )
+        expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+      ),
+    );
 
-    const syncCalls = state.invokeMock.mock.calls.filter(([command]) => command === "sync_panel_geometry")
-    const applyCalls = state.invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
-    const lastSyncCall = syncCalls.at(-1)
-    const lastApplyCall = applyCalls.at(-1)
+    const syncCalls = state.invokeMock.mock.calls.filter(
+      ([command]) => command === "sync_panel_geometry",
+    );
+    const applyCalls = state.invokeMock.mock.calls.filter(
+      ([command]) => command === "apply_panel_bounds",
+    );
+    const lastSyncCall = syncCalls.at(-1);
+    const lastApplyCall = applyCalls.at(-1);
 
-    expect(applyCalls.length).toBeGreaterThanOrEqual(1)
+    expect(applyCalls.length).toBeGreaterThanOrEqual(1);
     expect(lastApplyCall).toEqual([
       "apply_panel_bounds",
-      { panelHeightPx: (lastSyncCall?.[1] as { panelHeightPx: number } | undefined)?.panelHeightPx },
-    ])
-  })
+      {
+        panelHeightPx: (
+          lastSyncCall?.[1] as { panelHeightPx: number } | undefined
+        )?.panelHeightPx,
+      },
+    ]);
+  });
 
   it("syncs geometry before applying final backend bounds", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    const originalInnerHeight = window.innerHeight
+    state.isTauriMock.mockReturnValue(true);
+    const originalInnerHeight = window.innerHeight;
     Object.defineProperty(window, "innerHeight", {
       configurable: true,
       value: 120,
-    })
+    });
     try {
-      render(<App />)
+      render(<App />);
 
       await waitFor(() =>
         expect(state.invokeMock).toHaveBeenCalledWith(
           "apply_panel_bounds",
-          expect.objectContaining({ panelHeightPx: expect.any(Number) })
-        )
-      )
+          expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+        ),
+      );
 
       const syncCallIndex = state.invokeMock.mock.calls.findIndex(
-        ([command]) => command === "sync_panel_geometry"
-      )
+        ([command]) => command === "sync_panel_geometry",
+      );
       const applyCallIndex = state.invokeMock.mock.calls.findIndex(
-        ([command]) => command === "apply_panel_bounds"
-      )
-      expect(syncCallIndex).toBeGreaterThanOrEqual(0)
-      expect(applyCallIndex).toBeGreaterThanOrEqual(0)
+        ([command]) => command === "apply_panel_bounds",
+      );
+      expect(syncCallIndex).toBeGreaterThanOrEqual(0);
+      expect(applyCallIndex).toBeGreaterThanOrEqual(0);
 
-      const syncOrder = state.invokeMock.mock.invocationCallOrder[syncCallIndex]
-      const applyOrder = state.invokeMock.mock.invocationCallOrder[applyCallIndex]
+      const syncOrder =
+        state.invokeMock.mock.invocationCallOrder[syncCallIndex];
+      const applyOrder =
+        state.invokeMock.mock.invocationCallOrder[applyCallIndex];
 
-      expect(syncOrder).toBeLessThan(applyOrder)
+      expect(syncOrder).toBeLessThan(applyOrder);
     } finally {
       Object.defineProperty(window, "innerHeight", {
         configurable: true,
         value: originalInnerHeight,
-      })
+      });
     }
-  })
+  });
 
   it("keeps fallback panel sizing within the home max height cap", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    state.currentMonitorMock.mockResolvedValue(null)
-    render(<App />)
+    state.isTauriMock.mockReturnValue(true);
+    state.currentMonitorMock.mockResolvedValue(null);
+    render(<App />);
 
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "sync_panel_geometry",
-        expect.objectContaining({ panelHeightPx: expect.any(Number) })
-      )
-    )
+        expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+      ),
+    );
 
     const lastHeight = state.invokeMock.mock.calls
       .filter(([command]) => command === "sync_panel_geometry")
-      .at(-1)?.[1] as { panelHeightPx: number } | undefined
+      .at(-1)?.[1] as { panelHeightPx: number } | undefined;
 
-    expect(lastHeight?.panelHeightPx).toBeGreaterThan(0)
-    expect(lastHeight?.panelHeightPx).toBeLessThanOrEqual(720)
-  })
+    expect(lastHeight?.panelHeightPx).toBeGreaterThan(0);
+    expect(lastHeight?.panelHeightPx).toBeLessThanOrEqual(720);
+  });
 
   it("resizes again via ResizeObserver callback", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    const OriginalResizeObserver = globalThis.ResizeObserver
-    const observeSpy = vi.fn()
+    state.isTauriMock.mockReturnValue(true);
+    const OriginalResizeObserver = globalThis.ResizeObserver;
+    const observeSpy = vi.fn();
     globalThis.ResizeObserver = class ResizeObserverImmediate {
-      private cb: ResizeObserverCallback
+      private cb: ResizeObserverCallback;
       constructor(cb: ResizeObserverCallback) {
-        this.cb = cb
+        this.cb = cb;
       }
       observe() {
-        observeSpy()
-        this.cb([], this as unknown as ResizeObserver)
+        observeSpy();
+        this.cb([], this as unknown as ResizeObserver);
       }
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    } as unknown as typeof ResizeObserver;
 
-    render(<App />)
-    await waitFor(() => expect(observeSpy).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(observeSpy).toHaveBeenCalled());
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "apply_panel_bounds",
-        expect.objectContaining({ panelHeightPx: expect.any(Number) })
-      )
-    )
+        expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+      ),
+    );
 
-    globalThis.ResizeObserver = OriginalResizeObserver
-  })
+    globalThis.ResizeObserver = OriginalResizeObserver;
+  });
 
   it("remeasures the panel when the popup gains focus", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    let scrollHeightValue = 80
+    state.isTauriMock.mockReturnValue(true);
+    let scrollHeightValue = 80;
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
       configurable: true,
       get() {
-        return scrollHeightValue
+        return scrollHeightValue;
       },
-    })
+    });
 
-    render(<App />)
+    render(<App />);
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "sync_panel_geometry",
-        expect.objectContaining({ panelHeightPx: expect.any(Number) })
-      )
-    )
+        expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+      ),
+    );
 
     const initialHeight = (
       state.invokeMock.mock.calls
         .filter(([command]) => command === "apply_panel_bounds")
         .at(-1)?.[1] as { panelHeightPx: number } | undefined
-    )?.panelHeightPx
-    state.invokeMock.mockClear()
+    )?.panelHeightPx;
+    state.invokeMock.mockClear();
 
-    scrollHeightValue = 320
-    window.dispatchEvent(new Event("focus"))
+    scrollHeightValue = 320;
+    window.dispatchEvent(new Event("focus"));
 
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith(
         "sync_panel_geometry",
-        expect.objectContaining({ panelHeightPx: expect.any(Number) })
-      )
-    )
+        expect.objectContaining({ panelHeightPx: expect.any(Number) }),
+      ),
+    );
 
     const focusedHeight = (
       state.invokeMock.mock.calls
         .filter(([command]) => command === "apply_panel_bounds")
         .at(-1)?.[1] as { panelHeightPx: number } | undefined
-    )?.panelHeightPx
-    expect(focusedHeight).not.toBe(initialHeight)
+    )?.panelHeightPx;
+    expect(focusedHeight).not.toBe(initialHeight);
     expect(
-      state.invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
-    ).not.toHaveLength(0)
-  })
+      state.invokeMock.mock.calls.filter(
+        ([command]) => command === "apply_panel_bounds",
+      ),
+    ).not.toHaveLength(0);
+  });
 
   it("starts a catch-up probe when an enabled provider appears without probe state", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
-    state.startBatchMock.mockClear()
-    useAppPluginStore.getState().setPluginSettings({ order: ["a", "b"], disabled: [] })
+    state.startBatchMock.mockClear();
+    useAppPluginStore
+      .getState()
+      .setPluginSettings({ order: ["a", "b"], disabled: [] });
 
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalledWith(["b"]))
-  })
+    await waitFor(() =>
+      expect(state.startBatchMock).toHaveBeenCalledWith(["b"]),
+    );
+  });
 
   it("logs resize failures", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    state.isTauriMock.mockReturnValue(true);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
-          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [{ type: "text", label: "Now", scope: "overview" }] },
-          { id: "b", name: "Beta", iconUrl: "icon-b", primaryProgressLabel: null, lines: [] },
-        ]
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryProgressLabel: null,
+            lines: [{ type: "text", label: "Now", scope: "overview" }],
+          },
+          {
+            id: "b",
+            name: "Beta",
+            iconUrl: "icon-b",
+            primaryProgressLabel: null,
+            lines: [],
+          },
+        ];
       }
       if (cmd === "apply_panel_bounds") {
-        throw new Error("bounds fail")
+        throw new Error("bounds fail");
       }
-      return null
-    })
-    render(<App />)
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
-    errorSpy.mockRestore()
-  })
+      return null;
+    });
+    render(<App />);
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    errorSpy.mockRestore();
+  });
 
   it("switches to provider detail view when selecting a plugin", async () => {
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
     // Provide some data so detail view has content.
     state.probeHandlers?.onResult({
@@ -1340,151 +1696,199 @@ describe("App", () => {
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "Later" }],
-    })
+    });
 
     // Click plugin in side nav (aria-label is plugin name)
-    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }))
+    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }));
 
     // Detail view uses ProviderDetailPage (scope=all) but should still render the provider card content.
-    await screen.findByText("Now")
-  })
+    await screen.findByText("Now");
+  });
 
   it("opens the standalone settings window on the general tab by default", async () => {
-    render(<App />)
+    render(<App />);
 
-    await openSettings()
+    await openSettings();
 
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith("open_settings_window", {
         tab: "general",
         providerId: null,
-      })
-    )
-  })
+      }),
+    );
+  });
 
   it("reveals the tray target when selecting a provider in the settings window", async () => {
-    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
-    renderSettingsWindow()
+    state.loadPluginSettingsMock.mockResolvedValue({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    renderSettingsWindow();
 
-    await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
+    await userEvent.click(
+      await screen.findByRole("tab", { name: "Providers" }),
+    );
 
-    await userEvent.click(await screen.findByRole("button", { name: /beta/i }))
+    await userEvent.click(await screen.findByRole("button", { name: /beta/i }));
 
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
         view: "b",
-      })
-    )
-    expect(state.hideWindowMock).toHaveBeenCalled()
-  })
+      }),
+    );
+    expect(state.hideWindowMock).toHaveBeenCalled();
+  });
 
   it("publishes provider settings changes from the settings window", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: ["b"] })
-    renderSettingsWindow()
+    state.isTauriMock.mockReturnValue(true);
+    state.loadPluginSettingsMock.mockResolvedValue({
+      order: ["a", "b"],
+      disabled: ["b"],
+    });
+    renderSettingsWindow();
 
-    await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
-    const betaRow = await screen.findByRole("button", { name: /beta/i })
-    await userEvent.click(within(betaRow).getByRole("checkbox"))
+    await userEvent.click(
+      await screen.findByRole("tab", { name: "Providers" }),
+    );
+    const betaRow = await screen.findByRole("button", { name: /beta/i });
+    await userEvent.click(within(betaRow).getByRole("checkbox"));
 
     await waitFor(() =>
-      expect(eventState.emitMock).toHaveBeenCalledWith("plugin-settings:updated", {
-        order: ["a", "b"],
-        disabled: [],
-      })
-    )
-  })
+      expect(eventState.emitMock).toHaveBeenCalledWith(
+        "plugin-settings:updated",
+        {
+          order: ["a", "b"],
+          disabled: [],
+        },
+      ),
+    );
+  });
 
   it("publishes display preference changes from the settings window", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    renderSettingsWindow()
+    state.isTauriMock.mockReturnValue(true);
+    renderSettingsWindow();
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
-    await userEvent.click(await screen.findByRole("radio", { name: "Used" }))
-    await userEvent.click(await screen.findByRole("radio", { name: /Absolute/ }))
+    await userEvent.click(await screen.findByRole("radio", { name: "Light" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Used" }));
+    await userEvent.click(
+      await screen.findByRole("radio", { name: /Absolute/ }),
+    );
 
     await waitFor(() =>
-      expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
-        key: "themeMode",
-        value: "light",
-      })
-    )
-    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
-      key: "displayMode",
-      value: "used",
-    })
-    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
-      key: "resetTimerDisplayMode",
-      value: "absolute",
-    })
-    expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
-  })
+      expect(eventState.emitMock).toHaveBeenCalledWith(
+        "display-preferences:updated",
+        {
+          key: "themeMode",
+          value: "light",
+        },
+      ),
+    );
+    expect(eventState.emitMock).toHaveBeenCalledWith(
+      "display-preferences:updated",
+      {
+        key: "displayMode",
+        value: "used",
+      },
+    );
+    expect(eventState.emitMock).toHaveBeenCalledWith(
+      "display-preferences:updated",
+      {
+        key: "resetTimerDisplayMode",
+        value: "absolute",
+      },
+    );
+    expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument();
+  });
 
   it("applies display preference updates from the settings window to the tray", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    state.loadThemeModeMock.mockResolvedValue("dark")
-    render(<App />)
+    state.isTauriMock.mockReturnValue(true);
+    state.loadThemeModeMock.mockResolvedValue("dark");
+    render(<App />);
 
-    await waitFor(() => expect(document.documentElement.classList.contains("dark")).toBe(true))
-    await waitFor(() => expect(eventState.handlers.has("display-preferences:updated")).toBe(true))
+    await waitFor(() =>
+      expect(document.documentElement.classList.contains("dark")).toBe(true),
+    );
+    await waitFor(() =>
+      expect(eventState.handlers.has("display-preferences:updated")).toBe(true),
+    );
 
     await act(async () => {
       eventState.handlers.get("display-preferences:updated")?.({
         payload: { key: "themeMode", value: "light" },
-      })
+      });
       eventState.handlers.get("display-preferences:updated")?.({
         payload: { key: "displayMode", value: "used" },
-      })
+      });
       eventState.handlers.get("display-preferences:updated")?.({
         payload: { key: "resetTimerDisplayMode", value: "absolute" },
-      })
+      });
       eventState.handlers.get("display-preferences:updated")?.({
         payload: { key: "menubarIconStyle", value: "donut" },
-      })
-    })
+      });
+    });
 
-    await waitFor(() => expect(document.documentElement.classList.contains("dark")).toBe(false))
-    await waitFor(() => expect(useAppPreferencesStore.getState().displayMode).toBe("used"))
-    expect(useAppPreferencesStore.getState().resetTimerDisplayMode).toBe("absolute")
-    expect(useAppPreferencesStore.getState().menubarIconStyle).toBe("donut")
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-  })
+    await waitFor(() =>
+      expect(document.documentElement.classList.contains("dark")).toBe(false),
+    );
+    await waitFor(() =>
+      expect(useAppPreferencesStore.getState().displayMode).toBe("used"),
+    );
+    expect(useAppPreferencesStore.getState().resetTimerDisplayMode).toBe(
+      "absolute",
+    );
+    expect(useAppPreferencesStore.getState().menubarIconStyle).toBe("donut");
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+  });
 
   it("applies provider settings updates from the settings window to the tray", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: ["b"] })
-    render(<App />)
+    state.isTauriMock.mockReturnValue(true);
+    state.loadPluginSettingsMock.mockResolvedValue({
+      order: ["a", "b"],
+      disabled: ["b"],
+    });
+    render(<App />);
 
-    await screen.findByRole("button", { name: "Alpha" })
-    expect(screen.queryByRole("button", { name: "Beta" })).not.toBeInTheDocument()
+    await screen.findByRole("button", { name: "Alpha" });
+    expect(
+      screen.queryByRole("button", { name: "Beta" }),
+    ).not.toBeInTheDocument();
 
-    await waitFor(() => expect(eventState.handlers.has("plugin-settings:updated")).toBe(true))
+    await waitFor(() =>
+      expect(eventState.handlers.has("plugin-settings:updated")).toBe(true),
+    );
     await act(async () => {
       eventState.handlers.get("plugin-settings:updated")?.({
         payload: { order: ["a", "b"], disabled: [] },
-      })
-    })
+      });
+    });
 
-    expect(await screen.findByRole("button", { name: "Beta" })).toBeInTheDocument()
-  })
+    expect(
+      await screen.findByRole("button", { name: "Beta" }),
+    ).toBeInTheDocument();
+  });
 
   it("enables a provider from settings and renders reset context after data arrives", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: ["b"] })
-    render(<App />)
+    state.isTauriMock.mockReturnValue(true);
+    state.loadPluginSettingsMock.mockResolvedValue({
+      order: ["a", "b"],
+      disabled: ["b"],
+    });
+    render(<App />);
 
-    await screen.findByRole("button", { name: "Alpha" })
-    await waitFor(() => expect(eventState.handlers.has("plugin-settings:updated")).toBe(true))
+    await screen.findByRole("button", { name: "Alpha" });
+    await waitFor(() =>
+      expect(eventState.handlers.has("plugin-settings:updated")).toBe(true),
+    );
 
     await act(async () => {
       eventState.handlers.get("plugin-settings:updated")?.({
         payload: { order: ["a", "b"], disabled: [] },
-      })
-    })
+      });
+    });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Beta" }))
+    await userEvent.click(await screen.findByRole("button", { name: "Beta" }));
 
-    const resetsAt = new Date(Date.now() + 65 * 60 * 1000).toISOString()
+    const resetsAt = new Date(Date.now() + 65 * 60 * 1000).toISOString();
     await act(async () => {
       state.probeHandlers?.onResult({
         providerId: "b",
@@ -1501,59 +1905,71 @@ describe("App", () => {
             periodDurationMs: 5 * 60 * 60 * 1000,
           },
         ],
-      })
-    })
+      });
+    });
 
-    await screen.findByText("Session")
-    expect(screen.getByText("75% left")).toBeInTheDocument()
-    expect(screen.getByText((content) => content.startsWith("Resets "))).toBeInTheDocument()
-  })
+    await screen.findByText("Session");
+    expect(screen.getByText("75% left")).toBeInTheDocument();
+    expect(
+      screen.getByText((content) => content.startsWith("Resets ")),
+    ).toBeInTheDocument();
+  });
 
   it("opens the tray panel from the explicit provider action button", async () => {
-    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
-    renderSettingsWindow()
+    state.loadPluginSettingsMock.mockResolvedValue({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    renderSettingsWindow();
 
-    await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
-    await userEvent.click(await screen.findByRole("button", { name: /beta/i }))
+    await userEvent.click(
+      await screen.findByRole("tab", { name: "Providers" }),
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /beta/i }));
 
-    await userEvent.click(await screen.findByRole("button", { name: /open in tray/i }))
+    await userEvent.click(
+      await screen.findByRole("button", { name: /open in tray/i }),
+    );
 
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
         view: "b",
-      })
-    )
-    expect(state.hideWindowMock).toHaveBeenCalled()
-  })
+      }),
+    );
+    expect(state.hideWindowMock).toHaveBeenCalled();
+  });
 
   it("does not intercept the settings window close button", async () => {
-    state.loadPluginSettingsMock.mockResolvedValue({ order: ["a", "b"], disabled: [] })
-    renderSettingsWindow()
+    state.loadPluginSettingsMock.mockResolvedValue({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    renderSettingsWindow();
 
-    await screen.findByRole("tab", { name: "Providers" })
-    expect(state.closeRequestedHandler).toBeNull()
-  })
+    await screen.findByRole("tab", { name: "Providers" });
+    expect(state.closeRequestedHandler).toBeNull();
+  });
 
   it("logs when tray handle cannot be loaded", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.trayGetByIdMock.mockRejectedValueOnce(new Error("no tray"))
-    render(<App />)
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
-    errorSpy.mockRestore()
-  })
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.trayGetByIdMock.mockRejectedValueOnce(new Error("no tray"));
+    render(<App />);
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    errorSpy.mockRestore();
+  });
 
   it("logs when tray gauge resource cannot be resolved", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.resolveResourceMock.mockRejectedValueOnce(new Error("no resource"))
-    render(<App />)
-    await waitFor(() => expect(errorSpy).toHaveBeenCalled())
-    errorSpy.mockRestore()
-  })
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.resolveResourceMock.mockRejectedValueOnce(new Error("no resource"));
+    render(<App />);
+    await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    errorSpy.mockRestore();
+  });
 
   it("logs error when retry plugin batch fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
     // Push an error result to show Retry button
     state.probeHandlers?.onResult({
@@ -1561,210 +1977,275 @@ describe("App", () => {
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "badge", label: "Error", text: "Something failed" }],
-    })
+    });
 
     // Make startBatch reject on next call (the retry)
-    state.startBatchMock.mockRejectedValueOnce(new Error("retry failed"))
+    state.startBatchMock.mockRejectedValueOnce(new Error("retry failed"));
 
-    const retry = await screen.findByRole("button", { name: "Retry" })
-    await userEvent.click(retry)
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    await userEvent.click(retry);
 
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to retry plugin:", expect.any(Error))
-    )
-    errorSpy.mockRestore()
-  })
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to retry plugin:",
+        expect.any(Error),
+      ),
+    );
+    errorSpy.mockRestore();
+  });
 
   it("sets next update to null when changing interval with all plugins disabled", async () => {
     // All plugins disabled
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: ["a", "b"] })
-    renderSettingsWindow()
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: ["a", "b"],
+    });
+    renderSettingsWindow();
 
     // Change interval - this triggers the else branch (enabledIds.length === 0)
-    await userEvent.click(await screen.findByRole("radio", { name: "30 min" }))
+    await userEvent.click(await screen.findByRole("radio", { name: "30 min" }));
 
-    expect(state.saveAutoUpdateIntervalMock).toHaveBeenCalledWith(30)
-  })
+    expect(state.saveAutoUpdateIntervalMock).toHaveBeenCalledWith(30);
+  });
 
   it("covers interval change branch when plugins exist", async () => {
     // This test ensures the interval change logic is exercised with enabled plugins
     // to cover the if branch (enabledIds.length > 0 sets nextAt)
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    renderSettingsWindow()
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    renderSettingsWindow();
 
     // Change interval - this triggers the if branch (enabledIds.length > 0)
-    await userEvent.click(await screen.findByRole("radio", { name: "1 hour" }))
+    await userEvent.click(await screen.findByRole("radio", { name: "1 hour" }));
 
-    expect(state.saveAutoUpdateIntervalMock).toHaveBeenCalledWith(60)
-  })
+    expect(state.saveAutoUpdateIntervalMock).toHaveBeenCalledWith(60);
+  });
 
   it("fires auto-update interval and schedules next", async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers();
     // Set a very short interval for testing (5 min = 300000ms)
-    state.loadAutoUpdateIntervalMock.mockResolvedValueOnce(5)
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+    state.loadAutoUpdateIntervalMock.mockResolvedValueOnce(5);
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a"],
+      disabled: [],
+    });
 
-    render(<App />)
+    render(<App />);
 
     // Wait for initial setup
-    await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
     // Clear the initial batch call count
-    const initialCalls = state.startBatchMock.mock.calls.length
+    const initialCalls = state.startBatchMock.mock.calls.length;
 
     // Advance time by 5 minutes to trigger the interval
-    await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
 
     // The interval should have fired, calling startBatch again
     await vi.waitFor(() =>
-      expect(state.startBatchMock.mock.calls.length).toBeGreaterThan(initialCalls)
-    )
+      expect(state.startBatchMock.mock.calls.length).toBeGreaterThan(
+        initialCalls,
+      ),
+    );
 
-    vi.useRealTimers()
-  })
+    vi.useRealTimers();
+  });
 
   it("logs error when auto-update batch fails", async () => {
-    vi.useFakeTimers()
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.useFakeTimers();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    state.loadAutoUpdateIntervalMock.mockResolvedValueOnce(5)
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+    state.loadAutoUpdateIntervalMock.mockResolvedValueOnce(5);
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a"],
+      disabled: [],
+    });
     // First call succeeds (initial batch), subsequent calls fail
     state.startBatchMock
       .mockResolvedValueOnce(["a"])
-      .mockRejectedValue(new Error("auto-update failed"))
+      .mockRejectedValue(new Error("auto-update failed"));
 
-    render(<App />)
+    render(<App />);
 
     // Wait for initial batch
-    await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
     // Advance time to trigger the interval (which will fail)
-    await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
 
     await vi.waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to start auto-update batch:", expect.any(Error))
-    )
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to start auto-update batch:",
+        expect.any(Error),
+      ),
+    );
 
-    errorSpy.mockRestore()
-    vi.useRealTimers()
-  })
+    errorSpy.mockRestore();
+    vi.useRealTimers();
+  });
 
   it("logs error when loading auto-update interval fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.loadAutoUpdateIntervalMock.mockRejectedValueOnce(new Error("load interval failed"))
-    render(<App />)
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.loadAutoUpdateIntervalMock.mockRejectedValueOnce(
+      new Error("load interval failed"),
+    );
+    render(<App />);
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to load auto-update interval:", expect.any(Error))
-    )
-    errorSpy.mockRestore()
-  })
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to load auto-update interval:",
+        expect.any(Error),
+      ),
+    );
+    errorSpy.mockRestore();
+  });
 
   it("logs error when loading theme mode fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.loadThemeModeMock.mockRejectedValueOnce(new Error("load theme failed"))
-    render(<App />)
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.loadThemeModeMock.mockRejectedValueOnce(
+      new Error("load theme failed"),
+    );
+    render(<App />);
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to load theme mode:", expect.any(Error))
-    )
-    errorSpy.mockRestore()
-  })
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to load theme mode:",
+        expect.any(Error),
+      ),
+    );
+    errorSpy.mockRestore();
+  });
 
   it("logs error when loading start on login fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.loadStartOnLoginMock.mockRejectedValueOnce(new Error("load start on login failed"))
-    render(<App />)
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.loadStartOnLoginMock.mockRejectedValueOnce(
+      new Error("load start on login failed"),
+    );
+    render(<App />);
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to load start on login:", expect.any(Error))
-    )
-    errorSpy.mockRestore()
-  })
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to load start on login:",
+        expect.any(Error),
+      ),
+    );
+    errorSpy.mockRestore();
+  });
 
   it("refreshes all enabled providers when clicking next update label", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
+    });
     state.probeHandlers?.onResult({
       providerId: "b",
       displayName: "Beta",
       iconUrl: "icon-b",
       lines: [],
-    })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
+    });
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2),
+    );
 
-    const initialCalls = state.startBatchMock.mock.calls.length
-    const refreshButton = await screen.findByRole("button", { name: /Next update in/i })
-    await userEvent.click(refreshButton)
+    const initialCalls = state.startBatchMock.mock.calls.length;
+    const refreshButton = await screen.findByRole("button", {
+      name: /Next update in/i,
+    });
+    await userEvent.click(refreshButton);
 
     await waitFor(() =>
-      expect(state.startBatchMock.mock.calls.length).toBe(initialCalls + 1)
-    )
-    const lastCall = state.startBatchMock.mock.calls[state.startBatchMock.mock.calls.length - 1]
-    expect(lastCall[0]).toEqual(["a", "b"])
-  })
+      expect(state.startBatchMock.mock.calls.length).toBe(initialCalls + 1),
+    );
+    const lastCall =
+      state.startBatchMock.mock.calls[
+        state.startBatchMock.mock.calls.length - 1
+      ];
+    expect(lastCall[0]).toEqual(["a", "b"]);
+  });
 
   it("ignores repeated refresh-all clicks while providers are already refreshing", async () => {
-    state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a", "b"], disabled: [] })
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    });
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
     state.probeHandlers?.onResult({
       providerId: "a",
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
+    });
     state.probeHandlers?.onResult({
       providerId: "b",
       displayName: "Beta",
       iconUrl: "icon-b",
       lines: [],
-    })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
+    });
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2),
+    );
 
-    const initialCalls = state.startBatchMock.mock.calls.length
-    state.startBatchMock.mockImplementation(() => new Promise(() => {}))
+    const initialCalls = state.startBatchMock.mock.calls.length;
+    state.startBatchMock.mockImplementation(() => new Promise(() => {}));
 
-    const refreshButton = await screen.findByRole("button", { name: /Next update in/i })
-    await userEvent.click(refreshButton)
-    await userEvent.click(refreshButton)
-    await userEvent.click(refreshButton)
+    const refreshButton = await screen.findByRole("button", {
+      name: /Next update in/i,
+    });
+    await userEvent.click(refreshButton);
+    await userEvent.click(refreshButton);
+    await userEvent.click(refreshButton);
 
     await waitFor(() =>
-      expect(state.startBatchMock.mock.calls.length).toBe(initialCalls + 1)
-    )
-    const lastCall = state.startBatchMock.mock.calls[state.startBatchMock.mock.calls.length - 1]
-    expect(lastCall[0]).toEqual(["a", "b"])
-  })
+      expect(state.startBatchMock.mock.calls.length).toBe(initialCalls + 1),
+    );
+    const lastCall =
+      state.startBatchMock.mock.calls[
+        state.startBatchMock.mock.calls.length - 1
+      ];
+    expect(lastCall[0]).toEqual(["a", "b"]);
+  });
 
   it("does not leak manual refresh cooldown state when refresh-all start fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
-      render(<App />)
-      await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+      state.loadPluginSettingsMock.mockResolvedValueOnce({
+        order: ["a"],
+        disabled: [],
+      });
+      render(<App />);
+      await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
       state.probeHandlers?.onResult({
         providerId: "a",
         displayName: "Alpha",
         iconUrl: "icon-a",
         lines: [{ type: "text", label: "Now", value: "OK" }],
-      })
-      await screen.findByRole("button", { name: "Retry" })
+      });
+      await screen.findByRole("button", { name: "Retry" });
 
-      state.startBatchMock.mockRejectedValueOnce(new Error("refresh all failed"))
-      const refreshButton = await screen.findByRole("button", { name: /Next update in/i })
-      await userEvent.click(refreshButton)
+      state.startBatchMock.mockRejectedValueOnce(
+        new Error("refresh all failed"),
+      );
+      const refreshButton = await screen.findByRole("button", {
+        name: /Next update in/i,
+      });
+      await userEvent.click(refreshButton);
 
       await waitFor(() =>
-        expect(errorSpy).toHaveBeenCalledWith("Failed to start refresh batch:", expect.any(Error))
-      )
-      expect(state.startBatchMock).toHaveBeenCalledTimes(2)
-      await screen.findByText("Failed to start probe")
+        expect(errorSpy).toHaveBeenCalledWith(
+          "Failed to start refresh batch:",
+          expect.any(Error),
+        ),
+      );
+      expect(state.startBatchMock).toHaveBeenCalledTimes(2);
+      await screen.findByText("Failed to start probe");
 
       // Simulate non-manual success after the failed refresh attempt.
       state.probeHandlers?.onResult({
@@ -1772,8 +2253,8 @@ describe("App", () => {
         displayName: "Alpha",
         iconUrl: "icon-a",
         lines: [{ type: "text", label: "Now", value: "OK" }],
-      })
-      await screen.findByText("Now")
+      });
+      await screen.findByText("Now");
 
       // If manual state leaked, cooldown would hide Retry here.
       state.probeHandlers?.onResult({
@@ -1781,16 +2262,16 @@ describe("App", () => {
         displayName: "Alpha",
         iconUrl: "icon-a",
         lines: [{ type: "badge", label: "Error", text: "Network error" }],
-      })
-      await screen.findByRole("button", { name: "Retry" })
+      });
+      await screen.findByRole("button", { name: "Retry" });
     } finally {
-      errorSpy.mockRestore()
+      errorSpy.mockRestore();
     }
-  })
+  });
 
   it("clears manual refresh cooldown flag on result", async () => {
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
     // Show error to get Retry button
     state.probeHandlers?.onResult({
@@ -1798,10 +2279,10 @@ describe("App", () => {
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "badge", label: "Error", text: "Network error" }],
-    })
+    });
 
-    const retryButton = await screen.findByRole("button", { name: "Retry" })
-    await userEvent.click(retryButton)
+    const retryButton = await screen.findByRole("button", { name: "Retry" });
+    await userEvent.click(retryButton);
 
     // Simulate successful probe result after retry (isManual branch)
     state.probeHandlers?.onResult({
@@ -1809,25 +2290,27 @@ describe("App", () => {
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "text", label: "Now", value: "OK" }],
-    })
+    });
 
     // The result should be displayed (Now is the label from the provider-card)
-    await screen.findByText("Now")
-  })
+    await screen.findByText("Now");
+  });
 
   it("handles retry when plugin settings change to all disabled", async () => {
     // This test covers the resetAutoUpdateSchedule branch when enabledIds.length === 0
     // Setup: start with one plugin, show error, then disable it during retry flow
 
     // Use a mutable settings object we can modify
-    let currentSettings = { order: ["a", "b"], disabled: ["b"] }
-    state.loadPluginSettingsMock.mockImplementation(async () => currentSettings)
+    let currentSettings = { order: ["a", "b"], disabled: ["b"] };
+    state.loadPluginSettingsMock.mockImplementation(
+      async () => currentSettings,
+    );
     state.savePluginSettingsMock.mockImplementation(async (newSettings) => {
-      currentSettings = newSettings
-    })
+      currentSettings = newSettings;
+    });
 
-    render(<App />)
-    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    render(<App />);
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
     // Show error state for plugin "a"
     state.probeHandlers?.onResult({
@@ -1835,131 +2318,166 @@ describe("App", () => {
       displayName: "Alpha",
       iconUrl: "icon-a",
       lines: [{ type: "badge", label: "Error", text: "Network error" }],
-    })
+    });
 
     // Find and prepare to click retry
-    const retryButton = await screen.findByRole("button", { name: "Retry" })
+    const retryButton = await screen.findByRole("button", { name: "Retry" });
 
     // Before clicking, disable "a" to make enabledIds.length === 0 when resetAutoUpdateSchedule runs
     // This simulates a race condition where settings change mid-action
-    currentSettings = { order: ["a", "b"], disabled: ["a", "b"] }
+    currentSettings = { order: ["a", "b"], disabled: ["a", "b"] };
 
-    await userEvent.click(retryButton)
+    await userEvent.click(retryButton);
 
     // The retry should still work (startBatch called) but resetAutoUpdateSchedule
     // should hit the enabledIds.length === 0 branch
-    expect(state.startBatchMock).toHaveBeenCalledWith(["a"])
-  })
+    expect(state.startBatchMock).toHaveBeenCalledWith(["a"]);
+  });
 
   it("clears global shortcut via clear button and invokes update_global_shortcut with null", async () => {
     // Start with shortcut enabled
-    state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+U")
+    state.loadGlobalShortcutMock.mockResolvedValueOnce(
+      "CommandOrControl+Shift+U",
+    );
 
-    renderSettingsWindow()
+    renderSettingsWindow();
 
     // The shortcut should be displayed
-    await screen.findByText(/Cmd \+ Shift \+ U/i)
+    await screen.findByText(/Cmd \+ Shift \+ U/i);
 
     // Find and click the clear button (X icon)
-    const clearButton = await screen.findByRole("button", { name: /clear shortcut/i })
-    await userEvent.click(clearButton)
+    const clearButton = await screen.findByRole("button", {
+      name: /clear shortcut/i,
+    });
+    await userEvent.click(clearButton);
 
     // Clearing should save null and invoke update_global_shortcut with null
-    await waitFor(() => expect(state.saveGlobalShortcutMock).toHaveBeenCalledWith(null))
+    await waitFor(() =>
+      expect(state.saveGlobalShortcutMock).toHaveBeenCalledWith(null),
+    );
     await waitFor(() =>
       expect(state.invokeMock).toHaveBeenCalledWith("update_global_shortcut", {
         shortcut: null,
-      })
-    )
-  })
+      }),
+    );
+  });
 
   it("loads global shortcut from settings on startup", async () => {
-    state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+O")
+    state.loadGlobalShortcutMock.mockResolvedValueOnce(
+      "CommandOrControl+Shift+O",
+    );
 
-    renderSettingsWindow()
+    renderSettingsWindow();
 
     // The shortcut should be displayed (formatted version)
-    await screen.findByText(/Cmd \+ Shift \+ O/i)
-  })
+    await screen.findByText(/Cmd \+ Shift \+ O/i);
+  });
 
   it("shows placeholder when no shortcut is set", async () => {
-    state.loadGlobalShortcutMock.mockResolvedValueOnce(null)
+    state.loadGlobalShortcutMock.mockResolvedValueOnce(null);
 
-    renderSettingsWindow()
+    renderSettingsWindow();
 
     // Should show the placeholder text (appears twice: as main text and as hint)
-    const placeholders = await screen.findAllByText(/Click to set/i)
-    expect(placeholders.length).toBeGreaterThan(0)
-  })
+    const placeholders = await screen.findAllByText(/Click to set/i);
+    expect(placeholders.length).toBeGreaterThan(0);
+  });
 
   it("logs error when loading global shortcut fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-    state.loadGlobalShortcutMock.mockRejectedValueOnce(new Error("load shortcut failed"))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    state.loadGlobalShortcutMock.mockRejectedValueOnce(
+      new Error("load shortcut failed"),
+    );
 
-    render(<App />)
+    render(<App />);
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to load global shortcut:", expect.any(Error))
-    )
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to load global shortcut:",
+        expect.any(Error),
+      ),
+    );
 
-    errorSpy.mockRestore()
-  })
+    errorSpy.mockRestore();
+  });
 
   it("logs error when saving global shortcut fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     // Start with a shortcut so we can clear it
-    state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+U")
-    state.saveGlobalShortcutMock.mockRejectedValueOnce(new Error("save shortcut failed"))
+    state.loadGlobalShortcutMock.mockResolvedValueOnce(
+      "CommandOrControl+Shift+U",
+    );
+    state.saveGlobalShortcutMock.mockRejectedValueOnce(
+      new Error("save shortcut failed"),
+    );
 
-    renderSettingsWindow()
+    renderSettingsWindow();
 
     // Clear the shortcut to trigger save
-    const clearButton = await screen.findByRole("button", { name: /clear shortcut/i })
-    await userEvent.click(clearButton)
+    const clearButton = await screen.findByRole("button", {
+      name: /clear shortcut/i,
+    });
+    await userEvent.click(clearButton);
 
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to save global shortcut:", expect.any(Error))
-    )
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to save global shortcut:",
+        expect.any(Error),
+      ),
+    );
 
-    errorSpy.mockRestore()
-  })
+    errorSpy.mockRestore();
+  });
 
   it("logs error when update_global_shortcut invoke fails", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     // Start with a shortcut so we can clear it
-    state.loadGlobalShortcutMock.mockResolvedValueOnce("CommandOrControl+Shift+U")
+    state.loadGlobalShortcutMock.mockResolvedValueOnce(
+      "CommandOrControl+Shift+U",
+    );
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
-          { id: "a", name: "Alpha", iconUrl: "icon-a", primaryProgressLabel: null, lines: [] },
-        ]
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryProgressLabel: null,
+            lines: [],
+          },
+        ];
       }
       if (cmd === "update_global_shortcut") {
-        throw new Error("shortcut registration failed")
+        throw new Error("shortcut registration failed");
       }
-      return null
-    })
+      return null;
+    });
 
-    renderSettingsWindow()
+    renderSettingsWindow();
 
     // Clear the shortcut to trigger invoke
-    const clearButton = await screen.findByRole("button", { name: /clear shortcut/i })
-    await userEvent.click(clearButton)
+    const clearButton = await screen.findByRole("button", {
+      name: /clear shortcut/i,
+    });
+    await userEvent.click(clearButton);
 
     await waitFor(() =>
-      expect(errorSpy).toHaveBeenCalledWith("Failed to update global shortcut:", expect.any(Error))
-    )
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Failed to update global shortcut:",
+        expect.any(Error),
+      ),
+    );
 
-    errorSpy.mockRestore()
-  })
+    errorSpy.mockRestore();
+  });
 
   it("queues a follow-up tray update when stable icon update is in-flight", async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers();
 
     try {
-      let resolveFirstSetIcon: (() => void) | null = null
+      let resolveFirstSetIcon: (() => void) | null = null;
       const firstSetIcon = new Promise<void>((resolve) => {
-        resolveFirstSetIcon = resolve
-      })
+        resolveFirstSetIcon = resolve;
+      });
 
       state.invokeMock.mockImplementationOnce(async (cmd: string) => {
         if (cmd === "list_plugins") {
@@ -1969,61 +2487,84 @@ describe("App", () => {
               name: "Alpha",
               iconUrl: "icon-a",
               primaryCandidates: ["Session"],
-              lines: [{ type: "progress", label: "Session", scope: "overview" }],
+              lines: [
+                { type: "progress", label: "Session", scope: "overview" },
+              ],
             },
-          ]
+          ];
         }
-        return null
-      })
-      state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+        return null;
+      });
+      state.loadPluginSettingsMock.mockResolvedValueOnce({
+        order: ["a"],
+        disabled: [],
+      });
       state.traySetIconMock
         .mockReturnValueOnce(firstSetIcon)
-        .mockResolvedValue(undefined)
+        .mockResolvedValue(undefined);
 
-      render(<App />)
-      await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-      await vi.waitFor(() => expect(state.trayGetByIdMock).toHaveBeenCalled())
-      await vi.waitFor(() => expect(state.traySetIconMock).toHaveBeenCalledTimes(1))
+      render(<App />);
+      await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
+      await vi.waitFor(() => expect(state.trayGetByIdMock).toHaveBeenCalled());
+      await vi.waitFor(() =>
+        expect(state.traySetIconMock).toHaveBeenCalledTimes(1),
+      );
 
       state.probeHandlers?.onResult({
         providerId: "a",
         displayName: "Alpha",
         iconUrl: "icon-a",
-        lines: [{ type: "progress", label: "Session", used: 20, limit: 100, format: { kind: "percent" } }],
-      })
-      await vi.advanceTimersByTimeAsync(600)
-      expect(state.traySetIconMock).toHaveBeenCalledTimes(1)
+        lines: [
+          {
+            type: "progress",
+            label: "Session",
+            used: 20,
+            limit: 100,
+            format: { kind: "percent" },
+          },
+        ],
+      });
+      await vi.advanceTimersByTimeAsync(600);
+      expect(state.traySetIconMock).toHaveBeenCalledTimes(1);
 
-      resolveFirstSetIcon?.()
-      await Promise.resolve()
-      await vi.advanceTimersByTimeAsync(1)
-      await vi.waitFor(() => expect(state.traySetIconMock).toHaveBeenCalledTimes(2))
+      resolveFirstSetIcon?.();
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(1);
+      await vi.waitFor(() =>
+        expect(state.traySetIconMock).toHaveBeenCalledTimes(2),
+      );
     } finally {
-      vi.useRealTimers()
+      vi.useRealTimers();
     }
-  })
+  });
 
   it("waits for tray resource before initial provider tray update", async () => {
-    let resolveResourcePath: ((value: string) => void) | null = null
-    state.resolveResourceMock.mockReturnValueOnce(new Promise<string>((resolve) => {
-      resolveResourcePath = resolve
-    }))
+    let resolveResourcePath: ((value: string) => void) | null = null;
+    state.resolveResourceMock.mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveResourcePath = resolve;
+      }),
+    );
 
-    render(<App />)
-    await waitFor(() => expect(state.trayGetByIdMock).toHaveBeenCalled())
-    expect(state.resolveResourceMock).toHaveBeenCalledWith("icons/icon.png")
-    expect(state.traySetIconMock).not.toHaveBeenCalled()
+    render(<App />);
+    await waitFor(() => expect(state.trayGetByIdMock).toHaveBeenCalled());
+    expect(state.resolveResourceMock).toHaveBeenCalledWith("icons/icon.png");
+    expect(state.traySetIconMock).not.toHaveBeenCalled();
 
-    resolveResourcePath?.("/resource/icons/icon.png")
+    resolveResourcePath?.("/resource/icons/icon.png");
 
-    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalledWith("/resource/icons/icon.png"))
-    expect(state.traySetIconAsTemplateMock).toHaveBeenCalledWith(false)
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
-    expect(state.traySetTitleMock).toHaveBeenCalledWith("--%")
-  })
+    await waitFor(() =>
+      expect(state.traySetIconMock).toHaveBeenCalledWith(
+        "/resource/icons/icon.png",
+      ),
+    );
+    expect(state.traySetIconAsTemplateMock).toHaveBeenCalledWith(false);
+    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    expect(state.traySetTitleMock).toHaveBeenCalledWith("--%");
+  });
 
   it("clears pending tray timer on unmount", async () => {
-    vi.useFakeTimers()
+    vi.useFakeTimers();
 
     try {
       state.invokeMock.mockImplementationOnce(async (cmd: string) => {
@@ -2034,40 +2575,53 @@ describe("App", () => {
               name: "Alpha",
               iconUrl: "icon-a",
               primaryCandidates: ["Session"],
-              lines: [{ type: "progress", label: "Session", scope: "overview" }],
+              lines: [
+                { type: "progress", label: "Session", scope: "overview" },
+              ],
             },
-          ]
+          ];
         }
-        return null
-      })
-      state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+        return null;
+      });
+      state.loadPluginSettingsMock.mockResolvedValueOnce({
+        order: ["a"],
+        disabled: [],
+      });
 
-      const { unmount } = render(<App />)
-      await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+      const { unmount } = render(<App />);
+      await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
-      state.renderTrayBarsIconMock.mockClear()
+      state.renderTrayBarsIconMock.mockClear();
       state.probeHandlers?.onResult({
         providerId: "a",
         displayName: "Alpha",
         iconUrl: "icon-a",
-        lines: [{ type: "progress", label: "Session", used: 30, limit: 100, format: { kind: "percent" } }],
-      })
+        lines: [
+          {
+            type: "progress",
+            label: "Session",
+            used: 30,
+            limit: 100,
+            format: { kind: "percent" },
+          },
+        ],
+      });
 
-      unmount()
-      await vi.advanceTimersByTimeAsync(600)
+      unmount();
+      await vi.advanceTimersByTimeAsync(600);
 
-      expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled()
+      expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
     } finally {
-      vi.useRealTimers()
+      vi.useRealTimers();
     }
-  })
+  });
 
   it("updates tray icon without requestAnimationFrame (regression test for hidden panel)", async () => {
-    vi.useFakeTimers()
-    const originalRaf = window.requestAnimationFrame
+    vi.useFakeTimers();
+    const originalRaf = window.requestAnimationFrame;
     try {
-      const rafSpy = vi.fn()
-      window.requestAnimationFrame = rafSpy
+      const rafSpy = vi.fn();
+      window.requestAnimationFrame = rafSpy;
 
       state.invokeMock.mockImplementationOnce(async (cmd: string) => {
         if (cmd === "list_plugins") {
@@ -2077,34 +2631,47 @@ describe("App", () => {
               name: "Alpha",
               iconUrl: "icon-a",
               primaryProgressLabel: "Session",
-              lines: [{ type: "progress", label: "Session", scope: "overview" }],
+              lines: [
+                { type: "progress", label: "Session", scope: "overview" },
+              ],
             },
-          ]
+          ];
         }
-        return null
-      })
-      state.loadPluginSettingsMock.mockResolvedValueOnce({ order: ["a"], disabled: [] })
+        return null;
+      });
+      state.loadPluginSettingsMock.mockResolvedValueOnce({
+        order: ["a"],
+        disabled: [],
+      });
 
-      render(<App />)
-      await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
-      await vi.waitFor(() => expect(state.trayGetByIdMock).toHaveBeenCalled())
+      render(<App />);
+      await vi.waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
+      await vi.waitFor(() => expect(state.trayGetByIdMock).toHaveBeenCalled());
 
-      state.traySetIconMock.mockClear()
+      state.traySetIconMock.mockClear();
 
       state.probeHandlers?.onResult({
         providerId: "a",
         displayName: "Alpha",
         iconUrl: "icon-a",
-        lines: [{ type: "progress", label: "Session", used: 50, limit: 100, format: { kind: "percent" } }],
-      })
+        lines: [
+          {
+            type: "progress",
+            label: "Session",
+            used: 50,
+            limit: 100,
+            format: { kind: "percent" },
+          },
+        ],
+      });
 
-      await vi.advanceTimersByTimeAsync(600)
+      await vi.advanceTimersByTimeAsync(600);
 
-      expect(rafSpy).not.toHaveBeenCalled()
-      expect(state.traySetIconMock).toHaveBeenCalled()
+      expect(rafSpy).not.toHaveBeenCalled();
+      expect(state.traySetIconMock).toHaveBeenCalled();
     } finally {
-      window.requestAnimationFrame = originalRaf
-      vi.useRealTimers()
+      window.requestAnimationFrame = originalRaf;
+      vi.useRealTimers();
     }
-  })
-})
+  });
+});

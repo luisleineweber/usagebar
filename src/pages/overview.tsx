@@ -1,13 +1,15 @@
-import { ProviderCard } from "@/components/provider-card"
-import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
-import type { DisplayMode, ResetTimerDisplayMode } from "@/lib/settings"
+import { ProviderCard } from "@/components/provider-card";
+import { Button } from "@/components/ui/button";
+import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views";
+import type { DisplayMode, ResetTimerDisplayMode } from "@/lib/settings";
+import { openSettingsWindow } from "@/lib/settings-window";
 
 interface OverviewPageProps {
-  plugins: DisplayPluginState[]
-  onRetryPlugin?: (pluginId: string) => void
-  displayMode: DisplayMode
-  resetTimerDisplayMode: ResetTimerDisplayMode
-  onResetTimerDisplayModeToggle?: () => void
+  plugins: DisplayPluginState[];
+  onRetryPlugin?: (pluginId: string) => void;
+  displayMode: DisplayMode;
+  resetTimerDisplayMode: ResetTimerDisplayMode;
+  onResetTimerDisplayModeToggle?: () => void;
 }
 
 export function OverviewPage({
@@ -19,10 +21,21 @@ export function OverviewPage({
 }: OverviewPageProps) {
   if (plugins.length === 0) {
     return (
-      <div className="text-center text-muted-foreground py-8">
-        No active providers
+      <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+        <p className="text-sm text-muted-foreground">
+          No active providers yet.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            openSettingsWindow({ tab: "providers" }).catch(console.error);
+          }}
+        >
+          Set up a provider
+        </Button>
       </div>
-    )
+    );
   }
 
   return (
@@ -40,7 +53,9 @@ export function OverviewPage({
           lastManualRefreshAt={plugin.lastManualRefreshAt}
           lastUpdatedAt={plugin.lastSuccessAt}
           status={plugin.status}
-          onRetry={onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined}
+          onRetry={
+            onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined
+          }
           scopeFilter="overview"
           displayMode={displayMode}
           resetTimerDisplayMode={resetTimerDisplayMode}
@@ -48,5 +63,5 @@ export function OverviewPage({
         />
       ))}
     </div>
-  )
+  );
 }

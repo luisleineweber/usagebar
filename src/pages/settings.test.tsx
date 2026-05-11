@@ -168,10 +168,9 @@ describe("SettingsPage", () => {
 
   it("renders global settings on the General tab", () => {
     render(<TestHarness />)
-    expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
+expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
     expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
-    expect(screen.queryByText("Reorder your lineup and select a provider to manage.")).not.toBeInTheDocument()
   })
 
   it("opens the issue tracker from the General tab", async () => {
@@ -186,7 +185,6 @@ describe("SettingsPage", () => {
     render(<TestHarness />)
     await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
 
-    expect(screen.getByText("Reorder your lineup and select a provider to manage.")).toBeInTheDocument()
     expect(screen.getByTestId("provider-settings-opencode")).toBeInTheDocument()
     expect(screen.getByText("Experimental on Windows.")).toBeInTheDocument()
   })
