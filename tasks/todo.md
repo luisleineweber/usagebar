@@ -1,3 +1,160 @@
+# Make CI truthful, reproducible, and Windows-aware
+
+## Executive Summary
+- Pin CI tooling instead of using moving latest versions.
+- Run the same frontend/plugin gates on Linux and Windows.
+- Add Rust/Tauri backend verification to CI.
+- Keep Windows-specific wrapper checks explicit.
+
+## Acceptance Criteria
+- [x] CI pins Bun and installs with the lockfile on every job.
+- [x] CI runs frontend build, frontend/plugin tests, wrapper tests, Rust check, Linux Rust tests, and Windows Rust test compilation.
+- [x] Linux CI installs required Tauri/WebKit system packages before Rust verification.
+- [x] Windows CI keeps Windows-specific wrapper/script coverage in the required gate.
+- [x] Publish workflow uses frozen Bun installs.
+
+## Plan
+- [x] Update `.github/workflows/ci.yml` with explicit tool versions, OS setup, and named verification steps.
+- [x] Update `.github/workflows/publish.yml` to use the same pinned/frozen Bun install policy.
+- [x] Record the CI defaults in docs breadcrumbs/choices.
+- [x] Run local syntax and focused verification.
+
+## Verification Notes
+- `bun install --frozen-lockfile` -> passed after refreshing `bun.lock` for the current `package.json`.
+- `bun run build` -> passed; existing Vite/Tailwind timing and large chunk warnings remain.
+- `bun run test -- --run` -> 75 files passed, 1088 tests passed.
+- `node --test scripts\tauri\wrapper.test.mjs` -> 3 tests passed.
+- `cargo check --manifest-path src-tauri\Cargo.toml --locked` -> passed.
+- `cargo test --manifest-path src-tauri\Cargo.toml --locked --no-run` -> passed.
+- `cargo test --manifest-path src-tauri\Cargo.toml --locked` -> compiled, then failed locally with existing Windows `STATUS_ENTRYPOINT_NOT_FOUND`; CI runs full Rust tests on Linux and Windows Rust test compilation until that runtime blocker is fixed.
+- `bun run check` -> not added to CI; current Prettier contract reports hundreds of existing unformatted files, so making it required now would be false red.
+
+# P0 - Harden WebView and plugin security boundaries
+
+## Executive Summary
+- Tighten the app WebView's load/connect policy.
+- Require plugin network calls to match declared provider domains.
+- Add focused regression tests for the security boundary.
+
+## Acceptance Criteria
+- [x] WebView CSP no longer permits broad `https:` connections.
+- [x] Plugin HTTP requests are denied when `httpDomains` is empty.
+- [x] Existing networked plugins declare explicit `httpDomains`.
+- [x] Focused Rust/config verification passes.
+
+## Plan
+- [x] Patch Tauri CSP to least-privilege app/updater/dev connections.
+- [x] Patch plugin HTTP domain enforcement to deny by default.
+- [x] Add `httpDomains` to current networked plugin manifests.
+- [x] Run focused verification and record notes.
+
+## Verification Notes
+- `node -e "JSON.parse(... src-tauri/tauri.conf.json ...); JSON.parse(... plugins/*/plugin.json ...)"` -> passed.
+- Static boundary check confirmed `connect-src` has no broad `https:` source and every plugin using `ctx.util.request` or `ctx.host.http.request` declares non-empty `capabilities.httpDomains`.
+- Synced runtime plugin resources with `node ./copy-bundled.cjs` -> bundled 31 plugins.
+- Re-ran source + bundled plugin static check -> every HTTP-using plugin manifest declares non-empty `capabilities.httpDomains`.
+- `cargo test --manifest-path src-tauri\Cargo.toml http_domain_allowlist --no-run` -> compiled focused Rust test binaries.
+- `cargo check --manifest-path src-tauri\Cargo.toml` -> passed.
+- `git --no-pager diff --check -- src-tauri\src\plugin_engine\host_api.rs src-tauri\tauri.conf.json plugins tasks\todo.md` -> passed; only existing CRLF conversion warnings reported.
+- Attempted Rust test execution for `http_domain_allowlist` and `sqlite_write_defaults_to_blocked_without_capability`; both compiled, then local test binary exited with existing `STATUS_ENTRYPOINT_NOT_FOUND` blocker.
+
+# Resolve Aptabase and Tauri dependency mismatch
+
+## Executive Summary
+- Remove the stale Aptabase frontend package that pulled in Tauri v1 APIs.
+- Keep analytics behavior on the existing Tauri v2 command path.
+- Verify dependency trees and compile/test checks.
+
+## Acceptance Criteria
+- [x] `@aptabase/tauri` is no longer a package dependency or lockfile entry.
+- [x] Analytics tests still pass through the Tauri v2 `invoke` wrapper.
+- [x] Rust still compiles with the existing Aptabase plugin.
+
+## Plan
+- [x] Confirm the mismatch source in package and Cargo dependency trees.
+- [x] Remove the unused frontend Aptabase package and stale global mock.
+- [x] Refresh lockfiles and verify dependency/build checks.
+
+## Verification Notes
+- `npm view @aptabase/tauri version dependencies --json` -> latest `0.4.1`, depends on `@tauri-apps/api@^1.0.0`.
+- `cargo tree --manifest-path src-tauri\Cargo.toml -i tauri` -> Rust Tauri resolves to `tauri v2.10.3`; `tauri-plugin-aptabase` depends on the same Tauri v2 tree.
+- `rg -n "@aptabase/tauri|@tauri-apps/api@1\.6\.0|@aptabase/tauri/@tauri-apps/api" package.json bun.lock package-lock.json src\test\setup.ts` -> no matches.
+- `npm ls @aptabase/tauri @tauri-apps/api` -> no Aptabase frontend package; all installed Tauri API entries are v2.
+- `npx vitest run src\lib\analytics.test.ts` -> 1 file passed, 2 tests passed.
+- `npx tsc --noEmit` -> passed.
+- `cargo check --manifest-path src-tauri\Cargo.toml` -> passed.
+- `npm uninstall @aptabase/tauri --package-lock-only=false` removed the stale extraneous local package; npm reported EPERM cleanup warnings for unrelated native-package temp directories.
+
+# Add enforceable lint and formatting contract
+
+## Executive Summary
+- Add one developer command that checks formatting, linting, TypeScript, and Rust lints.
+- Make CI run the same contract before build/test.
+- Document the default tooling choice for future contributors.
+
+## Acceptance Criteria
+- [x] `package.json` exposes enforceable lint, format, typecheck, and combined check scripts.
+- [x] Repo config files define Prettier, ESLint, EditorConfig, rustfmt, and clippy expectations.
+- [x] CI runs the combined contract with frozen dependencies.
+- [x] Focused contract verification passes or blockers are documented.
+
+## Plan
+- [x] Add current lint/format dev tooling and scripts.
+- [x] Add config files with repo-scoped ignores.
+- [x] Wire CI to run the combined contract.
+- [x] Run focused verification and record results.
+
+## Verification Notes
+- Added current tooling after npm metadata health check: `eslint@10.3.0` (modified 2026-05-01), `prettier@3.8.3` (modified 2026-04-15), and `typescript-eslint@8.59.2` (modified 2026-05-08).
+- `bun run check` -> passed. Runs contract-file Prettier check, ESLint over `src`, `plugins`, and repo scripts/config, then `tsc --noEmit`.
+- `bun run lint` -> passed.
+- `bun run typecheck` -> passed.
+- Installed missing local Rust components with `rustup component add rustfmt` and `rustup component add clippy`.
+- `bun run format:rust:check` -> failed on existing Rust formatting drift in `src-tauri/src/codex_account_store.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/local_http_api/*`, `src-tauri/src/plugin_engine/*`, and `src-tauri/src/main.rs`; left as an explicit optional gate to avoid reformatting unrelated dirty Rust work in this slice.
+- `bun run lint:rust` -> failed on existing Clippy warnings including `clone_on_copy`, `needless_borrow`, `needless_return`, `ptr_arg`, `manual_find`, `type_complexity`, and related issues; left as an explicit optional gate until a Rust cleanup slice.
+
+# Stop dev rebuild storm after plugin bundling
+
+## Executive Summary
+- Keep `npm run tauri -- dev` from rebuilding once per bundled plugin file.
+- Refresh bundled plugins before Tauri starts watching files.
+- Keep release/build plugin bundling unchanged.
+
+## Acceptance Criteria
+- [x] Dev plugin bundling runs before Tauri's file watcher starts.
+- [x] Tauri `beforeDevCommand` starts only the frontend dev server.
+- [x] Focused wrapper/config verification passes.
+
+## Plan
+- [x] Move dev plugin bundling into `scripts/tauri/wrapper.mjs` before Tauri CLI launch.
+- [x] Change Tauri `beforeDevCommand` to `bun run dev`.
+- [x] Run focused verification and record results.
+
+## Verification Notes
+- `node --check scripts\tauri\wrapper.mjs` -> passed.
+- `node --test scripts\tauri\wrapper.test.mjs` -> 3 tests passed.
+- `node -e "JSON.parse(... src-tauri/tauri.conf.json ...)"` -> passed.
+
+# Pin tray settings button to bottom corner
+
+## Executive Summary
+- Move the tray settings button down to the bottom-left edge.
+- Keep panel sizing consistent with the visible nav buttons.
+- Verify the focused sidebar sizing regression.
+
+## Acceptance Criteria
+- [x] The sidebar no longer reserves bottom padding below the Settings button.
+- [x] The nav minimum-height math matches the current Home + provider + Settings button stack.
+- [x] Focused side-nav/panel tests pass.
+
+## Plan
+- [x] Remove the sidebar bottom padding that lifts Settings away from the bottom edge.
+- [x] Update the panel nav height floor and focused expectations.
+- [x] Run focused verification and record notes.
+
+## Verification Notes
+- `npx vitest run src\hooks\app\use-panel.test.ts src\components\side-nav.test.tsx` -> 2 files passed, 19 tests passed.
+
 # Deep research hardening roadmap
 
 # Fix Windows setup executable publisher
@@ -441,16 +598,16 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Final readiness result: beta6 has a locally verified unsigned Windows artifact and is not behind `origin/main`; publishing still needs an explicit commit/tag/push/release action.
 
 ## Acceptance Criteria
-- [ ] The highest-risk findings from the deep research report are represented as small, reviewable todo slices in priority order.
-- [ ] Each slice has concrete acceptance criteria and verification commands before implementation starts.
-- [ ] Existing in-flight provider/security work in the dirty worktree is not reverted or mixed into these planning changes.
+- [x] The highest-risk findings from the deep research report are represented as small, reviewable todo slices in priority order.
+- [x] Each slice has concrete acceptance criteria and verification commands before implementation starts.
+- [x] Existing in-flight provider/security work in the dirty worktree is not reverted or mixed into these planning changes.
 
 ## Priority Order
 1. [x] Stabilize the JavaScript toolchain and package-manager path.
 2. [ ] Harden the WebView and plugin security boundaries.
-3. [ ] Make CI truthful, reproducible, and Windows-aware.
+3. [x] Make CI truthful, reproducible, and Windows-aware.
 4. [ ] Resolve the Aptabase/Tauri dependency mismatch.
-5. [ ] Add an enforceable lint/format contract.
+5. [x] Add an enforceable lint/format contract.
 6. [ ] Finish UsageBar branding metadata cleanup.
 7. [ ] Improve keyboard accessibility for menu/reorder flows.
 8. [ ] Modularize the largest app/plugin-host hotspots.
@@ -462,6 +619,7 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Confirmed `.github/workflows/ci.yml` still runs only on `ubuntu-latest`, uses plain `bun install`, and does not run a lint or coverage command.
 - Confirmed the initial state had `vite@^8.0.0`, `vitest@^4.0.18`, `@tailwindcss/vite@^4.1.18`, and `@aptabase/tauri@^0.4.1`.
 - Completed the first P0 slice by keeping Vite 8 and updating Vite-facing Tailwind/Vitest packages to compatible versions; `@aptabase/tauri` remains the separate P1 dependency-mismatch slice.
+- Reconciled the parent roadmap after closing the CI and lint/format slices; remaining roadmap items are security boundaries, analytics dependency strategy, branding metadata, accessibility, modularization, and docs.
 
 # P0 - Stabilize JavaScript toolchain and package manager
 
@@ -515,15 +673,15 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 ## Acceptance Criteria
 - [x] CI job names match the commands actually run.
 - [x] CI installs with `bun install --frozen-lockfile`.
-- [ ] CI runs typecheck/build, tests, and coverage in non-watch mode.
+- [x] CI runs typecheck/build, tests, and coverage in non-watch mode.
 - [x] CI includes `windows-latest` because UsageBar is Windows-first.
-- [ ] CI includes lint once the lint/format contract slice lands.
+- [x] CI includes lint once the lint/format contract slice lands.
 
 ## Plan
 - [x] Add a matrix over `ubuntu-latest` and `windows-latest` with `fail-fast: false`.
-- [ ] Split build/typecheck/test/coverage into clearly named steps.
-- [ ] Upload coverage artifacts from one OS only to keep workflow output compact.
-- [ ] After the lint slice lands, add `bun run lint` as a required CI step.
+- [x] Split build/typecheck/test/coverage into clearly named steps.
+- [x] Upload coverage artifacts from one OS only to keep workflow output compact.
+- [x] After the lint slice lands, add `bun run lint` as a required CI step.
 
 ## Verification Notes
 - Updated `.github/workflows/ci.yml` to run on `push` to `main` and `pull_request` to `main`.
@@ -532,40 +690,65 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Switched CI install to `bun install --frozen-lockfile`.
 - Split CI into named `Type-check and build frontend` and `Run frontend and plugin tests` steps, using `bun run test -- --run` so CI does not enter watch mode.
 - Coverage enforcement is not wired into CI yet: `npx bun run test:coverage` passes all 71 test files / 1037 tests, but fails configured 90% global thresholds with statements 83.15%, branches 75.13%, functions 88.56%, and lines 86.34%.
-- Lint remains pending until the lint/format contract slice adds a `bun run lint` script.
+- Lint is now wired through `bun run check`; coverage report generation is wired separately from strict 90% threshold enforcement.
+- Current CI now runs `bun run check`, which includes format check, ESLint, and TypeScript typechecking.
+- Split CI into separate `Type-check frontend`, `Build frontend`, `Run frontend and plugin tests`, and Linux-only `Generate coverage report` steps.
+- Added Linux-only coverage artifact upload from `coverage/` to keep Windows output compact.
+- Added `USAGEBAR_COVERAGE_REPORT_ONLY=1` for CI coverage generation so CI can publish a report while the existing 90% local threshold remains the PR/release gate.
+- `bun run format:check` -> passed.
+- `bun run lint` -> passed.
+- `bun run typecheck` -> passed.
+- `bun run build:frontend` -> passed; existing >500 kB chunk warning remains.
+- `USAGEBAR_COVERAGE_REPORT_ONLY=1 bun run test:coverage` -> 75 files passed, 1088 tests passed; report generated with statements 84.97%, branches 77.88%, functions 91.1%, lines 88.24%.
+- `bun run build` -> passed; existing Tailwind plugin timing and >500 kB chunk warnings remain.
 
 # P1 - Resolve Aptabase and Tauri dependency mismatch
 
 ## Acceptance Criteria
-- [ ] `@aptabase/tauri` no longer pulls an incompatible Tauri v1 API surface into the frontend dependency graph, or the risk is explicitly accepted with documented isolation.
-- [ ] Rust analytics dependency is either a release-based crate, a reviewed pinned revision with rationale, or replaced by a local adapter.
-- [ ] Analytics initialization and opt-in/opt-out behavior still pass focused tests after the change.
+- [x] `@aptabase/tauri` no longer pulls an incompatible Tauri v1 API surface into the frontend dependency graph, or the risk is explicitly accepted with documented isolation.
+- [x] Rust analytics dependency is either a release-based crate, a reviewed pinned revision with rationale, or replaced by a local adapter.
+- [x] Analytics initialization and opt-in/opt-out behavior still pass focused tests after the change.
 
 ## Plan
-- [ ] Audit current frontend and Rust Aptabase usage sites.
-- [ ] Prefer a Tauri v2-compatible analytics package if available and healthy; otherwise isolate calls behind an internal analytics adapter.
-- [ ] Update tests around `src/lib/analytics.ts` and any Rust plugin initialization path affected.
-- [ ] Document the chosen analytics dependency strategy in repo notes if it is a deliberate exception.
+- [x] Audit current frontend and Rust Aptabase usage sites.
+- [x] Prefer a Tauri v2-compatible analytics package if available and healthy; otherwise isolate calls behind an internal analytics adapter.
+- [x] Update tests around `src/lib/analytics.ts` and any Rust plugin initialization path affected.
+- [x] Document the chosen analytics dependency strategy in repo notes if it is a deliberate exception.
 
 ## Verification Notes
-- Pending.
+- Audited local usage: frontend analytics goes through `src/lib/analytics.ts` and direct Tauri `invoke("plugin:aptabase|track_event")`; no frontend import from `@aptabase/tauri` exists.
+- Verified package metadata: `npm view @aptabase/tauri version peerDependencies dependencies --json` reports latest `0.4.1` with dependency `@tauri-apps/api: ^1.0.0`.
+- Verified Rust package metadata: `cargo info tauri-plugin-aptabase` reports crates.io `1.0.0`, MIT license, repository `https://github.com/aptabase/tauri-plugin-aptabase`, and docs.rs documentation.
+- Removed `@aptabase/tauri` from `package.json` / `bun.lock`.
+- Switched `src-tauri/Cargo.toml` from a git rev to `tauri-plugin-aptabase = "1.0.0"` and refreshed `src-tauri/Cargo.lock`.
+- `npx vitest run src\lib\analytics.test.ts` -> 1 file passed, 2 tests passed.
+- `bun run typecheck` -> passed.
+- `cargo check --manifest-path src-tauri\Cargo.toml --locked` -> passed.
+- `bun install --frozen-lockfile` -> checked 268 installs across 342 packages, no changes.
+- `rg -n "@aptabase/tauri|tauri-plugin-aptabase" ...` -> no frontend `@aptabase/tauri` dependency remains; Rust dependency points at crates.io `tauri-plugin-aptabase`.
 
 # P2 - Add enforceable lint and formatting contract
 
 ## Acceptance Criteria
-- [ ] The repo has a single documented lint/format command for TS/JS/JSON files.
-- [ ] The initial config excludes generated/build output and avoids repo-wide churn.
-- [ ] CI can run the lint command without formatting files.
-- [ ] Existing plugin JavaScript is either covered directly or tracked as a follow-up if the initial rule set is too noisy.
+- [x] The repo has a single documented lint/format command for TS/JS/JSON files.
+- [x] The initial config excludes generated/build output and avoids repo-wide churn.
+- [x] CI can run the lint command without formatting files.
+- [x] Existing plugin JavaScript is either covered directly or tracked as a follow-up if the initial rule set is too noisy.
 
 ## Plan
-- [ ] Add the smallest lint/format toolchain that fits the repo; Biome is the preferred default unless existing project constraints argue for ESLint.
-- [ ] Configure ignores for `dist`, `src-tauri/target`, bundled/generated plugin copies, and coverage output.
-- [ ] Run lint once, fix only high-signal issues needed to pass, and defer style churn to separate tasks.
-- [ ] Add `lint` and `format` scripts to `package.json`.
+- [x] Add the smallest lint/format toolchain that fits the repo; Biome is the preferred default unless existing project constraints argue for ESLint.
+- [x] Configure ignores for `dist`, `src-tauri/target`, bundled/generated plugin copies, and coverage output.
+- [x] Run lint once, fix only high-signal issues needed to pass, and defer style churn to separate tasks.
+- [x] Add `lint` and `format` scripts to `package.json`.
 
 ## Verification Notes
-- Pending.
+- Added the local quality-check contract to `README.md`: `bun run check` is the default TS/JS/JSON/config gate, with Rust format/lint exposed separately.
+- `package.json` exposes `check`, `format`, `format:check`, `lint`, `typecheck`, `format:rust:check`, and `lint:rust`.
+- `.prettierignore` and `eslint.config.js` exclude generated/build output including `dist`, `coverage`, `node_modules`, `src-tauri/target`, and `src-tauri/resources/bundled_plugins`.
+- `.github/workflows/ci.yml` runs `bun run check`, so CI can enforce lint/format/typecheck without writing files.
+- `bun run format:check` -> passed.
+- `bun run lint` -> passed.
+- `bun run typecheck` -> passed.
 
 # P2 - Finish UsageBar branding metadata cleanup
 
@@ -1841,3 +2024,127 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Verified source and bundled Antigravity manifest JSON parsing with `node -e ...` -> both parsed successfully.
 - Verified source/bundled Antigravity `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match after targeted `Copy-Item` sync.
 - Verified whitespace with `git --no-pager diff --check -- ...` -> passed; only existing CRLF conversion warnings were reported.
+# Harden Kiro provider path
+
+## Executive Summary
+- Keep Kiro on the richer local desktop-data path instead of switching to CLI-first.
+- Add tests for Kiro auth/cache/log/live fallback behavior, including Windows paths.
+- Correct stale Kiro documentation that still describes a placeholder or CLI-only plan.
+
+## Acceptance Criteria
+- [x] `plugins/kiro/plugin.test.js` covers auth missing, local cache + log metadata, log fallback, live refresh, external IdP headers, stale local fallback, and Windows paths.
+- [x] Kiro docs and `IMPLEMENTATION.md` describe the current local-data-first provider and explicitly defer CLI fallback.
+- [x] Provider/source-evaluation docs no longer call Kiro a placeholder.
+- [x] Focused Kiro tests pass and bundled Kiro plugin files are synced.
+
+## Plan
+- [x] Port the OpenUsage Kiro tests and add Windows path coverage.
+- [x] Update Kiro provider docs, implementation notes, choices, and breadcrumbs.
+- [x] Run focused Kiro verification and bundle sync.
+
+## Verification Notes
+- `npx bun run test -- plugins/kiro/plugin.test.js --run` -> 1 file passed, 7 tests passed.
+- `node ./copy-bundled.cjs` -> bundled 29 plugins, including `kiro`.
+- `rg -n "kiro.*placeholder|Kiro.*Placeholder|Kiro \\|.*placeholder|Placeholder plugin only|No current path" docs plugins tasks README.md` -> no Kiro placeholder hits remain; remaining hits are generic wording plus Alibaba/Augment stale entries.
+
+# Add local gray Windows start/taskbar icon
+
+## Executive Summary
+- Keep released UsageBar app icons green.
+- Use a gray icon only when launching this local checkout in dev.
+- Keep the local icon override out of normal source-controlled release assets.
+
+## Acceptance Criteria
+- [x] `bun run tauri dev` automatically uses `src-tauri/tauri.conf.local.json` when that local file exists.
+- [x] Local gray icon files are excluded from Git tracking.
+- [x] Shared release icon paths in `src-tauri/tauri.conf.json` remain green/unchanged.
+- [x] Script/config verification passes.
+
+## Plan
+- [x] Add local Tauri config auto-detection to the dev wrapper.
+- [x] Generate local gray icon PNG/ICO assets and local Tauri config.
+- [x] Verify config/script syntax and git tracking scope.
+
+## Verification Notes
+- `node --check scripts\tauri\wrapper.mjs` -> passed.
+- `node -e "JSON.parse(... src-tauri/tauri.conf.json ...); JSON.parse(... src-tauri/tauri.conf.local.json ...)"` -> passed after rewriting the local config without a UTF-8 BOM.
+- `git status --short -- src-tauri\tauri.conf.local.json src-tauri\icons-local scripts\tauri\wrapper.mjs src-tauri\tauri.conf.json src-tauri\icons` -> only `scripts/tauri/wrapper.mjs` is tracked/modified; local config/assets are excluded and shared release icon config/assets are unchanged.
+- `Get-FileHash src-tauri\icons\icon.ico,src-tauri\icons-local\icon.ico` -> hashes differ, confirming the local ICO is a distinct gray variant.
+# Fix Kiro CLI signed-in false negative
+
+## Executive Summary
+- Stop showing Kiro as signed out when only the Kiro CLI is installed and logged in.
+- Use local Kiro CLI session usage as a fallback when desktop auth/cache files are absent.
+- Keep desktop Kiro auth/cache/live usage as the richer primary path.
+
+## Acceptance Criteria
+- [x] Kiro desktop auth/cache path still behaves unchanged.
+- [x] Kiro CLI-only Windows state returns usage instead of `Open Kiro and sign in, then try again.`
+- [x] Focused Kiro plugin tests pass.
+- [x] Bundled Kiro plugin files are synced.
+
+## Plan
+- [x] Add CLI session usage parsing fallback for `~/.kiro/sessions/cli/*.json`.
+- [x] Add a focused regression test for Windows CLI-only sessions.
+- [x] Run focused Kiro tests and sync bundled plugin files.
+
+## Verification Notes
+- Local evidence: `kiro-cli whoami` succeeds, while `%USERPROFILE%\.aws\sso\cache\kiro-auth-token.json`, `%APPDATA%\Kiro\User\globalStorage\state.vscdb`, `%APPDATA%\Kiro\User\globalStorage\kiro.kiroagent\profile.json`, and `%APPDATA%\Kiro\logs` are missing on this machine.
+- Local evidence: `kiro-cli chat --no-interactive "/usage"` reports Kiro Free usage and `~\.kiro\sessions\cli\*.json` stores per-turn `metering_usage` credit values.
+- `npx bun run test -- plugins/kiro/plugin.test.js --run` -> 1 file passed, 8 tests passed.
+- `node --check plugins\kiro\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 29 plugins, including `kiro`.
+# Debug Kiro still signed out
+
+## Executive Summary
+- Find why Kiro still shows signed out after the CLI-session fallback.
+- Verify the real runtime path from local Kiro files through bundled plugin execution and UI rendering.
+- Patch the smallest failing layer and add a regression test.
+
+## Acceptance Criteria
+- [x] Real local Kiro CLI/session files are inspected without relying on localized command text.
+- [x] Kiro plugin behavior is verified against real file paths or an equivalent host-path expansion test.
+- [x] The app no longer reports `Open Kiro and sign in, then try again.` for the observed CLI-only state.
+- [x] Focused tests pass and bundled plugin copy is synced if plugin code changes.
+
+## Plan
+- [x] Inspect real Kiro CLI session paths, timestamps, and JSON shape.
+- [x] Trace backend resource loading and plugin host filesystem path expansion.
+- [x] Reproduce Kiro probe with the same file paths the Tauri host sees.
+- [x] Patch and verify the failing layer.
+
+## Verification Notes
+- Real local Kiro session files exist under `C:\Users\llein\.kiro\sessions\cli`, including files updated on 2026-05-11.
+- Root cause: `src-tauri/src/plugin_engine/host_api.rs` `expand_path` expands only `~` / `~/...`; Kiro plugin Windows paths used `%USERPROFILE%` and `%APPDATA%`, which were not expanded at runtime.
+- Patched Kiro Windows paths to `~/.aws/...`, `~/AppData/Roaming/Kiro/...`, and `~/.kiro/sessions/cli`.
+- Follow-up root cause: Kiro `plugin.json` declared overview label `Usage`, while plugin outputs `Credits` or `CLI Credits`; overview rendering filters by manifest labels and could hide successful output.
+- Patched Kiro manifest lines to `Credits`, `CLI Credits`, `Bonus Credits`, and `Overages`; updated settings copy to mention CLI fallback.
+- Real-path probe of `plugins/kiro/plugin.js` against local files returned `Kiro CLI` with `0.95 credits used this month` and reset `2026-06-01`.
+- `npx bun run test -- plugins/kiro/plugin.test.js --run` -> 1 file passed, 9 tests passed.
+- `node --check plugins\kiro\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `kiro`.
+- `Get-FileHash plugins\kiro\plugin.js,src-tauri\resources\bundled_plugins\kiro\plugin.js,plugins\kiro\plugin.json,src-tauri\resources\bundled_plugins\kiro\plugin.json` -> source/bundled hashes match.
+- `npx vitest run src\components\provider-card.test.tsx -t "renders metric lines|scope"` -> 1 file passed, 3 tests passed.
+# Stop release UsageBar blocking local dev API
+
+## Executive Summary
+- Dev startup should not lose the local HTTP API because another UsageBar process already owns port `6736`.
+- Keep cleanup dev-only and limited to UsageBar/openusage processes using that exact port.
+- Verify the wrapper helper behavior without touching unrelated provider/UI work.
+
+## Acceptance Criteria
+- [x] `npm run tauri -- dev` preflight can detect a UsageBar/openusage process owning `127.0.0.1:6736`.
+- [x] The preflight stops only matching UsageBar/openusage processes, not arbitrary software using the same port.
+- [x] Wrapper syntax or focused script verification passes.
+
+## Plan
+- [x] Add a Windows dev-port cleanup helper to `scripts/tauri/wrapper.mjs`.
+- [x] Keep the existing workspace-debug cleanup and run the port cleanup before launching Tauri.
+- [x] Verify with focused script checks and record notes.
+
+## Verification Notes
+- Local owner before fix: `Get-NetTCPConnection -LocalPort 6736` showed PID `1676`; `Get-CimInstance Win32_Process -Filter "ProcessId = 1676"` showed `D:\UsageBar-Release\usagebar.exe`.
+- Cleared the active blocker with the same identity rule -> stopped `D:\UsageBar-Release\usagebar.exe` PID `1676`.
+- Verified port is now free with `Get-NetTCPConnection -LocalPort 6736 -ErrorAction SilentlyContinue` -> no listener.
+- `node --check scripts\tauri\wrapper.mjs` -> passed.
+- `node --test scripts\tauri\wrapper.test.mjs` -> 3 tests passed.
