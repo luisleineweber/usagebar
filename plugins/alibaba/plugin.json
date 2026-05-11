@@ -13,7 +13,23 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Quota", "scope": "overview", "primaryOrder": 1 },
-    { "type": "badge", "label": "Plan", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Quota",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "badge",
+      "label": "Plan",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "devops.aliyuncs.com",
+      "devops.cn-beijing.aliyuncs.com"
+    ]
+  }
 }

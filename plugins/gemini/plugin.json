@@ -12,9 +12,35 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Pro", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Flash", "scope": "overview", "primaryOrder": 2 },
-    { "type": "progress", "label": "Flash Lite", "scope": "detail" },
-    { "type": "text", "label": "Account", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Pro",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "progress",
+      "label": "Flash",
+      "scope": "overview",
+      "primaryOrder": 2
+    },
+    {
+      "type": "progress",
+      "label": "Flash Lite",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Account",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "oauth2.googleapis.com",
+      "cloudcode-pa.googleapis.com",
+      "cloudresourcemanager.googleapis.com"
+    ]
+  }
 }

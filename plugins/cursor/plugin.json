@@ -12,20 +12,67 @@
     }
   },
   "capabilities": {
-    "sqliteWrite": true
+    "sqliteWrite": true,
+    "http": true,
+    "httpDomains": [
+      "api2.cursor.sh",
+      "cursor.com"
+    ]
   },
   "links": [
-    { "label": "Status", "url": "https://status.cursor.com/" },
-    { "label": "Dashboard", "url": "https://www.cursor.com/dashboard" }
+    {
+      "label": "Status",
+      "url": "https://status.cursor.com/"
+    },
+    {
+      "label": "Dashboard",
+      "url": "https://www.cursor.com/dashboard"
+    }
   ],
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Total usage", "scope": "overview", "primaryOrder": 2 },
-    { "type": "progress", "label": "Requests", "scope": "overview", "primaryOrder": 3 },
-    { "type": "progress", "label": "On-demand", "scope": "overview", "primaryOrder": 4 },
-    { "type": "text", "label": "Included budget", "scope": "detail" },
-    { "type": "text", "label": "On-demand status", "scope": "detail" },
-    { "type": "progress", "label": "Auto usage", "scope": "detail" },
-    { "type": "progress", "label": "API usage", "scope": "detail" }
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "progress",
+      "label": "Total usage",
+      "scope": "overview",
+      "primaryOrder": 2
+    },
+    {
+      "type": "progress",
+      "label": "Requests",
+      "scope": "overview",
+      "primaryOrder": 3
+    },
+    {
+      "type": "progress",
+      "label": "On-demand",
+      "scope": "overview",
+      "primaryOrder": 4
+    },
+    {
+      "type": "text",
+      "label": "Included budget",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "On-demand status",
+      "scope": "detail"
+    },
+    {
+      "type": "progress",
+      "label": "Auto usage",
+      "scope": "detail"
+    },
+    {
+      "type": "progress",
+      "label": "API usage",
+      "scope": "detail"
+    }
   ]
 }

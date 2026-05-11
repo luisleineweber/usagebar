@@ -12,8 +12,27 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Free", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Bonus", "scope": "detail" },
-    { "type": "text", "label": "Credits", "scope": "overview" }
-  ]
+    {
+      "type": "progress",
+      "label": "Free",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Bonus",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Credits",
+      "scope": "overview"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "ampcode.com"
+    ]
+  }
 }

@@ -13,12 +13,38 @@
     }
   },
   "links": [
-    { "label": "Dashboard", "url": "https://app.augmentcode.com/account/subscription" }
+    {
+      "label": "Dashboard",
+      "url": "https://app.augmentcode.com/account/subscription"
+    }
   ],
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Remaining", "scope": "overview" },
-    { "type": "text", "label": "Account", "scope": "detail" },
-    { "type": "text", "label": "Organization", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Remaining",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Account",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Organization",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "app.augmentcode.com"
+    ]
+  }
 }

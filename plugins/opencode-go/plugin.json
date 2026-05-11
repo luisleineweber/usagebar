@@ -43,5 +43,11 @@
       "label": "Monthly",
       "scope": "detail"
     }
-  ]
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "opencode.ai"
+    ]
+  }
 }

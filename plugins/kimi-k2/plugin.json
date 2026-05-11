@@ -14,8 +14,27 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Balance", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Voucher balance", "scope": "detail" },
-    { "type": "text", "label": "Cash balance", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Balance",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Voucher balance",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Cash balance",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "api.moonshot.ai"
+    ]
+  }
 }

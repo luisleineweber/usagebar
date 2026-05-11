@@ -13,14 +13,46 @@
     }
   },
   "links": [
-    { "label": "Usage", "url": "https://admin.mistral.ai/organization/usage" },
-    { "label": "Status", "url": "https://status.mistral.ai/" }
+    {
+      "label": "Usage",
+      "url": "https://admin.mistral.ai/organization/usage"
+    },
+    {
+      "label": "Status",
+      "url": "https://status.mistral.ai/"
+    }
   ],
   "lines": [
-    { "type": "text", "label": "Spend", "scope": "overview" },
-    { "type": "text", "label": "Input tokens", "scope": "detail" },
-    { "type": "text", "label": "Output tokens", "scope": "detail" },
-    { "type": "text", "label": "Cached tokens", "scope": "detail" },
-    { "type": "text", "label": "Models", "scope": "detail" }
-  ]
+    {
+      "type": "text",
+      "label": "Spend",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Input tokens",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Output tokens",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Cached tokens",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Models",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "admin.mistral.ai"
+    ]
+  }
 }

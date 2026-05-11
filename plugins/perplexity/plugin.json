@@ -13,8 +13,27 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Recurring credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Purchased credits", "scope": "overview" },
-    { "type": "progress", "label": "Bonus credits", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Recurring credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "progress",
+      "label": "Purchased credits",
+      "scope": "overview"
+    },
+    {
+      "type": "progress",
+      "label": "Bonus credits",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "www.perplexity.ai"
+    ]
+  }
 }

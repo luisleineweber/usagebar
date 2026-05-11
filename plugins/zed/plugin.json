@@ -13,19 +13,73 @@
     }
   },
   "links": [
-    { "label": "Dashboard", "url": "https://dashboard.zed.dev/account" },
-    { "label": "Docs", "url": "https://zed.dev/docs" }
+    {
+      "label": "Dashboard",
+      "url": "https://dashboard.zed.dev/account"
+    },
+    {
+      "label": "Docs",
+      "url": "https://zed.dev/docs"
+    }
   ],
   "lines": [
-    { "type": "badge", "label": "Source", "scope": "detail" },
-    { "type": "progress", "label": "Spend", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Limit", "scope": "detail" },
-    { "type": "text", "label": "Updated", "scope": "detail" },
-    { "type": "text", "label": "Prompts", "scope": "detail" },
-    { "type": "text", "label": "Input", "scope": "detail" },
-    { "type": "text", "label": "Output", "scope": "detail" },
-    { "type": "text", "label": "Cache read", "scope": "detail" },
-    { "type": "text", "label": "Cache write", "scope": "detail" },
-    { "type": "text", "label": "Models", "scope": "detail" }
-  ]
+    {
+      "type": "badge",
+      "label": "Source",
+      "scope": "detail"
+    },
+    {
+      "type": "progress",
+      "label": "Spend",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Limit",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Updated",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Prompts",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Input",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Output",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Cache read",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Cache write",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Models",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "cloud.zed.dev",
+      "dashboard.zed.dev"
+    ]
+  }
 }

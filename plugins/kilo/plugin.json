@@ -13,7 +13,22 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "badge", "label": "Plan", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "badge",
+      "label": "Plan",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "app.kilo.ai"
+    ]
+  }
 }

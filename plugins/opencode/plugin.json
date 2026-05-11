@@ -14,9 +14,22 @@
     }
   },
   "links": [
-    { "label": "Dashboard", "url": "https://opencode.ai/" }
+    {
+      "label": "Dashboard",
+      "url": "https://opencode.ai/"
+    }
   ],
   "lines": [
-    { "type": "text", "label": "Balance", "scope": "overview" }
-  ]
+    {
+      "type": "text",
+      "label": "Balance",
+      "scope": "overview"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "opencode.ai"
+    ]
+  }
 }

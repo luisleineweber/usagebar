@@ -13,14 +13,48 @@
     }
   },
   "links": [
-    { "label": "Vertex AI", "url": "https://console.cloud.google.com/vertex-ai" },
-    { "label": "Google Cloud Status", "url": "https://status.cloud.google.com" }
+    {
+      "label": "Vertex AI",
+      "url": "https://console.cloud.google.com/vertex-ai"
+    },
+    {
+      "label": "Google Cloud Status",
+      "url": "https://status.cloud.google.com"
+    }
   ],
   "lines": [
-    { "type": "badge", "label": "Source", "scope": "overview" },
-    { "type": "progress", "label": "Quota usage", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Project", "scope": "detail" },
-    { "type": "text", "label": "Quota", "scope": "detail" },
-    { "type": "text", "label": "Account", "scope": "detail" }
-  ]
+    {
+      "type": "badge",
+      "label": "Source",
+      "scope": "overview"
+    },
+    {
+      "type": "progress",
+      "label": "Quota usage",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Project",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Quota",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Account",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "oauth2.googleapis.com",
+      "monitoring.googleapis.com"
+    ]
+  }
 }

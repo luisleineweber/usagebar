@@ -13,6 +13,19 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 }
-  ]
+    {
+      "type": "progress",
+      "label": "Session",
+      "scope": "overview",
+      "primaryOrder": 1
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "api.minimax.io",
+      "www.minimax.io",
+      "api.minimaxi.com"
+    ]
+  }
 }

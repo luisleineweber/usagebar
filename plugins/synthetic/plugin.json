@@ -13,7 +13,22 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "badge", "label": "Tier", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "badge",
+      "label": "Tier",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "api.synthetic.new"
+    ]
+  }
 }

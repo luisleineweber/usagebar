@@ -13,10 +13,28 @@
     }
   },
   "links": [
-    { "label": "Usage", "url": "https://apps.abacus.ai/chatllm/admin/compute-points-usage" }
+    {
+      "label": "Usage",
+      "url": "https://apps.abacus.ai/chatllm/admin/compute-points-usage"
+    }
   ],
   "lines": [
-    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
-    { "type": "text", "label": "Billing", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Billing",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "apps.abacus.ai"
+    ]
+  }
 }

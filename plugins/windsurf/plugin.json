@@ -12,8 +12,27 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Daily quota", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Weekly quota", "scope": "overview" },
-    { "type": "text", "label": "Extra usage balance", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Daily quota",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "progress",
+      "label": "Weekly quota",
+      "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Extra usage balance",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "server.self-serve.windsurf.com"
+    ]
+  }
 }

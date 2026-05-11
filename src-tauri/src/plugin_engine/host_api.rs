@@ -25,7 +25,7 @@ use windows_sys::Win32::Security::Credentials::{
     CRED_TYPE_GENERIC, CREDENTIALW, CredFree, CredReadW,
 };
 
-const WHITELISTED_ENV_VARS: [&str; 33] = [
+const WHITELISTED_ENV_VARS: [&str; 35] = [
     "CODEX_HOME",
     "GH_CONFIG_DIR",
     "ALIBABA_API_KEY",
@@ -38,6 +38,8 @@ const WHITELISTED_ENV_VARS: [&str; 33] = [
     "COPILOT_BILLING_SCOPE",
     "COPILOT_BILLING_ENTERPRISE",
     "COPILOT_BILLING_ORG",
+    "DEEPSEEK_API_KEY",
+    "DEEPSEEK_KEY",
     "KILO_API_KEY",
     "MOONSHOT_API_KEY",
     "KIMI_API_KEY",
@@ -587,7 +589,7 @@ fn sanitize_allowed_domains(domains: &[String]) -> Vec<String> {
 
 fn is_url_allowed_by_domains(url: &str, allowed_domains: &[String]) -> bool {
     if allowed_domains.is_empty() {
-        return true;
+        return false;
     }
 
     let parsed = match reqwest::Url::parse(url) {
@@ -3304,8 +3306,8 @@ mod tests {
     }
 
     #[test]
-    fn empty_http_domain_allowlist_allows_any_url_for_legacy_plugins() {
-        assert!(is_url_allowed_by_domains(
+    fn empty_http_domain_allowlist_blocks_all_urls() {
+        assert!(!is_url_allowed_by_domains(
             "https://api.example.com/v1/usage",
             &[]
         ));

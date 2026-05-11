@@ -13,8 +13,27 @@
     }
   },
   "lines": [
-    { "type": "progress", "label": "Session", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Weekly", "scope": "overview" },
-    { "type": "progress", "label": "Web Searches", "scope": "overview" }
-  ]
+    {
+      "type": "progress",
+      "label": "Session",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "progress",
+      "label": "Weekly",
+      "scope": "overview"
+    },
+    {
+      "type": "progress",
+      "label": "Web Searches",
+      "scope": "overview"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "api.z.ai"
+    ]
+  }
 }
