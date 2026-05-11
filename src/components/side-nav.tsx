@@ -210,7 +210,7 @@ export function SideNav({
 
   return (
     <nav
-      className={cn("relative flex flex-col w-12 border-r bg-muted/50 dark:bg-card py-3", arrangeMode && "bg-accent/40")}
+      className={cn("relative flex flex-col w-12 border-r bg-muted/50 dark:bg-card pt-3", arrangeMode && "bg-accent/40")}
       onContextMenu={(event) => {
         event.preventDefault()
         event.stopPropagation()

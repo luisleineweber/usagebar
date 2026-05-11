@@ -15,9 +15,9 @@ const PANEL_HEIGHT_DELTA_THRESHOLD_PX = 2
 const PANEL_HEIGHT_TWEEN_THRESHOLD_PX = 12
 const PANEL_HEIGHT_TWEEN_DURATION_MS = 150
 const PANEL_HEIGHT_TWEEN_STEPS = 3
-const SIDE_NAV_VERTICAL_PADDING_PX = 24
+const SIDE_NAV_TOP_PADDING_PX = 12
 const SIDE_NAV_BUTTON_HEIGHT_PX = 44
-const SIDE_NAV_STATIC_BUTTON_COUNT = 3 // Home + Help + Settings
+const SIDE_NAV_STATIC_BUTTON_COUNT = 2 // Home + Settings
 
 function getMonitorLogicalHeight(monitor: Awaited<ReturnType<typeof currentMonitor>>): number | null {
   if (!monitor) return null
@@ -50,7 +50,7 @@ export function panelPreferredMinHeightForView(activeView: ActiveView): number {
 export function panelMinHeightForNav(providerCount: number): number {
   const normalizedProviderCount = Math.max(0, Math.floor(providerCount))
   const buttonCount = SIDE_NAV_STATIC_BUTTON_COUNT + normalizedProviderCount
-  return SIDE_NAV_VERTICAL_PADDING_PX + buttonCount * SIDE_NAV_BUTTON_HEIGHT_PX
+  return SIDE_NAV_TOP_PADDING_PX + buttonCount * SIDE_NAV_BUTTON_HEIGHT_PX
 }
 
 type UsePanelArgs = {

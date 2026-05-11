@@ -9,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const repoRoot = path.resolve(__dirname, "..", "..")
 const args = process.argv.slice(2)
+const localTauriConfigPath = path.join(repoRoot, "src-tauri", "tauri.conf.local.json")
 
 function quoteForPowerShell(value) {
   return `'${String(value).replace(/'/g, "''")}'`
@@ -58,6 +59,42 @@ Get-CimInstance Win32_Process |
   }
 }
 
+function stopUsageBarProcessOwningDevApiPort() {
+  const allowedNames = getWindowsDevExeNames().map((exeName) => exeName.toLowerCase())
+  const command = `
+$allowedNames = @(${allowedNames.map(quoteForPowerShell).join(", ")})
+$connections = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 6736 -State Listen -ErrorAction SilentlyContinue
+foreach ($connection in $connections) {
+  $process = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $connection.OwningProcess) -ErrorAction SilentlyContinue
+  if (-not $process -or -not $process.ExecutablePath) {
+    continue
+  }
+
+  $exeName = [System.IO.Path]::GetFileName($process.ExecutablePath).ToLowerInvariant()
+  if ($allowedNames -notcontains $exeName) {
+    Write-Output ("Port 6736 is already owned by PID " + $connection.OwningProcess + " (" + $process.ExecutablePath + "); leaving it running because it is not a UsageBar dev/release process.")
+    continue
+  }
+
+  Stop-Process -Id $connection.OwningProcess -Force
+  Write-Output ("Stopped UsageBar process PID " + $connection.OwningProcess + " that was blocking local HTTP API port 6736")
+}
+`.trim()
+
+  const result = spawnSync(
+    "powershell",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+    {
+      cwd: repoRoot,
+      stdio: "inherit",
+    }
+  )
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    process.exit(result.status)
+  }
+}
+
 function clearStaleWindowsDebugMetadata() {
   const result = cleanupStaleDebugBuildMetadata(repoRoot)
 
@@ -71,12 +108,28 @@ function clearStaleWindowsDebugMetadata() {
   )
 }
 
+function bundlePluginsForDev() {
+  const result = spawnSync(process.execPath, [path.join(repoRoot, "copy-bundled.cjs")], {
+    cwd: repoRoot,
+    stdio: "inherit",
+  })
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    process.exit(result.status)
+  }
+}
+
 function resolveTauriCli() {
+  const cliArgs = [...args]
+  if (args[0] === "dev" && existsSync(localTauriConfigPath) && !args.includes("--config") && !args.includes("-c")) {
+    cliArgs.push("--config", localTauriConfigPath)
+  }
+
   const packagedCli = path.join(repoRoot, "node_modules", "@tauri-apps", "cli", "tauri.js")
   if (existsSync(packagedCli)) {
     return {
       command: process.execPath,
-      args: [packagedCli, ...args],
+      args: [packagedCli, ...cliArgs],
     }
   }
 
@@ -89,25 +142,30 @@ function resolveTauriCli() {
     if (process.platform === "win32" && localBinary.endsWith(".cmd")) {
       return {
         command: localBinary,
-        args,
+        args: cliArgs,
         spawnOptions: {
           shell: true,
         },
       }
     }
 
-    return { command: localBinary, args }
+    return { command: localBinary, args: cliArgs }
   }
 
   return {
     command: process.platform === "win32" ? "npx.cmd" : "npx",
-    args: ["@tauri-apps/cli", ...args],
+    args: ["@tauri-apps/cli", ...cliArgs],
   }
 }
 
 if (process.platform === "win32" && args[0] === "dev") {
   clearStaleWindowsDebugMetadata()
   stopStaleWindowsDevProcess()
+  stopUsageBarProcessOwningDevApiPort()
+}
+
+if (args[0] === "dev") {
+  bundlePluginsForDev()
 }
 
 const tauriCli = resolveTauriCli()

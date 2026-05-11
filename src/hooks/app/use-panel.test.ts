@@ -272,8 +272,8 @@ describe("usePanel", () => {
   })
 
   it("keeps a minimum height for the nav icon stack", () => {
-    expect(panelMinHeightForNav(0)).toBe(156)
-    expect(panelMinHeightForNav(4)).toBe(332)
+    expect(panelMinHeightForNav(0)).toBe(100)
+    expect(panelMinHeightForNav(4)).toBe(276)
   })
 
   it("syncs the measured panel height back to Rust", async () => {
