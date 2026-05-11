@@ -32,7 +32,7 @@ Safety:
 | `kilo` | stored provider secret `apiKey`, `KILO_API_KEY` | Works partially | Secret/env replay can fake auth setup, but usage still comes from the Kilo HTTP API. CLI auth fallback is not wired yet. |
 | `kimi` | `~/.kimi/credentials/kimi-code.json` | Works partially | Local credential replay can fake login; usage still comes from HTTP. |
 | `kimi-k2` | stored provider secret `apiKey`, `MOONSHOT_API_KEY`, `KIMI_API_KEY`, `KIMI_KEY` | Works partially | Secret/env replay can fake auth setup, but balance still comes from the official Moonshot API HTTP endpoint. |
-| `kiro` | None | No current path | Placeholder plugin only. |
+| `kiro` | `~/.aws/sso/cache/kiro-auth-token.json`, `~/AppData/Roaming/Kiro/User/globalStorage/state.vscdb`, `~/AppData/Roaming/Kiro/logs/*/window*/exthost/kiro.kiroAgent/q-client.log`, `~/.kiro/sessions/cli/*.json` on Windows | Works partially | Local replay can fake auth, cache, log metadata, and CLI session metering; live fallback still comes from Kiro/AWS HTTP. |
 | `minimax` | `MINIMAX_API_KEY`, `MINIMAX_API_TOKEN`, `MINIMAX_CN_API_KEY` env vars | Works partially | No file path today; you can only fake env-based auth locally. Usage still comes from HTTP. |
 | `mock` | None | Works fully | Built-in self-test provider. Data is hardcoded in the plugin. |
 | `ollama` | Stored provider secret `cookieHeader` | Works partially | Manual secret can fake signed-in session, but usage still comes from Ollama web HTTP. |
@@ -192,8 +192,19 @@ Safety:
 - Local secret/env replay only covers auth configuration, not live account usage.
 
 ### `kiro`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
+- Local inputs read:
+- `~/.aws/sso/cache/kiro-auth-token.json` on Windows and elsewhere.
+- `~/AppData/Roaming/Kiro/User/globalStorage/state.vscdb` on Windows.
+- `~/AppData/Roaming/Kiro/User/globalStorage/kiro.kiroagent/profile.json` on Windows when the token file lacks `profileArn`.
+- `~/AppData/Roaming/Kiro/logs/*/window*/exthost/kiro.kiroAgent/q-client.log` on Windows.
+- `~/.kiro/sessions/cli/*.json` on Windows for CLI-only metering fallback.
+- What to fake:
+- A token JSON file with `refreshToken` and optionally `accessToken`, `expiresAt`, and `profileArn`.
+- A SQLite row for `kiro.kiroAgent` containing `kiro.resourceNotifications.usageState`.
+- CLI session JSON with `session_state.conversation_metadata.user_turn_metadatas[*].metering_usage`.
+- A `q-client.log` line containing `GetUsageLimitsCommand` output for plan/overage metadata.
+- Limitation:
+- Local replay can prove cache/log parsing, but the live refresh/API fallback still needs valid Kiro desktop credentials and network access.
 
 ### `minimax`
 - Local inputs read:

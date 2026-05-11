@@ -310,6 +310,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       placeholder: "ali_...",
     },
   },
+  deepseek: {
+    mode: "editable",
+    title: "DeepSeek Setup",
+    summary: "Fetches DeepSeek API balance from a stored API key or DEEPSEEK_API_KEY-compatible env vars.",
+    statusHint: "Save a DeepSeek API key here or set DEEPSEEK_API_KEY before launching UsageBar.",
+    connectHint: "Create a DeepSeek API key in the platform dashboard, save it here or set DEEPSEEK_API_KEY, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste a DeepSeek API key. UsageBar stores it in the app credential vault and uses it for https://api.deepseek.com/user/balance.",
+      placeholder: "sk-...",
+    },
+  },
   kilo: {
     mode: "editable",
     title: "Kilo Setup",
@@ -339,9 +352,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   kiro: {
     mode: "automatic",
     title: "Kiro Setup",
-    summary: "Reads local Kiro auth and cache state, then refreshes live usage from the Kiro usage endpoint when the desktop session is present.",
-    statusHint: "Open Kiro and sign in on this machine so UsageBar can read the local auth token, profile, and usage cache.",
-    connectHint: "Open Kiro, sign in, and load the Kiro account dashboard once, then retry.",
+    summary: "Reads local Kiro desktop auth/cache state when present, or local Kiro CLI session metering as a fallback.",
+    statusHint: "Open Kiro desktop or run Kiro CLI on this machine so UsageBar can read local usage state.",
+    connectHint: "Open Kiro, sign in, and load the Kiro account dashboard once. If you only use Kiro CLI, run at least one prompt, then retry.",
   },
   openrouter: {
     mode: "editable",
@@ -520,6 +533,7 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   if (providerId === "perplexity") return "Manual cookie"
   if (providerId === "abacus") return "Manual cookie"
   if (providerId === "augment") return "Manual cookie"
+  if (providerId === "deepseek") return config?.secrets?.apiKey ? "Stored DeepSeek API key" : "DeepSeek API key/env"
   if (providerId === "kimi") return config?.secrets?.apiKey ? "Kimi Code OAuth + Moonshot API key" : "Kimi Code OAuth"
   if (providerId === "kimi-k2") return config?.secrets?.apiKey ? "Stored Moonshot API key" : "Moonshot API key/env"
   if (providerId === "copilot") return config?.workspaceId ? "GitHub auth + billing scope" : "GitHub auth"

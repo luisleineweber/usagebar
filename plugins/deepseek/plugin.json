@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "deepseek",
+  "name": "DeepSeek",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#4D6BFE",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored DeepSeek API key or DEEPSEEK_API_KEY to fetch API balance."
+    }
+  },
+  "links": [
+    {
+      "label": "Usage",
+      "url": "https://platform.deepseek.com/usage"
+    },
+    {
+      "label": "Status",
+      "url": "https://status.deepseek.com"
+    }
+  ],
+  "lines": [
+    {
+      "type": "progress",
+      "label": "Balance",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Paid balance",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Granted balance",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "API availability",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "api.deepseek.com"
+    ]
+  }
+}

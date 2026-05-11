@@ -108,6 +108,7 @@ Record these fields in the relevant provider doc or rollout note:
 | Gemini | Experimental | P2 | real signed-in Windows validation after CLI-path hardening |
 | JetBrains AI Assistant | Working on Windows | P1 | broader IDE/account variance beyond current local XML path coverage |
 | Kilo | Experimental | P2 | real Windows API-key validation plus deferred CLI-session fallback |
+| Kiro | Experimental | P1 | focused Windows path coverage plus real desktop-auth/cache/log validation |
 | Kimi Code | Experimental | P2 | real Windows credential-file validation plus broader signed-in runtime evidence |
 | Kimi K2 | Experimental | P2 | real Windows API-key validation plus broader live credits-shape evidence |
 | MiniMax | Experimental | P2 | real Windows API-key validation plus broader real-plan coverage |

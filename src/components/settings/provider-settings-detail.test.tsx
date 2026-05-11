@@ -19,6 +19,14 @@ const cursorPlugin = {
   primaryCandidates: [],
 }
 
+const deepseekPlugin = {
+  id: "deepseek",
+  name: "DeepSeek",
+  iconUrl: "/deepseek.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const copilotPlugin = {
   id: "copilot",
   name: "Copilot",
@@ -350,6 +358,21 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/Fetches OpenRouter credits and key-rate data from a stored management key or OPENROUTER_API_KEY\./)).toBeInTheDocument()
     expect(screen.getByText(/Create a management key in the OpenRouter dashboard/i)).toBeInTheDocument()
     expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the credits and key endpoints\./)).toBeInTheDocument()
+  })
+
+  it("shows explicit DeepSeek API-key guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={deepseekPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches DeepSeek API balance from a stored API key or DEEPSEEK_API_KEY-compatible env vars\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a DeepSeek API key in the platform dashboard, save it here or set DEEPSEEK_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for https:\/\/api\.deepseek\.com\/user\/balance\./)).toBeInTheDocument()
   })
 
   it("shows optional Copilot billing scope guidance", () => {

@@ -8,11 +8,37 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Windows experimental. UsageBar reads the local Kiro auth/cache state and refreshes live usage when desktop credentials are present."
+      "message": "Windows experimental. UsageBar reads local Kiro desktop auth/cache state when present, or local Kiro CLI session metering as a fallback."
     }
   },
   "lines": [
-    { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },
-    { "type": "badge", "label": "Plan", "scope": "detail" }
-  ]
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "CLI Credits",
+      "scope": "overview"
+    },
+    {
+      "type": "progress",
+      "label": "Bonus Credits",
+      "scope": "detail"
+    },
+    {
+      "type": "badge",
+      "label": "Overages",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "prod.us-east-1.auth.desktop.kiro.dev",
+      "*.amazonaws.com"
+    ]
+  }
 }

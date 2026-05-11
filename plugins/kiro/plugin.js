@@ -3,6 +3,7 @@
   const STATE_KEY = "kiro.kiroAgent"
   const LOGS_ROOT = "~/Library/Application Support/Kiro/logs"
   const LOG_FILE_NAME = "q-client.log"
+  const CLI_SESSIONS_ROOT = "~/.kiro/sessions/cli"
   const TOKEN_PATH = "~/.aws/sso/cache/kiro-auth-token.json"
   const PROFILE_PATH = "~/Library/Application Support/Kiro/User/globalStorage/kiro.kiroagent/profile.json"
   const REFRESH_URL = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
@@ -67,7 +68,7 @@
 
   function stateDbPath(ctx) {
     if (ctx.app.platform === "windows") {
-      return "%APPDATA%/Kiro/User/globalStorage/state.vscdb"
+      return "~/AppData/Roaming/Kiro/User/globalStorage/state.vscdb"
     }
     if (ctx.app.platform === "linux") {
       return "~/.config/Kiro/User/globalStorage/state.vscdb"
@@ -77,7 +78,7 @@
 
   function profilePath(ctx) {
     if (ctx.app.platform === "windows") {
-      return "%APPDATA%/Kiro/User/globalStorage/kiro.kiroagent/profile.json"
+      return "~/AppData/Roaming/Kiro/User/globalStorage/kiro.kiroagent/profile.json"
     }
     if (ctx.app.platform === "linux") {
       return "~/.config/Kiro/User/globalStorage/kiro.kiroagent/profile.json"
@@ -87,12 +88,16 @@
 
   function tokenPath(ctx) {
     if (ctx.app.platform === "windows") {
-      return "%USERPROFILE%/.aws/sso/cache/kiro-auth-token.json"
+      return "~/.aws/sso/cache/kiro-auth-token.json"
     }
     if (ctx.app.platform === "linux") {
       return "~/.aws/sso/cache/kiro-auth-token.json"
     }
     return TOKEN_PATH
+  }
+
+  function cliSessionsRoot(ctx) {
+    return ctx.app.platform === "windows" ? "~/.kiro/sessions/cli" : CLI_SESSIONS_ROOT
   }
 
   function loadAuthState(ctx) {
@@ -101,6 +106,78 @@
     if (!parsed || typeof parsed !== "object") return null
     const token = sanitizeAuth(parsed)
     return token && (token.refreshToken || token.accessToken) ? { path: path, token } : null
+  }
+
+  function monthWindow(nowMs) {
+    const now = new Date(nowMs)
+    if (!Number.isFinite(now.getTime())) return null
+    const start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+    const end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
+    return { start, end, resetsAt: new Date(end).toISOString() }
+  }
+
+  function usageValue(item) {
+    if (!item || typeof item !== "object") return null
+    const unit = String(item.unit || item.unitPlural || "").toLowerCase()
+    if (unit !== "credit" && unit !== "credits") return null
+    return num(item.value)
+  }
+
+  function collectCliSessionUsage(parsed, window) {
+    const metadatas =
+      parsed &&
+      parsed.session_state &&
+      parsed.session_state.conversation_metadata &&
+      parsed.session_state.conversation_metadata.user_turn_metadatas
+    if (!Array.isArray(metadatas)) return null
+    let used = 0
+    let latestMs = null
+    for (let i = 0; i < metadatas.length; i += 1) {
+      const item = metadatas[i]
+      const endedMs = ctxSafeDate(item && item.end_timestamp)
+      if (endedMs !== null && (endedMs < window.start || endedMs >= window.end)) continue
+      const usages = item && Array.isArray(item.metering_usage) ? item.metering_usage : []
+      for (let j = 0; j < usages.length; j += 1) {
+        const value = usageValue(usages[j])
+        if (value !== null) used += value
+      }
+      if (endedMs !== null && (latestMs === null || endedMs > latestMs)) latestMs = endedMs
+    }
+    return used > 0 ? { used, latestMs } : null
+  }
+
+  function ctxSafeDate(value) {
+    const parsed = Date.parse(String(value || ""))
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  function loadCliSessionState(ctx, nowMs) {
+    const window = monthWindow(nowMs)
+    if (!window) return null
+    const root = cliSessionsRoot(ctx)
+    let files = []
+    try {
+      files = ctx.host.fs.listDir(root)
+    } catch {
+      return null
+    }
+    let used = 0
+    let latestMs = null
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i]
+      if (!/\.json$/i.test(file)) continue
+      const path = root + "/" + file
+      try {
+        const parsed = ctx.util.tryParseJson(ctx.host.fs.readText(path))
+        const usage = collectCliSessionUsage(parsed, window)
+        if (!usage) continue
+        used += usage.used
+        if (usage.latestMs !== null && (latestMs === null || usage.latestMs > latestMs)) latestMs = usage.latestMs
+      } catch (e) {
+        ctx.host.log.warn("failed to parse Kiro CLI session usage: " + String(e))
+      }
+    }
+    return used > 0 ? { used, resetsAt: window.resetsAt, timestampMs: latestMs || nowMs } : null
   }
 
   function saveAuthState(ctx, authState) {
@@ -233,7 +310,7 @@
   }
 
   function loadLoggedState(ctx) {
-    const logsRoot = ctx.app.platform === "windows" ? "%APPDATA%/Kiro/logs" : LOGS_ROOT
+    const logsRoot = ctx.app.platform === "windows" ? "~/AppData/Roaming/Kiro/logs" : LOGS_ROOT
     let sessions = []
     try {
       sessions = ctx.host.fs.listDir(logsRoot).slice().sort().reverse()
@@ -414,10 +491,28 @@
     return { plan: snapshot.plan || undefined, lines }
   }
 
+  function buildCliOutput(ctx, cliState) {
+    return {
+      plan: "Kiro CLI",
+      lines: [
+        ctx.line.text({
+          label: "CLI Credits",
+          value: String(Math.round(cliState.used * 100) / 100) + " credits used this month",
+          subtitle: "From local Kiro CLI sessions",
+        }),
+        ctx.line.badge({ label: "Resets", text: cliState.resetsAt.slice(0, 10) }),
+      ],
+    }
+  }
+
   function probe(ctx) {
     const nowMs = ctx.util.parseDateMs(ctx.nowIso) || Date.now()
     const authState = loadAuthState(ctx)
-    if (!authState || !authState.token || !authState.token.refreshToken) throw LOGIN_HINT
+    if (!authState || !authState.token || !authState.token.refreshToken) {
+      const cliState = loadCliSessionState(ctx, nowMs)
+      if (cliState) return buildCliOutput(ctx, cliState)
+      throw LOGIN_HINT
+    }
     const localState = normalizeCachedState(ctx)
     const loggedState = loadLoggedState(ctx)
     let liveState = null
