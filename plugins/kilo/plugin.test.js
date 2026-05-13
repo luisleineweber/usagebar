@@ -137,6 +137,28 @@ describe("kilo plugin", () => {
     })
   })
 
+  it("renders used-only pass data as text instead of fake progress", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { KILO_API_KEY: "env-key" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify([
+        { result: { data: { json: {} } } },
+        { result: { data: { json: { subscription: { tier: "Pro", currentPeriodUsageUsd: 30 } } } } },
+      ]),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Pro")
+    expect(result.lines.find((line) => line.label === "Credits")).toEqual({
+      type: "text",
+      label: "Credits",
+      value: "$30.00 used",
+    })
+  })
+
   it("maps auth failures from HTTP status", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { KILO_API_KEY: "env-key" })

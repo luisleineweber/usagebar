@@ -35,6 +35,8 @@ The provider keeps the first Windows rollout intentionally narrow: one stored se
 - `Plan`: tier or pass label from the pass-state payload
 - Plan text: same plan/tier label shown in the provider header
 
+UsageBar renders `Credits` as progress only when Kilo returns a real total or a derivable used+remaining total. Used-only payloads render as text so the app does not manufacture a max value.
+
 ## Common errors
 
 - `Kilo API key missing. Save it in Setup or set KILO_API_KEY.`

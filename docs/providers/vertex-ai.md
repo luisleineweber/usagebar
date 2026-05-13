@@ -10,7 +10,7 @@ UsageBar uses official Google auth and monitoring APIs:
 2. Refreshes the OAuth access token through `https://oauth2.googleapis.com/token` when needed.
 3. Queries Cloud Monitoring time-series metrics for `aiplatform.googleapis.com` quota usage and limits.
 
-The provider reports the highest matched quota usage percentage across current `consumer_quota` series.
+The provider reports the matched `consumer_quota` series with the highest usage pressure, rendered as the absolute Cloud Monitoring usage value over the matching limit value.
 
 ## Setup
 

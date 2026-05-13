@@ -79,11 +79,9 @@ describe("kimi-k2 plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Balance")).toEqual({
-      type: "progress",
+      type: "text",
       label: "Balance",
-      used: 49.58894,
-      limit: 49.58894,
-      format: { kind: "dollars" },
+      value: "$49.59",
     })
     expect(result.lines.find((line) => line.label === "Voucher balance")).toEqual({
       type: "text",

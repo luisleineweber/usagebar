@@ -93,7 +93,7 @@ describe("synthetic plugin", () => {
       label: "Credits",
       used: 40,
       limit: 100,
-      format: { kind: "percent" },
+      format: { kind: "count", suffix: "credits" },
       resetsAt: "2026-04-01T00:00:00.000Z",
     })
   })
@@ -125,8 +125,35 @@ describe("synthetic plugin", () => {
       label: "Credits",
       used: 25,
       limit: 100,
-      format: { kind: "percent" },
+      format: { kind: "count", suffix: "credits" },
       periodDurationMs: 604800000,
+    })
+  })
+
+  it("keeps exact quota limits when usage exceeds the limit", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { SYNTHETIC_API_KEY: "env-key" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(quotasPayload({
+        quotas: [
+          {
+            label: "Monthly",
+            used: 125,
+            limit: 100,
+          },
+        ],
+      })),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Credits")).toMatchObject({
+      type: "progress",
+      used: 125,
+      limit: 100,
+      format: { kind: "count", suffix: "credits" },
     })
   })
 

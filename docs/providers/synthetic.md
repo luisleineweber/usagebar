@@ -26,7 +26,7 @@ The provider keeps v1 intentionally narrow: app-owned secret storage plus one di
 
 ## Display
 
-- `Credits`: primary quota progress from the first parsed quota entry
+- `Credits`: primary quota progress from the first parsed quota entry. Exact `used`/`remaining` plus `limit` payloads render as count-based credit bars; percent-only payloads render as percent bars.
 - `Tier`: plan or tier label from the response, with the quota label as a fallback
 - Plan text: same plan/tier label shown in the provider header
 

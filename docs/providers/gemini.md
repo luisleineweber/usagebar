@@ -47,4 +47,6 @@ These return explicit errors.
   - `legacy-tier` -> `Legacy`
 - **Pro**: lowest remaining Gemini Pro bucket
 - **Flash**: lowest remaining Gemini Flash bucket
+- Progress bars use request counts when `retrieveUserQuota` returns an exact `used`/`limit` or `remaining`/`limit` bucket.
+- Fraction-only quota buckets still render as percent because the API response does not expose the absolute request cap for those buckets.
 - **Account**: email from `id_token` claims

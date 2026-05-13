@@ -223,15 +223,17 @@
 
     if (usedPercent === null) return null
 
+    const hasExactLimit = limit !== null && limit > 0 && (used !== null || remaining !== null)
     const usedValue = used !== null ? Math.max(0, used) : Math.max(0, usedPercent)
     const limitValue = limit !== null && limit > 0
-      ? Math.max(limit, usedValue)
+      ? limit
       : Math.max(100, usedValue, Math.max(0, usedPercent))
 
     return {
       label: firstString(payload, ["name", "label", "type", "period", "scope", "title", "id"]),
       used: usedValue,
       limit: limitValue,
+      format: hasExactLimit ? { kind: "count", suffix: "credits" } : { kind: "percent" },
       usedPercent: Math.max(0, Math.min(usedPercent, 100)),
       resetsAt: firstDateIso(ctx, payload, [
         "resetAt",
@@ -285,8 +287,8 @@
     const progress = {
       label: "Credits",
       used: primary.used,
-      limit: Math.max(primary.limit, primary.used, 1),
-      format: { kind: "percent" },
+      limit: primary.limit,
+      format: primary.format,
     }
     if (primary.resetsAt) {
       progress.resetsAt = primary.resetsAt

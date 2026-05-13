@@ -93,6 +93,61 @@ describe("augment plugin", () => {
     expect(ctx.host.http.request.mock.calls[0][0].headers.Cookie).toBe("env=session")
   })
 
+  it("renders partial credits data as text instead of fake progress", async () => {
+    const ctx = makePluginTestContext()
+    setCookie(ctx, "session=abc")
+    ctx.host.http.request.mockImplementation((request) => {
+      if (request.url.endsWith("/api/credits")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify(creditsPayload({
+            usageUnitsRemaining: undefined,
+            usageUnitsConsumedThisBillingCycle: 15,
+            usageUnitsAvailable: undefined,
+          })),
+        }
+      }
+      return { status: 500, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Credits")).toEqual({
+      type: "text",
+      label: "Credits",
+      value: "15 used",
+    })
+    expect(result.lines.find((line) => line.label === "Remaining")?.value).toBe("Unknown")
+  })
+
+  it("keeps provider limits when usage exceeds available credits", async () => {
+    const ctx = makePluginTestContext()
+    setCookie(ctx, "session=abc")
+    ctx.host.http.request.mockImplementation((request) => {
+      if (request.url.endsWith("/api/credits")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify(creditsPayload({
+            usageUnitsRemaining: undefined,
+            usageUnitsConsumedThisBillingCycle: 120,
+            usageUnitsAvailable: 100,
+          })),
+        }
+      }
+      return { status: 500, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Credits")).toMatchObject({
+      type: "progress",
+      used: 120,
+      limit: 100,
+    })
+  })
+
   it("throws a clear auth error for stale cookies", async () => {
     const ctx = makePluginTestContext()
     setCookie(ctx, "session=stale")

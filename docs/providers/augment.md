@@ -9,7 +9,7 @@ UsageBar reads Augment credit usage from the signed-in web session:
 1. `GET https://app.augmentcode.com/api/credits`
 2. Optional `GET https://app.augmentcode.com/api/subscription`
 
-The credits response provides used, remaining, and total credit values. The subscription response adds plan, account, organization, and billing-cycle reset details when available.
+The credits response normally provides used, remaining, and total credit values. The subscription response adds plan, account, organization, and billing-cycle reset details when available. UsageBar renders a progress bar only when the response exposes a real max through `used + remaining` or explicit available/used fields; partial used-only responses render as text.
 
 ## Setup
 

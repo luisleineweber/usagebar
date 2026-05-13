@@ -102,7 +102,7 @@ describe("vertex-ai plugin", () => {
       label: "Quota usage",
       used: 40,
       limit: 100,
-      format: { kind: "percent" },
+      format: { kind: "count", suffix: "quota units" },
     })
     expect(result.lines.find((line) => line.label === "Account")?.value).toBe("fresh@example.com")
     expect(ctx.host.http.request.mock.calls[1][0].headers.Authorization).toBe("Bearer fresh-token")
@@ -119,6 +119,30 @@ describe("vertex-ai plugin", () => {
 
     expect(result.plan).toBe("env-project")
     expect(result.lines.find((line) => line.label === "Quota")?.value).toBe("No recent quota data")
+  })
+
+  it("keeps Cloud Monitoring quota limits when usage exceeds the limit", async () => {
+    const ctx = makePluginTestContext()
+    writeAdc(ctx)
+    writeProject(ctx)
+    ctx.host.http.request.mockImplementation((request) => {
+      if (request.url.includes("allocation%2Fusage")) {
+        return { status: 200, bodyText: JSON.stringify({ timeSeries: [series("aiplatform.googleapis.com%2Fonline_prediction_requests_per_base_model|default|global", 125)] }) }
+      }
+      if (request.url.includes("quota%2Flimit")) {
+        return { status: 200, bodyText: JSON.stringify({ timeSeries: [series("aiplatform.googleapis.com%2Fonline_prediction_requests_per_base_model|default|global", 100, "int64Value")] }) }
+      }
+      return { status: 404, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Quota usage")).toMatchObject({
+      type: "progress",
+      used: 125,
+      limit: 100,
+    })
   })
 
   it("throws when project id is missing", async () => {

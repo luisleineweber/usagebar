@@ -26,7 +26,7 @@
       "primaryOrder": 2
     },
     {
-      "type": "progress",
+      "type": "text",
       "label": "API Balance",
       "scope": "overview",
       "primaryOrder": 3

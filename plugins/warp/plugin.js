@@ -159,13 +159,43 @@
     }
 
     const usage = parseUsage(requestUsage(ctx, token))
+    if (usage.isUnlimited) {
+      return {
+        lines: [
+          ctx.line.text({
+            label: "Requests",
+            value: "Unlimited",
+          }),
+          ctx.line.badge({
+            label: "Plan",
+            text: "Unlimited",
+          }),
+        ],
+      }
+    }
+
+    if (usage.requestLimit <= 0) {
+      return {
+        lines: [
+          ctx.line.text({
+            label: "Requests",
+            value: "No request limit",
+          }),
+          ctx.line.badge({
+            label: "Plan",
+            text: "Metered",
+          }),
+        ],
+      }
+    }
+
     const progress = {
       label: "Requests",
-      used: usage.isUnlimited ? 0 : usage.requestsUsed,
-      limit: usage.isUnlimited ? 1 : Math.max(usage.requestLimit, usage.requestsUsed, 1),
+      used: usage.requestsUsed,
+      limit: usage.requestLimit,
       format: { kind: "count", suffix: "credits" },
     }
-    if (!usage.isUnlimited && usage.resetsAt) {
+    if (usage.resetsAt) {
       progress.resetsAt = usage.resetsAt
     }
 

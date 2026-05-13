@@ -218,10 +218,15 @@
     return null
   }
 
+  function formatMoney(value) {
+    return "$" + Number(value || 0).toFixed(2)
+  }
+
   function parseCredits(payload) {
     const contexts = dictionaryContexts(payload)
     let total = null
     let remaining = null
+    let hasLimit = false
 
     const creditBlocks = Array.isArray(readObject(payload) && readObject(payload).creditBlocks)
       ? readObject(payload).creditBlocks
@@ -247,11 +252,15 @@
       }
       if (sawTotal) total = Math.max(0, totalMicro / 1000000)
       if (sawRemaining) remaining = Math.max(0, remainingMicro / 1000000)
+      hasLimit = sawTotal
     }
 
     if (total === null) {
       total = firstNumber(contexts, ["total", "totalCredits", "creditsTotal", "limit", "total_mUsd"])
-      if (total !== null && firstString(contexts, ["total_mUsd"])) total = total / 1000000
+      if (total !== null) {
+        if (firstString(contexts, ["total_mUsd"])) total = total / 1000000
+        hasLimit = true
+      }
     }
     if (remaining === null) {
       remaining = firstNumber(contexts, ["remaining", "remainingCredits", "creditsRemaining", "balance", "balance_mUsd"])
@@ -260,15 +269,19 @@
     let used = firstNumber(contexts, ["used", "usedCredits", "creditsUsed", "spent", "consumed", "used_mUsd"])
     if (used !== null && firstString(contexts, ["used_mUsd"])) used = used / 1000000
 
-    if (total === null && used !== null && remaining !== null) total = used + remaining
+    if (total === null && used !== null && remaining !== null) {
+      total = used + remaining
+      hasLimit = true
+    }
     if (used === null && total !== null && remaining !== null) used = Math.max(0, total - remaining)
     if (remaining === null && total !== null && used !== null) remaining = Math.max(0, total - used)
 
     if (used === null && total === null && remaining === null) return null
     return {
       used: Math.max(0, used ?? 0),
-      total: Math.max(total ?? used ?? 0, used ?? 0, 0),
+      total: Math.max(total ?? 0, 0),
       remaining: Math.max(0, remaining ?? 0),
+      hasLimit,
     }
   }
 
@@ -295,6 +308,7 @@
     ])
     let totalWithBonus = total
     if (totalWithBonus !== null) totalWithBonus += bonus
+    let hasLimit = totalWithBonus !== null
     let remaining = firstNumber(contexts, [
       "remaining",
       "available",
@@ -303,7 +317,10 @@
       "creditsRemaining",
     ])
 
-    if (totalWithBonus === null && used !== null && remaining !== null) totalWithBonus = used + remaining
+    if (totalWithBonus === null && used !== null && remaining !== null) {
+      totalWithBonus = used + remaining
+      hasLimit = true
+    }
     if (used === null && totalWithBonus !== null && remaining !== null) used = Math.max(0, totalWithBonus - remaining)
     if (remaining === null && totalWithBonus !== null && used !== null) remaining = Math.max(0, totalWithBonus - used)
 
@@ -328,28 +345,45 @@
     if (used === null && totalWithBonus === null && remaining === null && !planName && !resetsAt) return null
     return {
       used: Math.max(0, used ?? 0),
-      total: Math.max(totalWithBonus ?? used ?? 0, used ?? 0, 0),
+      total: Math.max(totalWithBonus ?? 0, 0),
       remaining: Math.max(0, remaining ?? 0),
+      hasLimit,
       planName,
       resetsAt,
     }
   }
 
   function selectPrimary(passInfo, creditInfo) {
-    if (passInfo && passInfo.total > 0) {
+    if (passInfo && passInfo.hasLimit && passInfo.total > 0) {
       return {
+        kind: "progress",
         label: "Credits",
         used: passInfo.used,
         total: passInfo.total,
         resetsAt: passInfo.resetsAt,
       }
     }
-    if (creditInfo && creditInfo.total > 0) {
+    if (creditInfo && creditInfo.hasLimit && creditInfo.total > 0) {
       return {
+        kind: "progress",
         label: "Credits",
         used: creditInfo.used,
         total: creditInfo.total,
         resetsAt: null,
+      }
+    }
+    if (passInfo && passInfo.used > 0) {
+      return {
+        kind: "text",
+        label: "Credits",
+        value: formatMoney(passInfo.used) + " used",
+      }
+    }
+    if (creditInfo && creditInfo.used > 0) {
+      return {
+        kind: "text",
+        label: "Credits",
+        value: formatMoney(creditInfo.used) + " used",
       }
     }
     return null
@@ -382,18 +416,23 @@
     }
 
     const planName = (passInfo && passInfo.planName) || "Kilo Pass"
-    const progress = {
-      label: primary.label,
-      used: primary.used,
-      limit: Math.max(primary.total, primary.used, 1),
-      format: { kind: "dollars" },
-    }
-    if (primary.resetsAt) progress.resetsAt = primary.resetsAt
+    const primaryLine = primary.kind === "progress"
+      ? ctx.line.progress({
+        label: primary.label,
+        used: primary.used,
+        limit: primary.total,
+        format: { kind: "dollars" },
+        ...(primary.resetsAt ? { resetsAt: primary.resetsAt } : {}),
+      })
+      : ctx.line.text({
+        label: primary.label,
+        value: primary.value,
+      })
 
     return {
       plan: planName,
       lines: [
-        ctx.line.progress(progress),
+        primaryLine,
         ctx.line.badge({ label: "Plan", text: planName }),
       ],
     }

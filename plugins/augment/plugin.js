@@ -89,15 +89,15 @@
     const limit = used !== null && remaining !== null
       ? used + remaining
       : available !== null && used !== null
-        ? Math.max(available, used)
+        ? available
         : null
 
     if (used === null && remaining === null) return null
     if (limit === null || limit <= 0) {
       return {
         used: used !== null ? used : 0,
-        limit: Math.max(remaining || 0, used || 0, 1),
         remaining,
+        hasLimit: false,
       }
     }
 
@@ -105,6 +105,7 @@
       used: used !== null ? used : Math.max(0, limit - (remaining || 0)),
       limit,
       remaining,
+      hasLimit: true,
     }
   }
 
@@ -122,24 +123,31 @@
     }
 
     const resetIso = subscription ? ctx.util.toIso(subscription.billingPeriodEnd) : null
-    const progress = {
-      label: "Credits",
-      used: Math.max(0, usage.used),
-      limit: Math.max(usage.limit, usage.used, 1),
-      format: { kind: "count", suffix: "credits" },
+    const lines = []
+    if (usage.hasLimit) {
+      const progress = {
+        label: "Credits",
+        used: Math.max(0, usage.used),
+        limit: usage.limit,
+        format: { kind: "count", suffix: "credits" },
+      }
+      if (resetIso) {
+        progress.resetsAt = resetIso
+        progress.periodDurationMs = 30 * 24 * 60 * 60 * 1000
+      }
+      lines.push(ctx.line.progress(progress))
+    } else {
+      lines.push(ctx.line.text({
+        label: "Credits",
+        value: formatCount(usage.used) + " used",
+      }))
     }
-    if (resetIso) {
-      progress.resetsAt = resetIso
-      progress.periodDurationMs = 30 * 24 * 60 * 60 * 1000
-    }
-
-    const lines = [
-      ctx.line.progress(progress),
+    lines.push(
       ctx.line.text({
         label: "Remaining",
         value: formatCount(usage.remaining),
-      }),
-    ]
+      })
+    )
 
     if (subscription && readString(subscription.email)) {
       lines.push(ctx.line.text({ label: "Account", value: readString(subscription.email) }))

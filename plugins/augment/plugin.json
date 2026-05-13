@@ -27,6 +27,12 @@
     },
     {
       "type": "text",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
       "label": "Remaining",
       "scope": "overview"
     },

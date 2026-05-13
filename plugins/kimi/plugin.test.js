@@ -51,11 +51,9 @@ describe("kimi plugin", () => {
     expect(result.plan).toBe("API balance $49.59")
     expect(ctx.host.http.request.mock.calls[0][0].url).toBe("https://api.moonshot.ai/v1/users/me/balance")
     expect(result.lines.find((line) => line.label === "API Balance")).toEqual({
-      type: "progress",
+      type: "text",
       label: "API Balance",
-      used: 49.58894,
-      limit: 49.58894,
-      format: { kind: "dollars" },
+      value: "$49.59",
     })
     expect(result.lines.find((line) => line.label === "Voucher balance")?.value).toBe("$46.59")
     expect(result.lines.find((line) => line.label === "Cash balance")?.value).toBe("$3.00")
@@ -96,8 +94,23 @@ describe("kimi plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.plan).toBe("Intermediate")
-    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Weekly")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "Session")).toEqual({
+      type: "progress",
+      label: "Session",
+      used: 15,
+      limit: 100,
+      format: { kind: "count", suffix: "quota units" },
+      resetsAt: "2099-02-07T12:32:50.000Z",
+      periodDurationMs: 300 * 60 * 1000,
+    })
+    expect(result.lines.find((line) => line.label === "Weekly")).toEqual({
+      type: "progress",
+      label: "Weekly",
+      used: 26,
+      limit: 100,
+      format: { kind: "count", suffix: "quota units" },
+      resetsAt: "2099-02-11T17:32:50.000Z",
+    })
     expect(result.lines.find((line) => line.label === "API Balance")).toBeTruthy()
   })
 
@@ -667,7 +680,9 @@ describe("kimi plugin", () => {
     const result = plugin.probe(ctx)
     const session = result.lines.find((line) => line.label === "Session")
     expect(session).toBeTruthy()
-    expect(session.used).toBe(25) // (200-150)/200
+    expect(session.used).toBe(50)
+    expect(session.limit).toBe(200)
+    expect(session.format).toEqual({ kind: "count", suffix: "quota units" })
     expect(session.periodDurationMs).toBe(24 * 60 * 60 * 1000)
     expect(result.plan).toBeNull()
   })
@@ -695,6 +710,8 @@ describe("kimi plugin", () => {
     expect(result.lines.find((line) => line.label === "Session")).toBeUndefined()
     const weekly = result.lines.find((line) => line.label === "Weekly")
     expect(weekly).toBeTruthy()
-    expect(weekly.used).toBe(25)
+    expect(weekly.used).toBe(125)
+    expect(weekly.limit).toBe(500)
+    expect(weekly.format).toEqual({ kind: "count", suffix: "quota units" })
   })
 })

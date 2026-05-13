@@ -105,6 +105,8 @@ UsageBar renders:
 | `weeklyQuotaResetAtUnix` | reset time for `Weekly quota` | unix seconds -> ISO |
 | `planInfo.planName` | plan label | blank or missing becomes `Unknown` |
 
+Windsurf's current public quota docs describe daily and weekly usage allowances, and the pricing page labels those allowances as `Light`, `Standard`, or `Heavy`, but they do not publish exact token or request caps for those buckets. The current cloud payload also returns remaining percentages rather than absolute used/max counters. UsageBar therefore keeps Windsurf's daily and weekly bars percent-based instead of inventing per-plan limits.
+
 If the payload falls back to the older credit-based shape or omits any required quota fields, the plugin returns:
 
 ```text

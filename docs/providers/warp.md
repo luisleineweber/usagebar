@@ -35,8 +35,10 @@ Sources:
 
 ## Display
 
-- `Requests`: progress from used over request limit
+- `Requests`: progress from used over positive request limit
 - `Plan`: `Metered` or `Unlimited`
+
+Unlimited or missing-limit accounts render `Requests` as text instead of a progress bar because Warp does not expose a finite max quota for those states.
 
 ## Common errors
 

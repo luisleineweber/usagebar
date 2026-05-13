@@ -882,6 +882,13 @@ describe("gemini plugin", () => {
       format: { kind: "count", suffix: "requests" },
       resetsAt: "2099-01-01T00:00:00.000Z",
     })
-    expect(result.lines.find((line) => line.label === "Flash Lite")?.used).toBe(300)
+    expect(result.lines.find((line) => line.label === "Flash Lite")).toEqual({
+      type: "progress",
+      label: "Flash Lite",
+      used: 300,
+      limit: 1000,
+      format: { kind: "count", suffix: "requests" },
+      resetsAt: "2099-01-02T00:00:00.000Z",
+    })
   })
 })

@@ -38,6 +38,8 @@ The provider reads `/credits` first and treats `/key` as optional enrichment. If
 - `Requests`: request-rate detail from `/key`, or a fallback key-credit summary / unavailable state
 - Plan text: current remaining credit balance
 
+UsageBar renders `Credits` as progress only when `/credits` returns a positive `total_credits` value. Zero-total balances render as text so the app does not invent a max credit limit.
+
 ## Common errors
 
 - `OpenRouter API key missing. Save it in Setup or set OPENROUTER_API_KEY.`

@@ -153,6 +153,26 @@ describe("openrouter plugin", () => {
     expect(result.lines.find((line) => line.label === "Requests")?.value).toBe("$3.75 key credit left")
   })
 
+  it("renders zero credit totals as text instead of fake progress", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { OPENROUTER_API_KEY: "env-key" })
+    ctx.host.http.request.mockImplementation((req) => {
+      if (req.url.endsWith("/credits")) {
+        return { status: 200, bodyText: JSON.stringify(creditsPayload({ total_credits: 0, total_usage: 0 })) }
+      }
+      return { status: 200, bodyText: JSON.stringify(keyPayload({ rate_limit: null })) }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Credits")).toEqual({
+      type: "text",
+      label: "Credits",
+      value: "$0.00",
+    })
+  })
+
   it("shows no key limit configured when key endpoint returns no quota", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { OPENROUTER_API_KEY: "env-key" })

@@ -38,6 +38,8 @@ The provider prefers the USD balance when DeepSeek returns multiple currencies, 
 - `API availability`: shown when DeepSeek reports a positive balance that is unavailable for API calls
 - Plan text: current balance, or a top-up prompt for zero balance
 
+DeepSeek's balance endpoint returns remaining account balance, not a subscription quota cap or used/max token allowance. UsageBar renders it as text instead of a progress bar so the UI does not imply a fake maximum.
+
 ## Common errors
 
 - `DeepSeek API key missing. Save it in Setup or set DEEPSEEK_API_KEY.`

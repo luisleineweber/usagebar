@@ -92,15 +92,19 @@ X-Github-Api-Version: 2025-04-01
 
 ## Displayed Lines
 
-| Line         | Tier | Description                              |
-|--------------|------|------------------------------------------|
-| Premium      | Paid | Premium interactions remaining (percent) |
-| Chat         | Both | Chat messages remaining                  |
-| Completions  | Free | Code completions remaining               |
+| Line         | Tier | Description |
+|--------------|------|-------------|
+| Premium      | Paid | Premium requests used out of the provider-reported entitlement or the documented plan allowance |
+| Chat         | Paid | Chat messages used out of provider-reported `entitlement` when available; percent fallback only when GitHub omits the exact chat cap |
+| Chat         | Free | Chat messages used out of `monthly_quotas.chat` |
+| Completions  | Free | Code completions used out of `monthly_quotas.completions` |
+| Premium Requests | Detail | Official GitHub billing API premium-request usage when the token can access billing usage |
 
 All progress lines include:
 - `resetsAt` - ISO timestamp of next quota reset
 - `periodDurationMs` - 30-day period (`2592000000ms`)
+
+Current GitHub plan docs list monthly premium request allowances as Free 50, Student 300, Pro 300, Pro+ 1,500, Business 300 per user, and Enterprise 1,000 per user. UsageBar uses provider-reported `entitlement` first, then those documented limits only when the Copilot payload names a known plan. GitHub has announced a move from request-based billing to usage-based billing starting June 1, 2026, so this mapping should be rechecked before promoting Copilot beyond `experimental`.
 
 ## Errors
 

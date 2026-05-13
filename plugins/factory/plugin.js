@@ -400,7 +400,7 @@
 
     // Standard tokens (primary line)
     const standard = usage.standard
-    if (standard && typeof standard.totalAllowance === "number") {
+    if (standard && typeof standard.totalAllowance === "number" && standard.totalAllowance > 0) {
       const used = standard.orgTotalTokensUsed || 0
       const limit = standard.totalAllowance
       lines.push(ctx.line.progress({

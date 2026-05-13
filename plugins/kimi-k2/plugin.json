@@ -15,7 +15,7 @@
   },
   "lines": [
     {
-      "type": "progress",
+      "type": "text",
       "label": "Balance",
       "scope": "overview",
       "primaryOrder": 1

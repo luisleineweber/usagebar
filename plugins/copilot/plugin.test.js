@@ -259,10 +259,85 @@ describe("copilot plugin", () => {
     const premium = result.lines.find((l) => l.label === "Premium");
     const chat = result.lines.find((l) => l.label === "Chat");
     expect(premium).toBeTruthy();
-    expect(premium.used).toBe(20); // 100 - 80
-    expect(premium.limit).toBe(100);
+    expect(premium.used).toBe(60);
+    expect(premium.limit).toBe(300);
+    expect(premium.format).toEqual({ kind: "count", suffix: "requests" });
     expect(chat).toBeTruthy();
-    expect(chat.used).toBe(5); // 100 - 95
+    expect(chat.used).toBe(50);
+    expect(chat.limit).toBe(1000);
+    expect(chat.format).toEqual({ kind: "count", suffix: "messages" });
+  });
+
+  it("keeps paid tier limits when usage exceeds entitlement", async () => {
+    const ctx = makePluginTestContext();
+    setKeychainToken(ctx, "tok");
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(
+        makeUsageResponse({
+          quota_snapshots: {
+            premium_interactions: {
+              percent_remaining: 0,
+              entitlement: 300,
+              remaining: -10,
+              quota_id: "premium",
+            },
+            chat: {
+              percent_remaining: 0,
+              entitlement: 1000,
+              remaining: -25,
+              quota_id: "chat",
+            },
+          },
+        }),
+      ),
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    const premium = result.lines.find((l) => l.label === "Premium");
+    const chat = result.lines.find((l) => l.label === "Chat");
+
+    expect(premium.used).toBe(310);
+    expect(premium.limit).toBe(300);
+    expect(chat.used).toBe(1025);
+    expect(chat.limit).toBe(1000);
+  });
+
+  it("keeps paid Chat percent-based when GitHub omits exact chat entitlement", async () => {
+    const ctx = makePluginTestContext();
+    setKeychainToken(ctx, "tok");
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(
+        makeUsageResponse({
+          quota_snapshots: {
+            premium_interactions: {
+              percent_remaining: 80,
+              entitlement: 300,
+              remaining: 240,
+              quota_id: "premium",
+            },
+            chat: {
+              percent_remaining: 95,
+              quota_id: "chat",
+            },
+          },
+        }),
+      ),
+    });
+
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    const chat = result.lines.find((l) => l.label === "Chat");
+
+    expect(chat).toMatchObject({
+      type: "progress",
+      label: "Chat",
+      used: 5,
+      limit: 100,
+      format: { kind: "percent" },
+    });
   });
 
   it("adds official premium request billing usage when a gh username is available", async () => {
@@ -593,9 +668,13 @@ describe("copilot plugin", () => {
     const chat = result.lines.find((l) => l.label === "Chat");
     const completions = result.lines.find((l) => l.label === "Completions");
     expect(chat).toBeTruthy();
-    expect(chat.used).toBe(18); // (500 - 410) / 500 * 100 = 18%
+    expect(chat.used).toBe(90);
+    expect(chat.limit).toBe(500);
+    expect(chat.format).toEqual({ kind: "count", suffix: "messages" });
     expect(completions).toBeTruthy();
-    expect(completions.used).toBe(0); // (4000 - 4000) / 4000 * 100 = 0%
+    expect(completions.used).toBe(0);
+    expect(completions.limit).toBe(4000);
+    expect(completions.format).toEqual({ kind: "count", suffix: "completions" });
   });
 
   it("includes periodDurationMs on free tier progress lines", async () => {
@@ -652,8 +731,33 @@ describe("copilot plugin", () => {
     const result = plugin.probe(ctx);
     const chat = result.lines.find((l) => l.label === "Chat");
     const completions = result.lines.find((l) => l.label === "Completions");
-    expect(chat.used).toBe(50); // 50% used
-    expect(completions.used).toBe(50); // 50% used
+    expect(chat.used).toBe(250);
+    expect(chat.limit).toBe(500);
+    expect(completions.used).toBe(2000);
+    expect(completions.limit).toBe(4000);
+  });
+
+  it("keeps free tier limits when remaining quotas are negative", async () => {
+    const ctx = makePluginTestContext();
+    setKeychainToken(ctx, "tok");
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        copilot_plan: "individual",
+        limited_user_quotas: { chat: -10, completions: -25 },
+        monthly_quotas: { chat: 500, completions: 4000 },
+        limited_user_reset_date: "2026-02-15",
+      }),
+    });
+    const plugin = await loadPlugin();
+    const result = plugin.probe(ctx);
+    const chat = result.lines.find((l) => l.label === "Chat");
+    const completions = result.lines.find((l) => l.label === "Completions");
+
+    expect(chat.used).toBe(510);
+    expect(chat.limit).toBe(500);
+    expect(completions.used).toBe(4025);
+    expect(completions.limit).toBe(4000);
   });
 
   it("handles graceful keychain write failure", async () => {

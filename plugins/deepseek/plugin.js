@@ -128,11 +128,9 @@
 
     const total = formatMoney(summary.totalBalance, summary.currency)
     const lines = [
-      ctx.line.progress({
+      ctx.line.text({
         label: "Balance",
-        used: summary.totalBalance,
-        limit: Math.max(summary.totalBalance, 1),
-        format: { kind: "dollars" },
+        value: total,
       }),
       ctx.line.text({ label: "Paid balance", value: formatMoney(summary.toppedUpBalance, summary.currency) }),
       ctx.line.text({ label: "Granted balance", value: formatMoney(summary.grantedBalance, summary.currency) }),

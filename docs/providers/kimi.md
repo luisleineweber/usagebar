@@ -112,4 +112,6 @@ Current local evidence on this machine: `~/.kimi/credentials/kimi-code.json` is 
 - The plugin refreshes tokens when near expiry (5-minute buffer).
 - If refresh is rejected (401/403), user must run `kimi login` again.
 - `limits[0].window.duration=300` and `TIME_UNIT_MINUTE` maps to the 5-hour session window.
+- **Session** and **Weekly** progress bars use the exact Kimi Code quota count from `limit` plus `used` or `remaining`.
 - API balance is separate from Kimi Code membership quota and comes from Moonshot's official Open Platform balance endpoint, not `kimi-k2.ai`.
+- API balance is rendered as text because the endpoint returns remaining balance only, not a used/max quota.

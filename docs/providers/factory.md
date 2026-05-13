@@ -69,6 +69,8 @@ Returns token usage for the current billing period.
 
 UsageBar does not infer a Factory subscription name from token allowances. The endpoint currently exposes usage buckets, not a stable public plan contract, so the provider renders `Standard` and optional `Premium` usage lines without a plan badge.
 
+UsageBar renders token progress only when Factory returns a positive `totalAllowance`. If all returned allowances are zero, it shows `No usage data` instead of creating a fake zero-limit progress bar.
+
 ## Authentication
 
 ### Token Location

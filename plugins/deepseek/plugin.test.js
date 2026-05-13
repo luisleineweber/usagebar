@@ -95,11 +95,9 @@ describe("deepseek plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Balance")).toEqual({
-      type: "progress",
+      type: "text",
       label: "Balance",
-      used: 20,
-      limit: 20,
-      format: { kind: "dollars" },
+      value: "$20.00",
     })
     expect(result.lines.find((line) => line.label === "Paid balance")).toEqual({
       type: "text",

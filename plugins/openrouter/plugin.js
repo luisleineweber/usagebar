@@ -170,12 +170,17 @@
     const keyData = keyPayload ? readKeyData(keyPayload) : null
 
     const lines = [
-      ctx.line.progress({
+      credits.totalCredits > 0
+        ? ctx.line.progress({
         label: "Credits",
         used: credits.totalUsage,
-        limit: Math.max(credits.totalCredits, credits.totalUsage, 1),
+        limit: credits.totalCredits,
         format: { kind: "dollars" },
-      }),
+      })
+        : ctx.line.text({
+          label: "Credits",
+          value: formatMoney(Math.max(0, credits.totalCredits - credits.totalUsage)),
+        }),
     ]
 
     let requestValue = "Unavailable"

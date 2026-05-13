@@ -948,7 +948,7 @@ describe("factory plugin", () => {
     expect(result.lines.find((line) => line.label === "Standard")).toBeTruthy()
   })
 
-  it("handles usage dates and counters when optional values are missing", async () => {
+  it("does not render progress when token allowance is zero", async () => {
     const ctx = makeCtx()
     const futureExp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60
     ctx.host.fs.writeText("~/.factory/auth.json", JSON.stringify({
@@ -976,11 +976,14 @@ describe("factory plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const standardLine = result.lines.find((line) => line.label === "Standard")
-    expect(standardLine).toBeTruthy()
-    expect(standardLine.used).toBe(0)
-    expect(standardLine.resetsAt).toBeUndefined()
-    expect(standardLine.periodDurationMs).toBeUndefined()
+    expect(result.lines).toEqual([
+      {
+        type: "badge",
+        label: "Status",
+        text: "No usage data",
+        color: "#a3a3a3",
+      },
+    ])
     expect(result.plan).toBeNull()
   })
 })

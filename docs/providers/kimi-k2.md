@@ -50,6 +50,8 @@ Official response shape:
 - `Cash balance`: cash portion of the balance
 - Plan text: current available API balance
 
+The official balance endpoint returns remaining API balance only; it does not expose a subscription quota cap or used/max token allowance. UsageBar renders this as text rather than a progress bar to avoid inventing a maximum.
+
 ## Common errors
 
 - `Moonshot API key missing. Save it in Setup or set MOONSHOT_API_KEY.`

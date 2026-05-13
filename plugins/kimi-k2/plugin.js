@@ -117,11 +117,9 @@
     }
 
     const lines = [
-      ctx.line.progress({
+      ctx.line.text({
         label: "Balance",
-        used: summary.available,
-        limit: Math.max(summary.available, 1),
-        format: { kind: "dollars" },
+        value: "$" + formatCount(summary.available),
       }),
       ctx.line.text({
         label: "Voucher balance",

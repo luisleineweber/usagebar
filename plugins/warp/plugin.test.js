@@ -111,6 +111,42 @@ describe("warp plugin", () => {
     })
   })
 
+  it("keeps metered request limits when usage exceeds the limit", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { WARP_API_KEY: "env-token" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(payload({ requestLimit: 100, requestsUsedSinceLastRefresh: 125 })),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Requests")).toMatchObject({
+      type: "progress",
+      used: 125,
+      limit: 100,
+    })
+  })
+
+  it("renders missing metered request limits as text instead of fake progress", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { WARP_API_KEY: "env-token" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(payload({ requestLimit: 0, requestsUsedSinceLastRefresh: 5 })),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Requests")).toEqual({
+      type: "text",
+      label: "Requests",
+      value: "No request limit",
+    })
+  })
+
   it("renders unlimited accounts with the unlimited badge", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { WARP_API_KEY: "env-token" })
@@ -128,11 +164,9 @@ describe("warp plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Requests")).toEqual({
-      type: "progress",
+      type: "text",
       label: "Requests",
-      used: 0,
-      limit: 1,
-      format: { kind: "count", suffix: "credits" },
+      value: "Unlimited",
     })
     expect(result.lines.find((line) => line.label === "Plan")?.text).toBe("Unlimited")
   })

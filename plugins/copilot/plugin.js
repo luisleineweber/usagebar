@@ -6,6 +6,18 @@
   const API_BASE_URL = "https://api.github.com";
   const WINDOWS_GH_HOSTS_PATH = "~/AppData/Roaming/GitHub CLI/hosts.yml";
   const UNIX_GH_HOSTS_PATH = "~/.config/gh/hosts.yml";
+  const COUNT_FORMAT_REQUESTS = { kind: "count", suffix: "requests" };
+  const COUNT_FORMAT_MESSAGES = { kind: "count", suffix: "messages" };
+  const COUNT_FORMAT_COMPLETIONS = { kind: "count", suffix: "completions" };
+  const COPILOT_PREMIUM_LIMITS = {
+    free: 50,
+    student: 300,
+    pro: 300,
+    "pro+": 1500,
+    pro_plus: 1500,
+    business: 300,
+    enterprise: 1000,
+  };
 
   function readJson(ctx, path) {
     try {
@@ -385,16 +397,68 @@
     });
   }
 
-  function makeLimitedProgressLine(ctx, label, remaining, total, resetDate) {
+  function copilotPlanKey(plan) {
+    const text = String(plan || "").toLowerCase();
+    if (!text) return null;
+    if (text.indexOf("enterprise") !== -1) return "enterprise";
+    if (text.indexOf("business") !== -1) return "business";
+    if (text.indexOf("pro+") !== -1 || text.indexOf("pro plus") !== -1 || text.indexOf("pro_plus") !== -1) return "pro+";
+    if (text.indexOf("student") !== -1) return "student";
+    if (text.indexOf("free") !== -1 || text.indexOf("limited") !== -1) return "free";
+    if (text.indexOf("pro") !== -1) return "pro";
+    return null;
+  }
+
+  function premiumLimitForPlan(plan) {
+    const key = copilotPlanKey(plan);
+    return key ? COPILOT_PREMIUM_LIMITS[key] || null : null;
+  }
+
+  function makePremiumProgressLine(ctx, snapshot, plan, resetDate) {
+    if (!snapshot || typeof snapshot.percent_remaining !== "number") return null;
+    const limit = readNumber(snapshot.entitlement) || readNumber(snapshot.limit) || premiumLimitForPlan(plan);
+    if (!limit || limit <= 0) return makeProgressLine(ctx, "Premium", snapshot, resetDate);
+    const remainingFromPayload = readNumber(snapshot.remaining);
+    const remaining = remainingFromPayload !== null
+      ? remainingFromPayload
+      : Math.round((Math.max(0, snapshot.percent_remaining) / 100) * limit);
+    return ctx.line.progress({
+      label: "Premium",
+      used: Math.max(0, limit - remaining),
+      limit,
+      format: COUNT_FORMAT_REQUESTS,
+      resetsAt: ctx.util.toIso(resetDate),
+      periodDurationMs: 30 * 24 * 60 * 60 * 1000,
+    });
+  }
+
+  function makeSnapshotCountProgressLine(ctx, label, snapshot, resetDate, format) {
+    if (!snapshot || typeof snapshot.percent_remaining !== "number") return null;
+    const limit = readNumber(snapshot.entitlement) || readNumber(snapshot.limit);
+    if (!limit || limit <= 0) return makeProgressLine(ctx, label, snapshot, resetDate);
+    const remainingFromPayload = readNumber(snapshot.remaining);
+    const remaining = remainingFromPayload !== null
+      ? remainingFromPayload
+      : Math.round((Math.max(0, snapshot.percent_remaining) / 100) * limit);
+    return ctx.line.progress({
+      label: label,
+      used: Math.max(0, limit - remaining),
+      limit,
+      format: format || COUNT_FORMAT_REQUESTS,
+      resetsAt: ctx.util.toIso(resetDate),
+      periodDurationMs: 30 * 24 * 60 * 60 * 1000,
+    });
+  }
+
+  function makeLimitedProgressLine(ctx, label, remaining, total, resetDate, format) {
     if (typeof remaining !== "number" || typeof total !== "number" || total <= 0)
       return null;
     const used = total - remaining;
-    const usedPercent = Math.min(100, Math.max(0, Math.round((used / total) * 100)));
     return ctx.line.progress({
       label: label,
-      used: usedPercent,
-      limit: 100,
-      format: { kind: "percent" },
+      used: Math.max(0, used),
+      limit: total,
+      format: format || COUNT_FORMAT_REQUESTS,
       resetsAt: ctx.util.toIso(resetDate),
       periodDurationMs: 30 * 24 * 60 * 60 * 1000,
     });
@@ -577,19 +641,20 @@
     // Paid tier: quota_snapshots
     const snapshots = data.quota_snapshots;
     if (snapshots) {
-      const premiumLine = makeProgressLine(
+      const premiumLine = makePremiumProgressLine(
         ctx,
-        "Premium",
         snapshots.premium_interactions,
+        data.copilot_plan || data.access_type_sku,
         data.quota_reset_date,
       );
       if (premiumLine) lines.push(premiumLine);
 
-      const chatLine = makeProgressLine(
+      const chatLine = makeSnapshotCountProgressLine(
         ctx,
         "Chat",
         snapshots.chat,
         data.quota_reset_date,
+        COUNT_FORMAT_MESSAGES,
       );
       if (chatLine) lines.push(chatLine);
     }
@@ -600,10 +665,10 @@
       const mq = data.monthly_quotas;
       const resetDate = data.limited_user_reset_date;
 
-      const chatLine = makeLimitedProgressLine(ctx, "Chat", lq.chat, mq.chat, resetDate);
+      const chatLine = makeLimitedProgressLine(ctx, "Chat", lq.chat, mq.chat, resetDate, COUNT_FORMAT_MESSAGES);
       if (chatLine) lines.push(chatLine);
 
-      const completionsLine = makeLimitedProgressLine(ctx, "Completions", lq.completions, mq.completions, resetDate);
+      const completionsLine = makeLimitedProgressLine(ctx, "Completions", lq.completions, mq.completions, resetDate, COUNT_FORMAT_COMPLETIONS);
       if (completionsLine) lines.push(completionsLine);
     }
 

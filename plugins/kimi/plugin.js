@@ -219,11 +219,9 @@
 
   function appendBalanceLines(ctx, lines, balance) {
     lines.push(
-      ctx.line.progress({
+      ctx.line.text({
         label: "API Balance",
-        used: balance.available,
-        limit: Math.max(balance.available, 1),
-        format: { kind: "dollars" },
+        value: "$" + formatMoney(balance.available),
       })
     )
     lines.push(ctx.line.text({ label: "Voucher balance", value: "$" + formatMoney(balance.voucher) }))
@@ -265,13 +263,12 @@
     }
   }
 
-  function toPercentUsage(quota) {
+  function toCountUsage(quota) {
     if (!quota || quota.limit <= 0) return null
-    const usedPercent = (quota.used / quota.limit) * 100
-    if (!Number.isFinite(usedPercent)) return null
+    if (!Number.isFinite(quota.used) || !Number.isFinite(quota.limit)) return null
     return {
-      used: Math.round(Math.max(0, usedPercent) * 10) / 10,
-      limit: 100,
+      used: Math.max(0, quota.used),
+      limit: quota.limit,
       resetsAt: quota.resetsAt,
     }
   }
@@ -399,15 +396,15 @@
       }
 
       if (sessionCandidate) {
-        const sessionPercent = toPercentUsage(sessionCandidate.quota)
-        if (sessionPercent) {
+        const sessionUsage = toCountUsage(sessionCandidate.quota)
+        if (sessionUsage) {
           lines.push(
             ctx.line.progress({
               label: "Session",
-              used: sessionPercent.used,
-              limit: sessionPercent.limit,
-              format: { kind: "percent" },
-              resetsAt: sessionPercent.resetsAt || undefined,
+              used: sessionUsage.used,
+              limit: sessionUsage.limit,
+              format: { kind: "count", suffix: "quota units" },
+              resetsAt: sessionUsage.resetsAt || undefined,
               periodDurationMs:
                 typeof sessionCandidate.periodMs === "number"
                   ? sessionCandidate.periodMs
@@ -418,15 +415,15 @@
       }
 
       if (weeklyCandidate && !sameQuota(weeklyCandidate, sessionCandidate)) {
-        const weeklyPercent = toPercentUsage(weeklyCandidate.quota)
-        if (weeklyPercent) {
+        const weeklyUsage = toCountUsage(weeklyCandidate.quota)
+        if (weeklyUsage) {
           lines.push(
             ctx.line.progress({
               label: "Weekly",
-              used: weeklyPercent.used,
-              limit: weeklyPercent.limit,
-              format: { kind: "percent" },
-              resetsAt: weeklyPercent.resetsAt || undefined,
+              used: weeklyUsage.used,
+              limit: weeklyUsage.limit,
+              format: { kind: "count", suffix: "quota units" },
+              resetsAt: weeklyUsage.resetsAt || undefined,
               periodDurationMs:
                 typeof weeklyCandidate.periodMs === "number"
                   ? weeklyCandidate.periodMs

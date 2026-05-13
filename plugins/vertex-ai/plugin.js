@@ -291,7 +291,7 @@
 
     const usageByKey = aggregate(fetchTimeSeries(ctx, credentials, USAGE_FILTER))
     const limitByKey = aggregate(fetchTimeSeries(ctx, credentials, LIMIT_FILTER))
-    let maxPercent = null
+    let best = null
     let matched = 0
 
     for (const key of Object.keys(limitByKey)) {
@@ -300,14 +300,17 @@
       if (!(limit > 0) || usage === undefined) continue
       matched += 1
       const percent = (usage / limit) * 100
-      maxPercent = Math.max(maxPercent === null ? percent : maxPercent, percent)
+      if (!best || percent > best.percent) best = { used: usage, limit, percent }
     }
 
-    if (matched === 0 || maxPercent === null) return null
-    return Math.max(0, maxPercent)
+    if (matched === 0 || best === null) return null
+    return {
+      used: Math.max(0, best.used),
+      limit: best.limit,
+    }
   }
 
-  function buildResult(ctx, credentials, quotaPercent) {
+  function buildResult(ctx, credentials, quota) {
     const lines = [
       ctx.line.badge({
         label: "Source",
@@ -317,12 +320,12 @@
       ctx.line.text({ label: "Project", value: credentials.projectId || "Missing" }),
     ]
 
-    if (quotaPercent !== null) {
+    if (quota !== null) {
       lines.splice(1, 0, ctx.line.progress({
         label: "Quota usage",
-        used: quotaPercent,
-        limit: 100,
-        format: { kind: "percent" },
+        used: quota.used,
+        limit: quota.limit,
+        format: { kind: "count", suffix: "quota units" },
       }))
     } else {
       lines.push(ctx.line.text({ label: "Quota", value: "No recent quota data" }))
@@ -343,8 +346,8 @@
     if (needsRefresh(ctx, credentials)) {
       credentials = refreshAccessToken(ctx, credentials)
     }
-    const quotaPercent = calculateQuotaUsage(ctx, credentials)
-    return buildResult(ctx, credentials, quotaPercent)
+    const quota = calculateQuotaUsage(ctx, credentials)
+    return buildResult(ctx, credentials, quota)
   }
 
   globalThis.__openusage_plugin = { id: "vertex-ai", probe }
