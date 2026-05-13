@@ -91,7 +91,7 @@ Before publishing Alpha 1, verify and record:
 - README and release notes state privacy, telemetry, crash-log behavior, known limitations, and feedback/debug-info path.
 - `CHANGELOG.md` includes the exact release version with supported features and known limitations.
 
-Run the checklist in [alpha-smoke-test.md](alpha-smoke-test.md) for the final local artifact or GitHub release candidate before tagging.
+Use the Alpha Gate bullets above for the final local artifact or GitHub release candidate before tagging. Historical Alpha 1 smoke evidence is archived at [alpha-smoke-test-0.1.0-alpha.1.md](archive/release/alpha-smoke-test-0.1.0-alpha.1.md).
 
 Suggested Alpha 1 release-note shape:
 
