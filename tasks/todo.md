@@ -1,3 +1,109 @@
+# Audit Markdown and HTML documentation clutter
+
+## Executive Summary
+- Review Markdown and HTML files for active usefulness.
+- Keep current product, provider, release, and architecture docs in active locations.
+- Move old transition notes, historical smoke evidence, scratch research, and redundant plugin implementation notes into `docs/archive/`.
+- Fix active docs that still describe outdated provider setup inputs.
+
+## Acceptance Criteria
+- [x] Markdown/HTML inventory excludes generated build folders and is reviewed.
+- [x] Obsolete or historical docs are no longer in active docs/plugin folders.
+- [x] Active docs keep current setup information for recently changed providers.
+- [x] Release docs no longer point at the old Alpha 1 smoke checklist as the current checklist.
+- [x] Verification confirms no tracked ignored docs and no broken active references to moved files.
+
+## Plan
+- [x] Inventory `.md` and `.html` files outside build/vendor folders.
+- [x] Check references and freshness signals for candidate docs.
+- [x] Archive historical/superseded docs with `Move-Item`.
+- [x] Patch stale active documentation.
+- [x] Verify references, ignore behavior, and diff.
+
+## Verification Notes
+- Reviewed `rg --files -g "*.md" -g "*.html"` excluding `node_modules`, `src-tauri/target`, `coverage`, and `dist`.
+- Moved obsolete/historical docs into `docs/archive/`: `capture-logs.md`, `app-state-architecture.md`, `archive-ai-provider-research-dump.md`, `upstream-sync-2026-04-24.md`, Alpha 1 smoke evidence, and plugin `IMPLEMENTATION.md` notes.
+- `rg --files plugins -g "IMPLEMENTATION.md"` -> no plugin implementation notes remain in active plugin folders.
+- `rg -n "env-only|you can only fake env-based|No file path today; auth is env-only|alpha-smoke-test\.md" docs\provider-input-simulation.md docs\providers docs\releasing.md` -> no active stale matches.
+- `docs/releasing.md` now links historical Alpha 1 smoke evidence under `docs/archive/release/` and keeps the current Alpha Gate inline.
+
+# Clean repo-root generated clutter
+
+## Executive Summary
+- Move old local dev logs out of the repository root.
+- Keep screenshots/assets in a named docs asset folder instead of root.
+- Add ignore rules so generated logs, screenshots, reports, and local notes do not reappear as long root lists.
+- Clean git tracking for generated artifacts without rewriting history.
+
+## Acceptance Criteria
+- [x] Root-level `*.log` files are no longer present.
+- [x] Generated root screenshots are ignored, and the existing screenshot is moved to a docs asset folder.
+- [x] `.gitignore` covers local logs, generated screenshots, HTML reports, temp archives, and local agent docs.
+- [x] Tracked generated artifacts are removed from git tracking without deleting the local file content.
+- [x] `git status --short --ignored` shows the cleanup clearly and no unrelated user changes are reverted.
+
+## Plan
+- [x] Inventory current generated/log/report files.
+- [x] Move existing root logs into `logs/archive/`.
+- [x] Move the root screenshot into `docs/assets/`.
+- [x] Extend `.gitignore` for generated local clutter.
+- [x] Remove generated artifacts from git tracking where appropriate.
+- [x] Verify ignore behavior and review the diff.
+
+## Verification Notes
+- `Get-ChildItem -LiteralPath . -File -Filter *.log` -> no root-level logs.
+- `git check-ignore -v logs/archive/.tauri-dev.out.log docs/assets/screenshot.png docs/reports/cookie-auth-fixability-review.html screenshot-new.png test-results/example.json playwright-report/index.html` -> all matched expected ignore rules.
+- `git ls-files -c -i --exclude-standard` -> no tracked ignored files remain.
+- `git rm --cached -- screenshot.png` removed the generated screenshot from tracking only; local image content remains at `docs/assets/screenshot.png`.
+
+# Auto-minimize tray bar after inactivity
+
+## Executive Summary
+- Hide the tray bar automatically after about 30 seconds of inactivity.
+- Reset the timer when the user interacts with the bar.
+- Keep the first version simple without adding a setting unless tests show the fixed default is too intrusive.
+
+## Acceptance Criteria
+- [x] The Tauri tray panel invokes `hide_panel` after 30 seconds of panel inactivity.
+- [x] Pointer, keyboard, wheel, scroll, focus, and tray navigation activity reset the timer.
+- [x] The auto-hide timer is cleaned up when the panel unmounts or the About dialog owns Escape handling.
+- [x] Focused panel tests pass.
+
+## Plan
+- [x] Add a panel inactivity timeout to `usePanel`.
+- [x] Add focused regressions for timeout hide, activity reset, and cleanup.
+- [x] Record the no-setting default in choices/breadcrumbs.
+- [x] Run focused panel tests and review the diff.
+
+## Verification Notes
+- `bun run test -- src\hooks\app\use-panel.test.ts --run` -> 1 file passed, 17 tests passed.
+- `bun run typecheck` -> passed.
+
+# Fix review findings from main/origin comparison
+
+## Executive Summary
+- Include the new Codebuff provider files in git tracking.
+- Keep Codebuff network access on the declared production domain only.
+- Align plugin HTTP documentation with deny-by-default host behavior.
+
+## Acceptance Criteria
+- [x] Codebuff docs and plugin files are staged/tracked for the next commit.
+- [x] Codebuff no longer exposes or documents a base-URL override that the host blocks.
+- [x] Plugin API/schema docs describe empty or omitted `httpDomains` as blocked.
+- [x] Focused Codebuff and docs/static verification passes.
+
+## Plan
+- [x] Remove stale Codebuff override references and env allowlist entry.
+- [x] Update plugin HTTP documentation.
+- [x] Run focused tests/checks.
+- [x] Stage the Codebuff docs/plugin files.
+
+## Verification Notes
+- `rg -n "CODEBUFF_API_URL|staging\\.codebuff|Optional:" plugins\\codebuff docs\\providers\\codebuff.md src-tauri\\src\\plugin_engine\\host_api.rs` -> no matches.
+- `bun run test -- plugins\\codebuff\\plugin.test.js --run` -> 1 file passed, 7 tests passed.
+- `node --check plugins\\codebuff\\plugin.js` -> passed.
+- `git diff --check ...` for touched docs/Codebuff/host/todo paths -> passed; only existing LF-to-CRLF warnings.
+
 # Make CI truthful, reproducible, and Windows-aware
 
 ## Executive Summary
@@ -133,6 +239,174 @@
 ## Verification Notes
 - `node --check scripts\tauri\wrapper.mjs` -> passed.
 - `node --test scripts\tauri\wrapper.test.mjs` -> 3 tests passed.
+
+# Implement Codebuff as a Windows-experimental provider
+
+## Executive Summary
+- Add Codebuff to the visible provider list with real setup.
+- Show credit usage as real progress bars with supported count formatting.
+- Support stored API token, `CODEBUFF_API_KEY`, and local `codebuff login` credentials.
+
+## Acceptance Criteria
+- [x] Codebuff plugin emits overview-visible `Credits` and `Weekly` progress lines with supported frontend formats.
+- [x] Settings exposes a Codebuff API-token setup path.
+- [x] The Tauri host exposes only the needed Codebuff env vars.
+- [x] README/docs describe the provider and its experimental validation gap.
+- [x] Focused Codebuff, settings, host-env, and bundle verification passes.
+
+## Plan
+- [x] Normalize Codebuff progress format and icon theming.
+- [x] Add settings metadata and env allowlist entries.
+- [x] Sync bundled plugins and run focused verification.
+
+## Verification Notes
+- Researched current public Codebuff surfaces on 2026-05-12: official pricing lists paid subscriptions by usage multiplier plus pay-as-you-go credits; official docs expose API-key setup and `/usage` CLI guidance, so the provider reads live quota/credit numbers instead of hardcoding plan allowances.
+- `bun run test -- plugins/codebuff/plugin.test.js --run` -> 1 file passed, 6 tests passed.
+- `bun run test -- src\components\settings\provider-settings-detail.test.tsx --run` -> 1 file passed, 24 tests passed.
+- `cargo test --manifest-path src-tauri\Cargo.toml env_api_respects_allowlist_in_host_and_js --no-run` -> compiled focused Rust test binaries.
+- `cargo test --manifest-path src-tauri\Cargo.toml env_api_respects_allowlist_in_host_and_js` -> compiled, then hit the existing local Windows `STATUS_ENTRYPOINT_NOT_FOUND` Rust test-runtime blocker.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `codebuff`.
+- `Get-FileHash` confirmed source/bundled Codebuff `plugin.js`, `plugin.json`, and `icon.svg` hashes match.
+- `rg -n 'kind: "credits"|CODEBUFF|Codebuff' ...` -> no unsupported `kind: "credits"` remains; Codebuff env/settings/docs references are present.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `node --check plugins\codebuff\plugin.js` -> passed.
+
+# Fix Alibaba Coding Plan progress bars
+
+## Executive Summary
+- Keep Alibaba as a Windows-experimental API-key provider.
+- Show real request counts against current Coding Plan limits instead of percent-only placeholders.
+- Align manifest labels, setup docs, and tests so the overview can display the bars.
+
+## Acceptance Criteria
+- [x] Alibaba overview lines match emitted progress labels.
+- [x] Alibaba progress bars use real request counts and limits for 5-hour, weekly, and monthly quota windows when available.
+- [x] Plan-limit fallback matches current online Coding Plan tiers only when the plan name is known.
+- [x] Stale Alibaba placeholder docs are corrected.
+- [x] Focused Alibaba plugin/settings/bundle verification passes.
+
+## Plan
+- [x] Patch Alibaba parser and manifest labels.
+- [x] Add focused plugin tests for API key, known plan fallback, and auth errors.
+- [x] Update stale docs and sync bundled plugin files.
+
+## Verification Notes
+- Researched current Alibaba Coding Plan docs on 2026-05-12: Pro is 6,000 requests per 5 hours, 45,000 per week, and 90,000 per month; legacy Lite is 1,200 / 9,000 / 18,000 and no longer available to new subscribers.
+- `bun run test -- plugins/alibaba/plugin.test.js --run` -> 1 file passed, 4 tests passed.
+- `bun run test -- src\components\settings\provider-settings-detail.test.tsx --run` -> 1 file passed, 25 tests passed after rerunning outside the transient parallel sandbox CWD issue.
+- `node --check plugins\alibaba\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `alibaba`.
+- `Get-FileHash` confirmed source/bundled Alibaba `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- `rg -n 'placeholder|Placeholder plugin only|Current implementation: placeholder|kind: "percent"|"label": "Quota"' ...` -> no Alibaba placeholder, percent-format, or stale `Quota` manifest hits remain; remaining hits are generic definitions and the separate Augment simulation row.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+
+# Fix Copilot quota progress units
+
+## Executive Summary
+- Keep Copilot login through GitHub CLI/token sources unchanged.
+- Change Copilot bars to real request/completion counts where GitHub exposes limits.
+- Use current documented premium-request plan limits only when the provider payload names a known Copilot plan.
+
+## Acceptance Criteria
+- [x] Premium Copilot progress uses request counts against current plan limits when a known plan is present.
+- [x] Free Chat and Completions progress uses exact remaining/monthly quota counts instead of percentages.
+- [x] Paid Chat stays percent-based only when GitHub exposes no count limit in the payload.
+- [x] Copilot docs explain count vs percent surfaces and current plan-limit fallback.
+- [x] Focused Copilot plugin verification passes.
+
+## Plan
+- [x] Add Copilot plan-limit mapping from current GitHub docs.
+- [x] Patch Premium and free-tier progress helpers.
+- [x] Update tests/docs and sync bundled plugin files.
+
+## Verification Notes
+- Researched current GitHub Copilot docs on 2026-05-12: monthly premium request allowances are Free 50, Student 300, Pro 300, Pro+ 1,500, Business 300 per user, and Enterprise 1,000 per user; GitHub also announces a June 1, 2026 move from request-based billing to usage-based billing.
+- `bun run test -- plugins\copilot\plugin.test.js --run` -> 1 file passed, 40 tests passed.
+- `node --check plugins\copilot\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `copilot`.
+- `Get-FileHash` confirmed source/bundled Copilot `plugin.js` and `plugin.test.js` hashes match.
+- `rg -n 'Premium interactions remaining|premium\.used\)\.toBe\(20\)|chat\.used\)\.toBe\(18\)|format: \{ kind: "percent" \}' ...` -> no stale Copilot percent-only expectations or docs remain.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+
+# Fix Synthetic quota progress units
+
+## Executive Summary
+- Keep Synthetic API-key login unchanged.
+- Show exact quota counts as credit progress when the API returns `used`/`remaining` plus `limit`.
+- Keep percent formatting only for percent-only payloads.
+
+## Acceptance Criteria
+- [x] Synthetic exact quota payloads render `count` progress with `credits` suffix.
+- [x] Synthetic percent-only payloads still render percent progress.
+- [x] Focused Synthetic plugin verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Track whether a parsed quota had an exact numeric limit source.
+- [x] Set progress format from that parsed source type.
+- [x] Update tests and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\synthetic\plugin.test.js --run` -> 1 file passed, 10 tests passed.
+- `node --check plugins\synthetic\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `synthetic`.
+- `Get-FileHash` confirmed source/bundled Synthetic `plugin.js` and `plugin.test.js` hashes match.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+
+# Fix Z.ai quota progress units
+
+## Executive Summary
+- Keep Z.ai env-key login unchanged.
+- Show exact token counts for session and weekly token quota bars.
+- Show web search usage as a normal count bar.
+
+## Acceptance Criteria
+- [x] Z.ai Session and Weekly lines use token counts from `currentValue` / `usage`.
+- [x] Z.ai Web Searches uses count format with a stable suffix.
+- [x] Z.ai docs describe token-count bars, not percent-only bars.
+- [x] Focused Z.ai plugin verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Add a token-limit progress helper.
+- [x] Patch Session, Weekly, and Web Searches formats.
+- [x] Update tests/docs and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\zai\plugin.test.js --run` -> 1 file passed, 24 tests passed after rerunning outside the transient parallel sandbox CWD issue.
+- `node --check plugins\zai\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `zai`.
+- `Get-FileHash` confirmed source/bundled Z.ai `plugin.js` and `plugin.test.js` hashes match.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+
+# Fix Vertex AI quota progress units
+
+## Executive Summary
+- Keep Vertex AI gcloud ADC login unchanged.
+- Use the Cloud Monitoring usage/limit values directly in the progress bar.
+- Preserve the existing "highest quota pressure" selection.
+
+## Acceptance Criteria
+- [x] Vertex AI `Quota usage` uses absolute Cloud Monitoring usage and limit values.
+- [x] The selected quota remains the matched series with the highest usage percentage.
+- [x] Vertex AI docs describe absolute quota-unit bars.
+- [x] Focused Vertex AI plugin verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Return the highest-pressure quota bucket as `{ used, limit }`.
+- [x] Render `Quota usage` as count progress.
+- [x] Update tests/docs and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\vertex-ai\plugin.test.js --run` -> 1 file passed, 6 tests passed.
+- `node --check plugins\vertex-ai\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `vertex-ai`.
+- `Get-FileHash` confirmed source/bundled Vertex AI `plugin.js` and `plugin.test.js` hashes match.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
 - `node -e "JSON.parse(... src-tauri/tauri.conf.json ...)"` -> passed.
 
 # Pin tray settings button to bottom corner
@@ -649,16 +923,16 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 
 ## Acceptance Criteria
 - [x] `src-tauri/tauri.conf.json` no longer uses `security.csp: null`; it has a restrictive starter CSP validated against the app's real asset and IPC needs.
-- [ ] Plugin manifests or host policy support explicit HTTP domain allowlists before arbitrary network access is treated as normal.
-- [ ] Dangerous host APIs such as write-capable `sqlite.exec` are gated by explicit plugin capability metadata.
-- [ ] `ccusage` execution avoids dynamic registry fallback in packaged builds, or the remaining dynamic path is explicitly documented and guarded.
+- [x] Plugin manifests or host policy support explicit HTTP domain allowlists before arbitrary network access is treated as normal.
+- [x] Dangerous host APIs such as write-capable `sqlite.exec` are gated by explicit plugin capability metadata.
+- [x] `ccusage` execution avoids dynamic registry fallback in packaged builds, or the remaining dynamic path is explicitly documented and guarded.
 - [ ] Focused Rust/JS tests cover at least one denied HTTP target and one denied write-capability path.
 
 ## Plan
 - [x] Start with the smallest safe CSP change and run the app/build to catch broken local asset, IPC, font, image, and style paths.
-- [ ] Extend plugin schema/manifest parsing with optional `permissions.httpDomains` and `permissions.sqliteWrite` fields, preserving current bundled plugins through explicit declarations where needed.
-- [ ] Enforce the policy in `src-tauri/src/plugin_engine/host_api.rs` and add regression tests around allow/deny decisions.
-- [ ] Update `docs/plugins/api.md`, `docs/plugins/schema.md`, and `SECURITY.md` so plugin authors understand the new defaults.
+- [x] Extend plugin schema/manifest parsing with optional `permissions.httpDomains` and `permissions.sqliteWrite` fields, preserving current bundled plugins through explicit declarations where needed.
+- [x] Enforce the policy in `src-tauri/src/plugin_engine/host_api.rs` and add regression tests around allow/deny decisions.
+- [x] Update `docs/plugins/api.md`, `docs/plugins/schema.md`, and `SECURITY.md` so plugin authors understand the new defaults.
 
 ## Verification Notes
 - Added a restrictive starter CSP in `src-tauri/tauri.conf.json` using the object form from Tauri v2 CSP docs.
@@ -667,6 +941,14 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Verified Tauri accepts and reports the policy with `npx bun run tauri -- info` -> App CSP reported as `default-src 'self' customprotocol: asset:; connect-src 'self' ipc: http://ipc.localhost https:; img-src 'self' asset: http://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:`.
 - Did not edit the broader plugin capability implementation because the dirty worktree already contains changes in `docs/plugins/api.md`, `docs/plugins/schema.md`, `SECURITY.md`, `src-tauri/src/plugin_engine/host_api.rs`, `manifest.rs`, and `runtime.rs`.
 - Attempted focused Rust verification with `cargo test --manifest-path src-tauri/Cargo.toml capability -- --nocapture`; the crate compiled, then the local test binary exited with `STATUS_ENTRYPOINT_NOT_FOUND`, matching the existing Rust-test blocker noted elsewhere in this task file.
+- Reconciled existing capability work: `HostCapabilities` parses `httpDomains` and `sqliteWrite`; `host_api.rs` injects HTTP with a domain allowlist and SQLite with write gating.
+- Patched stale `docs/plugins/api.md` wording that still said no HTTP domain allowlist existed.
+- Confirmed the remaining dynamic `ccusage` runner path is explicit in `docs/plugins/api.md` and gated by `capabilities.ccusage`; Windows command execution uses hidden background process flags and cached runner resolution from the earlier packaged-window slice.
+- Verified plugin manifest declarations with a Node scan: every plugin using `ctx.host.http.request` declares non-empty `capabilities.httpDomains`, and any plugin using `ctx.host.sqlite.exec` must declare `capabilities.sqliteWrite: true`.
+- `cargo test --manifest-path src-tauri\Cargo.toml http_domain_allowlist_matches_exact_and_wildcard_hosts --no-run` -> compiled focused test binaries.
+- `cargo test --manifest-path src-tauri\Cargo.toml empty_http_domain_allowlist_blocks_all_urls --no-run` -> compiled focused test binaries.
+- `cargo test --manifest-path src-tauri\Cargo.toml sqlite_exec_requires_write_capability --no-run` -> compiled focused test binaries.
+- Full local Rust test execution remains blocked by the existing Windows `STATUS_ENTRYPOINT_NOT_FOUND` runtime failure, so the deny-path execution criterion stays open.
 
 # P1 - Make CI truthful, reproducible, and Windows-aware
 
@@ -2148,3 +2430,525 @@ Source: `../docs/deep-research-report.md`, reviewed 2026-04-28 against the local
 - Verified port is now free with `Get-NetTCPConnection -LocalPort 6736 -ErrorAction SilentlyContinue` -> no listener.
 - `node --check scripts\tauri\wrapper.mjs` -> passed.
 - `node --test scripts\tauri\wrapper.test.mjs` -> 3 tests passed.
+
+# Audit Gemini quota count formatting
+
+## Executive Summary
+- Confirm Gemini already uses real request counts when Google returns exact quota buckets.
+- Keep fraction-only buckets percent-based because the API omits absolute caps.
+- Add regression/doc coverage so the remaining percent path is intentional.
+
+## Acceptance Criteria
+- [x] Gemini exact `used`/`limit` and `remaining`/`limit` quota buckets are covered as count-format request progress.
+- [x] Gemini docs explain count bars versus fraction-only percent fallback.
+- [x] Focused Gemini plugin verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Inspect Gemini quota parsing and current tests.
+- [x] Tighten the exact-count regression expectation and provider docs.
+- [x] Run focused Gemini verification and sync bundled plugins.
+
+## Verification Notes
+- `bun run test -- plugins\gemini\plugin.test.js --run` -> 1 file passed, 29 tests passed.
+- `node --check plugins\gemini\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `gemini`.
+- `Get-FileHash` confirmed source/bundled Gemini `plugin.js` and `plugin.test.js` hashes match.
+
+# Fix Kimi quota progress units
+
+## Executive Summary
+- Keep Kimi CLI OAuth and Moonshot API balance login unchanged.
+- Show Kimi Code membership quota as exact used/max counts.
+- Keep API balance as the existing dollar-format line.
+
+## Acceptance Criteria
+- [x] Kimi Session and Weekly progress bars use exact quota counts instead of percent conversion.
+- [x] Kimi docs describe the count source.
+- [x] Focused Kimi plugin verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch Kimi Session/Weekly progress rendering to use parsed quota counts.
+- [x] Update focused regression expectations and provider docs.
+- [x] Run focused Kimi verification and sync bundled plugins.
+
+## Verification Notes
+- `bun run test -- plugins\kimi\plugin.test.js --run` -> 1 file passed, 23 tests passed.
+- `node --check plugins\kimi\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `kimi`.
+- `Get-FileHash` confirmed source/bundled Kimi `plugin.js` and `plugin.test.js` hashes match.
+- `rg -n 'kind: "percent"|toPercentUsage' plugins\kimi src-tauri\resources\bundled_plugins\kimi` -> no Kimi percent-format or stale conversion helper remains.
+
+# Audit Windsurf quota progress limits
+
+## Executive Summary
+- Confirm whether Windsurf exposes exact daily/weekly usage caps.
+- Do not invent per-plan token/request limits when Windsurf only returns remaining percentages.
+- Record the limitation so the remaining percent bars are intentional.
+
+## Acceptance Criteria
+- [x] Windsurf docs state why daily/weekly quota bars remain percent-based.
+- [x] Focused Windsurf plugin verification passes and bundled docs are not required.
+- [x] Current provider-progress audit keeps Windsurf classified as percent-only by source payload, not as an unresolved count bug.
+
+## Plan
+- [x] Inspect Windsurf plugin payload parsing, tests, and provider docs.
+- [x] Check current Windsurf public docs/pricing for published numeric caps.
+- [x] Update provider docs with the exact-count limitation.
+- [x] Run focused Windsurf verification and record results.
+
+## Verification Notes
+- Checked current Windsurf docs/pricing on 2026-05-12: quota docs say usage now has daily and weekly allowances; pricing labels allowance sizes as Light, Standard, and Heavy, but neither source publishes exact token/request caps.
+- Inspected `plugins\windsurf\plugin.js`: the current cloud contract only reads `dailyQuotaRemainingPercent` and `weeklyQuotaRemainingPercent`, plus reset times and overage balance.
+- `bun run test -- plugins\windsurf\plugin.test.js --run` -> 1 file passed, 9 tests passed.
+- `node --check plugins\windsurf\plugin.js` -> passed.
+
+# Fix Copilot paid Chat quota counts
+
+## Executive Summary
+- Keep Copilot authentication and premium-request billing unchanged.
+- Show paid Chat as exact message counts when GitHub returns `entitlement` and `remaining`.
+- Keep percent fallback only when the paid Chat snapshot omits an exact cap.
+
+## Acceptance Criteria
+- [x] Paid Copilot Chat progress uses exact message counts when the private payload includes entitlement/remaining.
+- [x] Paid Copilot Chat still renders percent when GitHub only returns `percent_remaining`.
+- [x] Focused Copilot plugin verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Add a snapshot count progress helper for paid Chat.
+- [x] Update Copilot tests and docs for count-first paid Chat behavior.
+- [x] Run focused Copilot verification and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\copilot\plugin.test.js --run` -> 1 file passed, 41 tests passed.
+- `node --check plugins\copilot\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `copilot`.
+- `Get-FileHash` confirmed source/bundled Copilot `plugin.js` and `plugin.test.js` hashes match.
+
+# Remove fake balance progress bars
+
+## Executive Summary
+- Keep DeepSeek, Kimi optional API balance, and legacy Moonshot API Balance login paths unchanged.
+- Stop presenting remaining API balance as a fake full progress bar.
+- Preserve the balance in overview as text because these endpoints expose no max quota.
+
+## Acceptance Criteria
+- [x] DeepSeek Balance renders as text, not progress with `limit = balance`.
+- [x] Kimi optional API Balance renders as text, not progress with `limit = balance`.
+- [x] Moonshot API Balance renders as text, not progress with `limit = balance`.
+- [x] Provider docs explain that these balance endpoints expose no used/max quota.
+- [x] Focused DeepSeek, Kimi, and Kimi K2 plugin verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch DeepSeek, Kimi API Balance, and Kimi K2 balance lines and manifest line types.
+- [x] Update focused expectations and provider docs.
+- [x] Run focused verification and sync bundled plugin files.
+
+## Verification Notes
+- `node --check plugins\deepseek\plugin.js; node --check plugins\kimi-k2\plugin.js` -> passed.
+- `bun run test -- plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` first hit the known transient sandbox `src/test/setup.ts` path issue, then passed when rerun from `D:\UsageBar\usagebar`: 2 files passed, 18 tests passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `deepseek` and `kimi-k2`.
+- `Get-FileHash` confirmed source/bundled DeepSeek and Kimi K2 `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- `rg -n 'limit: Math.max\(summary\.|type.: .progress.|"type": "progress"' plugins\deepseek plugins\kimi-k2 src-tauri\resources\bundled_plugins\deepseek src-tauri\resources\bundled_plugins\kimi-k2` -> no fake balance-progress hits remain.
+- `bun run test -- plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 3 files passed, 41 tests passed.
+- `node --check plugins\kimi\plugin.js; node --check plugins\deepseek\plugin.js; node --check plugins\kimi-k2\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `kimi`, `deepseek`, and `kimi-k2`.
+- Node SHA-256 check confirmed source/bundled Kimi, DeepSeek, and Kimi K2 `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Node fake-balance-progress audit over experimental providers -> no provider still matches `limit: Math.max(...balance/available/totalBalance...)`.
+- Final focused verification after the Kimi API Balance follow-up: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\copilot\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js plugins\windsurf\plugin.test.js --run` first hit the known transient sandbox `src/test/setup.ts` path issue, then passed when rerun from `D:\UsageBar\usagebar`: 6 files passed, 116 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Remove fake Warp unlimited progress
+
+## Executive Summary
+- Keep Warp token login and metered request-limit progress unchanged.
+- Stop rendering unlimited accounts as `0 / 1 credits`.
+- Show unlimited request access as text plus the existing plan badge.
+
+## Acceptance Criteria
+- [x] Metered Warp accounts still render request used/max progress.
+- [x] Unlimited Warp accounts render text, not fake progress.
+- [x] Focused Warp verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Split Warp metered and unlimited display paths.
+- [x] Update manifest/docs/tests for unlimited text output.
+- [x] Run focused verification and sync bundled plugin files.
+
+## Verification Notes
+- `node --check plugins\warp\plugin.js` -> passed.
+- `bun run test -- plugins\warp\plugin.test.js --run` first hit the known transient sandbox `src/test/setup.ts` path issue, then passed when rerun from `D:\UsageBar\usagebar`: 1 file passed, 10 tests passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `warp`.
+- Node SHA-256 check confirmed source/bundled Warp `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- `rg -n '0 / 1|limit: usage\.isUnlimited|used: usage\.isUnlimited|Unlimited' ...` -> no old fake unlimited progress expressions remain; only the intended unlimited text/badge path remains.
+
+# Remove fake Perplexity zero-credit progress
+
+## Executive Summary
+- Keep Perplexity cookie login and real credit-pool progress unchanged.
+- Stop rendering zero-total pools as `1 / 1 credits`.
+- Show zero-total pools as text because no non-zero max exists.
+
+## Acceptance Criteria
+- [x] Perplexity pools with real totals still render used/max progress.
+- [x] Perplexity zero-total pools render text, not fake progress.
+- [x] Focused Perplexity verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch Perplexity zero-total line rendering and manifest line types.
+- [x] Update focused expectation and provider docs.
+- [x] Run focused verification and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\perplexity\plugin.test.js --run` -> 1 file passed, 11 tests passed.
+- `node --check plugins\perplexity\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `perplexity`.
+- Node SHA-256 check confirmed source/bundled Perplexity and Warp `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Static manufactured-progress audit over experimental providers found no remaining `used: 1 / limit: 1`, `limit: Math.max(...balance...)`, or unlimited-to-1 patterns.
+- Final focused suite after Warp/Perplexity fixes: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\warp\plugin.test.js plugins\perplexity\plugin.test.js plugins\copilot\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 7 files passed, 128 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Remove fake Abacus and Augment partial-credit progress
+
+## Executive Summary
+- Keep Abacus and Augment cookie login unchanged.
+- Preserve real credit used/max bars when the provider returns a real total.
+- Render zero/partial credit data as text instead of manufacturing a progress limit.
+
+## Acceptance Criteria
+- [x] Abacus non-zero total still renders used/max credit progress.
+- [x] Abacus zero-total data renders text, not fake progress.
+- [x] Augment complete credit data still renders used/max credit progress.
+- [x] Augment partial used-only data renders text, not fake progress.
+- [x] Focused Abacus/Augment verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch Abacus zero-total and Augment partial-data display paths.
+- [x] Update manifests/docs/tests for text fallback lines.
+- [x] Run focused verification and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\abacus\plugin.test.js plugins\augment\plugin.test.js --run` -> 2 files passed, 13 tests passed.
+- `node --check plugins\abacus\plugin.js; node --check plugins\augment\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `abacus` and `augment`.
+- Node SHA-256 check confirmed source/bundled Abacus and Augment `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Static manufactured-progress audit over experimental providers found no remaining sentinel `1/1`, balance-as-limit, unlimited-as-1, or partial-credit fallback patterns.
+- Final focused suite after Abacus/Augment fixes: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\abacus\plugin.test.js plugins\augment\plugin.test.js plugins\warp\plugin.test.js plugins\perplexity\plugin.test.js plugins\copilot\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 9 files passed, 141 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Remove fake Factory zero-allowance progress
+
+## Executive Summary
+- Keep Factory/Droid login and token usage parsing unchanged.
+- Preserve Standard/Premium token progress when Factory returns positive allowances.
+- Show no usage data when all allowances are zero instead of rendering zero-limit progress.
+
+## Acceptance Criteria
+- [x] Factory positive Standard allowance still renders used/max token progress.
+- [x] Factory Premium line still renders only for positive premium allowance.
+- [x] Factory zero Standard/Premium allowances render no fake progress.
+- [x] Focused Factory verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch Factory Standard progress to require positive allowance.
+- [x] Update zero-allowance regression and provider docs.
+- [x] Run focused verification and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\factory\plugin.test.js --run` -> 1 file passed, 35 tests passed.
+- `node --check plugins\factory\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `factory`.
+- Node SHA-256 check confirmed source/bundled Factory `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Final focused suite after Factory fix: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\factory\plugin.test.js plugins\abacus\plugin.test.js plugins\augment\plugin.test.js plugins\warp\plugin.test.js plugins\perplexity\plugin.test.js plugins\copilot\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 10 files passed, 176 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Remove fake Kilo and OpenRouter partial-credit progress
+
+## Executive Summary
+- Keep Kilo/OpenRouter API-key login unchanged.
+- Preserve real dollar progress when the provider returns a real total.
+- Render used-only or zero-total credit data as text instead of manufacturing a max.
+
+## Acceptance Criteria
+- [x] Kilo pass/credit payloads with real totals still render dollar progress.
+- [x] Kilo used-only payloads render text, not fake progress.
+- [x] OpenRouter positive `total_credits` still renders dollar progress.
+- [x] OpenRouter zero `total_credits` renders text, not fake progress.
+- [x] Focused Kilo/OpenRouter verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch Kilo to track whether a real limit exists.
+- [x] Patch OpenRouter zero-total credit display.
+- [x] Update manifests/docs/tests.
+- [x] Run focused verification and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\kilo\plugin.test.js plugins\openrouter\plugin.test.js --run` -> 2 files passed, 22 tests passed.
+- `node --check plugins\kilo\plugin.js; node --check plugins\openrouter\plugin.js` -> passed.
+- Follow-up Kilo cleanup removed the internal `total = used` fallback; `bun run test -- plugins\kilo\plugin.test.js --run` -> 1 file passed, 10 tests passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `kilo` and `openrouter`.
+- Node SHA-256 check confirmed source/bundled Kilo and OpenRouter `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Static manufactured-progress audit over experimental providers found no remaining sentinel `1/1`, balance-as-limit, unlimited-as-1, partial-credit fallback, used-as-total, or OpenRouter zero-credit-limit patterns.
+- Final focused suite after Kilo/OpenRouter fixes: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\kilo\plugin.test.js plugins\openrouter\plugin.test.js plugins\factory\plugin.test.js plugins\abacus\plugin.test.js plugins\augment\plugin.test.js plugins\warp\plugin.test.js plugins\perplexity\plugin.test.js plugins\copilot\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 12 files passed, 198 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Remove fake Codebuff used-only progress
+
+## Executive Summary
+- Keep Codebuff token login and real credit quota progress unchanged.
+- Preserve `used + remaining` derived totals when Codebuff returns both values.
+- Render used-only credit telemetry as text instead of manufacturing a max.
+
+## Acceptance Criteria
+- [x] Codebuff explicit quota data still renders used/max credit progress.
+- [x] Codebuff used+remaining data still derives a real total.
+- [x] Codebuff used-only data renders text, not fake progress.
+- [x] Codebuff over-limit usage keeps the provider max instead of inflating the limit.
+- [x] Focused Codebuff verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch Codebuff credit line rendering to require a real total for progress.
+- [x] Update manifest/docs/tests for the text fallback.
+- [x] Run focused verification and sync bundled plugin files.
+
+## Verification Notes
+- `bun run test -- plugins\codebuff\plugin.test.js --run` -> 1 file passed, 8 tests passed.
+- `node --check plugins\codebuff\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `codebuff`.
+- Node SHA-256 check confirmed source/bundled Codebuff `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Static manufactured-progress audit over experimental providers found no remaining sentinel `1/1`, balance-as-limit, unlimited-as-1, partial-credit fallback, used-as-total, OpenRouter zero-credit-limit, Codebuff used-only-limit, or Codebuff over-limit-inflation patterns.
+- Final focused suite after Codebuff fix: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\codebuff\plugin.test.js plugins\kilo\plugin.test.js plugins\openrouter\plugin.test.js plugins\factory\plugin.test.js plugins\abacus\plugin.test.js plugins\augment\plugin.test.js plugins\warp\plugin.test.js plugins\perplexity\plugin.test.js plugins\copilot\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 13 files passed, 206 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Preserve provider-owned max values in progress bars
+
+## Executive Summary
+- Keep existing login and parsing paths unchanged.
+- Stop replacing real provider limits with current usage when accounts are over limit.
+- Keep progress bars only when the provider supplies a positive real max.
+
+## Acceptance Criteria
+- [x] Alibaba, Augment, Copilot, Synthetic, Vertex AI, Warp, and Z.ai keep real max values when usage exceeds max.
+- [x] Warp metered data with no positive request limit does not render fake progress.
+- [x] Existing percent-only fallbacks remain percent-only.
+- [x] Focused provider verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch progress emitters to use provider max directly after positive-limit validation.
+- [x] Add over-limit regressions for affected providers.
+- [x] Run focused verification and sync bundled plugin files.
+
+## Verification Notes
+- First focused test run found that Z.ai still expected a `0 / 0` Web Searches progress line for non-numeric optional fields; fixed by parsing numeric strings and skipping Web Searches when no positive limit exists.
+- `bun run test -- plugins\alibaba\plugin.test.js plugins\augment\plugin.test.js plugins\copilot\plugin.test.js plugins\synthetic\plugin.test.js plugins\vertex-ai\plugin.test.js plugins\warp\plugin.test.js plugins\zai\plugin.test.js --run` first hit the known transient sandbox `src/test/setup.ts` path issue, then passed when rerun from `D:\UsageBar\usagebar`: 7 files passed, 111 tests passed.
+- `node --check plugins\alibaba\plugin.js; node --check plugins\augment\plugin.js; node --check plugins\copilot\plugin.js; node --check plugins\synthetic\plugin.js; node --check plugins\vertex-ai\plugin.js; node --check plugins\warp\plugin.js; node --check plugins\zai\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including all seven patched providers.
+- Node SHA-256 check confirmed source/bundled `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match for Alibaba, Augment, Copilot, Synthetic, Vertex AI, Warp, and Z.ai.
+- Static audit over Windows-experimental providers found no remaining `limit: Math.max(...)` progress inflation patterns.
+- Final focused suite after max-preservation fixes: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\alibaba\plugin.test.js plugins\augment\plugin.test.js plugins\copilot\plugin.test.js plugins\synthetic\plugin.test.js plugins\vertex-ai\plugin.test.js plugins\warp\plugin.test.js plugins\zai\plugin.test.js plugins\codebuff\plugin.test.js plugins\kilo\plugin.test.js plugins\openrouter\plugin.test.js plugins\factory\plugin.test.js plugins\abacus\plugin.test.js plugins\perplexity\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 17 files passed, 260 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Add stored Z.ai API-key login
+
+## Executive Summary
+- Keep existing `ZAI_API_KEY` / `GLM_API_KEY` env login working.
+- Add the same app-vault API-key setup path used by other direct API providers.
+- Verify Settings guidance, plugin auth precedence, and bundled plugin sync.
+
+## Acceptance Criteria
+- [x] Z.ai prefers a stored provider API key over env vars.
+- [x] Z.ai still falls back to `ZAI_API_KEY`, then `GLM_API_KEY`.
+- [x] Settings exposes a Z.ai API-key input and source label.
+- [x] Z.ai docs describe stored-key setup and env fallback.
+- [x] Focused Z.ai/settings verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch `plugins/zai` to read `providerSecrets.apiKey` first.
+- [x] Update `src/lib/provider-settings.ts` and settings tests.
+- [x] Update provider docs, run focused checks, and sync bundles.
+
+## Verification Notes
+- `bun run test -- plugins\zai\plugin.test.js src\components\settings\provider-settings-detail.test.tsx --run` -> 2 files passed, 53 tests passed.
+- `node --check plugins\zai\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `zai`.
+- Node SHA-256 check confirmed source/bundled Z.ai `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+
+# Add stored MiniMax API-key login
+
+## Executive Summary
+- Keep existing `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`, and `MINIMAX_API_TOKEN` env login working.
+- Add app-vault API-key setup for MiniMax.
+- Verify Settings guidance, plugin auth precedence, and bundled plugin sync.
+
+## Acceptance Criteria
+- [x] MiniMax prefers a stored provider API key over env vars.
+- [x] MiniMax still falls back to existing env vars and region auto-selection.
+- [x] Settings exposes a MiniMax API-key input and source label.
+- [x] MiniMax docs describe stored-key setup and env fallback.
+- [x] Focused MiniMax/settings verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch `plugins/minimax` to read `providerSecrets.apiKey` first.
+- [x] Update `src/lib/provider-settings.ts` and settings tests.
+- [x] Update provider docs, run focused checks, and sync bundles.
+
+## Verification Notes
+- `bun run test -- plugins\minimax\plugin.test.js src\components\settings\provider-settings-detail.test.tsx --run` -> 2 files passed, 70 tests passed.
+- `node --check plugins\minimax\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `minimax`.
+- Node SHA-256 check confirmed source/bundled MiniMax `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+
+# Add stored Amp API-key login
+
+## Executive Summary
+- Keep Amp CLI local secret discovery working.
+- Add app-vault API-key setup as a fallback login path.
+- Verify Settings guidance, plugin auth precedence, and bundled plugin sync.
+
+## Acceptance Criteria
+- [x] Amp prefers a stored provider API key over the local CLI secrets file.
+- [x] Amp still falls back to `~/.local/share/amp/secrets.json`.
+- [x] Settings exposes an Amp API-key input and source label.
+- [x] Amp docs describe stored-key setup and CLI fallback.
+- [x] Focused Amp/settings verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch `plugins/amp` to read `providerSecrets.apiKey` first.
+- [x] Update `src/lib/provider-settings.ts` and settings tests.
+- [x] Update provider docs, run focused checks, and sync bundles.
+
+## Verification Notes
+- `bun run test -- plugins\amp\plugin.test.js src\components\settings\provider-settings-detail.test.tsx --run` -> 2 files passed, 58 tests passed.
+- `node --check plugins\amp\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `amp`.
+- Node SHA-256 check confirmed source/bundled Amp `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Final focused suite after Amp setup fix: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\amp\plugin.test.js plugins\minimax\plugin.test.js plugins\zai\plugin.test.js plugins\alibaba\plugin.test.js plugins\augment\plugin.test.js plugins\copilot\plugin.test.js plugins\synthetic\plugin.test.js plugins\vertex-ai\plugin.test.js plugins\warp\plugin.test.js plugins\codebuff\plugin.test.js plugins\kilo\plugin.test.js plugins\openrouter\plugin.test.js plugins\factory\plugin.test.js plugins\abacus\plugin.test.js plugins\perplexity\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 19 files passed, 337 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Prefer stored cookie login over env fallback
+
+## Executive Summary
+- Keep Abacus, Perplexity, and Mistral env-cookie fallbacks working.
+- Make the Settings-saved Cookie header the first login source.
+- Prevent stale env vars from overriding a fresh app-vault login.
+
+## Acceptance Criteria
+- [x] Abacus prefers stored `cookieHeader` over env cookies.
+- [x] Perplexity prefers stored `cookieHeader` over env cookies and still supports session-token fallback.
+- [x] Mistral prefers stored `cookieHeader` over env cookies and still supports `MISTRAL_SESSION`.
+- [x] Provider docs describe stored cookie first, then env fallback.
+- [x] Focused provider verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch cookie source order in Abacus, Perplexity, and Mistral.
+- [x] Update focused tests and provider docs.
+- [x] Run focused checks and sync bundles.
+
+## Verification Notes
+- `bun run test -- plugins\abacus\plugin.test.js plugins\perplexity\plugin.test.js plugins\mistral\plugin.test.js --run` -> 3 files passed, 22 tests passed.
+- `node --check plugins\abacus\plugin.js; node --check plugins\perplexity\plugin.js; node --check plugins\mistral\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `abacus`, `perplexity`, and `mistral`.
+- Node SHA-256 check confirmed source/bundled Abacus, Perplexity, and Mistral `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Final focused suite after cookie-source-order fix: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\amp\plugin.test.js plugins\abacus\plugin.test.js plugins\perplexity\plugin.test.js plugins\mistral\plugin.test.js plugins\minimax\plugin.test.js plugins\zai\plugin.test.js plugins\alibaba\plugin.test.js plugins\augment\plugin.test.js plugins\copilot\plugin.test.js plugins\synthetic\plugin.test.js plugins\vertex-ai\plugin.test.js plugins\warp\plugin.test.js plugins\codebuff\plugin.test.js plugins\kilo\plugin.test.js plugins\openrouter\plugin.test.js plugins\factory\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 20 files passed, 341 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+- Final focused suite after MiniMax over-limit fix: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\minimax\plugin.test.js plugins\zai\plugin.test.js plugins\alibaba\plugin.test.js plugins\augment\plugin.test.js plugins\copilot\plugin.test.js plugins\synthetic\plugin.test.js plugins\vertex-ai\plugin.test.js plugins\warp\plugin.test.js plugins\codebuff\plugin.test.js plugins\kilo\plugin.test.js plugins\openrouter\plugin.test.js plugins\factory\plugin.test.js plugins\abacus\plugin.test.js plugins\perplexity\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 18 files passed, 306 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+- Env-only API-key audit over Windows-experimental providers found no remaining provider that reads API-key/token env vars without also reading provider secrets.
+- Final focused suite after Z.ai/MiniMax setup fixes: `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\minimax\plugin.test.js plugins\zai\plugin.test.js plugins\alibaba\plugin.test.js plugins\augment\plugin.test.js plugins\copilot\plugin.test.js plugins\synthetic\plugin.test.js plugins\vertex-ai\plugin.test.js plugins\warp\plugin.test.js plugins\codebuff\plugin.test.js plugins\kilo\plugin.test.js plugins\openrouter\plugin.test.js plugins\factory\plugin.test.js plugins\abacus\plugin.test.js plugins\perplexity\plugin.test.js plugins\kimi\plugin.test.js plugins\deepseek\plugin.test.js plugins\kimi-k2\plugin.test.js --run` -> 18 files passed, 306 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `git diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Preserve MiniMax over-limit usage
+
+## Executive Summary
+- Keep MiniMax stored/env login unchanged.
+- Stop clamping over-limit usage down to the max.
+- Preserve the provider max as the progress limit while showing true over-limit usage.
+
+## Acceptance Criteria
+- [x] MiniMax explicit used counts above total render as `used > limit`.
+- [x] Negative MiniMax used counts still clamp to zero.
+- [x] Focused MiniMax verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Remove the upper clamp in the MiniMax parser.
+- [x] Update/add focused MiniMax regression expectations.
+- [x] Run focused checks and sync bundles.
+
+## Verification Notes
+- `bun run test -- plugins\minimax\plugin.test.js --run` -> 1 file passed, 43 tests passed.
+- `node --check plugins\minimax\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `minimax`.
+- Node SHA-256 check confirmed source/bundled MiniMax `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+
+# Prefer stored OpenCode Zen cookie over env fallback
+
+## Executive Summary
+- Keep OpenCode Zen manual cookie setup working through Settings.
+- Keep `OPENCODE_COOKIE_HEADER` as a fallback for existing setups.
+- Prevent stale env cookies from shadowing a fresh Settings login in both OpenCode providers.
+
+## Acceptance Criteria
+- [x] Hidden `opencode` prefers stored `cookieHeader` over `OPENCODE_COOKIE_HEADER`.
+- [x] Visible `opencode-go` Zen balance prefers stored `cookieHeader` over `OPENCODE_COOKIE_HEADER`.
+- [x] OpenCode docs describe stored cookie first, then env fallback.
+- [x] Focused OpenCode verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Patch OpenCode cookie source order.
+- [x] Add focused source-order regressions.
+- [x] Update docs/notes, run focused checks, and sync bundles.
+
+## Verification Notes
+- `bun run test -- plugins\opencode\plugin.test.js plugins\opencode-go\plugin.test.js --run` -> 2 files passed, 26 tests passed.
+- `node --check plugins\opencode\plugin.js; node --check plugins\opencode-go\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `opencode` and `opencode-go`.
+- `Get-FileHash` confirmed source/bundled OpenCode `plugin.js` and `plugin.test.js` hashes match for both provider folders.
+- `git --no-pager diff --check -- plugins\opencode\plugin.js plugins\opencode-go\plugin.js plugins\opencode\plugin.test.js plugins\opencode-go\plugin.test.js docs\providers\opencode.md docs\providers\opencode-go.md src-tauri\resources\bundled_plugins\opencode src-tauri\resources\bundled_plugins\opencode-go` -> passed; only expected CRLF conversion warnings were reported.
+
+# Review cookie-provider auth alternatives
+
+## Executive Summary
+- Review cookie-based providers for possible non-cookie login paths.
+- Use provider docs and current repo implementation notes to classify fixability.
+- Produce a standalone HTML review for quick reading.
+
+## Acceptance Criteria
+- [x] Cookie pain-point providers are inventoried from current UsageBar settings/docs.
+- [x] Provider docs are checked for API/CLI/OAuth alternatives or hard walls.
+- [x] HTML review exists under `docs/` with fixability classification.
+- [x] Artifact is sanity-checked and breadcrumbs are recorded.
+
+## Plan
+- [x] Read current provider setup docs/code for cookie-dependent providers.
+- [x] Research provider documentation for alternatives.
+- [x] Create HTML review artifact.
+- [x] Verify artifact and update breadcrumbs.
+
+## Verification Notes
+- Reviewed current UsageBar setup metadata in `src/lib/provider-settings.ts` and cookie-provider docs under `docs/providers/`.
+- Checked current provider docs for Ollama, OpenCode, OpenAI Codex, Claude, Zed, Augment, Abacus, Perplexity, and Mistral.
+- Created `docs/cookie-auth-fixability-review.html`.
+- `node -e "...read docs/cookie-auth-fixability-review.html..."` -> passed required-content sanity check.
+- `git --no-pager diff --check -- docs\cookie-auth-fixability-review.html tasks\todo.md docs\breadcrumbs.md docs\choices.md` -> passed; only expected CRLF warning for `tasks/todo.md`.
