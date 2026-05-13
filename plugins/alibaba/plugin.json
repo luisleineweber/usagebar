@@ -15,13 +15,29 @@
   "lines": [
     {
       "type": "progress",
-      "label": "Quota",
+      "label": "5-hour",
       "scope": "overview",
       "primaryOrder": 1
     },
     {
+      "type": "progress",
+      "label": "Weekly",
+      "scope": "overview",
+      "primaryOrder": 2
+    },
+    {
+      "type": "progress",
+      "label": "Monthly",
+      "scope": "detail"
+    },
+    {
       "type": "badge",
       "label": "Plan",
+      "scope": "detail"
+    },
+    {
+      "type": "badge",
+      "label": "Region",
       "scope": "detail"
     }
   ],

@@ -83,14 +83,16 @@ Status meanings:
 | Provider | Windows status | Scope |
 |---|---|---|
 | [**Abacus AI**](docs/providers/abacus.md) | Experimental | API-key usage and credit details |
-| [**Alibaba Coding Plan**](docs/providers/alibaba.md) | Experimental | Coding Plan daily/weekly quotas with region-aware auth |
+| [**Alibaba Coding Plan**](docs/providers/alibaba.md) | Experimental | Coding Plan 5-hour, weekly, and monthly request quotas with region-aware auth |
 | [**Amp**](docs/providers/amp.md) | Experimental | Free tier, bonus, credits |
 | [**Antigravity**](docs/providers/antigravity.md) | Supported | All models |
 | [**Augment**](docs/providers/augment.md) | Experimental | Credits via signed-in Augment web Cookie header |
 | [**Claude**](docs/providers/claude.md) | Supported | Session, weekly, extra usage, local token usage (`ccusage`) |
+| [**Codebuff**](docs/providers/codebuff.md) | Experimental | Credit balance and weekly rate limit via API token or `codebuff login` credentials |
 | [**Codex**](docs/providers/codex.md) | Supported | Session, weekly, reviews, credits, managed multi-account selection |
 | [**Copilot**](docs/providers/copilot.md) | Experimental | Premium, chat, completions |
 | [**Cursor**](docs/providers/cursor.md) | Supported | Credits, total usage, auto usage, API usage, on-demand, CLI auth |
+| [**DeepSeek**](docs/providers/deepseek.md) | Experimental | API balance with paid and granted credit breakdown |
 | [**Factory / Droid**](docs/providers/factory.md) | Experimental | Standard and premium usage buckets |
 | [**Gemini**](docs/providers/gemini.md) | Experimental | Gemini quota buckets and reported Code Assist tier |
 | [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
@@ -188,6 +190,15 @@ Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](http
 - Tailwind CSS v4
 - Zustand
 - Vitest
+
+### Local quality checks
+
+```bash
+bun run check
+bun run test -- --run
+```
+
+`bun run check` is the default local quality gate for TypeScript, JavaScript, JSON/config formatting, ESLint, and TypeScript typechecking. Rust formatting and linting are exposed as `bun run format:rust:check` and `bun run lint:rust` while existing Rust style debt is cleaned separately.
 
 ### Local release build
 

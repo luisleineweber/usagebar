@@ -8,7 +8,8 @@
   "brandColor": "#F34E3F",
   "platformSupport": {
     "windows": {
-      "state": "experimental"
+      "state": "experimental",
+      "message": "Windows experimental. Save an Amp API key in Setup, or run amp login so UsageBar can read local Amp credentials."
     }
   },
   "lines": [

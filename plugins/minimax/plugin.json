@@ -9,7 +9,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Experimental on Windows. Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY before launching UsageBar."
+      "message": "Experimental on Windows. Save a MiniMax API key in Setup, or set MINIMAX_API_KEY / MINIMAX_CN_API_KEY before launching UsageBar."
     }
   },
   "lines": [

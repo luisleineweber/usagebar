@@ -9,14 +9,14 @@
 
 - **Protocol:** JSON-RPC (`POST /api/internal`)
 - **URL:** `https://ampcode.com/api/internal`
-- **Auth:** API key from Amp CLI secrets file
+- **Auth:** stored API key or API key from Amp CLI secrets file
 - **Tier:** Free (daily replenishing quota) and/or individual credits
 
 ## Authentication
 
 ### Credential Source
 
-The plugin reads the API key automatically from Amp CLI's secrets file. The current home-relative lookup is already valid on Windows:
+The plugin first checks the app-stored API key from Settings. If no stored key is configured, it reads the API key automatically from Amp CLI's secrets file. The current home-relative lookup is already valid on Windows:
 
 - Unix/macOS path: `~/.local/share/amp/secrets.json`
 - Windows path after `~` expansion: `%USERPROFILE%\.local\share\amp\secrets.json`
@@ -28,6 +28,17 @@ The plugin reads the API key automatically from Amp CLI's secrets file. The curr
 ```
 
 The key is sent as `Authorization: Bearer <key>` to the JSON-RPC API.
+
+## Setup
+
+1. Open Settings -> Providers -> Amp and paste an Amp API key.
+2. Enable Amp in UsageBar and refresh.
+
+CLI fallback:
+
+1. Install Amp Code CLI.
+2. Run `amp login`.
+3. Enable Amp in UsageBar and refresh.
 
 ## Data Source
 
@@ -93,7 +104,7 @@ Progress line includes:
 
 | Condition              | Message                                               |
 |------------------------|-------------------------------------------------------|
-| Amp not installed      | "Amp not installed. Install Amp Code to get started." |
+| Missing API key        | "Amp API key missing. Save it in Setup or install Amp Code and run `amp login`." |
 | 401/403                | "Session expired. Re-authenticate in Amp Code."       |
 | Non-2xx with detail    | Error message from API response                       |
 | Non-2xx without detail | "Request failed (HTTP {status}). Try again later."    |

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "codebuff",
+  "name": "Codebuff",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#44C800",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Windows experimental. Use a stored Codebuff API token, CODEBUFF_API_KEY, or codebuff login credentials to fetch credits and weekly rate limits."
+    }
+  },
+  "lines": [
+    {
+      "type": "progress",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "progress",
+      "label": "Weekly",
+      "scope": "overview",
+      "primaryOrder": 2
+    },
+    {
+      "type": "badge",
+      "label": "Plan",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": [
+      "www.codebuff.com"
+    ]
+  }
+}

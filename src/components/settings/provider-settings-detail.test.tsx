@@ -35,6 +35,16 @@ const copilotPlugin = {
   primaryCandidates: [],
 }
 
+const codebuffPlugin = {
+  id: "codebuff",
+  name: "Codebuff",
+  iconUrl: "/codebuff.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Windows experimental. Use a stored Codebuff API token, CODEBUFF_API_KEY, or codebuff login credentials to fetch credits and weekly rate limits.",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const ollamaPlugin = {
   id: "ollama",
   name: "Ollama",
@@ -131,12 +141,52 @@ const augmentPlugin = {
   primaryCandidates: [],
 }
 
+const alibabaPlugin = {
+  id: "alibaba",
+  name: "Alibaba Coding Plan",
+  iconUrl: "/alibaba.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Windows experimental. Save an Alibaba API key in Setup or set ALIBABA_API_KEY, then use ALIBABA_REGION if you need a non-default region.",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const vertexAiPlugin = {
   id: "vertex-ai",
   name: "Vertex AI",
   iconUrl: "/vertex-ai.svg",
   supportState: "experimental" as const,
   supportMessage: "Windows experimental. Uses gcloud application-default credentials and Cloud Monitoring quota data.",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const zaiPlugin = {
+  id: "zai",
+  name: "Z.ai",
+  iconUrl: "/zai.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Experimental on Windows. Save a Z.ai API key in Setup, or set ZAI_API_KEY / GLM_API_KEY before launching UsageBar.",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const minimaxPlugin = {
+  id: "minimax",
+  name: "MiniMax",
+  iconUrl: "/minimax.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Experimental on Windows. Save a MiniMax API key in Setup, or set MINIMAX_API_KEY / MINIMAX_CN_API_KEY before launching UsageBar.",
+  lines: [],
+  primaryCandidates: [],
+}
+
+const ampPlugin = {
+  id: "amp",
+  name: "Amp",
+  iconUrl: "/amp.svg",
+  supportState: "experimental" as const,
+  supportMessage: "Windows experimental. Save an Amp API key in Setup, or run amp login so UsageBar can read local Amp credentials.",
   lines: [],
   primaryCandidates: [],
 }
@@ -390,6 +440,21 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByLabelText("Copilot Billing scope")).toBeInTheDocument()
   })
 
+  it("shows explicit Codebuff API-token guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={codebuffPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches Codebuff credit balance and weekly rate limits from a stored API token, CODEBUFF_API_KEY, or local codebuff login credentials\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Codebuff API key at https:\/\/www\.codebuff\.com\/api-keys/)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for Codebuff usage and subscription endpoints\./)).toBeInTheDocument()
+  })
+
   it("shows explicit Moonshot API balance guidance", () => {
     render(
       <ProviderSettingsDetail
@@ -510,6 +575,21 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByLabelText("Augment Cookie header")).toBeInTheDocument()
   })
 
+  it("shows explicit Alibaba Coding Plan API-key guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={alibabaPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches 5-hour, weekly, and monthly Coding Plan request quotas from a stored API key or ALIBABA_API_KEY/)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Coding Plan API key, save it here or set ALIBABA_API_KEY, then retry/)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint\./)).toBeInTheDocument()
+  })
+
   it("shows explicit Vertex AI gcloud guidance", () => {
     render(
       <ProviderSettingsDetail
@@ -523,6 +603,54 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/Detected from gcloud application-default credentials and Cloud Monitoring quota metrics\./)).toBeInTheDocument()
     expect(screen.getByText(/gcloud auth application-default login/)).toBeInTheDocument()
     expect(screen.getByText(/GOOGLE_CLOUD_PROJECT/)).toBeInTheDocument()
+  })
+
+  it("shows explicit Z.ai API-key guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={zaiPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches Z\.ai GLM Coding quota data from a stored API key, ZAI_API_KEY, or GLM_API_KEY\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a Z\.ai API key in the console, save it here or set ZAI_API_KEY \/ GLM_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the subscription and quota endpoints\./)).toBeInTheDocument()
+    expect(screen.getByLabelText("Z.ai API key")).toBeInTheDocument()
+  })
+
+  it("shows explicit MiniMax API-key guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={minimaxPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches MiniMax Coding Plan quota data from a stored API key or MiniMax environment variables\./)).toBeInTheDocument()
+    expect(screen.getByText(/Create a MiniMax API key, save it here or set MINIMAX_API_KEY \/ MINIMAX_CN_API_KEY, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Coding Plan remains endpoint\./)).toBeInTheDocument()
+    expect(screen.getByLabelText("MiniMax API key")).toBeInTheDocument()
+  })
+
+  it("shows explicit Amp API-key guidance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={ampPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Fetches Amp balance from a stored API key or the local Amp CLI secrets file\./)).toBeInTheDocument()
+    expect(screen.getByText(/Save an Amp API key here, or install Amp Code CLI and run `amp login`, then retry\./)).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Amp internal balance endpoint\./)).toBeInTheDocument()
+    expect(screen.getByLabelText("Amp API key")).toBeInTheDocument()
   })
 
   it("shows explicit Antigravity offline guidance", () => {

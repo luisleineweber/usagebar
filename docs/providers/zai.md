@@ -10,18 +10,23 @@ Tracks [Z.ai](https://z.ai) (Zhipu AI) usage quotas for GLM coding plans.
 - **Public API base documented by Z.ai:** `https://api.z.ai/api/paas/v4`
 - **Public GLM Coding base documented by Z.ai:** `https://api.z.ai/api/coding/paas/v4`
 - **Usage host used by this plugin:** `https://api.z.ai/`
-- **Auth:** API key via environment variable (`ZAI_API_KEY`, fallback `GLM_API_KEY`)
-- **Session utilization:** percentage (0-100)
-- **Weekly utilization:** percentage (0-100)
+- **Auth:** stored API key, `ZAI_API_KEY`, or fallback `GLM_API_KEY`
+- **Session utilization:** token count (`currentValue / usage`) when available; percent fallback only when the payload omits token totals
+- **Weekly utilization:** token count (`currentValue / usage`) when available; percent fallback only when the payload omits token totals
 - **Web searches:** count-based (`used / limit`)
 - **Reset periods:** 5 hours (session), 7 days (weekly), monthly (web searches, from subscription renewal date)
 
 ## Setup
 
 1. [Subscribe to a GLM Coding plan](https://z.ai/subscribe) and get your API key from the [Z.ai console](https://z.ai/manage-apikey/apikey-list).
-2. Create a persistent `ZAI_API_KEY` user environment variable.
-3. Restart `UsageBar` so the desktop app can read the updated environment.
-4. Enable the Z.ai provider in Settings and refresh.
+2. Open Settings -> Providers -> Z.ai and paste the API key.
+3. Enable the Z.ai provider and refresh.
+
+Environment fallback:
+
+1. Create a persistent `ZAI_API_KEY` user environment variable.
+2. Restart `UsageBar` so the desktop app can read the updated environment.
+3. Enable the Z.ai provider in Settings and refresh.
 
 PowerShell example:
 
@@ -169,9 +174,9 @@ Returns session token usage and web search quotas. This path is not part of the 
 
 | Line | Description |
 |---|---|
-| Session | Token usage as percentage (0-100%) with 5h reset timer |
-| Weekly | Token usage as percentage (0-100%) with 7-day reset timer |
-| Web Searches | Web search or reader call count (`used / limit`) |
+| Session | Token usage count (`used / limit`) with 5h reset timer |
+| Weekly | Token usage count (`used / limit`) with 7-day reset timer |
+| Web Searches | Web search or reader call count (`used / limit`) when a positive limit is returned |
 
 ## Errors
 

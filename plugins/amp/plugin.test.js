@@ -52,21 +52,36 @@ describe("amp plugin", () => {
   it("throws when secrets file not found", async () => {
     var ctx = makeCtx()
     var plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Amp not installed")
+    expect(() => plugin.probe(ctx)).toThrow("Amp API key missing")
   })
 
   it("throws when secrets file has no api key", async () => {
     var ctx = makeCtx()
     ctx.host.fs.writeText(SECRETS_FILE, JSON.stringify({ other: "value" }))
     var plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Amp not installed")
+    expect(() => plugin.probe(ctx)).toThrow("Amp API key missing")
   })
 
   it("throws on invalid JSON in secrets file", async () => {
     var ctx = makeCtx()
     ctx.host.fs.writeText(SECRETS_FILE, "{bad json")
     var plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Amp not installed")
+    expect(() => plugin.probe(ctx)).toThrow("Amp API key missing")
+  })
+
+  it("prefers stored provider API key over local secrets file", async () => {
+    var ctx = makeCtx()
+    ctx.host.providerSecrets.read.mockImplementation(function (key) {
+      return key === "apiKey" ? "stored-api-key" : null
+    })
+    writeSecrets(ctx, "file-api-key")
+    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText()))
+
+    var plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    var call = ctx.host.http.request.mock.calls[0][0]
+    expect(call.headers.Authorization).toBe("Bearer stored-api-key")
   })
 
   it("uses the same home-relative secrets path on windows", async () => {

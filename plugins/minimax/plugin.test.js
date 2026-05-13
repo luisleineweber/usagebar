@@ -51,8 +51,26 @@ describe("minimax plugin", () => {
     setEnv(ctx, {})
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow(
-      "MiniMax API key missing. Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY."
+      "MiniMax API key missing. Save it in Setup, set MINIMAX_API_KEY, or set MINIMAX_CN_API_KEY."
     )
+  })
+
+  it("prefers stored provider API key over env vars", async () => {
+    const ctx = makeCtx()
+    ctx.host.providerSecrets.read.mockImplementation((key) => (key === "apiKey" ? "stored-key" : null))
+    setEnv(ctx, { MINIMAX_API_KEY: "mini-key", MINIMAX_API_TOKEN: "token-fallback" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify(successPayload()),
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    const call = ctx.host.http.request.mock.calls[0][0]
+    expect(call.url).toBe(PRIMARY_USAGE_URL)
+    expect(call.headers.Authorization).toBe("Bearer stored-key")
   })
 
   it("uses MINIMAX_API_KEY for auth header", async () => {
@@ -837,7 +855,7 @@ describe("minimax plugin", () => {
     expect(result.lines[0].used).toBe(0)
   })
 
-  it("clamps used counts above total", async () => {
+  it("keeps used counts above total", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MINIMAX_API_KEY: "mini-key" })
     ctx.host.http.request.mockReturnValue({
@@ -856,7 +874,8 @@ describe("minimax plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines[0].used).toBe(100)
+    expect(result.lines[0].used).toBe(500)
+    expect(result.lines[0].limit).toBe(100)
   })
 
   it("supports epoch seconds for start/end timestamps", async () => {

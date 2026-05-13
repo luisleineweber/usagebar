@@ -150,6 +150,19 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     statusHint: "Source/status is visible here; manual token editing is deferred until refresh persistence is modeled.",
     connectHint: "Open Cursor and sign in on this machine, then refresh to detect the saved auth state.",
   },
+  codebuff: {
+    mode: "editable",
+    title: "Codebuff Setup",
+    summary: "Fetches Codebuff credit balance and weekly rate limits from a stored API token, CODEBUFF_API_KEY, or local codebuff login credentials.",
+    statusHint: "Save a Codebuff API token here, set CODEBUFF_API_KEY, or run codebuff login before launching UsageBar.",
+    connectHint: "Create a Codebuff API key at https://www.codebuff.com/api-keys, save it here or set CODEBUFF_API_KEY. If you use the CLI, run codebuff login so UsageBar can read ~/.config/manicode/credentials.json.",
+    secretField: {
+      key: "apiKey",
+      label: "API token",
+      description: "Paste a Codebuff API token. UsageBar stores it in the app credential vault and uses it for Codebuff usage and subscription endpoints.",
+      placeholder: "cb_...",
+    },
+  },
   factory: {
     mode: "detected",
     title: "Factory Setup",
@@ -178,11 +191,17 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     },
   },
   amp: {
-    mode: "automatic",
+    mode: "editable",
     title: "Amp Setup",
-    summary: "Detected from the local Amp CLI secrets file.",
-    statusHint: "No provider-specific controls are needed yet.",
-    connectHint: "Install Amp Code CLI, run `amp login`, then retry.",
+    summary: "Fetches Amp balance from a stored API key or the local Amp CLI secrets file.",
+    statusHint: "Save an Amp API key here or run `amp login` so UsageBar can read local Amp credentials.",
+    connectHint: "Save an Amp API key here, or install Amp Code CLI and run `amp login`, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste an Amp API key. UsageBar stores it in the app credential vault and uses it for the Amp internal balance endpoint.",
+      placeholder: "amp_...",
+    },
   },
   windsurf: {
     mode: "automatic",
@@ -218,11 +237,17 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     },
   },
   minimax: {
-    mode: "automatic",
+    mode: "editable",
     title: "MiniMax Setup",
-    summary: "Detected from MiniMax API keys exposed as user environment variables.",
-    statusHint: "Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY before launching UsageBar.",
-    connectHint: "Create a persistent MINIMAX_API_KEY or MINIMAX_CN_API_KEY user environment variable, restart UsageBar, then refresh.",
+    summary: "Fetches MiniMax Coding Plan quota data from a stored API key or MiniMax environment variables.",
+    statusHint: "Save a MiniMax API key here, set MINIMAX_API_KEY, or set MINIMAX_CN_API_KEY before launching UsageBar.",
+    connectHint: "Create a MiniMax API key, save it here or set MINIMAX_API_KEY / MINIMAX_CN_API_KEY, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste a MiniMax API key. UsageBar stores it in the app credential vault and uses it for the Coding Plan remains endpoint.",
+      placeholder: "sk-...",
+    },
   },
   antigravity: {
     mode: "automatic",
@@ -278,11 +303,17 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     connectHint: "Sign in through JetBrains AI Assistant in your IDE, then retry.",
   },
   zai: {
-    mode: "automatic",
+    mode: "editable",
     title: "Z.ai Setup",
-    summary: "Detected from Z.ai API keys exposed as user environment variables.",
-    statusHint: "Set ZAI_API_KEY or GLM_API_KEY before launching UsageBar.",
-    connectHint: "Create a persistent ZAI_API_KEY or GLM_API_KEY user environment variable, restart UsageBar, then refresh.",
+    summary: "Fetches Z.ai GLM Coding quota data from a stored API key, ZAI_API_KEY, or GLM_API_KEY.",
+    statusHint: "Save a Z.ai API key here, set ZAI_API_KEY, or set GLM_API_KEY before launching UsageBar.",
+    connectHint: "Create a Z.ai API key in the console, save it here or set ZAI_API_KEY / GLM_API_KEY, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "Paste a Z.ai API key. UsageBar stores it in the app credential vault and uses it for the subscription and quota endpoints.",
+      placeholder: "sk-...",
+    },
   },
   augment: {
     mode: "editable",
@@ -300,14 +331,14 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   alibaba: {
     mode: "editable",
     title: "Alibaba Coding Plan Setup",
-    summary: "Fetches daily and weekly Coding Plan quotas from a stored API key or ALIBABA_API_KEY, with optional ALIBABA_REGION override.",
+    summary: "Fetches 5-hour, weekly, and monthly Coding Plan request quotas from a stored API key or ALIBABA_API_KEY, with optional ALIBABA_REGION override.",
     statusHint: "Save an Alibaba API key here or set ALIBABA_API_KEY before launching UsageBar. Default region is cn-beijing unless ALIBABA_REGION is set.",
-    connectHint: "Create an Alibaba API key, save it here or set ALIBABA_API_KEY, then retry. Set ALIBABA_REGION if your account uses a non-default region.",
+    connectHint: "Create a Coding Plan API key, save it here or set ALIBABA_API_KEY, then retry. Set ALIBABA_REGION before launch if your account uses a non-default region.",
     secretField: {
       key: "apiKey",
       label: "API key",
-      description: "Paste an Alibaba API key. UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint.",
-      placeholder: "ali_...",
+      description: "Paste an Alibaba Coding Plan API key. UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint.",
+      placeholder: "sk-sp-...",
     },
   },
   deepseek: {
@@ -534,8 +565,12 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   if (providerId === "abacus") return "Manual cookie"
   if (providerId === "augment") return "Manual cookie"
   if (providerId === "deepseek") return config?.secrets?.apiKey ? "Stored DeepSeek API key" : "DeepSeek API key/env"
+  if (providerId === "codebuff") return config?.secrets?.apiKey ? "Stored Codebuff API token" : "Codebuff API token/env"
   if (providerId === "kimi") return config?.secrets?.apiKey ? "Kimi Code OAuth + Moonshot API key" : "Kimi Code OAuth"
   if (providerId === "kimi-k2") return config?.secrets?.apiKey ? "Stored Moonshot API key" : "Moonshot API key/env"
+  if (providerId === "zai") return config?.secrets?.apiKey ? "Stored Z.ai API key" : "Z.ai API key/env"
+  if (providerId === "minimax") return config?.secrets?.apiKey ? "Stored MiniMax API key" : "MiniMax API key/env"
+  if (providerId === "amp") return config?.secrets?.apiKey ? "Stored Amp API key" : "Amp CLI credentials"
   if (providerId === "copilot") return config?.workspaceId ? "GitHub auth + billing scope" : "GitHub auth"
   if (providerId === "claude") return config?.secrets?.cookieHeader ? "OAuth + web cookie" : "Auto-detected"
   if (providerId === "codex") {

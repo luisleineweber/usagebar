@@ -25,8 +25,9 @@ use windows_sys::Win32::Security::Credentials::{
     CRED_TYPE_GENERIC, CREDENTIALW, CredFree, CredReadW,
 };
 
-const WHITELISTED_ENV_VARS: [&str; 35] = [
+const WHITELISTED_ENV_VARS: [&str; 36] = [
     "CODEX_HOME",
+    "CODEBUFF_API_KEY",
     "GH_CONFIG_DIR",
     "ALIBABA_API_KEY",
     "ALIBABA_REGION",

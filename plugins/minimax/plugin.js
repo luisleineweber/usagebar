@@ -81,7 +81,24 @@
     return secOverflow <= msOverflow ? asSecondsMs : asMillisecondsMs
   }
 
+  function loadStoredApiKey(ctx) {
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    try {
+      const key = readString(ctx.host.providerSecrets.read("apiKey"))
+      if (key) {
+        ctx.host.log.info("api key loaded from provider secret")
+        return { value: key, source: "providerSecret" }
+      }
+    } catch (e) {
+      ctx.host.log.warn("provider secret read failed: " + String(e))
+    }
+    return null
+  }
+
   function loadApiKey(ctx, endpointSelection) {
+    const stored = loadStoredApiKey(ctx)
+    if (stored) return stored
+
     const envVars = endpointSelection === "CN" ? CN_API_KEY_ENV_VARS : GLOBAL_API_KEY_ENV_VARS
     for (let i = 0; i < envVars.length; i += 1) {
       const name = envVars[i]
@@ -259,7 +276,6 @@
     if (used === null && inferredRemainingCount !== null) used = total - inferredRemainingCount
     if (used === null) return null
     if (used < 0) used = 0
-    if (used > total) used = total
 
     const startMs = epochToMs(chosen.start_time ?? chosen.startTime)
     const endMs = epochToMs(chosen.end_time ?? chosen.endTime)
@@ -327,7 +343,7 @@
 
     if (!parsed) {
       if (lastError) throw lastError
-      throw "MiniMax API key missing. Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY."
+      throw "MiniMax API key missing. Save it in Setup, set MINIMAX_API_KEY, or set MINIMAX_CN_API_KEY."
     }
 
     // CN API returns model call counts (needs division by 15 for prompts)

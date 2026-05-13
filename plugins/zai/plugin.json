@@ -9,7 +9,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Experimental on Windows. Set ZAI_API_KEY or GLM_API_KEY before launching UsageBar."
+      "message": "Experimental on Windows. Save a Z.ai API key in Setup, or set ZAI_API_KEY / GLM_API_KEY before launching UsageBar."
     }
   },
   "lines": [

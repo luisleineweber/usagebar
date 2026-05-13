@@ -6,12 +6,12 @@
 
 - **Protocol:** HTTPS (JSON)
 - **Endpoint:** `GET https://api.minimax.io/v1/api/openplatform/coding_plan/remains`
-- **Auth:** `Authorization: Bearer <api_key>`
+- **Auth:** stored API key, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`, or `MINIMAX_API_TOKEN`
 - **Window model:** dynamic rolling 5-hour limit (per MiniMax Coding Plan docs)
 
 ## Authentication
 
-The plugin supports automatic region detection and reads API keys based on the selected region:
+The plugin first checks the app-stored API key from Settings. If no stored key is configured, it supports automatic region detection and reads environment variables based on the selected region:
 
 **Region auto-selection:**
 - If `MINIMAX_CN_API_KEY` is set: tries `CN` first, then `GLOBAL`
@@ -23,9 +23,14 @@ The plugin supports automatic region detection and reads API keys based on the s
 
 If no key is found after attempting both regions, it throws:
 
-- `MiniMax API key missing. Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY.`
+- `MiniMax API key missing. Save it in Setup, set MINIMAX_API_KEY, or set MINIMAX_CN_API_KEY.`
 
 ## Windows setup
+
+1. Open Settings -> Providers -> MiniMax and paste the API key.
+2. Enable the MiniMax provider and refresh.
+
+Environment fallback:
 
 1. Create a persistent user environment variable for either `MINIMAX_API_KEY` or `MINIMAX_CN_API_KEY`.
 2. Restart `UsageBar` so the desktop app can read the updated environment.
@@ -97,7 +102,7 @@ Expected payload fields:
 
 | Condition | Message |
 |---|---|
-| Missing API key | `MiniMax API key missing. Set MINIMAX_API_KEY or MINIMAX_CN_API_KEY.` |
+| Missing API key | `MiniMax API key missing. Save it in Setup, set MINIMAX_API_KEY, or set MINIMAX_CN_API_KEY.` |
 | HTTP 401/403 | `Session expired. Check your MiniMax API key.` |
 | API status `base_resp.status_code != 0` | `MiniMax API error: ...` (or session-expired for auth-like errors) |
 | Non-2xx | `Request failed (HTTP {status}). Try again later.` |

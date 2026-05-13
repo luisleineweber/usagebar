@@ -18,10 +18,10 @@ Safety:
 
 | Provider | Local inputs UsageBar reads | Fake local input? | Notes |
 | --- | --- | --- | --- |
-| `alibaba` | None | No current path | Placeholder plugin only. |
+| `alibaba` | stored provider secret `apiKey`, `ALIBABA_API_KEY`, `ALIBABA_REGION` | Works partially | Secret/env replay can fake auth setup, but quota data still comes from Alibaba HTTP. |
 | `amp` | `~/.local/share/amp/secrets.json` | Works partially | Local file can fake signed-in state, but usage still comes from Amp HTTP. |
 | `antigravity` | `~/AppData/Roaming/Antigravity/User/globalStorage/state.vscdb` on Windows, `pluginDataDir/auth.json`, local LS discovery | Works partially | Fake auth DB/state can exercise the offline Cloud Code path; live LS only affects process-backed fractions. |
-| `augment` | None | No current path | Placeholder plugin only. |
+| `augment` | stored provider secret `cookieHeader`, `AUGMENT_COOKIE_HEADER` | Works partially | Cookie/env replay can fake auth setup, but credit data still comes from Augment HTTP. |
 | `claude` | `~/.claude/.credentials.json`, `~/.claude.json`, keychain, local `ccusage` runner | Works partially | File replay can fake signed-in state; remote OAuth usage and `ccusage` still matter for realistic output. |
 | `codex` | `$CODEX_HOME/auth.json`, `~/.config/codex/auth.json`, `~/.codex/auth.json`, keychain, imported provider secret `account:<profileId>:authJson`, local `ccusage` runner | Works partially | File replay can fake auth/account shape; imported managed profiles let you pin a specific account; realistic usage still often depends on `ccusage`. |
 | `copilot` | `~/AppData/Roaming/GitHub CLI/hosts.yml`, `GH_CONFIG_DIR/hosts.yml`, keychain, `pluginDataDir/auth.json`, `gh auth token` | Works partially | You can fake the host file and cached token file, but final usage comes from GitHub HTTP. |
@@ -33,7 +33,7 @@ Safety:
 | `kimi` | `~/.kimi/credentials/kimi-code.json` | Works partially | Local credential replay can fake login; usage still comes from HTTP. |
 | `kimi-k2` | stored provider secret `apiKey`, `MOONSHOT_API_KEY`, `KIMI_API_KEY`, `KIMI_KEY` | Works partially | Secret/env replay can fake auth setup, but balance still comes from the official Moonshot API HTTP endpoint. |
 | `kiro` | `~/.aws/sso/cache/kiro-auth-token.json`, `~/AppData/Roaming/Kiro/User/globalStorage/state.vscdb`, `~/AppData/Roaming/Kiro/logs/*/window*/exthost/kiro.kiroAgent/q-client.log`, `~/.kiro/sessions/cli/*.json` on Windows | Works partially | Local replay can fake auth, cache, log metadata, and CLI session metering; live fallback still comes from Kiro/AWS HTTP. |
-| `minimax` | `MINIMAX_API_KEY`, `MINIMAX_API_TOKEN`, `MINIMAX_CN_API_KEY` env vars | Works partially | No file path today; you can only fake env-based auth locally. Usage still comes from HTTP. |
+| `minimax` | stored provider secret `apiKey`, `MINIMAX_API_KEY`, `MINIMAX_API_TOKEN`, `MINIMAX_CN_API_KEY` env vars | Works partially | Secret/env replay can fake auth setup, but usage still comes from HTTP. |
 | `mock` | None | Works fully | Built-in self-test provider. Data is hardcoded in the plugin. |
 | `ollama` | Stored provider secret `cookieHeader` | Works partially | Manual secret can fake signed-in session, but usage still comes from Ollama web HTTP. |
 | `opencode` | Stored provider secret `cookieHeader`, `OPENCODE_COOKIE_HEADER`, keychain fallback | Works partially | Cookie replay can fake the web session, but billing data still comes from OpenCode HTTP. |
@@ -45,14 +45,20 @@ Safety:
 | `warp` | stored provider secret `token`, `WARP_API_KEY`, `WARP_TOKEN` | Works partially | Secret/env replay can fake auth setup, but request limits still come from Warp's undocumented app GraphQL endpoint. |
 | `windsurf` | `~/AppData/Roaming/Windsurf/User/globalStorage/state.vscdb`, `~/AppData/Roaming/Windsurf - Next/User/globalStorage/state.vscdb` | Works partially | SQLite replay can fake account discovery; quota still comes from Windsurf HTTP. |
 | `zed` | stored provider secret `cookieHeader`, external Windows credential target `zed:url=https://zed.dev`, `~/AppData/Local/Zed/logs/telemetry.log` | Works partially | Embedded-browser cookie replay can cover billing auth, while local replay covers sign-in detection and telemetry fallback. |
-| `zai` | `ZAI_API_KEY`, `GLM_API_KEY` env vars | Works partially | No file path today; auth is env-only and usage comes from HTTP. |
+| `zai` | stored provider secret `apiKey`, `ZAI_API_KEY`, `GLM_API_KEY` env vars | Works partially | Secret/env replay can fake auth setup, but usage still comes from HTTP. |
 
 ## Provider Details
 
 ### `alibaba`
-- Current implementation: placeholder that always throws.
-- Local replay path: none.
-- Manual testing outcome: not possible without first implementing the real provider.
+- Local inputs read:
+- stored provider secret `apiKey`
+- `ALIBABA_API_KEY`
+- `ALIBABA_REGION`
+- What to fake:
+- Save an Alibaba Coding Plan API key through the app settings or expose `ALIBABA_API_KEY` before launching UsageBar.
+- Optionally set `ALIBABA_REGION` to choose the regional endpoint.
+- Limitation:
+- The provider still fetches quota data over HTTP, so local replay only covers auth configuration.
 
 ### `amp`
 - Local input read: `~/.local/share/amp/secrets.json`.
@@ -208,14 +214,15 @@ Safety:
 
 ### `minimax`
 - Local inputs read:
+- provider secret `apiKey`
 - `MINIMAX_API_KEY`
 - `MINIMAX_API_TOKEN`
 - `MINIMAX_CN_API_KEY`
 - What to fake:
-- Set env vars before launching UsageBar.
+- Save a MiniMax API key through the app settings or set env vars before launching UsageBar.
 - Limitation:
 - This provider has no file-based auth path today.
-- All usage still comes from HTTP, so env replay only gets you past auth configuration.
+- All usage still comes from HTTP, so secret/env replay only gets you past auth configuration.
 
 ### `mock`
 - Current implementation: hardcoded self-test output.
@@ -328,10 +335,11 @@ Safety:
 
 ### `zai`
 - Local inputs read:
+- provider secret `apiKey`
 - `ZAI_API_KEY`
 - `GLM_API_KEY`
 - What to fake:
-- Set env vars before launching UsageBar.
+- Save a Z.ai API key through the app settings or set env vars before launching UsageBar.
 - Limitation:
 - This provider has no file-based auth path today.
 - Usage still comes from HTTP.

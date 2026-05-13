@@ -2,6 +2,16 @@
   const API_BASE_CN = "https://devops.cn-beijing.aliyuncs.com"
   const API_BASE_GLOBAL = "https://devops.aliyuncs.com"
   const DEFAULT_REGION = "cn-beijing"
+  const COUNT_FORMAT = { kind: "count", suffix: "requests" }
+  const WINDOW_MS = {
+    fiveHour: 5 * 60 * 60 * 1000,
+    weekly: 7 * 24 * 60 * 60 * 1000,
+    monthly: 30 * 24 * 60 * 60 * 1000,
+  }
+  const PLAN_LIMITS = {
+    lite: { fiveHour: 1200, weekly: 9000, monthly: 18000 },
+    pro: { fiveHour: 6000, weekly: 45000, monthly: 90000 },
+  }
 
   function loadApiKey(ctx) {
     if (ctx.host.providerSecrets && typeof ctx.host.providerSecrets.read === "function") {
@@ -128,6 +138,63 @@
     return data
   }
 
+  function readNumber(value) {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : null
+    }
+    return null
+  }
+
+  function readObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null
+  }
+
+  function readPlanKey(plan) {
+    const text = typeof plan === "string" ? plan.toLowerCase() : ""
+    if (text.includes("lite")) return "lite"
+    if (text.includes("pro")) return "pro"
+    return null
+  }
+
+  function firstObject(root, keys) {
+    for (let i = 0; i < keys.length; i++) {
+      const value = readObject(root[keys[i]])
+      if (value) return value
+    }
+    return null
+  }
+
+  function firstNumber(root, keys) {
+    for (let i = 0; i < keys.length; i++) {
+      const value = readNumber(root[keys[i]])
+      if (value !== null) return value
+    }
+    return null
+  }
+
+  function parseQuotaWindow(root, keys, fallbackLimit) {
+    const value = firstObject(root, keys)
+    if (!value) {
+      return fallbackLimit ? { used: 0, limit: fallbackLimit, resetsAt: null } : null
+    }
+
+    const used = firstNumber(value, ["used", "usage", "consumed", "current", "requestUsed", "requestsUsed"]) ?? 0
+    const remaining = firstNumber(value, ["remaining", "available", "left", "requestRemaining", "requestsRemaining"])
+    let limit = firstNumber(value, ["limit", "quota", "total", "maximum", "max", "requestLimit", "requestsLimit"])
+    if (limit === null && remaining !== null) limit = used + remaining
+    if (limit === null) limit = fallbackLimit
+    if (limit === null) return null
+    if (limit <= 0) return null
+
+    return {
+      used: Math.max(0, used),
+      limit,
+      resetsAt: value.resetsAt || value.resetAt || value.reset_at || value.nextResetAt || null,
+    }
+  }
+
   function parseQuota(data) {
     if (!data.data || typeof data.data !== "object") {
       return null
@@ -135,32 +202,34 @@
 
     const quotas = data.data
     const plan = typeof quotas.plan === "string" ? quotas.plan : "Coding Plan"
-    const dailyQuota = quotas.dailyQuota || {}
-    const weeklyQuota = quotas.weeklyQuota || {}
-
-    const dailyUsed = typeof dailyQuota.used === "number" ? dailyQuota.used : 0
-    const dailyLimit = typeof dailyQuota.limit === "number" ? dailyQuota.limit : 100
-    const dailyResetAt = dailyQuota.resetsAt || null
-
-    const weeklyUsed = typeof weeklyQuota.used === "number" ? weeklyQuota.used : 0
-    const weeklyLimit = typeof weeklyQuota.limit === "number" ? weeklyQuota.limit : 500
-    const weeklyResetAt = weeklyQuota.resetsAt || null
+    const planKey = readPlanKey(plan)
+    const planLimits = planKey ? PLAN_LIMITS[planKey] : null
+    const fiveHour = parseQuotaWindow(
+      quotas,
+      ["fiveHourQuota", "five_hour_quota", "fiveHour", "slidingQuota", "dailyQuota"],
+      planLimits && planLimits.fiveHour
+    )
+    const weekly = parseQuotaWindow(quotas, ["weeklyQuota", "weekQuota", "weekly"], planLimits && planLimits.weekly)
+    const monthly = parseQuotaWindow(quotas, ["monthlyQuota", "monthQuota", "monthly"], planLimits && planLimits.monthly)
 
     return {
       plan: plan,
-      daily: {
-        used: dailyUsed,
-        limit: Math.max(dailyLimit, dailyUsed, 1),
-        percent: dailyLimit > 0 ? (dailyUsed / dailyLimit) * 100 : 0,
-        resetsAt: dailyResetAt,
-      },
-      weekly: {
-        used: weeklyUsed,
-        limit: Math.max(weeklyLimit, weeklyUsed, 1),
-        percent: weeklyLimit > 0 ? (weeklyUsed / weeklyLimit) * 100 : 0,
-        resetsAt: weeklyResetAt,
-      },
+      fiveHour,
+      weekly,
+      monthly,
     }
+  }
+
+  function pushQuotaLine(ctx, lines, label, quota, periodDurationMs) {
+    if (!quota) return
+    lines.push(ctx.line.progress({
+      label: label,
+      used: quota.used,
+      limit: quota.limit,
+      format: COUNT_FORMAT,
+      resetsAt: ctx.util.toIso(quota.resetsAt),
+      periodDurationMs: periodDurationMs,
+    }))
   }
 
   function probe(ctx) {
@@ -180,22 +249,17 @@
 
     const lines = []
 
-    lines.push(ctx.line.progress({
-      label: "Daily",
-      used: quota.daily.percent,
-      limit: 100,
-      format: { kind: "percent" },
-      resetsAt: ctx.util.toIso(quota.daily.resetsAt),
-      periodDurationMs: 24 * 60 * 60 * 1000,
-    }))
+    pushQuotaLine(ctx, lines, "5-hour", quota.fiveHour, WINDOW_MS.fiveHour)
+    pushQuotaLine(ctx, lines, "Weekly", quota.weekly, WINDOW_MS.weekly)
+    pushQuotaLine(ctx, lines, "Monthly", quota.monthly, WINDOW_MS.monthly)
 
-    lines.push(ctx.line.progress({
-      label: "Weekly",
-      used: quota.weekly.percent,
-      limit: 100,
-      format: { kind: "percent" },
-      resetsAt: ctx.util.toIso(quota.weekly.resetsAt),
-      periodDurationMs: 7 * 24 * 60 * 60 * 1000,
+    if (lines.length === 0) {
+      throw "Alibaba quota response missing usage data. Try again later."
+    }
+
+    lines.push(ctx.line.badge({
+      label: "Plan",
+      text: quota.plan,
     }))
 
     lines.push(ctx.line.badge({
