@@ -15,6 +15,7 @@ const PANEL_HEIGHT_DELTA_THRESHOLD_PX = 2
 const PANEL_HEIGHT_TWEEN_THRESHOLD_PX = 12
 const PANEL_HEIGHT_TWEEN_DURATION_MS = 150
 const PANEL_HEIGHT_TWEEN_STEPS = 3
+export const PANEL_AUTO_HIDE_DELAY_MS = 30_000
 const SIDE_NAV_TOP_PADDING_PX = 12
 const SIDE_NAV_BUTTON_HEIGHT_PX = 44
 const SIDE_NAV_STATIC_BUTTON_COUNT = 2 // Home + Settings
@@ -88,6 +89,8 @@ export function usePanel({
   const requestPanelResizeRef = useRef<() => void>(() => {})
   const scheduledResizeFrameRef = useRef<number | null>(null)
   const scheduledMeasureFrameRef = useRef<number | null>(null)
+  const autoHideTimerRef = useRef<number | null>(null)
+  const scheduleAutoHideRef = useRef<() => void>(() => {})
   const tweenTimeoutsRef = useRef<number[]>([])
   const onPanelFocusRef = useRef(onPanelFocus)
 
@@ -127,6 +130,23 @@ export function usePanel({
     if (!isTauri()) return
     if (showAbout) return
 
+    const clearAutoHideTimer = () => {
+      if (autoHideTimerRef.current === null) return
+      window.clearTimeout(autoHideTimerRef.current)
+      autoHideTimerRef.current = null
+    }
+
+    const scheduleAutoHide = () => {
+      clearAutoHideTimer()
+      autoHideTimerRef.current = window.setTimeout(() => {
+        autoHideTimerRef.current = null
+        void invoke("hide_panel").catch((error) => {
+          console.error("Failed to auto-hide panel:", error)
+        })
+      }, PANEL_AUTO_HIDE_DELAY_MS)
+    }
+    scheduleAutoHideRef.current = scheduleAutoHide
+
     const syncPendingPanelView = async () => {
       const pendingView = await invoke<string | null>("take_pending_panel_view")
       if (typeof pendingView !== "string") return null
@@ -137,12 +157,18 @@ export function usePanel({
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      scheduleAutoHide()
       if (e.key === "Escape") {
-        invoke("hide_panel")
+        void invoke("hide_panel")
       }
     }
 
+    const handleActivity = () => {
+      scheduleAutoHide()
+    }
+
     const handleFocus = () => {
+      scheduleAutoHide()
       void syncPendingPanelView()
         .catch((error) => {
           console.error("Failed to sync pending panel view on focus:", error)
@@ -154,11 +180,20 @@ export function usePanel({
         })
     }
 
+    scheduleAutoHide()
     document.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("pointerdown", handleActivity, { passive: true })
+    window.addEventListener("wheel", handleActivity, { passive: true })
+    window.addEventListener("scroll", handleActivity, { passive: true, capture: true })
     window.addEventListener("focus", handleFocus)
 
     return () => {
+      clearAutoHideTimer()
+      scheduleAutoHideRef.current = () => {}
       document.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("pointerdown", handleActivity)
+      window.removeEventListener("wheel", handleActivity)
+      window.removeEventListener("scroll", handleActivity, { capture: true })
       window.removeEventListener("focus", handleFocus)
     }
   }, [setActiveView, showAbout])
@@ -171,6 +206,7 @@ export function usePanel({
     async function setup() {
       const u1 = await listen<string>("tray:navigate", (event) => {
         const nextView = event.payload as ActiveView
+        scheduleAutoHideRef.current()
         setActiveView(nextView)
         onPanelFocusRef.current?.(nextView)
         void invoke("take_pending_panel_view").catch((error) => {

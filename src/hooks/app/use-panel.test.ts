@@ -28,6 +28,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }))
 
 import {
+  PANEL_AUTO_HIDE_DELAY_MS,
   panelMaxHeightForView,
   panelMinHeightForNav,
   panelMinHeightForView,
@@ -185,6 +186,127 @@ describe("usePanel", () => {
     })
 
     expect(onPanelFocus).toHaveBeenCalledTimes(1)
+  })
+
+  it("auto-hides the panel after 30 seconds of inactivity", async () => {
+    vi.useFakeTimers()
+
+    try {
+      renderHook(() =>
+        usePanel({
+          activeView: "home",
+          setActiveView: vi.fn(),
+          showAbout: false,
+          setShowAbout: vi.fn(),
+          displayPlugins: [],
+          navPluginCount: 0,
+          onPanelFocus: vi.fn(),
+        })
+      )
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS)
+      })
+
+      expect(invokeMock).toHaveBeenCalledWith("hide_panel")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("resets auto-hide on panel activity and tray navigation", async () => {
+    vi.useFakeTimers()
+    const callbacks = new Map<string, (event: { payload: unknown }) => void>()
+
+    listenMock.mockImplementation(async (event: string, callback: (event: { payload: unknown }) => void) => {
+      callbacks.set(event, callback)
+      return vi.fn()
+    })
+
+    try {
+      renderHook(() =>
+        usePanel({
+          activeView: "home",
+          setActiveView: vi.fn(),
+          showAbout: false,
+          setShowAbout: vi.fn(),
+          displayPlugins: [],
+          navPluginCount: 0,
+          onPanelFocus: vi.fn(),
+        })
+      )
+
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(listenMock).toHaveBeenCalledTimes(2)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS - 1)
+      })
+      expect(invokeMock).not.toHaveBeenCalledWith("hide_panel")
+
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"))
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS - 1)
+      })
+      expect(invokeMock).not.toHaveBeenCalledWith("hide_panel")
+
+      act(() => {
+        callbacks.get("tray:navigate")?.({ payload: "codex" })
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS - 1)
+      })
+      expect(invokeMock).not.toHaveBeenCalledWith("hide_panel")
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1)
+      })
+      expect(invokeMock).toHaveBeenCalledWith("hide_panel")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("clears auto-hide when the hook unmounts or about is open", async () => {
+    vi.useFakeTimers()
+
+    try {
+      const { rerender, unmount } = renderHook(
+        ({ showAbout }) =>
+          usePanel({
+            activeView: "home",
+            setActiveView: vi.fn(),
+            showAbout,
+            setShowAbout: vi.fn(),
+            displayPlugins: [],
+            navPluginCount: 0,
+            onPanelFocus: vi.fn(),
+          }),
+        { initialProps: { showAbout: false } }
+      )
+
+      rerender({ showAbout: true })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS)
+      })
+      expect(invokeMock).not.toHaveBeenCalledWith("hide_panel")
+
+      rerender({ showAbout: false })
+      unmount()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS)
+      })
+      expect(invokeMock).not.toHaveBeenCalledWith("hide_panel")
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("replays a pending panel target on focus and refreshes that provider", async () => {
