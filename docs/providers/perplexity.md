@@ -13,9 +13,9 @@
 
 Auth precedence in this fork:
 
-1. `PERPLEXITY_COOKIE_HEADER`
-2. `PERPLEXITY_COOKIE`
-3. stored provider secret `cookieHeader`
+1. stored provider secret `cookieHeader`
+2. `PERPLEXITY_COOKIE_HEADER`
+3. `PERPLEXITY_COOKIE`
 4. `PERPLEXITY_SESSION_TOKEN` converted to `__Secure-next-auth.session-token=<token>`
 
 If none of those are present, the plugin throws:
@@ -47,7 +47,7 @@ The credits endpoint is undocumented and may return different grant shapes. Usag
 
 UsageBar does not infer a Perplexity subscription name from credit totals. Perplexity credit allowances can vary by plan, region, promotion, and enterprise contract, so the provider renders the credit pools without a plan badge unless a future endpoint exposes an explicit plan label.
 
-Zero-value pools are rendered as depleted rather than incorrectly showing as full.
+Zero-value pools are rendered as `0 credits` text rather than fake progress bars, because the endpoint does not provide a non-zero maximum for those pools.
 
 ## Limitations
 

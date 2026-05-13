@@ -31,6 +31,8 @@ UsageBar currently expects the authenticated workspace billing session for OpenC
 
 If OpenCode redirects you back to home or sign-in, the session is not ready yet.
 
+UsageBar reads the Cookie header saved in Settings first. `OPENCODE_COOKIE_HEADER` remains supported only as a fallback for existing environment-based setups.
+
 ## Setup
 
 1. Open the OpenCode Zen provider detail in UsageBar.

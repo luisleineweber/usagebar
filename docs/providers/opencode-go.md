@@ -29,7 +29,7 @@ If neither signal exists, the plugin stays hidden. If auth exists but no local G
 
 OpenCode Zen used to exist as a separate experimental provider. It is now folded into this provider as an optional `Zen balance` line.
 
-To show Zen balance, paste a signed-in `opencode.ai` billing Cookie header in Settings and set a workspace ID only when auto-discovery chooses the wrong workspace.
+To show Zen balance, paste a signed-in `opencode.ai` billing Cookie header in Settings and set a workspace ID only when auto-discovery chooses the wrong workspace. The Settings-saved Cookie header is used before `OPENCODE_COOKIE_HEADER`; the environment variable remains a fallback for older setups.
 
 ## Data Source
 

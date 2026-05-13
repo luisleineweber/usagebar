@@ -112,7 +112,7 @@ describe("mistral plugin", () => {
     }))
   })
 
-  it("uses MISTRAL_COOKIE_HEADER before stored secrets", async () => {
+  it("prefers stored secrets before MISTRAL_COOKIE_HEADER", async () => {
     const ctx = makeCtx()
     ctx.host.env.get.mockImplementation((name) => {
       if (name === "MISTRAL_COOKIE_HEADER") return "ory_session_x=env"
@@ -128,7 +128,7 @@ describe("mistral plugin", () => {
     plugin.probe(ctx)
 
     expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
-      headers: expect.objectContaining({ Cookie: "ory_session_x=env" }),
+      headers: expect.objectContaining({ Cookie: "ory_session_x=stored" }),
     }))
   })
 

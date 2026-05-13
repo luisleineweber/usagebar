@@ -30,11 +30,11 @@
   }
 
   function loadCookieHeader(ctx) {
-    const directHeader = readEnv(ctx, "MISTRAL_COOKIE_HEADER")
-    if (directHeader) return directHeader
-
     const stored = readStoredCookieHeader(ctx)
     if (stored) return stored
+
+    const directHeader = readEnv(ctx, "MISTRAL_COOKIE_HEADER")
+    if (directHeader) return directHeader
 
     const session = readEnv(ctx, "MISTRAL_SESSION")
     if (session) return "ory_session_mistral=" + session

@@ -46,9 +46,6 @@
   }
 
   function readCookieHeader(ctx) {
-    var envValue = readEnv(ctx, "OPENCODE_COOKIE_HEADER")
-    if (envValue) return envValue
-
     var source = readProviderConfig(ctx, "source") || "manual"
     if (source === "auto") {
       throw "OpenCode automatic browser import is not available in this OpenUsage build yet. Switch Source to Manual."
@@ -56,6 +53,9 @@
 
     var providerSecret = readProviderSecret(ctx, "cookieHeader")
     if (providerSecret) return providerSecret
+
+    var envValue = readEnv(ctx, "OPENCODE_COOKIE_HEADER")
+    if (envValue) return envValue
 
     if (ctx.host.keychain && typeof ctx.host.keychain.readGenericPassword === "function") {
       try {

@@ -92,14 +92,14 @@
   }
 
   function readZenCookieHeader(ctx) {
-    const envValue = readEnv(ctx, "OPENCODE_COOKIE_HEADER");
-    if (envValue) return envValue;
-
     const source = readProviderConfig(ctx, "source") || "manual";
     if (source === "auto") return null;
 
     const providerSecret = readProviderSecret(ctx, "cookieHeader");
     if (providerSecret) return providerSecret;
+
+    const envValue = readEnv(ctx, "OPENCODE_COOKIE_HEADER");
+    if (envValue) return envValue;
 
     if (ctx.host.keychain && typeof ctx.host.keychain.readGenericPassword === "function") {
       try {

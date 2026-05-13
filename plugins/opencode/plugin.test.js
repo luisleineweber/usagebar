@@ -71,6 +71,29 @@ describe("opencode plugin", () => {
     ])
   })
 
+  it("prefers the stored cookie over OPENCODE_COOKIE_HEADER", async () => {
+    const ctx = makeCtx()
+    setManualCookie(ctx, "auth=stored")
+    setWorkspace(ctx)
+    ctx.host.env.get.mockImplementation((key) => (key === "OPENCODE_COOKIE_HEADER" ? "auth=stale-env" : null))
+    ctx.host.http.request.mockReturnValue(
+      response(JSON.stringify({
+        billing: {
+          currentBalance: 12.34,
+        },
+      }))
+    )
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
+      headers: expect.objectContaining({
+        Cookie: "auth=stored",
+      }),
+    }))
+  })
+
   it("keeps standalone Zen hidden because Zen balance is surfaced through OpenCode Go", () => {
     const manifest = JSON.parse(readFileSync("plugins/opencode/plugin.json", "utf8"))
 

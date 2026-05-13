@@ -62,12 +62,12 @@ describe("abacus plugin", () => {
     expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
   })
 
-  it("uses env cookie before stored cookie", () => {
+  it("prefers stored cookie before env cookie", () => {
     const ctx = makeCtx()
     ctx.host.env.get = vi.fn((name) => (name === "ABACUS_COOKIE_HEADER" ? "env_session=abc" : null))
     ctx.host.providerSecrets.read = vi.fn(() => "stored_session=def")
     ctx.host.http.request = vi.fn((request) => {
-      expect(request.headers.Cookie).toBe("env_session=abc")
+      expect(request.headers.Cookie).toBe("stored_session=def")
       return {
         status: 200,
         bodyText: JSON.stringify({
@@ -82,6 +82,28 @@ describe("abacus plugin", () => {
     const result = probe(ctx)
 
     expect(result.lines[0]).toMatchObject({ used: 10, limit: 10 })
+  })
+
+  it("renders zero total credits as text instead of fake progress", () => {
+    const ctx = makeCtx()
+    ctx.host.providerSecrets.read = vi.fn(() => "sessionid=abc")
+    ctx.host.http.request = vi.fn((request) => ({
+      status: 200,
+      bodyText: JSON.stringify({
+        success: true,
+        result: request.url.includes("_getOrganizationComputePoints")
+          ? { totalComputePoints: 0, computePointsLeft: 0 }
+          : {},
+      }),
+    }))
+
+    const result = probe(ctx)
+
+    expect(result.lines[0]).toEqual({
+      type: "text",
+      label: "Credits",
+      value: "0 credits",
+    })
   })
 
   it("keeps credits when optional billing info fails", () => {

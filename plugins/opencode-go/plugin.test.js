@@ -254,6 +254,31 @@ describe("opencode-go plugin", () => {
     });
   });
 
+  it("uses the stored Zen cookie before OPENCODE_COOKIE_HEADER", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+
+    const ctx = makeCtx();
+    const workspaceId = setZenConfig(ctx, "auth=stored");
+    ctx.host.env.get.mockImplementation((key) =>
+      key === "OPENCODE_COOKIE_HEADER" ? "auth=stale-env" : null,
+    );
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
+    ]);
+
+    const plugin = await loadPlugin();
+    plugin.probe(ctx);
+
+    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      headers: expect.objectContaining({
+        Cookie: "auth=stored",
+        Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
+      }),
+    }));
+  });
+
   it("keeps Go usage visible when the optional Zen balance read fails", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));

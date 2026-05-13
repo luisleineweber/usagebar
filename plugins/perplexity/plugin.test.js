@@ -33,7 +33,7 @@ describe("perplexity plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
-  it("prefers PERPLEXITY_COOKIE_HEADER over other sources", async () => {
+  it("prefers stored cookie header over env sources", async () => {
     const ctx = makeCtx()
     ctx.host.env.get.mockImplementation((name) => {
       if (name === "PERPLEXITY_COOKIE_HEADER") return "header-cookie=1"
@@ -49,7 +49,7 @@ describe("perplexity plugin", () => {
     const plugin = await loadPlugin()
     plugin.probe(ctx)
 
-    expect(ctx.host.http.request.mock.calls[0][0].headers.Cookie).toBe("header-cookie=1")
+    expect(ctx.host.http.request.mock.calls[0][0].headers.Cookie).toBe("stored-cookie=1")
   })
 
   it("uses PERPLEXITY_COOKIE when the explicit header env var is absent", async () => {
@@ -143,7 +143,7 @@ describe("perplexity plugin", () => {
     expect(result.lines[0].limit).toBe(12000)
   })
 
-  it("renders zero-value pools as depleted instead of full", async () => {
+  it("renders zero-value pools as text instead of fake progress", async () => {
     const ctx = makeCtx()
     ctx.host.providerSecrets.read.mockImplementation((key) => (key === "cookieHeader" ? "stored-cookie=1" : null))
     mockCreditsEndpoint(ctx, {
@@ -156,9 +156,11 @@ describe("perplexity plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines).toHaveLength(1)
-    expect(result.lines[0].label).toBe("Bonus credits")
-    expect(result.lines[0].used).toBe(1)
-    expect(result.lines[0].limit).toBe(1)
+    expect(result.lines[0]).toEqual({
+      type: "text",
+      label: "Bonus credits",
+      value: "0 credits",
+    })
   })
 
   it("throws a clear session error on unauthorized responses", async () => {

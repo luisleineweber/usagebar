@@ -32,9 +32,9 @@
 
   function loadCookieHeader(ctx) {
     return (
+      readStoredCookieHeader(ctx) ||
       readEnv(ctx, "ABACUS_COOKIE_HEADER") ||
-      readEnv(ctx, "ABACUS_COOKIE") ||
-      readStoredCookieHeader(ctx)
+      readEnv(ctx, "ABACUS_COOKIE")
     )
   }
 
@@ -122,19 +122,24 @@
 
     const safeTotal = Math.max(0, total)
     const used = Math.max(0, safeTotal - Math.max(0, left))
-    const line = {
-      label: "Credits",
-      used,
-      limit: safeTotal > 0 ? safeTotal : 1,
-      format: { kind: "count", suffix: "credits" },
-    }
     const resetIso = ctx.util.toIso(billingInfo.nextBillingDate)
-    if (resetIso) {
-      line.resetsAt = resetIso
-      line.periodDurationMs = 30 * 24 * 60 * 60 * 1000
+    const lines = []
+    if (safeTotal > 0) {
+      const line = {
+        label: "Credits",
+        used,
+        limit: safeTotal,
+        format: { kind: "count", suffix: "credits" },
+      }
+      if (resetIso) {
+        line.resetsAt = resetIso
+        line.periodDurationMs = 30 * 24 * 60 * 60 * 1000
+      }
+      lines.push(ctx.line.progress(line))
+    } else {
+      lines.push(ctx.line.text({ label: "Credits", value: "0 credits" }))
     }
 
-    const lines = [ctx.line.progress(line)]
     const usedLabel = formatCredits(used)
     const totalLabel = formatCredits(safeTotal)
     if (usedLabel && totalLabel) {

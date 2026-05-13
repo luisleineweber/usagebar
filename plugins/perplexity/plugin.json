@@ -20,12 +20,28 @@
       "primaryOrder": 1
     },
     {
+      "type": "text",
+      "label": "Recurring credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
       "type": "progress",
       "label": "Purchased credits",
       "scope": "overview"
     },
     {
+      "type": "text",
+      "label": "Purchased credits",
+      "scope": "overview"
+    },
+    {
       "type": "progress",
+      "label": "Bonus credits",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
       "label": "Bonus credits",
       "scope": "detail"
     }

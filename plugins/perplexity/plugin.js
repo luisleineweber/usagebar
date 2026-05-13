@@ -30,14 +30,14 @@
   }
 
   function loadCookieHeader(ctx) {
+    const stored = readStoredCookieHeader(ctx)
+    if (stored) return stored
+
     const directHeader = readEnv(ctx, "PERPLEXITY_COOKIE_HEADER")
     if (directHeader) return directHeader
 
     const rawCookie = readEnv(ctx, "PERPLEXITY_COOKIE")
     if (rawCookie) return rawCookie
-
-    const stored = readStoredCookieHeader(ctx)
-    if (stored) return stored
 
     const sessionToken = readEnv(ctx, "PERPLEXITY_SESSION_TOKEN")
     if (sessionToken) return "__Secure-next-auth.session-token=" + sessionToken
@@ -177,11 +177,9 @@
       })
     }
 
-    return ctx.line.progress({
+    return ctx.line.text({
       label,
-      used: 1,
-      limit: 1,
-      format: { kind: "count", suffix: "credits" },
+      value: "0 credits",
     })
   }
 
