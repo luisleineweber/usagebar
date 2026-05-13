@@ -187,7 +187,7 @@ host.http.request({
 
 - **No redirects**: The HTTP client does not follow redirects (policy: none)
 - **Throws on network errors**: Connection failures, DNS errors, and timeouts throw
-- **No domain allowlist**: Any URL is allowed (for now)
+- **Capability-gated domains**: HTTP requests are limited to exact hosts or `*.example.com` wildcard hosts from `capabilities.httpDomains`. Empty or omitted domains block all plugin HTTP requests.
 
 ### Example: GET request
 

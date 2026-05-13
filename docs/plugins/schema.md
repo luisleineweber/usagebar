@@ -116,7 +116,7 @@ Validation rules:
 | `env` | boolean | `true` | Expose whitelisted environment lookup |
 | `providerConfig` | boolean | `true` | Expose provider config helpers |
 | `http` | boolean | `true` | Expose `ctx.host.http` |
-| `httpDomains` | string[] | `[]` | Optional HTTP hostname allowlist. Empty means no domain restriction. Supports exact hosts and `*.example.com`. |
+| `httpDomains` | string[] | `[]` | HTTP hostname allowlist. Empty or omitted means all plugin HTTP requests are blocked. Supports exact hosts and `*.example.com`. |
 | `browser` | boolean | `true` | Expose browser/session bridge helpers |
 | `keychain` | boolean | `true` | Expose generic credential helpers |
 | `gh` | boolean | `true` | Expose GitHub auth helper |
