@@ -308,7 +308,10 @@ vi.mock("@/lib/provider-settings", async () => {
 });
 
 import { App } from "@/App";
-import { SettingsWindowApp } from "@/settings-window-app";
+import {
+  SETTINGS_AUTO_CLOSE_DELAY_MS,
+  SettingsWindowApp,
+} from "@/settings-window-app";
 import { APP_NAME } from "@/lib/project-metadata";
 import { useAppPluginStore } from "@/stores/app-plugin-store";
 import { useAppPreferencesStore } from "@/stores/app-preferences-store";
@@ -1716,6 +1719,85 @@ describe("App", () => {
         providerId: null,
       }),
     );
+  });
+
+  it("auto-closes the settings window after 5 minutes of inactivity", async () => {
+    vi.useFakeTimers();
+
+    try {
+      renderSettingsWindow();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SETTINGS_AUTO_CLOSE_DELAY_MS);
+      });
+
+      expect(state.hideWindowMock).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resets settings auto-close on activity and settings-open events", async () => {
+    vi.useFakeTimers();
+
+    try {
+      renderSettingsWindow();
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(eventState.handlers.has("settings:open")).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SETTINGS_AUTO_CLOSE_DELAY_MS - 1);
+      });
+      expect(state.hideWindowMock).not.toHaveBeenCalled();
+
+      act(() => {
+        window.dispatchEvent(new Event("pointerdown"));
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SETTINGS_AUTO_CLOSE_DELAY_MS - 1);
+      });
+      expect(state.hideWindowMock).not.toHaveBeenCalled();
+
+      act(() => {
+        eventState.handlers.get("settings:open")?.({
+          payload: { tab: "providers", providerId: "a" },
+        });
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SETTINGS_AUTO_CLOSE_DELAY_MS - 1);
+      });
+      expect(state.hideWindowMock).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(state.hideWindowMock).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears settings auto-close on unmount", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const { unmount } = renderSettingsWindow();
+      unmount();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SETTINGS_AUTO_CLOSE_DELAY_MS);
+      });
+
+      expect(state.hideWindowMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reveals the tray target when selecting a provider in the settings window", async () => {

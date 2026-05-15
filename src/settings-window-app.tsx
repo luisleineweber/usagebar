@@ -32,8 +32,12 @@ type SettingsOpenPayload = {
   providerId?: string | null
 }
 
+export const SETTINGS_AUTO_CLOSE_DELAY_MS = 5 * 60 * 1000
+
 export function SettingsWindowApp() {
   const initialTargetRef = useRef(parseSettingsWindowLocation(window.location.search))
+  const autoCloseTimerRef = useRef<number | null>(null)
+  const scheduleAutoCloseRef = useRef<() => void>(() => {})
   const [settingsTab, setSettingsTab] = useState<SettingsWindowTab>(initialTargetRef.current.tab ?? "general")
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
     initialTargetRef.current.providerId ?? null
@@ -181,6 +185,47 @@ export function SettingsWindowApp() {
   }, [])
 
   useEffect(() => {
+    const clearAutoCloseTimer = () => {
+      if (autoCloseTimerRef.current === null) return
+      window.clearTimeout(autoCloseTimerRef.current)
+      autoCloseTimerRef.current = null
+    }
+
+    const scheduleAutoClose = () => {
+      clearAutoCloseTimer()
+      autoCloseTimerRef.current = window.setTimeout(() => {
+        autoCloseTimerRef.current = null
+        void getCurrentWindow().hide().catch((error) => {
+          console.error("Failed to auto-close settings window:", error)
+        })
+      }, SETTINGS_AUTO_CLOSE_DELAY_MS)
+    }
+
+    const handleActivity = () => {
+      scheduleAutoClose()
+    }
+
+    scheduleAutoCloseRef.current = scheduleAutoClose
+    scheduleAutoClose()
+
+    window.addEventListener("focus", handleActivity)
+    window.addEventListener("keydown", handleActivity)
+    window.addEventListener("pointerdown", handleActivity, { passive: true })
+    window.addEventListener("wheel", handleActivity, { passive: true })
+    window.addEventListener("scroll", handleActivity, { passive: true, capture: true })
+
+    return () => {
+      clearAutoCloseTimer()
+      scheduleAutoCloseRef.current = () => {}
+      window.removeEventListener("focus", handleActivity)
+      window.removeEventListener("keydown", handleActivity)
+      window.removeEventListener("pointerdown", handleActivity)
+      window.removeEventListener("wheel", handleActivity)
+      window.removeEventListener("scroll", handleActivity, { capture: true })
+    }
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
 
     loadProviderConfigs()
@@ -212,6 +257,7 @@ export function SettingsWindowApp() {
     let unlisten: (() => void) | undefined
 
     void listen<SettingsOpenPayload>("settings:open", (event) => {
+      scheduleAutoCloseRef.current()
       const nextTab = event.payload.tab === "providers" ? "providers" : "general"
       setSettingsTab(nextTab)
       if (event.payload.providerId !== undefined) {
