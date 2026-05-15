@@ -41,7 +41,62 @@ describe("augment plugin", () => {
     const plugin = await loadPlugin()
 
     expect(() => plugin.probe(ctx)).toThrow(
-      "Augment Cookie header missing. Save it in Setup or set AUGMENT_COOKIE_HEADER."
+      "Augment auth missing. Run `auggie login` to confirm local auth, or save a dashboard Cookie header for credit usage."
+    )
+  })
+
+  it("reports local Auggie auth when no dashboard cookie is configured", async () => {
+    const ctx = makePluginTestContext()
+    ctx.host.fs.writeText(
+      "~/.augment/session.json",
+      JSON.stringify({
+        accessToken: "token",
+        tenantURL: "https://tenant.api.augmentcode.com",
+      })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Auggie Session")
+    expect(result.lines).toEqual([
+      {
+        type: "text",
+        label: "Credits",
+        value: "Dashboard cookie required",
+      },
+      {
+        type: "text",
+        label: "Auggie Auth",
+        value: "Detected via ~/.augment/session.json",
+      },
+    ])
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("prefers AUGMENT_SESSION_AUTH over the Auggie session file for auth detection", async () => {
+    const ctx = makePluginTestContext()
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "AUGMENT_SESSION_AUTH"
+        ? JSON.stringify({
+            accessToken: "env-token",
+            tenantURL: "https://tenant.api.augmentcode.com",
+          })
+        : null
+    )
+    ctx.host.fs.writeText(
+      "~/.augment/session.json",
+      JSON.stringify({
+        accessToken: "file-token",
+        tenantURL: "https://tenant.api.augmentcode.com",
+      })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Auggie Auth")?.value).toBe(
+      "Detected via AUGMENT_SESSION_AUTH"
     )
   })
 

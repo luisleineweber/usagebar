@@ -31,7 +31,52 @@ describe("ollama plugin", () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
 
-    expect(() => plugin.probe(ctx)).toThrow("Paste your Ollama Cookie header in Setup before refreshing.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Paste your Ollama Cookie header in Setup before refreshing, or run `ollama signin` / set OLLAMA_API_KEY for Cloud auth detection."
+    )
+  })
+
+  it("reports Cloud auth from OLLAMA_API_KEY without creating usage progress", async () => {
+    const ctx = makeCtx()
+    ctx.host.env.get.mockImplementation((name) => (name === "OLLAMA_API_KEY" ? "ollama-key" : null))
+    const plugin = await loadPlugin()
+
+    const result = plugin.probe(ctx)
+
+    expect(result).toEqual({
+      plan: "Ollama Cloud Auth",
+      lines: [
+        {
+          type: "text",
+          label: "Cloud Auth",
+          value: "API key detected",
+        },
+        {
+          type: "text",
+          label: "Usage",
+          value: "Settings cookie required",
+        },
+      ],
+    })
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("reports local signin keys without creating usage progress", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText("~/.ollama/id_ed25519", "private")
+    ctx.host.fs.writeText("~/.ollama/id_ed25519.pub", "public")
+    const plugin = await loadPlugin()
+
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Ollama Cloud Auth")
+    expect(result.lines).toContainEqual({
+      type: "text",
+      label: "Cloud Auth",
+      value: "Local signin keys detected",
+    })
+    expect(result.lines.find((line) => line.type === "progress")).toBeUndefined()
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
   it("surfaces when saved metadata exists but the vault entry is missing", async () => {

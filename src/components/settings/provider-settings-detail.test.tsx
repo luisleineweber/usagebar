@@ -19,6 +19,14 @@ const cursorPlugin = {
   primaryCandidates: [],
 }
 
+const claudePlugin = {
+  id: "claude",
+  name: "Claude",
+  iconUrl: "/claude.svg",
+  lines: [],
+  primaryCandidates: [],
+}
+
 const deepseekPlugin = {
   id: "deepseek",
   name: "DeepSeek",
@@ -136,7 +144,7 @@ const augmentPlugin = {
   name: "Augment",
   iconUrl: "/augment.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Save an Augment Cookie header or set AUGMENT_COOKIE_HEADER before probing.",
+  supportMessage: "Windows experimental. Run `auggie login` for local auth detection; save an Augment Cookie header for dashboard credit usage.",
   lines: [],
   primaryCandidates: [],
 }
@@ -211,9 +219,24 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText("How to connect")).toBeInTheDocument()
-    expect(
-      screen.getByText(/For dashboard history, open https:\/\/chatgpt\.com\/codex\/cloud\/settings\/analytics/)
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Install Codex CLI, sign in on this machine, then retry\./)).toBeInTheDocument()
+    expect(screen.queryByText(/copy the Cookie request header from DevTools/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText("Codex Dashboard Cookie header")).toBeInTheDocument()
+  })
+
+  it("shows Claude OAuth-first guidance while keeping web cookie fallback editable", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={claudePlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Run `claude` CLI and sign in on this machine, then retry\./)).toBeInTheDocument()
+    expect(screen.queryByText(/copy the Cookie request header containing sessionKey from DevTools/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText("Claude Claude web Cookie header")).toBeInTheDocument()
   })
 
   it("shows loading state while refreshing", () => {
@@ -269,6 +292,22 @@ describe("ProviderSettingsDetail", () => {
       expect(onSecretSave).toHaveBeenCalledWith("ollama", "cookieHeader", "session=abc123")
     })
     expect(screen.getByText("Secret stored securely for this app.")).toBeInTheDocument()
+  })
+
+  it("shows Ollama Cloud auth detection guidance while keeping settings cookie editable", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={ollamaPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText(/Reads Ollama settings-page quota from a stored cookie header and can detect Cloud auth/)).toBeInTheDocument()
+    expect(screen.getByText(/Run `ollama signin` or set OLLAMA_API_KEY to confirm Cloud auth/)).toBeInTheDocument()
+    expect(screen.getByText(/settings-page quota percentages/)).toBeInTheDocument()
+    expect(screen.getByLabelText("Ollama Cookie header")).toBeInTheDocument()
   })
 
   it("shows precise string-shaped secret save errors", async () => {
@@ -389,10 +428,10 @@ describe("ProviderSettingsDetail", () => {
     )
 
     expect(screen.getByText("OpenCode")).toBeInTheDocument()
-    expect(screen.getByText(/Tracks OpenCode Go subscription limit usage from local OpenCode history and can show the Zen pay-as-you-go balance/)).toBeInTheDocument()
-    expect(screen.getByText(/For Zen balance, open https:\/\/opencode.ai/i)).toBeInTheDocument()
-    expect(screen.getByLabelText("OpenCode Cookie header")).toBeInTheDocument()
-    expect(screen.getByLabelText("OpenCode Workspace ID")).toBeInTheDocument()
+    expect(screen.getByText(/Tracks OpenCode Go subscription limit usage from local OpenCode auth and SQLite history\./)).toBeInTheDocument()
+    expect(screen.getByText(/~\/\.local\/share\/opencode\/auth\.json and ~\/\.local\/share\/opencode\/opencode\.db exist/)).toBeInTheDocument()
+    expect(screen.queryByLabelText("OpenCode Cookie header")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("OpenCode Workspace ID")).not.toBeInTheDocument()
   })
 
   it("shows explicit OpenRouter management-key guidance", () => {
@@ -570,8 +609,8 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText(/Fetches Augment credit usage from the signed-in web session using a manual Cookie header or AUGMENT_COOKIE_HEADER\./)).toBeInTheDocument()
-    expect(screen.getByText(/copy the full Cookie request header, paste it here, then retry\. Do not paste Set-Cookie\./)).toBeInTheDocument()
+    expect(screen.getByText(/Detects local Auggie auth and fetches dashboard credit usage from a signed-in web session Cookie header\./)).toBeInTheDocument()
+    expect(screen.getByText(/Run `auggie login` to confirm local Augment auth/)).toBeInTheDocument()
     expect(screen.getByLabelText("Augment Cookie header")).toBeInTheDocument()
   })
 

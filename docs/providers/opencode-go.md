@@ -7,7 +7,7 @@ OpenCode has two similarly named products, and UsageBar surfaces them in one pro
 - `OpenCode Go`: subscription model access with 5-hour, weekly, and monthly dollar-value limits.
 - `OpenCode Zen`: pay-as-you-go model access. You add balance and are charged per request.
 
-This page is for the visible OpenCode provider. Go usage is local-history based; Zen balance is optional and uses a signed-in `opencode.ai` billing session when configured.
+This page is for the visible OpenCode provider. Go usage is local-history based. Zen balance support still exists as a hidden compatibility path for older saved cookies or environment-based setups, but normal OpenCode Go setup no longer asks for browser cookies.
 
 ## Overview
 
@@ -25,11 +25,13 @@ The plugin enables when either condition is true:
 
 If neither signal exists, the plugin stays hidden. If auth exists but no local Go usage history exists yet, UsageBar shows a neutral status instead of zero-filled allowance bars because the same local auth file can exist for Zen without proving an active Go subscription.
 
-## Optional Zen Balance
+## Optional Zen Balance Compatibility
 
 OpenCode Zen used to exist as a separate experimental provider. It is now folded into this provider as an optional `Zen balance` line.
 
-To show Zen balance, paste a signed-in `opencode.ai` billing Cookie header in Settings and set a workspace ID only when auto-discovery chooses the wrong workspace. The Settings-saved Cookie header is used before `OPENCODE_COOKIE_HEADER`; the environment variable remains a fallback for older setups.
+The visible Settings UI and overview card are intentionally local-history only. If an older setup already has an OpenCode cookie secret saved, or if `OPENCODE_COOKIE_HEADER` is set, UsageBar can still try to show the Zen balance line on the provider detail view. `OPENCODE_WORKSPACE_ID` remains available as an advanced workspace override when auto-discovery chooses the wrong workspace.
+
+This keeps the legacy balance line working without making new OpenCode Go users copy DevTools Cookie headers for the main subscription-limit view.
 
 ## Data Source
 

@@ -3,6 +3,8 @@
   var PERIOD_MS = 5 * 60 * 60 * 1000
   var WEEK_MS = 7 * 24 * 60 * 60 * 1000
   var SESSION_LABELS = ["Session usage", "Hourly usage"]
+  var OLLAMA_PRIVATE_KEY = "~/.ollama/id_ed25519"
+  var OLLAMA_PUBLIC_KEY = "~/.ollama/id_ed25519.pub"
 
   function readCookieHeader(ctx) {
     if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") {
@@ -23,7 +25,54 @@
       throw "Could not read the stored Ollama cookie header from the system credential vault: " + message
     }
 
-    throw "Paste your Ollama Cookie header in Setup before refreshing."
+    return null
+  }
+
+  function readEnv(ctx, name) {
+    if (!ctx.host.env || typeof ctx.host.env.get !== "function") return null
+    try {
+      var value = ctx.host.env.get(name)
+      return typeof value === "string" && value.trim() ? value.trim() : null
+    } catch (e) {
+      ctx.host.log.warn("env read failed for " + name + ": " + String(e))
+      return null
+    }
+  }
+
+  function hasLocalSigninKeypair(ctx) {
+    if (!ctx.host.fs || typeof ctx.host.fs.exists !== "function") return false
+    try {
+      return ctx.host.fs.exists(OLLAMA_PRIVATE_KEY) && ctx.host.fs.exists(OLLAMA_PUBLIC_KEY)
+    } catch (e) {
+      ctx.host.log.warn("Ollama local keypair check failed: " + String(e))
+      return false
+    }
+  }
+
+  function readCloudAuth(ctx) {
+    if (readEnv(ctx, "OLLAMA_API_KEY")) {
+      return "API key detected"
+    }
+    if (hasLocalSigninKeypair(ctx)) {
+      return "Local signin keys detected"
+    }
+    return null
+  }
+
+  function authOnlyResult(ctx, source) {
+    return {
+      plan: "Ollama Cloud Auth",
+      lines: [
+        ctx.line.text({
+          label: "Cloud Auth",
+          value: source,
+        }),
+        ctx.line.text({
+          label: "Usage",
+          value: "Settings cookie required",
+        }),
+      ],
+    }
   }
 
   function getHeader(headers, name) {
@@ -207,6 +256,11 @@
 
   function probe(ctx) {
     var cookieHeader = readCookieHeader(ctx)
+    if (!cookieHeader) {
+      var cloudAuth = readCloudAuth(ctx)
+      if (cloudAuth) return authOnlyResult(ctx, cloudAuth)
+      throw "Paste your Ollama Cookie header in Setup before refreshing, or run `ollama signin` / set OLLAMA_API_KEY for Cloud auth detection."
+    }
     var html = fetchSettingsHtml(ctx, cookieHeader)
     var snapshot = parseSnapshot(html)
 

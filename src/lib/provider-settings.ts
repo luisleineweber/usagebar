@@ -67,13 +67,13 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   ollama: {
     mode: "editable",
     title: "Ollama Setup",
-    summary: "Reads Ollama Cloud Usage from the web settings page using a stored cookie header.",
-    statusHint: "Manual cookie mode is the only supported Ollama setup in this Windows-first build.",
-    connectHint: "Open https://ollama.com/settings, copy the browser Cookie header, paste it here, then retry.",
+    summary: "Reads Ollama settings-page quota from a stored cookie header and can detect Cloud auth from `ollama signin` or OLLAMA_API_KEY.",
+    statusHint: "Cloud auth can be detected locally, but Session/Weekly quota still needs the settings-page Cookie header.",
+    connectHint: "Run `ollama signin` or set OLLAMA_API_KEY to confirm Cloud auth. For Session/Weekly quota, open https://ollama.com/settings, copy the browser Cookie header, paste it here, then retry.",
     secretField: {
       key: "cookieHeader",
       label: "Cookie header",
-      description: "Paste the full Cookie header captured while signed in at https://ollama.com/settings.",
+      description: "Paste the full Cookie header captured while signed in at https://ollama.com/settings. This is still required for settings-page quota percentages.",
       placeholder: "session=...; __Secure-next-auth.session-token=...;",
     },
   },
@@ -100,29 +100,16 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   "opencode-go": {
     mode: "editable",
     title: "OpenCode Setup",
-    summary: "Tracks OpenCode Go subscription limit usage from local OpenCode history and can show the Zen pay-as-you-go balance from the same opencode.ai account.",
-    statusHint: "Local Go usage is auto-detected. Add the opencode.ai Cookie header here to include the Zen balance in this tab.",
-    connectHint: "Install OpenCode Go and sign in on this machine. For Zen balance, open https://opencode.ai, copy the Cookie request header from the workspace billing page or an opencode.ai/_server request, and paste it here.",
-    sourceOptions: OPENCODE_SOURCE_OPTIONS,
-    secretField: {
-      key: "cookieHeader",
-      label: "Cookie header",
-      description: "Optional. Paste the full Cookie request header from a signed-in opencode.ai/workspace/.../billing or opencode.ai/_server request to show Zen balance here. Do not paste Set-Cookie.",
-      placeholder: "auth=...; __Host-auth=...; other_cookie=...;",
-    },
-    textField: {
-      key: "workspaceId",
-      label: "Workspace ID",
-      description: "Optional override when workspace lookup fails or your account has multiple teams. Paste the wrk_... ID from the billing URL or an _server payload.",
-      placeholder: "wrk_...",
-    },
+    summary: "Tracks OpenCode Go subscription limit usage from local OpenCode auth and SQLite history.",
+    statusHint: "Local Go usage is auto-detected. No browser cookie is needed for the main OpenCode provider.",
+    connectHint: "Install OpenCode Go, sign in on this machine, and use it locally so ~/.local/share/opencode/auth.json and ~/.local/share/opencode/opencode.db exist. UsageBar reads local assistant spend from that history.",
   },
   codex: {
     mode: "editable",
     title: "Codex Setup",
     summary: "Tracks Codex CLI usage from local auth, app-managed imported accounts, and optional OpenAI dashboard history from a signed-in dashboard Cookie header.",
-    statusHint: "Import the current local Codex login into a managed profile to pin an account, or add a dashboard cookie to show OpenAI web usage breakdown and credits history.",
-    connectHint: "Install Codex CLI and sign in on this machine. For dashboard history, open https://chatgpt.com/codex/cloud/settings/analytics while signed in, copy the Cookie request header from DevTools, paste it here, then retry.",
+    statusHint: "Install Codex CLI and sign in locally. Dashboard cookies are optional enrichment only.",
+    connectHint: "Install Codex CLI, sign in on this machine, then retry. Use managed account import if you want to pin a specific local Codex account.",
     secretField: {
       key: "cookieHeader",
       label: "Dashboard Cookie header",
@@ -134,8 +121,8 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     mode: "editable",
     title: "Claude Setup",
     summary: "Uses local Claude OAuth credentials first, then can fall back to a signed-in claude.ai web session Cookie header and local ccusage history.",
-    statusHint: "Local OAuth remains preferred. Add a Claude web cookie when CLI OAuth usage is unavailable but claude.ai is signed in.",
-    connectHint: "Run `claude` CLI and sign in on this machine. For web fallback, open https://claude.ai while signed in, copy the Cookie request header containing sessionKey from DevTools, paste it here, then retry.",
+    statusHint: "Run Claude Code locally and sign in with OAuth. The claude.ai Cookie header is an optional fallback only.",
+    connectHint: "Run `claude` CLI and sign in on this machine, then retry. UsageBar prefers local Claude OAuth credentials and local usage history.",
     secretField: {
       key: "cookieHeader",
       label: "Claude web Cookie header",
@@ -318,9 +305,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   augment: {
     mode: "editable",
     title: "Augment Setup",
-    summary: "Fetches Augment credit usage from the signed-in web session using a manual Cookie header or AUGMENT_COOKIE_HEADER.",
-    statusHint: "Manual cookie or env mode is the supported Windows path in this build.",
-    connectHint: "Open a signed-in app.augmentcode.com subscription or credits request in DevTools, copy the full Cookie request header, paste it here, then retry. Do not paste Set-Cookie.",
+    summary: "Detects local Auggie auth and fetches dashboard credit usage from a signed-in web session Cookie header.",
+    statusHint: "Run `auggie login` for local auth detection. Dashboard credit usage still needs a Cookie header or AUGMENT_COOKIE_HEADER.",
+    connectHint: "Run `auggie login` to confirm local Augment auth. For dashboard credit usage, open a signed-in app.augmentcode.com subscription or credits request in DevTools, copy the full Cookie request header, paste it here, then retry. Do not paste Set-Cookie.",
     secretField: {
       key: "cookieHeader",
       label: "Cookie header",
@@ -560,10 +547,10 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   if (providerId === "opencode") {
     return config?.source === "manual" ? "Manual cookie" : "Automatic"
   }
-  if (providerId === "ollama") return "Manual cookie"
+  if (providerId === "ollama") return config?.secrets?.cookieHeader ? "Cloud auth + settings cookie" : "Cloud auth/cookie"
   if (providerId === "perplexity") return "Manual cookie"
   if (providerId === "abacus") return "Manual cookie"
-  if (providerId === "augment") return "Manual cookie"
+  if (providerId === "augment") return config?.secrets?.cookieHeader ? "Auggie auth + dashboard cookie" : "Auggie auth/cookie"
   if (providerId === "deepseek") return config?.secrets?.apiKey ? "Stored DeepSeek API key" : "DeepSeek API key/env"
   if (providerId === "codebuff") return config?.secrets?.apiKey ? "Stored Codebuff API token" : "Codebuff API token/env"
   if (providerId === "kimi") return config?.secrets?.apiKey ? "Kimi Code OAuth + Moonshot API key" : "Kimi Code OAuth"

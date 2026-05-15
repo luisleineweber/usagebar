@@ -31,7 +31,7 @@
     {
       "type": "text",
       "label": "Zen balance",
-      "scope": "overview"
+      "scope": "detail"
     },
     {
       "type": "progress",

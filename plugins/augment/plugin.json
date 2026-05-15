@@ -9,7 +9,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Windows experimental. Save an Augment Cookie header or set AUGMENT_COOKIE_HEADER before probing."
+      "message": "Windows experimental. Run `auggie login` for local auth detection; save an Augment Cookie header for dashboard credit usage."
     }
   },
   "links": [
@@ -28,13 +28,17 @@
     {
       "type": "text",
       "label": "Credits",
-      "scope": "overview",
-      "primaryOrder": 1
+      "scope": "overview"
     },
     {
       "type": "text",
       "label": "Remaining",
       "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Auggie Auth",
+      "scope": "detail"
     },
     {
       "type": "text",

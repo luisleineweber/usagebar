@@ -28,6 +28,16 @@
       "type": "progress",
       "label": "Weekly",
       "scope": "overview"
+    },
+    {
+      "type": "text",
+      "label": "Cloud Auth",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Usage",
+      "scope": "overview"
     }
   ],
   "capabilities": {

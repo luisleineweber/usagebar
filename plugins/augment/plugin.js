@@ -2,6 +2,7 @@
   const BASE_URL = "https://app.augmentcode.com"
   const CREDITS_URL = BASE_URL + "/api/credits"
   const SUBSCRIPTION_URL = BASE_URL + "/api/subscription"
+  const AUGGIE_SESSION_PATH = "~/.augment/session.json"
 
   function readString(value) {
     if (typeof value !== "string") return null
@@ -33,6 +34,46 @@
         if (envCookie) return envCookie
       } catch (e) {
         ctx.host.log.warn("env read failed for AUGMENT_COOKIE_HEADER: " + String(e))
+      }
+    }
+
+    return null
+  }
+
+  function readEnv(ctx, name) {
+    if (!ctx.host.env || typeof ctx.host.env.get !== "function") return null
+    try {
+      return readString(ctx.host.env.get(name))
+    } catch (e) {
+      ctx.host.log.warn("env read failed for " + name + ": " + String(e))
+      return null
+    }
+  }
+
+  function parseAuggieSession(ctx, text, source) {
+    const data = ctx.util.tryParseJson(text)
+    if (!data || typeof data !== "object") return null
+    const accessToken = readString(data.accessToken)
+    const tenantUrl = readString(data.tenantURL || data.tenantUrl || data.apiUrl)
+    if (!accessToken || !tenantUrl) return null
+    return { source }
+  }
+
+  function readAuggieSession(ctx) {
+    const envSession = readEnv(ctx, "AUGMENT_SESSION_AUTH")
+    if (envSession) {
+      const parsed = parseAuggieSession(ctx, envSession, "AUGMENT_SESSION_AUTH")
+      if (parsed) return parsed
+      ctx.host.log.warn("augment AUGMENT_SESSION_AUTH is not valid Auggie session JSON")
+    }
+
+    if (ctx.host.fs && typeof ctx.host.fs.readText === "function") {
+      try {
+        const fileSession = ctx.host.fs.readText(AUGGIE_SESSION_PATH)
+        const parsed = parseAuggieSession(ctx, fileSession, AUGGIE_SESSION_PATH)
+        if (parsed) return parsed
+      } catch (e) {
+        ctx.host.log.info("augment Auggie session file not readable: " + String(e))
       }
     }
 
@@ -166,7 +207,23 @@
   function probe(ctx) {
     const cookieHeader = readCookieHeader(ctx)
     if (!cookieHeader) {
-      throw "Augment Cookie header missing. Save it in Setup or set AUGMENT_COOKIE_HEADER."
+      const auggieSession = readAuggieSession(ctx)
+      if (auggieSession) {
+        return {
+          plan: "Auggie Session",
+          lines: [
+            ctx.line.text({
+              label: "Credits",
+              value: "Dashboard cookie required",
+            }),
+            ctx.line.text({
+              label: "Auggie Auth",
+              value: "Detected via " + auggieSession.source,
+            }),
+          ],
+        }
+      }
+      throw "Augment auth missing. Run `auggie login` to confirm local auth, or save a dashboard Cookie header for credit usage."
     }
 
     const credits = requestJson(ctx, cookieHeader, CREDITS_URL, "credits", false)

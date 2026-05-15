@@ -5,7 +5,8 @@ Tracks Ollama Cloud subscription usage by scraping the authenticated settings pa
 ## Data source
 
 - Web settings page via manual `Cookie` header stored in the system credential vault
-- No public quota API is used in this first slice
+- Cloud auth detection from `OLLAMA_API_KEY` or local `~/.ollama/id_ed25519` + `~/.ollama/id_ed25519.pub`
+- No public account-quota API is used
 
 ## What it shows
 
@@ -13,19 +14,21 @@ Tracks Ollama Cloud subscription usage by scraping the authenticated settings pa
 - `Session` usage from the page's `Session usage` or `Hourly usage` block
 - `Weekly` usage when present
 - Reset times from nearby `data-time` attributes when available
+- If Cloud auth exists but no settings cookie is configured, a text-only auth status plus `Settings cookie required`
 
 ## Setup
 
 1. Open the Ollama provider detail view in OpenUsage.
 2. Expand `Setup`.
-3. Open `https://ollama.com/settings` in your browser while signed in.
-4. Copy the full `Cookie` request header from the Network tab.
-5. Paste it into `Ollama -> Cookie header`.
-6. Save the secret and click `Retry`.
+3. Run `ollama signin` or set `OLLAMA_API_KEY` if you want UsageBar to detect Cloud auth.
+4. For Session/Weekly quota, open `https://ollama.com/settings` in your browser while signed in.
+5. Copy the full `Cookie` request header from the Network tab.
+6. Paste it into `Ollama -> Cookie header`.
+7. Save the secret and click `Retry`.
 
 ## Failure modes
 
-- Missing cookie header: `Paste your Ollama Cookie header in Setup before refreshing.`
+- Missing cookie header and no Cloud auth: `Paste your Ollama Cookie header in Setup before refreshing, or run `ollama signin` / set OLLAMA_API_KEY for Cloud auth detection.`
 - Expired cookie: `Ollama session cookie expired. Paste a fresh Cookie header from ollama.com/settings.`
 - Signed-out HTML or auth redirect: `Not logged in to Ollama. Paste a signed-in Cookie header from ollama.com/settings.`
 - HTML shape changed: `Could not parse Ollama usage.`
@@ -33,4 +36,5 @@ Tracks Ollama Cloud subscription usage by scraping the authenticated settings pa
 ## Notes
 
 - This is a best-effort HTML scrape, not a stable Ollama account API integration.
-- Browser auto-import is intentionally out of scope for this first Windows slice.
+- Ollama's official Cloud/API docs support `ollama signin` and `OLLAMA_API_KEY`, and API usage responses include per-request telemetry. They do not document an account Session/Weekly quota endpoint, so UsageBar does not create quota bars from API-key auth alone.
+- Browser auto-import remains out of scope for this Windows slice.

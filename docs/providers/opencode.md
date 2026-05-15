@@ -13,7 +13,13 @@ This provider is no longer surfaced separately in Settings. It remains only as a
 
 - Authenticated OpenCode website session via a manually stored `Cookie` request header
 - `https://opencode.ai/_server` workspace lookup and billing usage calls
-- No public quota API is used in this Windows-first slice
+- No public quota or balance API is used in this Windows-first slice
+
+## API-key balance spike
+
+UsageBar checked the official OpenCode Zen docs before adding API-key balance support. The docs confirm Zen API keys for model access and list model endpoints such as `https://opencode.ai/zen/v1/responses`. They describe pay-as-you-go balance, auto-reload, and monthly limits as account billing settings, but do not document an API-key balance endpoint.
+
+Decision: do not expose Zen API-key balance setup until a documented or real-account-validated balance endpoint exists. API keys remain model-access credentials; balance remains a signed-in web-session source.
 
 ## What it shows
 
