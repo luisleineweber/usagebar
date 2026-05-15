@@ -59,42 +59,6 @@ Get-CimInstance Win32_Process |
   }
 }
 
-function stopUsageBarProcessOwningDevApiPort() {
-  const allowedNames = getWindowsDevExeNames().map((exeName) => exeName.toLowerCase())
-  const command = `
-$allowedNames = @(${allowedNames.map(quoteForPowerShell).join(", ")})
-$connections = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 6736 -State Listen -ErrorAction SilentlyContinue
-foreach ($connection in $connections) {
-  $process = Get-CimInstance Win32_Process -Filter ("ProcessId = " + $connection.OwningProcess) -ErrorAction SilentlyContinue
-  if (-not $process -or -not $process.ExecutablePath) {
-    continue
-  }
-
-  $exeName = [System.IO.Path]::GetFileName($process.ExecutablePath).ToLowerInvariant()
-  if ($allowedNames -notcontains $exeName) {
-    Write-Output ("Port 6736 is already owned by PID " + $connection.OwningProcess + " (" + $process.ExecutablePath + "); leaving it running because it is not a UsageBar dev/release process.")
-    continue
-  }
-
-  Stop-Process -Id $connection.OwningProcess -Force
-  Write-Output ("Stopped UsageBar process PID " + $connection.OwningProcess + " that was blocking local HTTP API port 6736")
-}
-`.trim()
-
-  const result = spawnSync(
-    "powershell",
-    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-    {
-      cwd: repoRoot,
-      stdio: "inherit",
-    }
-  )
-
-  if (typeof result.status === "number" && result.status !== 0) {
-    process.exit(result.status)
-  }
-}
-
 function clearStaleWindowsDebugMetadata() {
   const result = cleanupStaleDebugBuildMetadata(repoRoot)
 
@@ -161,7 +125,6 @@ function resolveTauriCli() {
 if (process.platform === "win32" && args[0] === "dev") {
   clearStaleWindowsDebugMetadata()
   stopStaleWindowsDevProcess()
-  stopUsageBarProcessOwningDevApiPort()
 }
 
 if (args[0] === "dev") {
