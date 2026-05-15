@@ -28,8 +28,7 @@
     {
       "type": "text",
       "label": "API Balance",
-      "scope": "overview",
-      "primaryOrder": 3
+      "scope": "overview"
     },
     {
       "type": "text",

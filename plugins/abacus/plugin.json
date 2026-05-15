@@ -28,8 +28,7 @@
     {
       "type": "text",
       "label": "Credits",
-      "scope": "overview",
-      "primaryOrder": 1
+      "scope": "overview"
     },
     {
       "type": "text",
