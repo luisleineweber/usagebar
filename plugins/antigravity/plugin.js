@@ -655,6 +655,17 @@
     return [ctx.line.badge({ label: "Status", text: "Quota unavailable", color: "#a3a3a3" })]
   }
 
+  function sourceLine(ctx, value) {
+    return ctx.line.text({ label: "Source", value: value })
+  }
+
+  function withSource(ctx, output, value) {
+    return {
+      plan: output && output.plan ? output.plan : null,
+      lines: (output && output.lines ? output.lines : []).concat([sourceLine(ctx, value)]),
+    }
+  }
+
   function parseLsResult(data) {
     var hasUserStatus = !!(data && data.userStatus)
     var container = hasUserStatus ? data.userStatus : data
@@ -851,14 +862,14 @@
     if (ls && hasUsableQuota(ls.models)) {
       var liveOutput = { plan: ls.plan, lines: buildGroupedLines(ctx, ls.models) }
       cacheLiveUsage(ctx, liveOutput)
-      return liveOutput
+      return withSource(ctx, liveOutput, "Live Antigravity language server")
     }
 
     if (!ls) {
       var cachedLive = loadCachedLiveUsage(ctx)
       if (cachedLive) {
         ctx.host.log.warn("using cached live Antigravity usage because the language server is not running")
-        return cachedLive
+        return withSource(ctx, cachedLive, "Cached live Antigravity language server")
       }
     }
 
@@ -866,11 +877,15 @@
     var ccData = resolveCloudCodeData(ctx, cached, dbTokens, status)
     if (ccData && !ccData.authFailed) {
       var ccModels = parseCloudCodeModels(ccData)
-      if (hasUsableQuota(ccModels)) return { plan: ls ? ls.plan : null, lines: buildGroupedLines(ctx, ccModels) }
-      return { plan: ls ? ls.plan : null, lines: unavailableLines(ctx) }
+      if (hasUsableQuota(ccModels)) {
+        return withSource(ctx, { plan: ls ? ls.plan : null, lines: buildGroupedLines(ctx, ccModels) }, "Cloud Code fallback")
+      }
+      return withSource(ctx, { plan: ls ? ls.plan : null, lines: unavailableLines(ctx) }, "Cloud Code fallback")
     }
 
-    if (ls && (ls.models.length > 0 || ls.plan)) return { plan: ls.plan, lines: unavailableLines(ctx) }
+    if (ls && (ls.models.length > 0 || ls.plan)) {
+      return withSource(ctx, { plan: ls.plan, lines: unavailableLines(ctx) }, "Antigravity language server without usable quota")
+    }
     throw finalErrorMessage(status, cached, dbTokens)
   }
 

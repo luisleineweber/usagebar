@@ -152,6 +152,13 @@
     }
   }
 
+  function sourceLine(ctx) {
+    return ctx.line.text({
+      label: "Source",
+      value: "Undocumented Warp app GraphQL request-limit endpoint",
+    })
+  }
+
   function probe(ctx) {
     const token = loadToken(ctx)
     if (!token) {
@@ -170,6 +177,7 @@
             label: "Plan",
             text: "Unlimited",
           }),
+          sourceLine(ctx),
         ],
       }
     }
@@ -185,6 +193,7 @@
             label: "Plan",
             text: "Metered",
           }),
+          sourceLine(ctx),
         ],
       }
     }
@@ -206,6 +215,7 @@
           label: "Plan",
           text: usage.isUnlimited ? "Unlimited" : "Metered",
         }),
+        sourceLine(ctx),
       ],
     }
   }

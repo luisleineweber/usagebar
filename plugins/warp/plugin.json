@@ -22,12 +22,16 @@
     {
       "type": "text",
       "label": "Requests",
-      "scope": "overview",
-      "primaryOrder": 1
+      "scope": "overview"
     },
     {
       "type": "badge",
       "label": "Plan",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Source",
       "scope": "detail"
     }
   ],

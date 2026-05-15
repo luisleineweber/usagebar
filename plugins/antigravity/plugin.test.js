@@ -185,9 +185,14 @@ describe("antigravity plugin", () => {
 
     expect(result.plan).toBe("Pro")
     expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(result.lines).toHaveLength(2)
+    expect(result.lines).toHaveLength(3)
     expect(getLine(result, "Gemini Pro").used).toBe(20)
     expect(getLine(result, "Claude").used).toBe(40)
+    expect(getLine(result, "Source")).toEqual({
+      type: "text",
+      label: "Source",
+      value: "Live Antigravity language server",
+    })
   })
 
   it("prefers userTier.name over legacy planInfo.planName", async () => {
@@ -249,6 +254,7 @@ describe("antigravity plugin", () => {
     expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
     expect(getLine(result, "Gemini Pro").used).toBe(30)
     expect(getLine(result, "Claude").used).toBe(50)
+    expect(getLine(result, "Source")?.value).toBe("Cloud Code fallback")
   })
 
   it("caches live LS quota and reuses it while Antigravity is closed", async () => {
@@ -275,6 +281,7 @@ describe("antigravity plugin", () => {
     expect(getProgressLabels(cachedResult)).toEqual(["Gemini Pro", "Claude"])
     expect(getLine(cachedResult, "Gemini Pro").used).toBe(20)
     expect(getLine(cachedResult, "Claude").used).toBe(40)
+    expect(getLine(cachedResult, "Source")?.value).toBe("Cached live Antigravity language server")
     expect(ctx.host.http.request).not.toHaveBeenCalled()
     expect(ctx.host.log.warn).toHaveBeenCalledWith(
       "using cached live Antigravity usage because the language server is not running"
@@ -402,6 +409,7 @@ describe("antigravity plugin", () => {
     expect(result.plan).toBe("Pro")
     expect(result.lines).toEqual([
       { type: "badge", label: "Status", text: "Quota unavailable", color: "#a3a3a3" },
+      { type: "text", label: "Source", value: "Cloud Code fallback" },
     ])
   })
 

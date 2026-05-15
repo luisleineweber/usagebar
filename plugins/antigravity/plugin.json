@@ -29,6 +29,7 @@
     { "type": "progress", "label": "Gemini Pro", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "Gemini Flash", "scope": "overview", "primaryOrder": 2 },
     { "type": "progress", "label": "Gemini Image", "scope": "overview", "primaryOrder": 3 },
-    { "type": "progress", "label": "Claude", "scope": "overview", "primaryOrder": 4 }
+    { "type": "progress", "label": "Claude", "scope": "overview", "primaryOrder": 4 },
+    { "type": "text", "label": "Source", "scope": "detail" }
   ]
 }

@@ -109,6 +109,11 @@ describe("warp plugin", () => {
       label: "Plan",
       text: "Metered",
     })
+    expect(result.lines.find((line) => line.label === "Source")).toEqual({
+      type: "text",
+      label: "Source",
+      value: "Undocumented Warp app GraphQL request-limit endpoint",
+    })
   })
 
   it("keeps metered request limits when usage exceeds the limit", async () => {
@@ -145,6 +150,9 @@ describe("warp plugin", () => {
       label: "Requests",
       value: "No request limit",
     })
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe(
+      "Undocumented Warp app GraphQL request-limit endpoint"
+    )
   })
 
   it("renders unlimited accounts with the unlimited badge", async () => {
@@ -169,6 +177,9 @@ describe("warp plugin", () => {
       value: "Unlimited",
     })
     expect(result.lines.find((line) => line.label === "Plan")?.text).toBe("Unlimited")
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe(
+      "Undocumented Warp app GraphQL request-limit endpoint"
+    )
   })
 
   it("throws a precise auth error on 401", async () => {
