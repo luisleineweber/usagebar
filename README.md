@@ -15,10 +15,7 @@ Release plan:
 - Windows: GitHub prerelease with a NSIS setup `.exe`
 - macOS: still secondary while the Windows fork stabilizes
 
-For published betas:
-- Download the latest prerelease from [UsageBar releases](https://github.com/luisleineweber/usagebar/releases).
-
-To run the current branch before a release is tagged, build from source below. If you want the upstream stable app instead, follow [UsageBar releases](https://github.com/luisleineweber/usagebar/releases).
+Download published builds from [UsageBar releases](https://github.com/luisleineweber/usagebar/releases).
 
 Release process and preflight checks live in [docs/releasing.md](docs/releasing.md).
 
@@ -47,15 +44,7 @@ Local data:
 
 ## Alpha Readiness
 
-UsageBar is not a full release yet. The first public alpha should be treated as a testable Windows desktop build for people who accept rough edges and can report provider issues.
-
-Alpha 1 should ship only when:
-
-- A stranger can install the app from a GitHub release asset without cloning the repo.
-- At least one supported provider can be configured, refreshed, and removed through the app UI.
-- The panel shows usage/cost scope clearly, including date range, source, and last-updated state where the provider supplies enough data.
-- Invalid credentials, offline mode, provider API failures, empty data, and active refresh states are visible without crashing the app.
-- Privacy, telemetry, config/data storage, limitations, and issue-reporting paths are documented in this README and release notes.
+UsageBar is still pre-release. Alpha 1 means a Windows user can install from GitHub, enable at least one supported provider, refresh and remove it through the UI, and understand what each usage number covers. Before that ships, credential errors, offline mode, provider failures, empty data, privacy, storage, and reporting paths must be visible and documented.
 
 ## What It Does
 
@@ -133,7 +122,7 @@ UsageBar is a Tauri v2 desktop app with a Rust host and a React/TypeScript front
 
 ## Privacy And Security
 
-UsageBar is local-first. Provider credentials are read from local app state, environment variables, browser/session cookies you explicitly provide, or OS credential storage depending on the provider.
+UsageBar is local-first. Secrets stay local. Provider APIs are called only when you explicitly enable and configure that provider, and credentials come from app settings, environment variables, browser/session cookies you provide, or OS credential storage depending on the provider.
 
 - Secrets stay on the machine unless a provider plugin must call that provider's API to read usage.
 - UsageBar does not send provider credentials, raw usage payloads, API keys, cookies, or app-owned provider secret files to UsageBar-owned services.
@@ -149,7 +138,7 @@ This repository is no longer trying to stay narrowly aligned with upstream pull-
 
 That means the fork can change UX, provider strategy, release packaging, and architecture when that is the right tradeoff for Windows.
 
-Upstream lineage stays visible and upstream fixes can still be pulled in through `upstream`, but this repository should be read as its own product direction.
+Upstream lineage stays visible through the original [OpenUsage](https://github.com/robinebers/openusage) link, fork history, and the `upstream` remote used for selective fixes. This repository should be read as its own product direction.
 
 ## Contributing
 
@@ -164,10 +153,6 @@ Keep it simple. No feature creep, no AI-generated commit messages, test your cha
 ## Lineage
 
 UsageBar started from the [OpenUsage](https://github.com/robinebers/openusage) codebase. This fork also borrows practical Windows ideas from [CodexBar](https://github.com/steipete/CodexBar) and provider reference patterns from [ccusage](https://github.com/ryoppippi/ccusage) where they fit.
-
-## Credits
-
-Inspired by [CodexBar](https://github.com/steipete/CodexBar) by [@steipete](https://github.com/steipete). Same idea, very different approach.
 
 ## License
 
