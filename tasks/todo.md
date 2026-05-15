@@ -1,3 +1,368 @@
+# Surface Antigravity quota source
+
+## Executive Summary
+- Show which Antigravity data path produced the current quota output.
+- Keep existing quota parsing, caching, and auth behavior unchanged.
+- Verify live LS, cached LS, Cloud Code, and unavailable states.
+
+## Acceptance Criteria
+- [x] Live Antigravity LS quota includes a detail-only source line.
+- [x] Cached live quota includes a detail-only source line.
+- [x] Cloud Code fallback quota includes a detail-only source line.
+- [x] Quota-unavailable output includes a detail-only source line.
+- [x] Focused Antigravity tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Add a shared Antigravity source text line helper.
+- [x] Add source lines at each successful output path.
+- [x] Update manifest/test expectations.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- `node --check plugins\antigravity\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `antigravity`.
+- `bun run test -- plugins\antigravity\plugin.test.js --run` -> passed.
+- Antigravity now emits detail-only `Source` text for live language server, cached live language server, Cloud Code fallback, and no-usable-quota states.
+
+# Surface Warp endpoint provenance
+
+## Executive Summary
+- Make Warp's risky data source visible in provider output.
+- Keep existing token login and request-limit behavior unchanged.
+- Verify source and bundled plugin files stay aligned.
+
+## Acceptance Criteria
+- [x] Warp detail output includes an explicit data-source/provenance line.
+- [x] Metered, unlimited, and missing-limit Warp states all include the provenance line.
+- [x] Warp manifest declares the new detail text line.
+- [x] Focused Warp tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Add a shared Warp provenance text line to plugin output.
+- [x] Update Warp manifest/test expectations.
+- [x] Sync bundled plugin resources.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- `node --check plugins\warp\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `warp`.
+- `bun run test -- plugins\warp\plugin.test.js --run` -> passed.
+- SHA-256 check confirmed source/bundled Warp `plugin.js`, `plugin.json`, and `plugin.test.js` hashes match.
+- Diff review confirmed Warp now emits detail-only `Source: Undocumented Warp app GraphQL request-limit endpoint` for metered, unlimited, and missing-limit output states.
+
+# Tighten README onboarding copy
+
+## Executive Summary
+- Remove duplicate credits copy.
+- Shorten download/install and alpha-readiness wording.
+- Make privacy and fork-lineage text more concrete.
+
+## Acceptance Criteria
+- [x] Duplicate `## Credits` section is removed.
+- [x] Release/download intro no longer repeats build-from-source guidance.
+- [x] Alpha readiness is concise and preserves release gates.
+- [x] Privacy opening states local secrets and explicit provider API calls.
+- [x] Fork direction names where upstream lineage remains visible.
+- [x] Markdown/diff verification passes.
+
+## Plan
+- [x] Patch README copy in the requested sections.
+- [x] Record breadcrumb/task notes for the docs slice.
+- [x] Run focused markdown/diff checks.
+
+## Verification Notes
+- `rg -n "^## (Download|Install, Uninstall, And Data|Alpha Readiness|Privacy And Security|Fork Direction|Lineage|Credits|License)|To run the current branch|Download published builds|Secrets stay local" README.md` -> confirmed requested sections and no `## Credits` heading.
+- `git --no-pager diff --check -- README.md tasks\todo.md docs\breadcrumbs.md` -> passed; only expected LF-to-CRLF warnings for `README.md` and `tasks/todo.md`.
+
+# Review all provider auth/output readiness as HTML
+
+## Executive Summary
+- Re-check every current provider for login quality and output quality.
+- Classify how ready each provider is for the current UsageBar product.
+- Produce one standalone HTML report under `docs/` for quick review.
+
+## Acceptance Criteria
+- [x] All source plugin manifests are inventoried.
+- [x] Auth path, output shape, maturity, and product-fit risk are classified per provider.
+- [x] HTML report exists under `docs/` and includes provider-by-provider findings.
+- [x] Report is sanity-checked for required provider coverage.
+- [x] Breadcrumbs record the review artifact and verification.
+
+## Plan
+- [x] Inventory plugin manifests, Settings setup metadata, provider docs, and focused tests.
+- [x] Derive auth/output readiness classifications from current code and notes.
+- [x] Create the standalone HTML report.
+- [x] Run static sanity checks and diff review.
+
+## Verification Notes
+- Inventoried `plugins/*/plugin.json`: 32 plugin manifests total, including 31 product providers plus `mock`.
+- Reviewed current Settings setup metadata in `src/lib/provider-settings.ts` and provider implementation patterns in `plugins/*/plugin.js`.
+- Created `docs/reports/provider-auth-output-readiness-review.html`.
+- Node sanity check confirmed the HTML matrix covers 32/32 plugin manifests.
+- `git diff --check -- docs\reports\provider-auth-output-readiness-review.html docs\breadcrumbs.md docs\choices.md tasks\todo.md` -> passed; only expected CRLF warning for `tasks/todo.md`.
+- Follow-up added a tackle ranking for unstable providers: 1 Augment, 2 Ollama, 3 Zed, then Warp, Antigravity, Windsurf, Kiro, Alibaba, Perplexity, Abacus, Mistral, JetBrains AI Assistant, OpenCode Zen.
+
+# Keep installed app alive during local dev
+
+# Validate OpenCode Zen API-key balance path
+
+## Executive Summary
+- Check whether OpenCode Zen API keys can replace billing cookies for balance.
+- Avoid probing live model endpoints or leaking local API keys.
+- Keep Zen balance cookie-backed if docs/package/local state only prove model access.
+
+## Acceptance Criteria
+- [x] Current hidden OpenCode Zen provider behavior is reviewed.
+- [x] Official OpenCode docs are checked for Zen API-key balance endpoints.
+- [x] Local OpenCode auth state and npm package shape are inspected without exposing secrets.
+- [x] Decision is documented in active provider docs and task notes.
+- [x] No provider code claims API-key balance support without a verified endpoint.
+
+## Plan
+- [x] Inspect current hidden `opencode` provider, tests, manifest, and docs.
+- [x] Research official OpenCode Zen and provider docs.
+- [x] Inspect local OpenCode auth state and current npm package wrapper.
+- [x] Record the implementation decision and verification notes.
+
+## Verification Notes
+- Official OpenCode Zen docs confirm API keys for model access and list model endpoints such as `https://opencode.ai/zen/v1/responses`.
+- The docs describe pay-as-you-go balance, auto-reload, and monthly limits as billing/account settings, but do not document an API-key balance endpoint.
+- Local `~/.local/share/opencode/auth.json` contains provider API-key config (`opencode-go`) and no separate Zen billing-balance cache. The real key value was not copied into notes.
+- Current `opencode-ai@1.14.50` npm package is a thin platform-binary wrapper; no JS balance client exists in the package.
+- Decision: do not add Zen API-key balance support. Keep Zen balance on the existing signed-in web-session/cookie path and keep it detail-only/hidden unless a documented or real-account-validated balance endpoint appears.
+
+# Add Ollama Cloud auth detection
+
+## Executive Summary
+- Detect Ollama Cloud auth without pretending it replaces settings quota.
+- Keep the existing cookie-backed settings usage bars unchanged.
+- Improve no-cookie Ollama output for users who already ran `ollama signin` or set `OLLAMA_API_KEY`.
+
+## Acceptance Criteria
+- [x] Ollama detects `OLLAMA_API_KEY` when no settings cookie is configured.
+- [x] Ollama detects local `~/.ollama/id_ed25519` plus `~/.ollama/id_ed25519.pub` when no settings cookie is configured.
+- [x] Detected Cloud auth returns a safe text status and does not create fake quota bars.
+- [x] Existing cookie-backed Session/Weekly progress still works unchanged.
+- [x] Settings/docs explain Cloud auth detection and dashboard-cookie quota limits.
+- [x] Focused Ollama/settings verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Add Cloud auth detection helpers to the Ollama plugin.
+- [x] Add text manifest lines and focused plugin regressions.
+- [x] Update Settings copy, docs, env allowlist, choices, and breadcrumbs.
+- [x] Sync bundled plugins and run focused verification.
+
+## Verification Notes
+- Official Ollama Cloud/API docs confirm `ollama signin` and `OLLAMA_API_KEY` for Cloud/API access, while documented usage fields are per-response telemetry rather than account Session/Weekly quota counters.
+- `bun run test -- plugins\ollama\plugin.test.js src\components\settings\provider-settings-detail.test.tsx --run` -> passed.
+- `node --check plugins\ollama\plugin.js` -> passed.
+- `cargo test --manifest-path src-tauri\Cargo.toml env_api_respects_allowlist_in_host_and_js --no-run` -> compiled test binaries.
+- `bun run typecheck` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `ollama`.
+- SHA-256 check confirmed source/bundled Ollama `plugin.js`, `plugin.json`, `plugin.test.js`, and icon hashes match.
+- `git diff --check -- plugins\ollama src-tauri\resources\bundled_plugins\ollama src-tauri\src\plugin_engine\host_api.rs src\lib\provider-settings.ts src\components\settings\provider-settings-detail.test.tsx docs\providers\ollama.md docs\choices.md docs\breadcrumbs.md tasks\todo.md` -> passed; only expected CRLF conversion warnings were reported.
+
+# Spike Abacus API-key compute-points path
+
+## Executive Summary
+- Check whether Abacus compute points can move from browser cookies to API-key auth.
+- Use official docs and current SDK package evidence.
+- Avoid adding a fake API-key path if no callable compute-points API exists.
+
+## Acceptance Criteria
+- [x] Current Abacus plugin cookie behavior is reviewed.
+- [x] Official Abacus docs and latest Python SDK are checked for `ComputePointInfo` access.
+- [x] Decision is documented in active provider docs and task notes.
+- [x] No provider code claims API-key support without a verified endpoint.
+
+## Plan
+- [x] Inspect current plugin, tests, manifest, and provider docs.
+- [x] Search official Abacus docs for compute-point API access.
+- [x] Download and inspect latest `abacusai` Python SDK package.
+- [x] Record the implementation decision and verification notes.
+
+## Verification Notes
+- Official docs expose `ComputePointInfo` fields (`currMonthAvailPoints`, `currMonthUsage`, `freeTierTotal`, etc.), but the page documents the return class, not a callable API method.
+- Downloaded `abacusai==1.4.95` from PyPI and searched the package. `ComputePointInfo` exists as `compute_point_info.py`, but `client.py` has no method returning it and no `getOrganizationComputePoints` / compute-point client API method.
+- The SDK's public `_call_api` path authenticates with an API-key header against `/api/v0/<action>`, but there is no documented or generated action for organization compute points.
+- The only concrete endpoint found for current balance remains the existing private web-session path, `https://apps.abacus.ai/api/_getOrganizationComputePoints`.
+- Decision: do not add Abacus API-key setup yet. Keep cookie mode and classify API-key replacement as blocked until a real account or official docs validate a callable compute-points API.
+
+# Add Auggie session detection to Augment
+
+## Executive Summary
+- Detect local Auggie login state for Augment.
+- Keep dashboard credit balance on the current cookie path until a real balance API is validated.
+- Improve the missing-cookie error so signed-in Auggie users know what still needs a dashboard session.
+
+## Acceptance Criteria
+- [x] Augment reads Auggie session JSON from `AUGMENT_SESSION_AUTH` or `~/.augment/session.json`.
+- [x] Augment reports local Auggie auth detection when no dashboard cookie is configured.
+- [x] Credit usage still requires the existing cookie-backed dashboard endpoint.
+- [x] Settings/docs do not claim Auggie session auth replaces dashboard credit balance.
+- [x] Focused Augment/settings verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Add Auggie session parsing and source detection to the Augment plugin.
+- [x] Update Augment setup copy, docs, manifest message, and tests.
+- [x] Sync bundled plugin resources.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- Official Augment docs/package inspection confirmed Auggie session auth uses `AUGMENT_SESSION_AUTH` or `~/.augment/session.json` with `accessToken` and `tenantURL`, while no dashboard credit-balance endpoint was found in the published Auggie SDK.
+- `bun run test -- plugins\augment\plugin.test.js src\components\settings\provider-settings-detail.test.tsx --run` -> passed.
+- `bun run typecheck` -> passed.
+- `node --check plugins\augment\plugin.js` -> passed.
+- `cargo test --manifest-path src-tauri\Cargo.toml env_api_respects_allowlist_in_host_and_js --no-run` -> compiled test binaries; execution not attempted because local Rust test execution is already blocked by `STATUS_ENTRYPOINT_NOT_FOUND`.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `augment`.
+- SHA-256 check confirmed source/bundled Augment `plugin.js`, `plugin.json`, `plugin.test.js`, and icon hashes match.
+- `git diff --check -- plugins\augment src-tauri\resources\bundled_plugins\augment src-tauri\src\plugin_engine\host_api.rs src\lib\provider-settings.ts src\components\settings\provider-settings-detail.test.tsx docs\providers\augment.md tasks\todo.md` -> passed; only expected CRLF conversion warnings were reported.
+
+# Make Codebuff icon white
+
+## Executive Summary
+- Render the Codebuff SVG as white.
+- Keep the source and bundled plugin icon copies aligned.
+- Verify the SVG diff only changes icon rendering.
+
+## Acceptance Criteria
+- [x] `plugins/codebuff/icon.svg` renders non-transparent pixels as white.
+- [x] `src-tauri/resources/bundled_plugins/codebuff/icon.svg` matches the source icon.
+- [x] Diff review confirms no unrelated asset changes.
+
+## Plan
+- [x] Patch the Codebuff SVG with a white alpha-preserving filter.
+- [x] Apply the same change to the bundled Codebuff SVG.
+- [x] Run a focused diff/hash check.
+
+## Verification Notes
+- Source and bundled Codebuff SVG files include `filter="url(#white)"` with `feFlood flood-color="#fff"` and alpha compositing.
+- SHA-256 hash matches for source and bundled Codebuff SVG: `914B194893A8231AD24B7802DCC91AEA06DB25BCE9BB98DD89A10DC8DF184CBA`.
+- Source SVG starts with `3C-3F-78-6D-6C-20-76-65`, confirming no UTF-8 BOM.
+
+## Executive Summary
+- Let the installed UsageBar keep running when local dev starts.
+- Keep stale workspace debug cleanup for rebuild safety.
+- Make the Cargo toolchain failure explicit instead of masking it behind process cleanup.
+
+## Acceptance Criteria
+- [x] `npm run tauri -- dev` no longer stops installed/release UsageBar just because it owns port `6736`.
+- [x] Dev wrapper still stops exact workspace debug binaries before launch.
+- [x] Focused wrapper tests pass.
+- [x] Missing Cargo is repaired and `cargo metadata` succeeds.
+- [x] Tauri dev frontend startup uses a Windows-resolvable command.
+
+## Plan
+- [x] Remove broad dev API port-owner cleanup from the Tauri wrapper.
+- [x] Preserve exact-path stale debug process cleanup.
+- [x] Run focused wrapper tests and inspect Rust toolchain availability.
+- [x] Install/repair Rustup when Cargo is genuinely missing.
+- [x] Switch Tauri dev frontend startup from the extensionless Bun shim to `npm run dev`.
+
+## Verification Notes
+- `node --test scripts\tauri\wrapper.test.mjs` -> 3 tests passed.
+- Initial `Get-Command cargo` / `where.exe cargo` -> cargo not found, even though PATH included `C:\Users\llein\.cargo\bin`.
+- Winget had a stale Rustup registration but no usable binaries; direct Rustup bootstrap installed `stable-x86_64-pc-windows-msvc`.
+- `cargo --version` -> `cargo 1.95.0`.
+- `cargo metadata --manifest-path src-tauri\Cargo.toml --no-deps --format-version 1` -> passed.
+- `npm run tauri -- dev` after Cargo repair reached `beforeDevCommand`; Tauri could not resolve the extensionless Kiro-Cli `bun` shim, so dev startup now uses `npm run dev`.
+
+# Reduce OpenCode Go cookie setup from cookie-auth review
+
+## Executive Summary
+- Keep OpenCode Go focused on local usage history.
+- Stop prompting normal OpenCode Go users to paste Zen billing cookies.
+- Preserve existing optional Zen balance fallback for saved/env cookies.
+
+## Acceptance Criteria
+- [x] OpenCode Go Settings no longer exposes Cookie header or Workspace ID inputs.
+- [x] OpenCode Go guidance explains local `opencode` auth/history setup first.
+- [x] Existing optional Zen balance code path remains available for existing saved/env cookies.
+- [x] Focused Settings and OpenCode Go plugin tests pass.
+
+## Plan
+- [x] Patch OpenCode Go provider settings metadata.
+- [x] Update OpenCode Go docs for hidden/legacy Zen balance.
+- [x] Update focused Settings expectations.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- `bun run test -- src\components\settings\provider-settings-detail.test.tsx plugins\opencode-go\plugin.test.js --run` -> 2 files passed, 45 tests passed.
+- `git diff --check -- src\lib\provider-settings.ts src\components\settings\provider-settings-detail.test.tsx docs\providers\opencode-go.md tasks\todo.md` -> passed; only expected CRLF conversion warnings were reported.
+- Diff review confirms OpenCode Go plugin runtime code was not changed, so existing saved/env Zen balance fallback remains available.
+
+# Make OpenCode Zen balance detail-only
+
+## Executive Summary
+- Keep OpenCode Go overview focused on local Go usage.
+- Move optional Zen balance out of the default overview card.
+- Preserve the compatibility line on the provider detail view.
+
+## Acceptance Criteria
+- [x] `opencode-go` manifest marks `Zen balance` as `detail`, not `overview`.
+- [x] Focused manifest and plugin tests pass.
+- [x] Bundled plugin manifest is synced from source.
+- [x] Docs explain Zen balance is hidden from normal/default setup.
+
+## Plan
+- [x] Patch source manifest and test expectation.
+- [x] Update provider docs wording.
+- [x] Sync bundled plugin resources.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `opencode-go`.
+- `bun run test -- plugins\opencode-go\plugin.test.js src\components\settings\provider-settings-detail.test.tsx --run` -> 2 files passed, 45 tests passed.
+- SHA-256 check confirmed source/bundled OpenCode Go `plugin.js`, `plugin.json`, `plugin.test.js`, and `icon.svg` hashes match.
+- `git diff --check -- plugins\opencode-go src-tauri\resources\bundled_plugins\opencode-go docs\providers\opencode-go.md src\lib\provider-settings.ts src\components\settings\provider-settings-detail.test.tsx tasks\todo.md docs\breadcrumbs.md` -> passed; only expected CRLF conversion warnings were reported.
+
+# De-emphasize optional Codex and Claude cookies
+
+## Executive Summary
+- Keep Codex and Claude local OAuth/CLI setup as the main path.
+- Stop putting browser-cookie capture in the primary connection guidance.
+- Leave optional cookie fields available for dashboard/fallback use.
+
+## Acceptance Criteria
+- [x] Codex “How to connect” guidance is CLI/local-auth first and does not ask for dashboard cookies.
+- [x] Claude “How to connect” guidance is CLI/OAuth first and does not ask for claude.ai cookies.
+- [x] Optional cookie secret fields remain available for advanced/fallback use.
+- [x] Focused Settings tests pass.
+
+## Plan
+- [x] Patch Codex and Claude provider settings copy.
+- [x] Update focused Settings expectations.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- `bun run test -- src\components\settings\provider-settings-detail.test.tsx --run` -> 1 file passed, 29 tests passed.
+- `git diff --check -- src\lib\provider-settings.ts src\components\settings\provider-settings-detail.test.tsx tasks\todo.md` -> passed; only expected CRLF conversion warnings were reported.
+
+# Remove invalid text-line primary order warnings
+
+## Executive Summary
+- Clean up dev-start warnings from provider manifests.
+- Keep overview fallback text lines visible.
+- Preserve primary metric ordering for real progress bars only.
+
+## Acceptance Criteria
+- [x] No source plugin manifest has `primaryOrder` on a `text` line.
+- [x] Bundled plugin manifests are synced from source.
+- [x] Focused manifest verification passes.
+- [x] Diff review confirms only manifest/task/supporting notes changed.
+
+## Plan
+- [x] Remove `primaryOrder` from text fallback lines in affected plugin manifests.
+- [x] Sync bundled plugins.
+- [x] Run static manifest validation and focused checks.
+- [x] Review diff and record verification notes.
+
+## Verification Notes
+- `node -e "...text lines declare primaryOrder..."` over `plugins` and `src-tauri/resources/bundled_plugins` -> passed; no text lines declare `primaryOrder`.
+- `node -e "...JSON.parse(plugin.json)..."` over source and bundled manifests -> passed.
+- `git diff --check -- ...` -> passed; only expected LF-to-CRLF warnings reported.
+- `git status --short` -> only affected source plugin manifests plus task/lesson notes are modified.
+
 # Audit Markdown and HTML documentation clutter
 
 ## Executive Summary
@@ -77,6 +442,29 @@
 
 ## Verification Notes
 - `bun run test -- src\hooks\app\use-panel.test.ts --run` -> 1 file passed, 17 tests passed.
+- `bun run typecheck` -> passed.
+
+# Auto-close Settings window after inactivity
+
+## Executive Summary
+- Close the Settings window after 5 minutes of inactivity.
+- Reset the timer when the user interacts with Settings.
+- Keep the tray bar auto-minimize behavior separate.
+
+## Acceptance Criteria
+- [x] Settings invokes the current window `hide()` after 5 minutes of inactivity.
+- [x] Pointer, keyboard, wheel, scroll, focus, and `settings:open` activity reset the timer.
+- [x] The Settings auto-close timer is cleaned up on unmount.
+- [x] Focused Settings window tests pass.
+
+## Plan
+- [x] Add a Settings inactivity timeout in `SettingsWindowApp`.
+- [x] Add focused regressions for timeout hide, activity reset, and cleanup.
+- [x] Record the 5-minute default in choices/breadcrumbs.
+- [x] Run focused tests and typecheck.
+
+## Verification Notes
+- `bun run test -- src\App.test.tsx --run` -> 1 file passed, 87 tests passed.
 - `bun run typecheck` -> passed.
 
 # Fix review findings from main/origin comparison
