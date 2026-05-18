@@ -59,6 +59,21 @@ describe("abacus plugin", () => {
       label: "Billing",
       value: "250 / 1,000 credits",
     })
+    expect(result.lines.find((line) => line.label === "Source")).toEqual({
+      type: "text",
+      label: "Source",
+      value: "Abacus dashboard compute-points session",
+    })
+    expect(result.lines.find((line) => line.label === "Auth source")).toEqual({
+      type: "text",
+      label: "Auth source",
+      value: "Stored Cookie header",
+    })
+    expect(result.lines.find((line) => line.label === "Endpoint")).toEqual({
+      type: "text",
+      label: "Endpoint",
+      value: "https://apps.abacus.ai/api/_getOrganizationComputePoints",
+    })
     expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
   })
 
@@ -82,6 +97,29 @@ describe("abacus plugin", () => {
     const result = probe(ctx)
 
     expect(result.lines[0]).toMatchObject({ used: 10, limit: 10 })
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored Cookie header")
+  })
+
+  it("uses ABACUS_COOKIE when the explicit header env var is absent", () => {
+    const ctx = makeCtx()
+    ctx.host.env.get = vi.fn((name) => (name === "ABACUS_COOKIE" ? "raw_session=abc" : null))
+    ctx.host.http.request = vi.fn((request) => {
+      expect(request.headers.Cookie).toBe("raw_session=abc")
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          success: true,
+          result: request.url.includes("_getOrganizationComputePoints")
+            ? { totalComputePoints: 10, computePointsLeft: 4 }
+            : {},
+        }),
+      }
+    })
+
+    const result = probe(ctx)
+
+    expect(result.lines[0]).toMatchObject({ used: 6, limit: 10 })
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("ABACUS_COOKIE")
   })
 
   it("renders zero total credits as text instead of fake progress", () => {

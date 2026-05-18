@@ -37,6 +37,9 @@ Sources:
 
 - `Requests`: progress from used over positive request limit
 - `Plan`: `Metered` or `Unlimited`
+- `Source`: `Undocumented Warp app GraphQL request-limit endpoint`
+- `Auth source`: `Stored token`, `WARP_API_KEY`, or `WARP_TOKEN`
+- `Endpoint`: `https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo`
 
 Unlimited or missing-limit accounts render `Requests` as text instead of a progress bar because Warp does not expose a finite max quota for those states.
 
@@ -51,5 +54,5 @@ Unlimited or missing-limit accounts render `Requests` as text instead of a progr
 ## Current Windows state
 
 - Windows support state: `experimental`
-- Contract coverage: focused plugin tests, provider-settings detail tests, and the host env allowlist test
+- Contract coverage: focused plugin tests pin the GraphQL operation, request-limit fields, `UserOutput` response shape, provider-settings detail tests, and the host env allowlist test
 - Remaining gaps: real signed-in Windows validation with a live Warp token, plus migration to an official usage endpoint if Warp documents one

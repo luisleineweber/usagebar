@@ -277,6 +277,11 @@
     return rounded.toFixed(places).replace(/\.?0+$/, "")
   }
 
+  function ideNameFromQuotaPath(path) {
+    var match = String(path || "").match(/\/([^/]+)\/options\/AIAssistantQuotaManager2\.xml$/)
+    return match ? match[1] : null
+  }
+
   function detectDisplayScale(quota, nextRefill) {
     var maxAbs = Math.max(
       Math.abs(quota.maximum || 0),
@@ -363,6 +368,12 @@
         })
       )
     }
+
+    var ideName = ideNameFromQuotaPath(chosen.path)
+    if (ideName) {
+      lines.push(ctx.line.text({ label: "IDE", value: ideName }))
+    }
+    lines.push(ctx.line.text({ label: "Source", value: chosen.path }))
 
     ctx.host.log.info("quota loaded from " + chosen.path)
 

@@ -68,6 +68,21 @@ describe("opencode plugin", () => {
         value: "$12.34",
         subtitle: "OpenCode Zen pay-as-you-go balance",
       },
+      {
+        type: "text",
+        label: "Source",
+        value: "OpenCode Zen signed-in website billing session",
+      },
+      {
+        type: "text",
+        label: "Auth source",
+        value: "Stored Cookie header",
+      },
+      {
+        type: "text",
+        label: "Endpoint",
+        value: "https://opencode.ai/_server",
+      },
     ])
   })
 
@@ -85,13 +100,14 @@ describe("opencode plugin", () => {
     )
 
     const plugin = await loadPlugin()
-    plugin.probe(ctx)
+    const result = plugin.probe(ctx)
 
     expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
       headers: expect.objectContaining({
         Cookie: "auth=stored",
       }),
     }))
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored Cookie header")
   })
 
   it("keeps standalone Zen hidden because Zen balance is surfaced through OpenCode Go", () => {

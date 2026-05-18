@@ -178,6 +178,11 @@ describe("kiro plugin", () => {
       type: "badge",
       text: "2026-06-01",
     })
+    expect(result.lines.find((line) => line.label === "Source")).toEqual({
+      type: "text",
+      label: "Source",
+      value: "CLI session files",
+    })
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
@@ -230,6 +235,11 @@ describe("kiro plugin", () => {
       type: "badge",
       text: "Disabled",
     })
+    expect(result.lines.find((line) => line.label === "Source")).toEqual({
+      type: "text",
+      label: "Source",
+      value: "Desktop cache",
+    })
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
@@ -255,6 +265,35 @@ describe("kiro plugin", () => {
       used: 106.11,
       limit: 500,
     })
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe("Usage log after live API failure")
+    expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+  })
+
+  it("skips malformed newer Windows logs and uses an older valid usage log", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    writeToken(ctx, makeToken({ profileArn: "" }), WINDOWS_TOKEN_PATH)
+    writeProfile(ctx, makeToken().profileArn, WINDOWS_PROFILE_PATH)
+    ctx.host.fs.writeText(
+      "~/AppData/Roaming/Kiro/logs/20260407T000000/window1/exthost/kiro.kiroAgent/q-client.log",
+      "2026-02-02 00:00:00.000 [info] malformed latest log\n"
+    )
+    writeUsageLog(ctx, makeUsageOutput(), "2026-02-01 23:57:00.000", WINDOWS_LOG_PATH)
+    ctx.host.http.request.mockReturnValue({
+      status: 503,
+      headers: {},
+      bodyText: "{}",
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Kiro Free")
+    expect(result.lines.find((line) => line.label === "Credits")).toMatchObject({
+      used: 0,
+      limit: 50,
+    })
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe("Usage log after live API failure")
     expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
   })
 
@@ -292,6 +331,7 @@ describe("kiro plugin", () => {
 
     expect(result.plan).toBe("Kiro Free")
     expect(result.lines.find((line) => line.label === "Credits")).toBeTruthy()
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe("Live usage API")
     const savedToken = JSON.parse(ctx.host.fs.readText(TOKEN_PATH))
     expect(savedToken.accessToken).toBe("refreshed-access-token")
     expect(savedToken.refreshToken).toBe("refreshed-refresh-token")
@@ -330,7 +370,7 @@ describe("kiro plugin", () => {
     mockStateDb(
       ctx,
       makeStatePayload({
-        timestamp: Date.parse("2026-02-01T23:30:00.000Z"),
+        timestamp: Date.parse("2026-02-01T23:00:00.000Z"),
       })
     )
 
@@ -348,6 +388,9 @@ describe("kiro plugin", () => {
       limit: 50,
     })
     expect(result.plan).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe(
+      "Desktop cache after live API failure"
+    )
   })
 
   it("uses Windows token, state, profile, and log paths", async () => {
@@ -379,6 +422,7 @@ describe("kiro plugin", () => {
       "text:CLI Credits:overview",
       "progress:Bonus Credits:detail",
       "badge:Overages:detail",
+      "text:Source:detail",
     ])
   })
 })

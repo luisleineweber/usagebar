@@ -60,9 +60,10 @@ describe("perplexity plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    plugin.probe(ctx)
+    const result = plugin.probe(ctx)
 
     expect(ctx.host.http.request.mock.calls[0][0].headers.Cookie).toBe("raw-cookie=1")
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("PERPLEXITY_COOKIE")
   })
 
   it("uses stored cookie header when env vars are absent", async () => {
@@ -88,11 +89,12 @@ describe("perplexity plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    plugin.probe(ctx)
+    const result = plugin.probe(ctx)
 
     expect(ctx.host.http.request.mock.calls[0][0].headers.Cookie).toBe(
       "__Secure-next-auth.session-token=token-123"
     )
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("PERPLEXITY_SESSION_TOKEN")
   })
 
   it("parses recurring, purchased, and bonus pools", async () => {
@@ -114,11 +116,29 @@ describe("perplexity plugin", () => {
       "Recurring credits",
       "Purchased credits",
       "Bonus credits",
+      "Source",
+      "Auth source",
+      "Endpoint",
     ])
     expect(result.lines[0].used).toBe(750)
     expect(result.lines[0].limit).toBe(3000)
     expect(result.lines[1].used).toBe(375)
     expect(result.lines[2].used).toBe(50)
+    expect(result.lines.find((line) => line.label === "Source")).toEqual({
+      type: "text",
+      label: "Source",
+      value: "Private Perplexity billing-session endpoint",
+    })
+    expect(result.lines.find((line) => line.label === "Auth source")).toEqual({
+      type: "text",
+      label: "Auth source",
+      value: "Stored Cookie header",
+    })
+    expect(result.lines.find((line) => line.label === "Endpoint")).toEqual({
+      type: "text",
+      label: "Endpoint",
+      value: "https://www.perplexity.ai/rest/billing/credits",
+    })
   })
 
   it("aggregates nested grants without inferring a plan from recurring pool size", async () => {
@@ -137,7 +157,7 @@ describe("perplexity plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.plan).toBeUndefined()
-    expect(result.lines).toHaveLength(1)
+    expect(result.lines.filter((line) => line.label === "Recurring credits")).toHaveLength(1)
     expect(result.lines[0].label).toBe("Recurring credits")
     expect(result.lines[0].used).toBe(9000)
     expect(result.lines[0].limit).toBe(12000)
@@ -155,7 +175,7 @@ describe("perplexity plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines).toHaveLength(1)
+    expect(result.lines.filter((line) => line.label === "Bonus credits")).toHaveLength(1)
     expect(result.lines[0]).toEqual({
       type: "text",
       label: "Bonus credits",

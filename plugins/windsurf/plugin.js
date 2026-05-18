@@ -155,6 +155,8 @@
     if (extraUsageBalance && extraUsageBalance !== "$0.00") {
       lines.push(ctx.line.text({ label: "Extra usage balance", value: extraUsageBalance }))
     }
+    lines.push(ctx.line.text({ label: "Source", value: "Windsurf cloud quota endpoint" }))
+    lines.push(ctx.line.text({ label: "Quota basis", value: "Percent-only daily and weekly buckets" }))
 
     return {
       plan: planName,

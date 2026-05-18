@@ -52,15 +52,17 @@
     }
 
     var providerSecret = readProviderSecret(ctx, "cookieHeader")
-    if (providerSecret) return providerSecret
+    if (providerSecret) return { value: providerSecret, source: "Stored Cookie header" }
 
     var envValue = readEnv(ctx, "OPENCODE_COOKIE_HEADER")
-    if (envValue) return envValue
+    if (envValue) return { value: envValue, source: "OPENCODE_COOKIE_HEADER" }
 
     if (ctx.host.keychain && typeof ctx.host.keychain.readGenericPassword === "function") {
       try {
         var stored = ctx.host.keychain.readGenericPassword(COOKIE_HEADER_SERVICE)
-        if (typeof stored === "string" && stored.trim()) return stored.trim()
+        if (typeof stored === "string" && stored.trim()) {
+          return { value: stored.trim(), source: "Legacy keychain Cookie header" }
+        }
       } catch {}
     }
     throw "Set OPENCODE_COOKIE_HEADER to your OpenCode cookie header."
@@ -317,13 +319,13 @@
 
   function probe(ctx) {
     var cookieHeader = readCookieHeader(ctx)
-    var workspaceId = resolveWorkspaceId(ctx, cookieHeader)
+    var workspaceId = resolveWorkspaceId(ctx, cookieHeader.value)
     var referer = BASE_URL + "/workspace/" + workspaceId + "/billing"
     var text = requestServer(ctx, {
       method: "GET",
       serverId: SUBSCRIPTION_SERVER_ID,
       args: [workspaceId],
-      cookieHeader: cookieHeader,
+      cookieHeader: cookieHeader.value,
       referer: referer,
     })
 
@@ -336,7 +338,7 @@
     if (balance === null) {
       var billingPageText = requestBillingPage(ctx, {
         workspaceId: workspaceId,
-        cookieHeader: cookieHeader,
+        cookieHeader: cookieHeader.value,
       })
       balance = readZenBalance(ctx, billingPageText).balance
     }
@@ -348,6 +350,18 @@
           label: "Balance",
           value: formatDollars(balance),
           subtitle: "OpenCode Zen pay-as-you-go balance",
+        }),
+        ctx.line.text({
+          label: "Source",
+          value: "OpenCode Zen signed-in website billing session",
+        }),
+        ctx.line.text({
+          label: "Auth source",
+          value: cookieHeader.source,
+        }),
+        ctx.line.text({
+          label: "Endpoint",
+          value: SERVER_URL,
         }),
       ],
     }

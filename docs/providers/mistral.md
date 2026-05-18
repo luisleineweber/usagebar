@@ -26,6 +26,9 @@
 - `Output tokens`: paid output tokens
 - `Cached tokens`: paid cached tokens when present
 - `Models`: completion model count represented in the usage payload
+- `Source`: `Mistral admin billing session`
+- `Auth source`: `Stored Cookie header`, `MISTRAL_COOKIE_HEADER`, or `MISTRAL_SESSION`
+- `Endpoint`: current-month admin billing usage URL
 
 ## Errors
 

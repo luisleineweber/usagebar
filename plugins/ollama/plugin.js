@@ -14,7 +14,10 @@
     try {
       var value = ctx.host.providerSecrets.read("cookieHeader")
       if (typeof value === "string" && value.trim()) {
-        return value.trim()
+        return {
+          value: value.trim(),
+          source: "Stored Cookie header",
+        }
       }
     } catch (e) {
       var message = String(e || "").trim()
@@ -70,6 +73,10 @@
         ctx.line.text({
           label: "Usage",
           value: "Settings cookie required",
+        }),
+        ctx.line.text({
+          label: "Source",
+          value: "Cloud auth only; settings cookie required for quota",
         }),
       ],
     }
@@ -261,7 +268,7 @@
       if (cloudAuth) return authOnlyResult(ctx, cloudAuth)
       throw "Paste your Ollama Cookie header in Setup before refreshing, or run `ollama signin` / set OLLAMA_API_KEY for Cloud auth detection."
     }
-    var html = fetchSettingsHtml(ctx, cookieHeader)
+    var html = fetchSettingsHtml(ctx, cookieHeader.value)
     var snapshot = parseSnapshot(html)
 
     var lines = [
@@ -271,6 +278,9 @@
     if (snapshot.weekly) {
       lines.push(progressLine(ctx, "Weekly", snapshot.weekly.usedPercent, snapshot.weekly.resetsAt, WEEK_MS))
     }
+    lines.push(ctx.line.text({ label: "Source", value: "Settings page cookie" }))
+    lines.push(ctx.line.text({ label: "Auth source", value: cookieHeader.source }))
+    lines.push(ctx.line.text({ label: "Endpoint", value: SETTINGS_URL }))
 
     return {
       plan: snapshot.plan || undefined,

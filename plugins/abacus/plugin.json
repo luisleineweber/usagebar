@@ -34,6 +34,21 @@
       "type": "text",
       "label": "Billing",
       "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Source",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Auth source",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Endpoint",
+      "scope": "detail"
     }
   ],
   "capabilities": {

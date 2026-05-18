@@ -15,6 +15,13 @@ Tracks Ollama Cloud subscription usage by scraping the authenticated settings pa
 - `Weekly` usage when present
 - Reset times from nearby `data-time` attributes when available
 - If Cloud auth exists but no settings cookie is configured, a text-only auth status plus `Settings cookie required`
+- Provider detail `Source` line:
+  - `Settings page cookie` means Session/Weekly quota came from the authenticated settings page.
+  - `Cloud auth only; settings cookie required for quota` means API key or local signin was detected, but no account-quota endpoint has been validated.
+- Provider detail `Auth source` line:
+  - `Stored Cookie header` means the quota request used the saved settings-page cookie.
+- Provider detail `Endpoint` line:
+  - `https://ollama.com/settings`
 
 ## Setup
 

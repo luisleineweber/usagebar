@@ -96,15 +96,17 @@
     if (source === "auto") return null;
 
     const providerSecret = readProviderSecret(ctx, "cookieHeader");
-    if (providerSecret) return providerSecret;
+    if (providerSecret) return { value: providerSecret, source: "Stored Cookie header" };
 
     const envValue = readEnv(ctx, "OPENCODE_COOKIE_HEADER");
-    if (envValue) return envValue;
+    if (envValue) return { value: envValue, source: "OPENCODE_COOKIE_HEADER" };
 
     if (ctx.host.keychain && typeof ctx.host.keychain.readGenericPassword === "function") {
       try {
         const stored = ctx.host.keychain.readGenericPassword(COOKIE_HEADER_SERVICE);
-        if (typeof stored === "string" && stored.trim()) return stored.trim();
+        if (typeof stored === "string" && stored.trim()) {
+          return { value: stored.trim(), source: "Legacy keychain Cookie header" };
+        }
       } catch {}
     }
     return null;
@@ -330,33 +332,47 @@
     const cookieHeader = readZenCookieHeader(ctx);
     if (!cookieHeader) return null;
 
-    const workspaceId = resolveWorkspaceId(ctx, cookieHeader);
+    const workspaceId = resolveWorkspaceId(ctx, cookieHeader.value);
     const referer = BASE_URL + "/workspace/" + workspaceId + "/billing";
     const text = requestServer(ctx, {
       method: "GET",
       serverId: SUBSCRIPTION_SERVER_ID,
       args: [workspaceId],
-      cookieHeader,
+      cookieHeader: cookieHeader.value,
       referer,
     });
 
     let balance = String(text).trim() === "null" ? null : readZenBalance(ctx, text);
     if (balance === null) {
-      balance = readZenBalance(ctx, requestBillingPage(ctx, { workspaceId, cookieHeader }));
+      balance = readZenBalance(ctx, requestBillingPage(ctx, { workspaceId, cookieHeader: cookieHeader.value }));
     }
     if (balance === null) throw "OpenCode Zen balance was not found in billing data.";
 
-    return ctx.line.text({
-      label: "Zen balance",
-      value: formatDollars(balance),
-      subtitle: "OpenCode Zen pay-as-you-go balance",
-    });
+    return [
+      ctx.line.text({
+        label: "Zen balance",
+        value: formatDollars(balance),
+        subtitle: "OpenCode Zen pay-as-you-go balance",
+      }),
+      ctx.line.text({
+        label: "Zen source",
+        value: "OpenCode Zen signed-in website billing session",
+      }),
+      ctx.line.text({
+        label: "Zen auth source",
+        value: cookieHeader.source,
+      }),
+      ctx.line.text({
+        label: "Zen endpoint",
+        value: SERVER_URL,
+      }),
+    ];
   }
 
   function appendZenBalanceLine(ctx, lines) {
     try {
-      const line = loadZenBalanceLine(ctx);
-      return line ? lines.concat(line) : lines;
+      const zenLines = loadZenBalanceLine(ctx);
+      return zenLines ? lines.concat(zenLines) : lines;
     } catch (e) {
       if (ctx.host.log && typeof ctx.host.log.warn === "function") {
         ctx.host.log.warn("opencode-go zen balance read failed: " + String(e));

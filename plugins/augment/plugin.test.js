@@ -70,6 +70,11 @@ describe("augment plugin", () => {
         label: "Auggie Auth",
         value: "Detected via ~/.augment/session.json",
       },
+      {
+        type: "text",
+        label: "Source",
+        value: "Local Auggie auth only; dashboard cookie required for credits",
+      },
     ])
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
@@ -128,6 +133,11 @@ describe("augment plugin", () => {
     })
     expect(result.lines.find((line) => line.label === "Remaining")?.value).toBe("20")
     expect(result.lines.find((line) => line.label === "Account")?.value).toBe("user@example.com")
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe("Dashboard session cookie")
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored Cookie header")
+    expect(result.lines.find((line) => line.label === "Endpoint")?.value).toBe(
+      "https://app.augmentcode.com/api/credits"
+    )
     expect(ctx.host.http.request.mock.calls[0][0].headers.Cookie).toBe("session=abc")
   })
 
@@ -145,6 +155,10 @@ describe("augment plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Credits")?.used).toBe(15)
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("AUGMENT_COOKIE_HEADER")
+    expect(result.lines.find((line) => line.label === "Endpoint")?.value).toBe(
+      "https://app.augmentcode.com/api/credits"
+    )
     expect(ctx.host.http.request.mock.calls[0][0].headers.Cookie).toBe("env=session")
   })
 

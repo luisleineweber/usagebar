@@ -31,16 +31,21 @@
 
   function loadCookieHeader(ctx) {
     const stored = readStoredCookieHeader(ctx)
-    if (stored) return stored
+    if (stored) return { value: stored, source: "Stored Cookie header" }
 
     const directHeader = readEnv(ctx, "PERPLEXITY_COOKIE_HEADER")
-    if (directHeader) return directHeader
+    if (directHeader) return { value: directHeader, source: "PERPLEXITY_COOKIE_HEADER" }
 
     const rawCookie = readEnv(ctx, "PERPLEXITY_COOKIE")
-    if (rawCookie) return rawCookie
+    if (rawCookie) return { value: rawCookie, source: "PERPLEXITY_COOKIE" }
 
     const sessionToken = readEnv(ctx, "PERPLEXITY_SESSION_TOKEN")
-    if (sessionToken) return "__Secure-next-auth.session-token=" + sessionToken
+    if (sessionToken) {
+      return {
+        value: "__Secure-next-auth.session-token=" + sessionToken,
+        source: "PERPLEXITY_SESSION_TOKEN",
+      }
+    }
 
     return null
   }
@@ -221,7 +226,7 @@
       throw "Not logged in. Save a Perplexity Cookie header or set PERPLEXITY_COOKIE_HEADER."
     }
 
-    const payload = fetchCredits(ctx, cookieHeader)
+    const payload = fetchCredits(ctx, cookieHeader.value)
     const buckets = parseCreditsPayload(payload)
     if (!buckets) {
       throw "Usage response missing credit pools. Try again later."
@@ -236,6 +241,19 @@
     if (lines.length === 0) {
       throw "Usage response missing credit pools. Try again later."
     }
+
+    lines.push(ctx.line.text({
+      label: "Source",
+      value: "Private Perplexity billing-session endpoint",
+    }))
+    lines.push(ctx.line.text({
+      label: "Auth source",
+      value: cookieHeader.source,
+    }))
+    lines.push(ctx.line.text({
+      label: "Endpoint",
+      value: CREDITS_URL,
+    }))
 
     return { lines }
   }

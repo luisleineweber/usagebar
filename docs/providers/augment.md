@@ -18,6 +18,16 @@ UsageBar reads Augment credit usage from the signed-in web session:
 
 The credits response normally provides used, remaining, and total credit values. The subscription response adds plan, account, organization, and billing-cycle reset details when available. UsageBar renders a progress bar only when the response exposes a real max through `used + remaining` or explicit available/used fields; partial used-only responses render as text.
 
+Provider detail output includes `Source` so the risk boundary stays visible:
+
+- `Dashboard session cookie` means credit usage came from the signed-in web-session endpoint.
+- `Local Auggie auth only; dashboard cookie required for credits` means Auggie login was detected, but no non-cookie credit endpoint has been validated yet.
+
+Dashboard credit output also includes:
+
+- `Auth source`: `Stored Cookie header` or `AUGMENT_COOKIE_HEADER`
+- `Endpoint`: `https://app.augmentcode.com/api/credits`
+
 ## Setup
 
 1. Run `auggie login` if you use Auggie locally. UsageBar can detect the local session from `~/.augment/session.json`.

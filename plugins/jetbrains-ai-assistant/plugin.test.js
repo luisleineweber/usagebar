@@ -60,6 +60,8 @@ describe("jetbrains-ai-assistant plugin", () => {
     const quota = result.lines.find((line) => line.label === "Quota")
     const used = result.lines.find((line) => line.label === "Used")
     const remaining = result.lines.find((line) => line.label === "Remaining")
+    const ide = result.lines.find((line) => line.label === "IDE")
+    const source = result.lines.find((line) => line.label === "Source")
 
     expect(quota && quota.used).toBe(75)
     expect(quota && quota.limit).toBe(100)
@@ -67,6 +69,8 @@ describe("jetbrains-ai-assistant plugin", () => {
     expect(quota && quota.periodDurationMs).toBe(2592000000)
     expect(used && used.value).toBe("75")
     expect(remaining && remaining.value).toBe("25")
+    expect(ide && ide.value).toBe("WebStorm2025.3")
+    expect(source && source.value).toBe(DARWIN_PATH)
   })
 
   it("falls back to quota until when nextRefill is missing", async () => {
@@ -317,6 +321,31 @@ describe("jetbrains-ai-assistant plugin", () => {
     const result = plugin.probe(ctx)
     const quota = result.lines.find((line) => line.label === "Quota")
     expect(quota && quota.used).toBe(42)
+  })
+
+  it("skips invalid newer Windows quota files and uses an older valid IDE snapshot", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    ctx.host.fs.writeText(
+      "~/AppData/Roaming/JetBrains/WebStorm2026.1/options/AIAssistantQuotaManager2.xml",
+      '<application><component name="AIAssistantQuotaManager2"></component></application>'
+    )
+    ctx.host.fs.writeText(
+      "~/AppData/Roaming/JetBrains/WebStorm2025.3/options/AIAssistantQuotaManager2.xml",
+      makeQuotaXml({
+        quotaInfo: { current: "31", maximum: "100", available: "69", until: "2099-01-31T00:00:00Z" },
+        nextRefill: { type: "Known", next: "2099-01-01T00:00:00Z", tariff: { amount: "100", duration: "PT720H" } },
+      })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Quota")?.used).toBe(31)
+    expect(result.lines.find((line) => line.label === "IDE")?.value).toBe("WebStorm2025.3")
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe(
+      "~/AppData/Roaming/JetBrains/WebStorm2025.3/options/AIAssistantQuotaManager2.xml"
+    )
   })
 
   it("continues gracefully when listDir throws", async () => {

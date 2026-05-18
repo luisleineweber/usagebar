@@ -104,6 +104,9 @@ describe("opencode-go plugin", () => {
     expect(manifest.lines).toEqual([
       { type: "progress", label: "5h", scope: "overview", primaryOrder: 1 },
       { type: "text", label: "Zen balance", scope: "detail" },
+      { type: "text", label: "Zen source", scope: "detail" },
+      { type: "text", label: "Zen auth source", scope: "detail" },
+      { type: "text", label: "Zen endpoint", scope: "detail" },
       { type: "progress", label: "Weekly", scope: "detail" },
       { type: "progress", label: "Monthly", scope: "detail" },
     ]);
@@ -252,6 +255,21 @@ describe("opencode-go plugin", () => {
       value: "$12.34",
       subtitle: "OpenCode Zen pay-as-you-go balance",
     });
+    expect(result.lines).toContainEqual({
+      type: "text",
+      label: "Zen source",
+      value: "OpenCode Zen signed-in website billing session",
+    });
+    expect(result.lines).toContainEqual({
+      type: "text",
+      label: "Zen auth source",
+      value: "Stored Cookie header",
+    });
+    expect(result.lines).toContainEqual({
+      type: "text",
+      label: "Zen endpoint",
+      value: "https://opencode.ai/_server",
+    });
   });
 
   it("uses the stored Zen cookie before OPENCODE_COOKIE_HEADER", async () => {
@@ -268,7 +286,7 @@ describe("opencode-go plugin", () => {
     ]);
 
     const plugin = await loadPlugin();
-    plugin.probe(ctx);
+    const result = plugin.probe(ctx);
 
     expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
       method: "GET",
@@ -277,6 +295,11 @@ describe("opencode-go plugin", () => {
         Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
       }),
     }));
+    expect(result.lines).toContainEqual({
+      type: "text",
+      label: "Zen auth source",
+      value: "Stored Cookie header",
+    });
   });
 
   it("keeps Go usage visible when the optional Zen balance read fails", async () => {

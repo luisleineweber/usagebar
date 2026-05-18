@@ -32,7 +32,8 @@
     }
 
     try {
-      return readString(ctx.host.providerSecrets.read("cookieHeader"));
+      const value = readString(ctx.host.providerSecrets.read("cookieHeader"));
+      return value ? { value, source: "Stored Cookie header" } : null;
     } catch (e) {
       ctx.host.log.info("zed cookie read failed: " + String(e));
       return null;
@@ -182,7 +183,7 @@
     return { resetsAt: endIso, periodDurationMs };
   }
 
-  function buildBillingResult(ctx, payload, subscriptionPayload) {
+  function buildBillingResult(ctx, payload, subscriptionPayload, authSource) {
     const currentUsage = payload.current_usage;
     const tokenSpend = currentUsage && typeof currentUsage === "object" ? currentUsage.token_spend : null;
     if (!currentUsage || typeof currentUsage !== "object") {
@@ -224,6 +225,14 @@
           subtitle: "Live browser-backed dashboard request.",
         }),
         ctx.line.progress(spendLine),
+        ctx.line.text({
+          label: "Auth source",
+          value: authSource,
+        }),
+        ctx.line.text({
+          label: "Endpoint",
+          value: BILLING_USAGE_URL,
+        }),
         ctx.line.text({
           label: "Limit",
           value: "$" + String(ctx.fmt.dollars(limitCents * 1)),
@@ -398,6 +407,7 @@
         ctx.line.text({ label: "Cache read", value: formatCount(telemetry.cacheReadTokens) }),
         ctx.line.text({ label: "Cache write", value: formatCount(telemetry.cacheWriteTokens) }),
         ctx.line.text({ label: "Models", value: formatModels(telemetry.models) }),
+        ctx.line.text({ label: "Billing", value: "Dashboard cookie required for spend" }),
       ],
     };
   }
@@ -407,8 +417,9 @@
     if (cookieHeader) {
       return buildBillingResult(
         ctx,
-        requestBillingUsage(ctx, cookieHeader),
-        requestBillingSubscription(ctx, cookieHeader)
+        requestBillingUsage(ctx, cookieHeader.value),
+        requestBillingSubscription(ctx, cookieHeader.value),
+        cookieHeader.source
       );
     }
 

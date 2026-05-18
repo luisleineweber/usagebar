@@ -8,6 +8,7 @@
 - **Auth:** browser billing-session Cookie header
 - **Endpoint:** `GET https://www.perplexity.ai/rest/billing/credits`
 - **Output:** recurring, purchased, and bonus credit pools
+- **Displayed source:** private Perplexity billing-session endpoint plus the cookie source used
 
 ## Authentication
 
@@ -49,9 +50,24 @@ UsageBar does not infer a Perplexity subscription name from credit totals. Perpl
 
 Zero-value pools are rendered as `0 credits` text rather than fake progress bars, because the endpoint does not provide a non-zero maximum for those pools.
 
+Successful output also includes detail-only provenance lines:
+
+| Line | Value |
+| --- | --- |
+| `Source` | `Private Perplexity billing-session endpoint` |
+| `Auth source` | `Stored Cookie header`, `PERPLEXITY_COOKIE_HEADER`, `PERPLEXITY_COOKIE`, or `PERPLEXITY_SESSION_TOKEN` |
+| `Endpoint` | `https://www.perplexity.ai/rest/billing/credits` |
+
+Current Perplexity API docs describe billing, credit balance, and usage visibility in the API Platform/Admin console, but do not document a stable API-key balance endpoint that returns these account credit pools. UsageBar therefore keeps this provider experimental and cookie-backed.
+
 ## Limitations
 
 - This is not a public API and may change without notice.
 - Session cookies expire and must be refreshed manually when Perplexity invalidates them.
 - The plugin does not currently import cookies from a browser automatically.
 - The plugin does not yet offer a WebView sign-in flow.
+
+## References
+
+- [Perplexity API Groups & Billing](https://docs.perplexity.ai/docs/getting-started/api-groups)
+- [Perplexity Rate Limits & Usage Tiers](https://docs.perplexity.ai/docs/admin/rate-limits-usage-tiers)

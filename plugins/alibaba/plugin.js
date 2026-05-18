@@ -17,7 +17,7 @@
     if (ctx.host.providerSecrets && typeof ctx.host.providerSecrets.read === "function") {
       try {
         const stored = ctx.host.providerSecrets.read("apiKey")
-        if (stored) return stored
+        if (stored) return { value: stored, source: "Stored API key" }
       } catch (e) {
         ctx.host.log.warn("provider secret read failed: " + String(e))
       }
@@ -26,7 +26,7 @@
     if (ctx.host.env && typeof ctx.host.env.get === "function") {
       try {
         const envKey = ctx.host.env.get("ALIBABA_API_KEY")
-        if (envKey) return envKey
+        if (envKey) return { value: envKey, source: "ALIBABA_API_KEY" }
       } catch (e) {
         ctx.host.log.warn("env read failed for ALIBABA_API_KEY: " + String(e))
       }
@@ -85,6 +85,13 @@
       throw "Alibaba request failed. Check your connection."
     }
 
+    const data = ctx.util.tryParseJson(resp.bodyText)
+    const code = data && typeof data.code === "string" ? data.code : ""
+    const message = data && typeof data.message === "string" ? data.message : ""
+    if (code === "ConsoleNeedLogin" || message.includes("ConsoleNeedLogin")) {
+      throw "Alibaba Coding Plan quota requires a browser console session for this account or region. Check region/account access."
+    }
+
     if (ctx.util.isAuthStatus(resp.status)) {
       throw "Alibaba API key invalid. Check Setup or ALIBABA_API_KEY."
     }
@@ -93,12 +100,11 @@
       throw "Alibaba request failed (HTTP " + String(resp.status) + "). Try again later."
     }
 
-    const data = ctx.util.tryParseJson(resp.bodyText)
     if (!data || typeof data !== "object") {
       throw "Alibaba response invalid. Try again later."
     }
 
-    return data
+    return { data, endpoint: url }
   }
 
   function requestQuotasWithCookie(ctx, cookie, region) {
@@ -240,8 +246,8 @@
       throw "Alibaba API key missing. Save it in Setup or set ALIBABA_API_KEY."
     }
 
-    const payload = requestQuotas(ctx, apiKey, region)
-    const quota = parseQuota(payload)
+    const payload = requestQuotas(ctx, apiKey.value, region)
+    const quota = parseQuota(payload.data)
 
     if (!quota) {
       throw "Alibaba quota response missing usage data. Try again later."
@@ -265,6 +271,21 @@
     lines.push(ctx.line.badge({
       label: "Region",
       text: region,
+    }))
+
+    lines.push(ctx.line.text({
+      label: "Source",
+      value: "Alibaba Coding Plan quota endpoint",
+    }))
+
+    lines.push(ctx.line.text({
+      label: "Auth source",
+      value: apiKey.source,
+    }))
+
+    lines.push(ctx.line.text({
+      label: "Endpoint",
+      value: payload.endpoint,
     }))
 
     return {

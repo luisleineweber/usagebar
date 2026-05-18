@@ -45,7 +45,7 @@
     if (ctx.host.providerSecrets && typeof ctx.host.providerSecrets.read === "function") {
       try {
         const stored = readString(ctx.host.providerSecrets.read("token"))
-        if (stored) return stored
+        if (stored) return { value: stored, source: "Stored token" }
       } catch (e) {
         ctx.host.log.warn("provider secret read failed: " + String(e))
       }
@@ -56,7 +56,7 @@
         const name = API_KEY_ENV_VARS[i]
         try {
           const value = readString(ctx.host.env.get(name))
-          if (value) return value
+          if (value) return { value, source: name }
         } catch (e) {
           ctx.host.log.warn("env read failed for " + name + ": " + String(e))
         }
@@ -133,6 +133,9 @@
     }
 
     const userRoot = payload.data && payload.data.user
+    if (userRoot && typeof userRoot === "object" && readString(userRoot.__typename) !== "UserOutput") {
+      throw "Warp response invalid. Try again later."
+    }
     const user = userRoot && typeof userRoot === "object" ? userRoot.user : null
     const limitInfo = user && typeof user === "object" ? user.requestLimitInfo : null
     if (!limitInfo || typeof limitInfo !== "object") {
@@ -159,13 +162,22 @@
     })
   }
 
+  function provenanceLines(ctx, tokenSource) {
+    return [
+      sourceLine(ctx),
+      ctx.line.text({ label: "Auth source", value: tokenSource }),
+      ctx.line.text({ label: "Endpoint", value: API_URL }),
+    ]
+  }
+
   function probe(ctx) {
     const token = loadToken(ctx)
     if (!token) {
       throw "Warp token missing. Save it in Setup or set WARP_API_KEY."
     }
 
-    const usage = parseUsage(requestUsage(ctx, token))
+    const usage = parseUsage(requestUsage(ctx, token.value))
+    const provenance = provenanceLines(ctx, token.source)
     if (usage.isUnlimited) {
       return {
         lines: [
@@ -177,7 +189,7 @@
             label: "Plan",
             text: "Unlimited",
           }),
-          sourceLine(ctx),
+          ...provenance,
         ],
       }
     }
@@ -193,7 +205,7 @@
             label: "Plan",
             text: "Metered",
           }),
-          sourceLine(ctx),
+          ...provenance,
         ],
       }
     }
@@ -215,7 +227,7 @@
           label: "Plan",
           text: usage.isUnlimited ? "Unlimited" : "Metered",
         }),
-        sourceLine(ctx),
+        ...provenance,
       ],
     }
   }

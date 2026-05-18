@@ -31,13 +31,18 @@
 
   function loadCookieHeader(ctx) {
     const stored = readStoredCookieHeader(ctx)
-    if (stored) return stored
+    if (stored) return { value: stored, source: "Stored Cookie header" }
 
     const directHeader = readEnv(ctx, "MISTRAL_COOKIE_HEADER")
-    if (directHeader) return directHeader
+    if (directHeader) return { value: directHeader, source: "MISTRAL_COOKIE_HEADER" }
 
     const session = readEnv(ctx, "MISTRAL_SESSION")
-    if (session) return "ory_session_mistral=" + session
+    if (session) {
+      return {
+        value: "ory_session_mistral=" + session,
+        source: "MISTRAL_SESSION",
+      }
+    }
 
     return null
   }
@@ -150,6 +155,7 @@
 
   function fetchUsage(ctx, cookieHeader) {
     const csrfToken = cookieValue(cookieHeader, "csrftoken")
+    const url = monthUsageUrl(new Date())
     const headers = {
       Accept: "*/*",
       Cookie: cookieHeader,
@@ -163,7 +169,7 @@
     try {
       resp = ctx.util.request({
         method: "GET",
-        url: monthUsageUrl(new Date()),
+        url,
         headers,
         timeoutMs: 15000,
       })
@@ -183,7 +189,7 @@
     if (!payload || typeof payload !== "object") {
       throw "Usage response invalid. Try again later."
     }
-    return payload
+    return { payload, endpoint: url }
   }
 
   function probe(ctx) {
@@ -192,7 +198,8 @@
       throw "Not logged in. Save a Mistral Cookie header or set MISTRAL_COOKIE_HEADER."
     }
 
-    const snapshot = parseUsagePayload(fetchUsage(ctx, cookieHeader))
+    const usage = fetchUsage(ctx, cookieHeader.value)
+    const snapshot = parseUsagePayload(usage.payload)
     if (!snapshot) {
       throw "Usage response invalid. Try again later."
     }
@@ -209,6 +216,9 @@
       lines.push(ctx.line.text({ label: "Cached tokens", value: fmtCount(snapshot.totalCachedTokens) }))
     }
     lines.push(ctx.line.text({ label: "Models", value: fmtCount(snapshot.modelCount) }))
+    lines.push(ctx.line.text({ label: "Source", value: "Mistral admin billing session" }))
+    lines.push(ctx.line.text({ label: "Auth source", value: cookieHeader.source }))
+    lines.push(ctx.line.text({ label: "Endpoint", value: usage.endpoint }))
 
     return { plan: snapshot.currency, lines }
   }

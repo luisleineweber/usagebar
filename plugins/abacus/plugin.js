@@ -31,11 +31,16 @@
   }
 
   function loadCookieHeader(ctx) {
-    return (
-      readStoredCookieHeader(ctx) ||
-      readEnv(ctx, "ABACUS_COOKIE_HEADER") ||
-      readEnv(ctx, "ABACUS_COOKIE")
-    )
+    const stored = readStoredCookieHeader(ctx)
+    if (stored) return { value: stored, source: "Stored Cookie header" }
+
+    const directHeader = readEnv(ctx, "ABACUS_COOKIE_HEADER")
+    if (directHeader) return { value: directHeader, source: "ABACUS_COOKIE_HEADER" }
+
+    const rawCookie = readEnv(ctx, "ABACUS_COOKIE")
+    if (rawCookie) return { value: rawCookie, source: "ABACUS_COOKIE" }
+
+    return null
   }
 
   function readNumber(value) {
@@ -113,7 +118,7 @@
     }
   }
 
-  function buildOutput(ctx, computePoints, billingInfo) {
+  function buildOutput(ctx, computePoints, billingInfo, authSource) {
     const total = readNumber(computePoints.totalComputePoints)
     const left = readNumber(computePoints.computePointsLeft)
     if (total === null || left === null) {
@@ -146,6 +151,21 @@
       lines.push(ctx.line.text({ label: "Billing", value: usedLabel + " / " + totalLabel + " credits" }))
     }
 
+    lines.push(ctx.line.text({
+      label: "Source",
+      value: "Abacus dashboard compute-points session",
+    }))
+
+    lines.push(ctx.line.text({
+      label: "Auth source",
+      value: authSource,
+    }))
+
+    lines.push(ctx.line.text({
+      label: "Endpoint",
+      value: COMPUTE_POINTS_URL,
+    }))
+
     const plan = readString(billingInfo.currentTier)
     return plan ? { plan, lines } : { lines }
   }
@@ -156,9 +176,9 @@
       throw "Not logged in. Save an Abacus AI Cookie header or set ABACUS_COOKIE_HEADER."
     }
 
-    const computePoints = fetchComputePoints(ctx, cookieHeader)
-    const billingInfo = fetchBillingInfo(ctx, cookieHeader)
-    return buildOutput(ctx, computePoints, billingInfo)
+    const computePoints = fetchComputePoints(ctx, cookieHeader.value)
+    const billingInfo = fetchBillingInfo(ctx, cookieHeader.value)
+    return buildOutput(ctx, computePoints, billingInfo, cookieHeader.source)
   }
 
   globalThis.__openusage_plugin = { id: "abacus", probe }

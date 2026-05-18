@@ -66,6 +66,8 @@ The local Zed client credential is readable on Windows, but it does not authenti
 When the dashboard cookie is configured:
 
 - `Source`: `Dashboard billing`
+- `Auth source`: `Stored Cookie header`
+- `Endpoint`: `https://cloud.zed.dev/frontend/billing/usage`
 - `Spend`: dollar progress from current spend to spend limit, with reset countdown when `subscription.period.end_at` is available
 - `Limit`: dollar limit
 - `Updated`: billing payload timestamp
@@ -74,6 +76,9 @@ When the dashboard cookie is missing:
 
 - `Source`: `Local telemetry`
 - `Prompts`, `Input`, `Output`, `Cache read`, `Cache write`, `Models`
+- `Billing`: `Dashboard cookie required for spend`
+
+Local telemetry is a fallback for Zed-hosted agent activity only. It is not a billing-spend substitute.
 
 ## Common errors
 

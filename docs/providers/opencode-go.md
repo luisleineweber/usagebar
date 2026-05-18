@@ -33,6 +33,14 @@ The visible Settings UI and overview card are intentionally local-history only. 
 
 This keeps the legacy balance line working without making new OpenCode Go users copy DevTools Cookie headers for the main subscription-limit view.
 
+When the optional Zen balance line is shown, it also adds detail-only provenance lines:
+
+| Line | Value |
+| --- | --- |
+| `Zen source` | `OpenCode Zen signed-in website billing session` |
+| `Zen auth source` | `Stored Cookie header`, `OPENCODE_COOKIE_HEADER`, or `Legacy keychain Cookie header` |
+| `Zen endpoint` | `https://opencode.ai/_server` |
+
 ## Data Source
 
 OpenUsage reads the local OpenCode SQLite database directly:

@@ -6,6 +6,13 @@ Antigravity is essentially a Google-branded fork of [Windsurf](windsurf.md) - bo
 
 In OpenUsage, Antigravity is treated as a grouped-quota provider. Both the overview card and provider detail page show grouped quota buckets only: `Gemini Pro`, `Gemini Flash`, `Gemini Image`, and `Claude`. Unknown quota is shown as unavailable, never as exhausted.
 
+Provider detail output also includes `Source` so local diagnostics are visible:
+
+- `Live Antigravity language server`
+- `Cached live Antigravity language server`
+- `Cloud Code fallback`
+- `Antigravity language server without usable quota`
+
 ## Overview
 
 - **Vendor:** Google (internal codename "Jetski")

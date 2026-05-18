@@ -27,6 +27,16 @@
       "type": "text",
       "label": "Extra usage balance",
       "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Source",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Quota basis",
+      "scope": "detail"
     }
   ],
   "capabilities": {

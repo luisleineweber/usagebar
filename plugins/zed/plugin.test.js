@@ -97,6 +97,8 @@ describe("zed plugin", () => {
     expect(manifest.lines).toEqual([
       { type: "badge", label: "Source", scope: "detail" },
       { type: "progress", label: "Spend", scope: "overview", primaryOrder: 1 },
+      { type: "text", label: "Auth source", scope: "detail" },
+      { type: "text", label: "Endpoint", scope: "detail" },
       { type: "text", label: "Limit", scope: "detail" },
       { type: "text", label: "Updated", scope: "detail" },
       { type: "text", label: "Prompts", scope: "detail" },
@@ -105,6 +107,7 @@ describe("zed plugin", () => {
       { type: "text", label: "Cache read", scope: "detail" },
       { type: "text", label: "Cache write", scope: "detail" },
       { type: "text", label: "Models", scope: "detail" },
+      { type: "text", label: "Billing", scope: "detail" },
     ]);
   });
 
@@ -140,6 +143,16 @@ describe("zed plugin", () => {
       format: { kind: "dollars" },
       resetsAt: "2026-05-10T00:00:00.000Z",
       periodDurationMs: 30 * 24 * 60 * 60 * 1000,
+    });
+    expect(result.lines.find((line) => line.label === "Auth source")).toEqual({
+      type: "text",
+      label: "Auth source",
+      value: "Stored Cookie header",
+    });
+    expect(result.lines.find((line) => line.label === "Endpoint")).toEqual({
+      type: "text",
+      label: "Endpoint",
+      value: BILLING_URL,
     });
     expect(result.lines.find((line) => line.label === "Limit")?.value).toBe("$10");
     expect(result.lines.find((line) => line.label === "Updated")?.value).toBe("2026-04-03T14:33:11.104Z");
@@ -239,6 +252,9 @@ describe("zed plugin", () => {
     expect(result.lines.find((line) => line.label === "Models")?.value).toBe(
       "zed.dev/claude-sonnet-4-6, zed.dev/gpt-5"
     );
+    expect(result.lines.find((line) => line.label === "Billing")?.value).toBe(
+      "Dashboard cookie required for spend"
+    );
     expect(ctx.host.browser.requestWithCookies).not.toHaveBeenCalled();
   });
 
@@ -306,6 +322,9 @@ describe("zed plugin", () => {
       subtitle: "Add a billing cookie for spend, or use Zed Agent once.",
     });
     expect(result.lines.find((line) => line.label === "Prompts")?.value).toBe("0");
+    expect(result.lines.find((line) => line.label === "Billing")?.value).toBe(
+      "Dashboard cookie required for spend"
+    );
   });
 
   it("fails loudly when usage events exist but their telemetry shape is no longer parseable", async () => {

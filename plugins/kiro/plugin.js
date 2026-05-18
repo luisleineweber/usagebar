@@ -278,7 +278,7 @@
     if (!usageState || !Array.isArray(usageState.usageBreakdowns)) return null
     const usageBreakdowns = usageState.usageBreakdowns.map((item) => normalizeBreakdown(ctx, item)).filter(Boolean)
     return usageBreakdowns.length
-      ? { usageBreakdowns, timestampMs: first(usageState.timestamp), plan: null, overageEnabled: null }
+      ? { usageBreakdowns, timestampMs: first(usageState.timestamp), plan: null, overageEnabled: null, source: "Desktop cache" }
       : null
   }
 
@@ -291,6 +291,7 @@
       timestampMs: timestampMs !== null ? timestampMs : null,
       plan: title(raw.subscriptionInfo && raw.subscriptionInfo.subscriptionTitle),
       overageEnabled: raw.overageConfiguration ? raw.overageConfiguration.overageStatus === "ENABLED" : null,
+      source: "Live usage API",
     }
   }
 
@@ -330,7 +331,10 @@
         if (!ctx.host.fs.exists(logPath)) continue
         try {
           const snapshot = parseUsageLogText(ctx, ctx.host.fs.readText(logPath))
-          if (snapshot) return snapshot
+          if (snapshot) {
+            snapshot.source = "Usage log"
+            return snapshot
+          }
         } catch (e) {
           ctx.host.log.warn("failed to parse Kiro usage log: " + String(e))
         }
@@ -449,6 +453,7 @@
           : null,
       usageBreakdowns: usageSource.usageBreakdowns,
       timestampMs: usageSource.timestampMs !== null ? usageSource.timestampMs : nowMs,
+      source: usageSource.source || "Usage snapshot",
     }
   }
 
@@ -488,6 +493,7 @@
       )
     }
     if (snapshot.overageEnabled !== null) lines.push(ctx.line.badge({ label: "Overages", text: snapshot.overageEnabled ? "Enabled" : "Disabled" }))
+    if (snapshot.source) lines.push(ctx.line.text({ label: "Source", value: snapshot.source }))
     return { plan: snapshot.plan || undefined, lines }
   }
 
@@ -501,6 +507,7 @@
           subtitle: "From local Kiro CLI sessions",
         }),
         ctx.line.badge({ label: "Resets", text: cliState.resetsAt.slice(0, 10) }),
+        ctx.line.text({ label: "Source", value: "CLI session files" }),
       ],
     }
   }
@@ -517,13 +524,19 @@
     const loggedState = loadLoggedState(ctx)
     let liveState = null
     let liveError = null
+    let triedLive = false
     if (shouldTryLive(localState, loggedState, nowMs)) {
+      triedLive = true
       try {
         liveState = fetchLiveState(ctx, authState, nowMs)
       } catch (e) {
         liveError = e
         ctx.host.log.warn("Kiro live fallback failed: " + String(e))
       }
+    }
+    if (triedLive && (!liveState || !liveState.usageBreakdowns.length)) {
+      if (localState && localState.usageBreakdowns.length) localState.source = "Desktop cache after live API failure"
+      if (!localState && loggedState && loggedState.usageBreakdowns.length) loggedState.source = "Usage log after live API failure"
     }
     const snapshot = mergeSnapshots(localState, loggedState, liveState, nowMs)
     if (!snapshot) {

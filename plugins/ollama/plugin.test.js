@@ -56,6 +56,11 @@ describe("ollama plugin", () => {
           label: "Usage",
           value: "Settings cookie required",
         },
+        {
+          type: "text",
+          label: "Source",
+          value: "Cloud auth only; settings cookie required for quota",
+        },
       ],
     })
     expect(ctx.host.http.request).not.toHaveBeenCalled()
@@ -75,6 +80,9 @@ describe("ollama plugin", () => {
       label: "Cloud Auth",
       value: "Local signin keys detected",
     })
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe(
+      "Cloud auth only; settings cookie required for quota"
+    )
     expect(result.lines.find((line) => line.type === "progress")).toBeUndefined()
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
@@ -159,6 +167,9 @@ describe("ollama plugin", () => {
     expect(weekly.used).toBe(34)
     expect(weekly.resetsAt).toBe("2026-03-15T00:00:00.000Z")
     expect(weekly.periodDurationMs).toBe(7 * 24 * 60 * 60 * 1000)
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe("Settings page cookie")
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored Cookie header")
+    expect(result.lines.find((line) => line.label === "Endpoint")?.value).toBe("https://ollama.com/settings")
   })
 
   it("accepts Hourly usage as the session source label", async () => {
@@ -194,8 +205,11 @@ describe("ollama plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines).toHaveLength(1)
+    expect(result.lines).toHaveLength(4)
     expectProgress(result, "Session")
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe("Settings page cookie")
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored Cookie header")
+    expect(result.lines.find((line) => line.label === "Endpoint")?.value).toBe("https://ollama.com/settings")
   })
 
   it("throws on expired session status codes", async () => {

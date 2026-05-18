@@ -22,7 +22,7 @@
     if (ctx.host.providerSecrets && typeof ctx.host.providerSecrets.read === "function") {
       try {
         const stored = readString(ctx.host.providerSecrets.read("cookieHeader"))
-        if (stored) return stored
+        if (stored) return { value: stored, source: "Stored Cookie header" }
       } catch (e) {
         ctx.host.log.info("augment cookie secret read failed: " + String(e))
       }
@@ -31,7 +31,7 @@
     if (ctx.host.env && typeof ctx.host.env.get === "function") {
       try {
         const envCookie = readString(ctx.host.env.get("AUGMENT_COOKIE_HEADER"))
-        if (envCookie) return envCookie
+        if (envCookie) return { value: envCookie, source: "AUGMENT_COOKIE_HEADER" }
       } catch (e) {
         ctx.host.log.warn("env read failed for AUGMENT_COOKIE_HEADER: " + String(e))
       }
@@ -157,7 +157,7 @@
     return n.toLocaleString("en-US", { maximumFractionDigits: 2 })
   }
 
-  function buildResult(ctx, credits, subscription) {
+  function buildResult(ctx, credits, subscription, authSource) {
     const usage = readUsage(credits)
     if (!usage) {
       throw "Augment credits response missing usage fields. Refresh the Cookie header or update UsageBar."
@@ -196,6 +196,9 @@
     if (subscription && readString(subscription.organization)) {
       lines.push(ctx.line.text({ label: "Organization", value: readString(subscription.organization) }))
     }
+    lines.push(ctx.line.text({ label: "Source", value: "Dashboard session cookie" }))
+    lines.push(ctx.line.text({ label: "Auth source", value: authSource }))
+    lines.push(ctx.line.text({ label: "Endpoint", value: CREDITS_URL }))
 
     const plan = subscription && readString(subscription.planName)
       ? ctx.fmt.planLabel(subscription.planName)
@@ -220,15 +223,19 @@
               label: "Auggie Auth",
               value: "Detected via " + auggieSession.source,
             }),
+            ctx.line.text({
+              label: "Source",
+              value: "Local Auggie auth only; dashboard cookie required for credits",
+            }),
           ],
         }
       }
       throw "Augment auth missing. Run `auggie login` to confirm local auth, or save a dashboard Cookie header for credit usage."
     }
 
-    const credits = requestJson(ctx, cookieHeader, CREDITS_URL, "credits", false)
-    const subscription = requestJson(ctx, cookieHeader, SUBSCRIPTION_URL, "subscription", true)
-    return buildResult(ctx, credits, subscription)
+    const credits = requestJson(ctx, cookieHeader.value, CREDITS_URL, "credits", false)
+    const subscription = requestJson(ctx, cookieHeader.value, SUBSCRIPTION_URL, "subscription", true)
+    return buildResult(ctx, credits, subscription, cookieHeader.source)
   }
 
   globalThis.__openusage_plugin = { id: "augment", probe }

@@ -24,6 +24,7 @@ Decision: do not expose Zen API-key balance setup until a documented or real-acc
 ## What it shows
 
 - Current OpenCode Zen pay-as-you-go balance for the selected workspace
+- Detail provenance lines: `Source`, `Auth source`, and `Endpoint`
 
 ## Where usage lives
 
@@ -38,6 +39,14 @@ UsageBar currently expects the authenticated workspace billing session for OpenC
 If OpenCode redirects you back to home or sign-in, the session is not ready yet.
 
 UsageBar reads the Cookie header saved in Settings first. `OPENCODE_COOKIE_HEADER` remains supported only as a fallback for existing environment-based setups.
+
+Successful output includes:
+
+| Line | Value |
+| --- | --- |
+| `Source` | `OpenCode Zen signed-in website billing session` |
+| `Auth source` | `Stored Cookie header`, `OPENCODE_COOKIE_HEADER`, or `Legacy keychain Cookie header` |
+| `Endpoint` | `https://opencode.ai/_server` |
 
 ## Setup
 

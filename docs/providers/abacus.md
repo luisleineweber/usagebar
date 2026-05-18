@@ -17,3 +17,13 @@ Decision: do not expose Abacus API-key setup until a real account or official do
 UsageBar calls `_getOrganizationComputePoints` for the credit balance and `_getBillingInfo` for optional plan and reset metadata.
 
 When Abacus reports a non-zero `totalComputePoints`, UsageBar renders `Credits` as used/max progress. If the total is zero, it renders `0 credits` as text instead of creating a fake progress maximum.
+
+Successful output also includes detail-only provenance lines:
+
+| Line | Value |
+| --- | --- |
+| `Source` | `Abacus dashboard compute-points session` |
+| `Auth source` | `Stored Cookie header`, `ABACUS_COOKIE_HEADER`, or `ABACUS_COOKIE` |
+| `Endpoint` | `https://apps.abacus.ai/api/_getOrganizationComputePoints` |
+
+The optional billing-info request can fail without hiding the compute-points result. In that case UsageBar keeps the credit output and logs the billing metadata failure.

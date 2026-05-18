@@ -111,6 +111,16 @@ describe("windsurf plugin", () => {
         label: "Extra usage balance",
         value: "$964.22",
       },
+      {
+        type: "text",
+        label: "Source",
+        value: "Windsurf cloud quota endpoint",
+      },
+      {
+        type: "text",
+        label: "Quota basis",
+        value: "Percent-only daily and weekly buckets",
+      },
     ])
   })
 
@@ -170,6 +180,27 @@ describe("windsurf plugin", () => {
 
     expect(result.plan).toBe("Next")
     expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
+  })
+
+  it("falls through to Windsurf Next when stable auth is rejected", async () => {
+    const ctx = makeCtx()
+    setupCloudMock(ctx, {
+      stableAuth: "sk-ws-01-stable",
+      nextAuth: "sk-ws-01-next",
+      stableResponse: { status: 401, bodyText: "{}" },
+      nextResponse: {
+        status: 200,
+        bodyText: JSON.stringify(makeQuotaResponse({ planInfo: { planName: "Next" } })),
+      },
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Next")
+    expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
+    const nextRequestBody = JSON.parse(String(ctx.host.http.request.mock.calls[1][0].bodyText))
+    expect(nextRequestBody.metadata.ideName).toBe("windsurf-next")
   })
 
   it("prefers the stable Windsurf variant when both auth DBs are available", async () => {

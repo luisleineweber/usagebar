@@ -102,6 +102,23 @@ describe("mistral plugin", () => {
     expect(result.lines.find((line) => line.label === "Output tokens")?.value).toBe("4,097")
     expect(result.lines.find((line) => line.label === "Models")?.value).toBe("2")
     expect(result.lines.find((line) => line.label === "Spend")?.value).toContain("€0.0254")
+    expect(result.lines.find((line) => line.label === "Source")).toEqual({
+      type: "text",
+      label: "Source",
+      value: "Mistral admin billing session",
+    })
+    expect(result.lines.find((line) => line.label === "Auth source")).toEqual({
+      type: "text",
+      label: "Auth source",
+      value: "Stored Cookie header",
+    })
+    expect(result.lines.find((line) => line.label === "Endpoint")).toMatchObject({
+      type: "text",
+      label: "Endpoint",
+    })
+    expect(result.lines.find((line) => line.label === "Endpoint")?.value).toContain(
+      "https://admin.mistral.ai/api/billing/v2/usage?"
+    )
     expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
       method: "GET",
       url: expect.stringContaining("https://admin.mistral.ai/api/billing/v2/usage?"),
@@ -125,11 +142,29 @@ describe("mistral plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    plugin.probe(ctx)
+    const result = plugin.probe(ctx)
 
     expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
       headers: expect.objectContaining({ Cookie: "ory_session_x=stored" }),
     }))
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored Cookie header")
+  })
+
+  it("uses MISTRAL_SESSION when cookie headers are absent", async () => {
+    const ctx = makeCtx()
+    ctx.host.env.get.mockImplementation((name) => (name === "MISTRAL_SESSION" ? "session-token" : null))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({ completion: { models: {} }, prices: [] }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
+      headers: expect.objectContaining({ Cookie: "ory_session_mistral=session-token" }),
+    }))
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("MISTRAL_SESSION")
   })
 
   it("throws session expired on auth status", async () => {

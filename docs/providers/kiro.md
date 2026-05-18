@@ -15,6 +15,17 @@ UsageBar prefers Kiro desktop auth state, then resolves usage in this order:
 
 If the live fallback fails but local cache/log data exists, UsageBar keeps showing the local data instead of failing the provider.
 
+Displayed `Source` values:
+
+| Output state | Source |
+| --- | --- |
+| Local state DB usage | `Desktop cache` |
+| Parsed desktop usage log | `Usage log` |
+| Refreshed Kiro/AWS API usage | `Live usage API` |
+| Local cache after live API failure | `Desktop cache after live API failure` |
+| Usage log after live API failure | `Usage log after live API failure` |
+| CLI session fallback | `CLI session files` |
+
 ## Platform Paths
 
 Auth token:

@@ -36,6 +36,16 @@
     },
     {
       "type": "text",
+      "label": "Auth source",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Endpoint",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
       "label": "Limit",
       "scope": "detail"
     },
@@ -72,6 +82,11 @@
     {
       "type": "text",
       "label": "Models",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Billing",
       "scope": "detail"
     }
   ],

@@ -62,6 +62,21 @@ describe("alibaba plugin", () => {
       format: { kind: "count", suffix: "requests" },
     })
     expect(result.lines.find((line) => line.label === "Plan")).toMatchObject({ type: "badge", text: "Pro" })
+    expect(result.lines.find((line) => line.label === "Source")).toEqual({
+      type: "text",
+      label: "Source",
+      value: "Alibaba Coding Plan quota endpoint",
+    })
+    expect(result.lines.find((line) => line.label === "Auth source")).toEqual({
+      type: "text",
+      label: "Auth source",
+      value: "Stored API key",
+    })
+    expect(result.lines.find((line) => line.label === "Endpoint")).toEqual({
+      type: "text",
+      label: "Endpoint",
+      value: "https://devops.cn-beijing.aliyuncs.com/webapi/codingplan/quotas",
+    })
   })
 
   it("uses current documented plan limits when a known plan omits limits", async () => {
@@ -90,6 +105,7 @@ describe("alibaba plugin", () => {
     expect(result.lines.find((line) => line.label === "5-hour")).toMatchObject({ used: 100, limit: 1200 })
     expect(result.lines.find((line) => line.label === "Weekly")).toMatchObject({ used: 2000, limit: 9000 })
     expect(result.lines.find((line) => line.label === "Monthly")).toMatchObject({ used: 3000, limit: 18000 })
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("ALIBABA_API_KEY")
   })
 
   it("keeps provider limits when usage exceeds the quota", async () => {
@@ -122,5 +138,36 @@ describe("alibaba plugin", () => {
     ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "" })
 
     expect(() => plugin.probe(ctx)).toThrow("Alibaba API key invalid")
+  })
+
+  it("maps console-session-walled responses to a specific setup error", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    ctx.host.providerSecrets.read.mockImplementation((key) => (key === "apiKey" ? "sk-sp-test" : null))
+    ctx.host.http.request.mockReturnValue({
+      status: 403,
+      bodyText: JSON.stringify({ code: "ConsoleNeedLogin", message: "ConsoleNeedLogin" }),
+    })
+
+    expect(() => plugin.probe(ctx)).toThrow("requires a browser console session")
+  })
+
+  it("does not invent limits for unknown plans without quota limits", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    ctx.host.providerSecrets.read.mockImplementation((key) => (key === "apiKey" ? "sk-sp-test" : null))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        data: {
+          plan: "Unknown Preview Plan",
+          fiveHourQuota: { used: 100 },
+          weeklyQuota: { used: 200 },
+          monthlyQuota: { used: 300 },
+        },
+      }),
+    })
+
+    expect(() => plugin.probe(ctx)).toThrow("missing usage data")
   })
 })

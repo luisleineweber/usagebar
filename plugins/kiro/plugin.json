@@ -32,6 +32,11 @@
       "type": "badge",
       "label": "Overages",
       "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Source",
+      "scope": "detail"
     }
   ],
   "capabilities": {

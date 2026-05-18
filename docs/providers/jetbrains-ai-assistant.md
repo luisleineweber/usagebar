@@ -48,6 +48,8 @@ From nested quota buckets:
 | Quota     | Overview | Used percentage |
 | Used      | Detail   | Used quota amount |
 | Remaining | Detail   | Remaining quota |
+| IDE       | Detail   | IDE config directory selected, including version folder when present |
+| Source    | Detail   | Exact quota XML path used for the displayed quota |
 
 ## Errors
 

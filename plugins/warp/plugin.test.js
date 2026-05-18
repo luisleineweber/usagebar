@@ -52,12 +52,13 @@ describe("warp plugin", () => {
     ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify(payload()) })
 
     const plugin = await loadPlugin()
-    plugin.probe(ctx)
+    const result = plugin.probe(ctx)
 
     const request = ctx.host.http.request.mock.calls[0][0]
     expect(request.headers.Authorization).toBe("Bearer secret-token")
     expect(request.headers["x-warp-client-id"]).toBe("warp-app")
     expect(request.headers["User-Agent"]).toBe("Warp/1.0")
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored token")
   })
 
   it("falls back to WARP_TOKEN when WARP_API_KEY is missing", async () => {
@@ -69,6 +70,7 @@ describe("warp plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Plan")?.text).toBe("Metered")
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("WARP_TOKEN")
     expect(ctx.host.http.request.mock.calls[0][0].headers.Authorization).toBe("Bearer env-token")
   })
 
@@ -114,6 +116,16 @@ describe("warp plugin", () => {
       label: "Source",
       value: "Undocumented Warp app GraphQL request-limit endpoint",
     })
+    expect(result.lines.find((line) => line.label === "Auth source")).toEqual({
+      type: "text",
+      label: "Auth source",
+      value: "WARP_API_KEY",
+    })
+    expect(result.lines.find((line) => line.label === "Endpoint")).toEqual({
+      type: "text",
+      label: "Endpoint",
+      value: "https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo",
+    })
   })
 
   it("keeps metered request limits when usage exceeds the limit", async () => {
@@ -153,6 +165,10 @@ describe("warp plugin", () => {
     expect(result.lines.find((line) => line.label === "Source")?.value).toBe(
       "Undocumented Warp app GraphQL request-limit endpoint"
     )
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("WARP_API_KEY")
+    expect(result.lines.find((line) => line.label === "Endpoint")?.value).toBe(
+      "https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo"
+    )
   })
 
   it("renders unlimited accounts with the unlimited badge", async () => {
@@ -179,6 +195,10 @@ describe("warp plugin", () => {
     expect(result.lines.find((line) => line.label === "Plan")?.text).toBe("Unlimited")
     expect(result.lines.find((line) => line.label === "Source")?.value).toBe(
       "Undocumented Warp app GraphQL request-limit endpoint"
+    )
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("WARP_API_KEY")
+    expect(result.lines.find((line) => line.label === "Endpoint")?.value).toBe(
+      "https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo"
     )
   })
 
@@ -216,6 +236,25 @@ describe("warp plugin", () => {
     const ctx = makeCtx()
     setEnv(ctx, { WARP_API_KEY: "env-token" })
     ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ data: {} }) })
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Warp response invalid. Try again later.")
+  })
+
+  it("throws when the GraphQL user shape is no longer UserOutput", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { WARP_API_KEY: "env-token" })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        data: {
+          user: {
+            __typename: "UnauthorizedError",
+            message: "shape changed",
+          },
+        },
+      }),
+    })
 
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Warp response invalid. Try again later.")
