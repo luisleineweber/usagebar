@@ -132,6 +132,14 @@ Work style: Be radically precise. No fluff. Pure information only (drop grammar;
 
 ## Before Release
 - Update `CHANGELOG.md` with a section for the exact release version before tagging, publishing, or running the final release preflight.
+- GitHub release body must follow the previous release format exactly:
+  - `What's Changed`
+  - bullet list of notable commits as `- Human summary by @luisleineweber in shortsha`
+  - `Alpha Notes` / milestone notes
+  - `New Contributors`
+  - `Full Changelog: https://github.com/luisleineweber/usagebar/compare/<previous-tag>...<new-tag>`
+- Never leave `Full Changelog` as plain text tag names; it must be the GitHub compare URL.
+- Before publishing or editing a release body, view the previous release with `gh release view <previous-tag> --json body` and mirror its structure.
 
 ## Project Notes
 - This repo is a fork of `openusage`: `https://github.com/robinebers/openusage`.
