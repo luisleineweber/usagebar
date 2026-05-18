@@ -39,11 +39,7 @@ fn acquire_release_single_instance() -> Option<ReleaseSingleInstanceGuard> {
         .chain(std::iter::once(0))
         .collect();
     let handle = unsafe {
-        windows_sys::Win32::System::Threading::CreateMutexW(
-            std::ptr::null_mut(),
-            0,
-            name.as_ptr(),
-        )
+        windows_sys::Win32::System::Threading::CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr())
     };
 
     if handle.is_null() {

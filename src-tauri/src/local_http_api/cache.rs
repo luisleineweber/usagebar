@@ -56,7 +56,10 @@ pub fn load_cache(app_data_dir: &Path) -> HashMap<String, CachedPluginSnapshot> 
             HashMap::new()
         }
         Err(error) => {
-            log::warn!("failed to parse usage-api-cache.json: {}, starting empty", error);
+            log::warn!(
+                "failed to parse usage-api-cache.json: {}, starting empty",
+                error
+            );
             HashMap::new()
         }
     }
@@ -106,9 +109,7 @@ pub fn cache_successful_output(output: &PluginOutput) {
     };
 
     let mut state = cache_state().lock().expect("cache state poisoned");
-    state
-        .snapshots
-        .insert(output.provider_id.clone(), snapshot);
+    state.snapshots.insert(output.provider_id.clone(), snapshot);
     save_cache(&state.app_data_dir, &state.snapshots);
 }
 
@@ -136,7 +137,11 @@ fn read_plugin_settings(app_data_dir: &Path) -> (Vec<String>, HashSet<String>, b
             Ok(data) => data,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => {
-                log::warn!("failed to read plugin settings from {}: {}", path.display(), error);
+                log::warn!(
+                    "failed to read plugin settings from {}: {}",
+                    path.display(),
+                    error
+                );
                 continue;
             }
         };
@@ -144,7 +149,11 @@ fn read_plugin_settings(app_data_dir: &Path) -> (Vec<String>, HashSet<String>, b
         let settings = match serde_json::from_str::<SettingsFile>(&data) {
             Ok(settings) => settings,
             Err(error) => {
-                log::warn!("failed to parse plugin settings from {}: {}", path.display(), error);
+                log::warn!(
+                    "failed to parse plugin settings from {}: {}",
+                    path.display(),
+                    error
+                );
                 continue;
             }
         };

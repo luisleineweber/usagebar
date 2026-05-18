@@ -1,4 +1,29 @@
+#[cfg(not(test))]
 pub mod browser_bridge;
+#[cfg(test)]
+pub mod browser_bridge {
+    #[derive(Debug, Clone)]
+    pub struct BrowserRequestWithCookiesParams {
+        pub url: String,
+        pub cookie_header: String,
+        pub source_url: Option<String>,
+        pub timeout_ms: Option<u64>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct BrowserRequestResponse {
+        pub status: u16,
+        pub body_text: String,
+        pub final_url: String,
+    }
+
+    pub fn request_with_cookies(
+        _app_handle: &(),
+        _params: &BrowserRequestWithCookiesParams,
+    ) -> Result<BrowserRequestResponse, String> {
+        Err("browser-backed requests are unavailable in Rust unit tests".to_string())
+    }
+}
 pub mod host_api;
 pub mod manifest;
 pub mod runtime;

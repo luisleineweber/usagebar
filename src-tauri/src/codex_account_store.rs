@@ -45,15 +45,21 @@ fn load_accounts_file(app_data_dir: &Path) -> Result<CodexAccountsFile, String> 
     match std::fs::read_to_string(&path) {
         Ok(text) => serde_json::from_str(&text)
             .map_err(|error| format!("Could not parse Codex account registry: {}", error)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(CodexAccountsFile::default()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(CodexAccountsFile::default())
+        }
         Err(error) => Err(format!("Could not read Codex account registry: {}", error)),
     }
 }
 
 fn save_accounts_file(app_data_dir: &Path, file: &CodexAccountsFile) -> Result<(), String> {
     let dir = codex_accounts_dir(app_data_dir);
-    std::fs::create_dir_all(&dir)
-        .map_err(|error| format!("Could not create Codex account registry directory: {}", error))?;
+    std::fs::create_dir_all(&dir).map_err(|error| {
+        format!(
+            "Could not create Codex account registry directory: {}",
+            error
+        )
+    })?;
 
     let path = codex_accounts_file_path(app_data_dir);
     let temp_path = path.with_extension("json.tmp");
@@ -69,7 +75,7 @@ fn save_accounts_file(app_data_dir: &Path, file: &CodexAccountsFile) -> Result<(
 pub fn list_profiles(app_data_dir: &Path) -> Result<Vec<CodexAccountProfile>, String> {
     let mut file = load_accounts_file(app_data_dir)?;
     file.profiles
-        .sort_by(|left, right| right.last_imported_at.cmp(&left.last_imported_at));
+        .sort_by_key(|profile| std::cmp::Reverse(profile.last_imported_at));
     Ok(file.profiles)
 }
 
@@ -109,9 +115,16 @@ pub fn import_profile(
     Ok(profile)
 }
 
-pub fn delete_profile(app_data_dir: &Path, profile_id: &str) -> Result<Option<CodexAccountProfile>, String> {
+pub fn delete_profile(
+    app_data_dir: &Path,
+    profile_id: &str,
+) -> Result<Option<CodexAccountProfile>, String> {
     let mut file = load_accounts_file(app_data_dir)?;
-    let index = match file.profiles.iter().position(|profile| profile.profile_id == profile_id) {
+    let index = match file
+        .profiles
+        .iter()
+        .position(|profile| profile.profile_id == profile_id)
+    {
         Some(index) => index,
         None => return Ok(None),
     };

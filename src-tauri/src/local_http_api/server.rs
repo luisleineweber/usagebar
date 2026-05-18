@@ -132,7 +132,11 @@ fn response_no_content() -> String {
 }
 
 fn response_not_found(error_code: &str) -> String {
-    response_json(404, "Not Found", &format!(r#"{{"error":"{}"}}"#, error_code))
+    response_json(
+        404,
+        "Not Found",
+        &format!(r#"{{"error":"{}"}}"#, error_code),
+    )
 }
 
 fn response_method_not_allowed() -> String {
@@ -145,7 +149,7 @@ fn response_method_not_allowed() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::super::cache::{cache_state, CachedPluginSnapshot};
+    use super::super::cache::{CachedPluginSnapshot, cache_state};
     use super::*;
     use std::sync::{Mutex, OnceLock};
 

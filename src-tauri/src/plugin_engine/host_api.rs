@@ -17,7 +17,20 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, OnceLock};
-use tauri::AppHandle;
+#[cfg(not(test))]
+type HostAppHandle = tauri::AppHandle;
+#[cfg(test)]
+type HostAppHandle = ();
+
+#[cfg(not(test))]
+fn clone_host_app_handle(app_handle: &Option<HostAppHandle>) -> Option<HostAppHandle> {
+    app_handle.clone()
+}
+
+#[cfg(test)]
+fn clone_host_app_handle(app_handle: &Option<HostAppHandle>) -> Option<HostAppHandle> {
+    *app_handle
+}
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::GetLastError;
 #[cfg(target_os = "windows")]
@@ -85,11 +98,11 @@ fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
 fn provider_secret_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
     #[cfg(target_os = "windows")]
     {
-        return ProviderSecretEntrySpec {
+        ProviderSecretEntrySpec {
             target: Some(service),
             service: KEYRING_TARGET,
             user: PROVIDER_SECRET_WINDOWS_USER,
-        };
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -216,13 +229,12 @@ fn read_windows_generic_password_target(target: &str) -> Result<String, String> 
         )
     };
     if read_ok == 0 {
-        return Err(format!(
-            "credential read failed: os error {}",
-            unsafe { GetLastError() }
-        ));
+        return Err(format!("credential read failed: os error {}", unsafe {
+            GetLastError()
+        }));
     }
 
-    let decode_result = (|| {
+    let decode_result = {
         let credential = unsafe { &*credential_ptr };
         let blob_len = credential.CredentialBlobSize as usize;
         let blob = if blob_len == 0 || credential.CredentialBlob.is_null() {
@@ -231,7 +243,7 @@ fn read_windows_generic_password_target(target: &str) -> Result<String, String> 
             unsafe { std::slice::from_raw_parts(credential.CredentialBlob, blob_len) }
         };
         decode_windows_generic_password_blob(blob)
-    })();
+    };
 
     unsafe {
         CredFree(credential_ptr as *mut std::ffi::c_void);
@@ -616,9 +628,9 @@ fn is_url_allowed_by_domains(url: &str, allowed_domains: &[String]) -> bool {
 pub fn inject_host_api<'js>(
     ctx: &Ctx<'js>,
     plugin_id: &str,
-    app_data_dir: &PathBuf,
+    app_data_dir: &Path,
     app_version: &str,
-    app_handle: Option<AppHandle>,
+    app_handle: Option<HostAppHandle>,
     capabilities: &HostCapabilities,
 ) -> rquickjs::Result<()> {
     let globals = ctx.globals();
@@ -696,7 +708,10 @@ fn inject_crypto<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
         "decryptAes256Gcm",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, envelope: String, key_b64: String| -> rquickjs::Result<String> {
+            move |ctx_inner: Ctx<'_>,
+                  envelope: String,
+                  key_b64: String|
+                  -> rquickjs::Result<String> {
                 decrypt_aes256_gcm_internal(&envelope, &key_b64)
                     .map_err(|error| Exception::throw_message(&ctx_inner, &error))
             },
@@ -707,7 +722,10 @@ fn inject_crypto<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()
         "encryptAes256Gcm",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, plaintext: String, key_b64: String| -> rquickjs::Result<String> {
+            move |ctx_inner: Ctx<'_>,
+                  plaintext: String,
+                  key_b64: String|
+                  -> rquickjs::Result<String> {
                 encrypt_aes256_gcm_internal(&plaintext, &key_b64)
                     .map_err(|error| Exception::throw_message(&ctx_inner, &error))
             },
@@ -865,11 +883,11 @@ fn inject_provider_config<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
     plugin_id: &str,
-    app_data_dir: &PathBuf,
+    app_data_dir: &Path,
 ) -> rquickjs::Result<()> {
     let provider_config_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
-    let data_dir = app_data_dir.clone();
+    let data_dir = app_data_dir.to_path_buf();
 
     provider_config_obj.set(
         "get",
@@ -897,7 +915,7 @@ fn inject_provider_config<'js>(
     )?;
 
     let pid = plugin_id.to_string();
-    let data_dir = app_data_dir.clone();
+    let data_dir = app_data_dir.to_path_buf();
     provider_config_obj.set(
         "getAll",
         Function::new(ctx.clone(), move || -> String {
@@ -955,13 +973,19 @@ fn inject_http<'js>(
                 }
 
                 // Check if we should bypass proxy for this URL
-                let should_use_proxy = proxy_url.as_ref().map_or(false, |_| {
-                    !should_bypass_proxy(&req.url)
-                });
+                let should_use_proxy = proxy_url
+                    .as_ref()
+                    .is_some_and(|_| !should_bypass_proxy(&req.url));
 
                 if should_use_proxy {
                     if let Some(ref url) = proxy_url {
-                        log::info!("[plugin:{}] HTTP {} {} via proxy {}", pid, method_str, redacted_url, redact_proxy_url(url));
+                        log::info!(
+                            "[plugin:{}] HTTP {} {} via proxy {}",
+                            pid,
+                            method_str,
+                            redacted_url,
+                            redact_proxy_url(url)
+                        );
                     }
                 } else {
                     log::info!("[plugin:{}] HTTP {} {}", pid, method_str, redacted_url);
@@ -989,7 +1013,7 @@ fn inject_http<'js>(
 
                 let timeout_ms = req.timeout_ms.unwrap_or(10_000);
                 let ignore_tls = req.dangerously_ignore_tls.unwrap_or(false);
-                
+
                 // Determine proxy URL to use (if any)
                 let effective_proxy = if should_use_proxy {
                     proxy_url.as_deref()
@@ -1087,7 +1111,7 @@ fn inject_browser<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
     plugin_id: &str,
-    app_handle: Option<AppHandle>,
+    app_handle: Option<HostAppHandle>,
 ) -> rquickjs::Result<()> {
     let browser_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
@@ -1097,15 +1121,15 @@ fn inject_browser<'js>(
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, req_json: String| -> rquickjs::Result<String> {
-                let Some(app_handle) = app_handle.clone() else {
+                let Some(app_handle) = clone_host_app_handle(&app_handle) else {
                     return Err(Exception::throw_message(
                         &ctx_inner,
                         "browser-backed requests are unavailable in this build",
                     ));
                 };
 
-                let req: BrowserRequestWithCookiesReqParams =
-                    serde_json::from_str(&req_json).map_err(|error| {
+                let req: BrowserRequestWithCookiesReqParams = serde_json::from_str(&req_json)
+                    .map_err(|error| {
                         Exception::throw_message(
                             &ctx_inner,
                             &format!("invalid browser request: {}", error),
@@ -1580,7 +1604,7 @@ fn ls_list_processes() -> std::io::Result<Vec<(i32, String)>> {
             }
         }
 
-        return Ok(out);
+        Ok(out)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -1628,10 +1652,10 @@ fn ls_listening_ports(process_pid: i32) -> std::io::Result<Vec<i32>> {
         if !output.status.success() {
             return Ok(Vec::new());
         }
-        return Ok(ls_parse_netstat_ports(
+        Ok(ls_parse_netstat_ports(
             &String::from_utf8_lossy(&output.stdout),
             process_pid,
-        ));
+        ))
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -2028,10 +2052,7 @@ fn ccusage_package_spec(provider: CcusageProvider) -> String {
     format!("{}@{}", config.package_name, CCUSAGE_VERSION)
 }
 
-fn ccusage_home_override<'a>(
-    opts: &'a CcusageQueryOpts,
-    provider: CcusageProvider,
-) -> Option<&'a str> {
+fn ccusage_home_override(opts: &CcusageQueryOpts, provider: CcusageProvider) -> Option<&str> {
     if let Some(home_path) = opts
         .home_path
         .as_deref()
@@ -2195,13 +2216,13 @@ fn configure_ccusage_command(
 
 fn resolve_ccusage_runner_binary(kind: CcusageRunnerKind) -> Option<String> {
     let path = ccusage_enriched_path();
-    for candidate in ccusage_runner_candidates(kind) {
-        if ccusage_runner_available(&candidate, path.as_deref()) {
-            return Some(candidate);
-        }
-    }
-    None
+    ccusage_runner_candidates(kind)
+        .into_iter()
+        .find(|candidate| ccusage_runner_available(candidate, path.as_deref()))
 }
+
+type CcusageRunnerList = Vec<(CcusageRunnerKind, String)>;
+type CcusageRunnerCache = Mutex<Option<CcusageRunnerList>>;
 
 fn collect_ccusage_runners_with<F>(mut resolver: F) -> Vec<(CcusageRunnerKind, String)>
 where
@@ -2220,8 +2241,8 @@ fn collect_ccusage_runners() -> Vec<(CcusageRunnerKind, String)> {
     collect_ccusage_runners_with(resolve_ccusage_runner_binary)
 }
 
-fn ccusage_runner_cache() -> &'static Mutex<Option<Vec<(CcusageRunnerKind, String)>>> {
-    static CACHE: OnceLock<Mutex<Option<Vec<(CcusageRunnerKind, String)>>>> = OnceLock::new();
+fn ccusage_runner_cache() -> &'static CcusageRunnerCache {
+    static CACHE: OnceLock<CcusageRunnerCache> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
@@ -2302,7 +2323,11 @@ fn ccusage_runner_args(
         CcusageRunnerKind::Bunx => {
             #[cfg(target_os = "windows")]
             {
-                vec!["x".to_string(), "--silent".to_string(), package_spec.clone()]
+                vec![
+                    "x".to_string(),
+                    "--silent".to_string(),
+                    package_spec.clone(),
+                ]
             }
 
             #[cfg(not(target_os = "windows"))]
@@ -2533,11 +2558,19 @@ fn run_ccusage_query_with<FCached, FInvalidate, FRun>(
 where
     FCached: FnMut() -> Vec<(CcusageRunnerKind, String)>,
     FInvalidate: FnMut(),
-    FRun: FnMut(&[(CcusageRunnerKind, String)], &CcusageQueryOpts, CcusageProvider, &str) -> (bool, Option<String>),
+    FRun: FnMut(
+        &[(CcusageRunnerKind, String)],
+        &CcusageQueryOpts,
+        CcusageProvider,
+        &str,
+    ) -> (bool, Option<String>),
 {
     let cached_runners = collect_runners();
     if cached_runners.is_empty() {
-        log::warn!("[plugin:{}] no package runner found for ccusage query", plugin_id);
+        log::warn!(
+            "[plugin:{}] no package runner found for ccusage query",
+            plugin_id
+        );
         return Err("no_runner");
     }
 
@@ -2726,8 +2759,8 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
             move |ctx_inner: Ctx<'_>, target: String| -> rquickjs::Result<String> {
                 #[cfg(target_os = "windows")]
                 {
-                    return read_windows_generic_password_target(&target)
-                        .map_err(|e| Exception::throw_message(&ctx_inner, &e));
+                    read_windows_generic_password_target(&target)
+                        .map_err(|e| Exception::throw_message(&ctx_inner, &e))
                 }
 
                 #[cfg(not(target_os = "windows"))]
@@ -2810,11 +2843,11 @@ fn inject_provider_secrets<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
     plugin_id: &str,
-    app_data_dir: &PathBuf,
+    app_data_dir: &Path,
 ) -> rquickjs::Result<()> {
     let provider_secrets_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
-    let data_dir = app_data_dir.clone();
+    let data_dir = app_data_dir.to_path_buf();
 
     provider_secrets_obj.set(
         "read",
@@ -2888,7 +2921,7 @@ fn inject_provider_secrets<'js>(
     )?;
 
     let pid = plugin_id.to_string();
-    let data_dir = app_data_dir.clone();
+    let data_dir = app_data_dir.to_path_buf();
     provider_secrets_obj.set(
         "write",
         Function::new(
@@ -3077,9 +3110,9 @@ fn expand_path(path: &str) -> String {
             return home.to_string_lossy().to_string();
         }
     }
-    if path.starts_with("~/") {
+    if let Some(rest) = path.strip_prefix("~/") {
         if let Some(home) = dirs::home_dir() {
-            return home.join(&path[2..]).to_string_lossy().to_string();
+            return home.join(rest).to_string_lossy().to_string();
         }
     }
     path.to_string()
@@ -3103,7 +3136,7 @@ struct AppConfig {
 fn load_app_config() -> Option<AppConfig> {
     let home = dirs::home_dir()?;
     let config_path = home.join(".usagebar").join("config.json");
-    
+
     let text = std::fs::read_to_string(&config_path).ok()?;
     let config: AppConfig = serde_json::from_str(&text).ok()?;
     Some(config)
@@ -3112,10 +3145,10 @@ fn load_app_config() -> Option<AppConfig> {
 fn should_bypass_proxy(url: &str) -> bool {
     // Bypass proxy for localhost, 127.0.0.1, and ::1
     let lower = url.to_lowercase();
-    lower.contains("localhost") || 
-    lower.contains("127.0.0.1") || 
-    lower.contains("::1") ||
-    lower.contains("[::1]")
+    lower.contains("localhost")
+        || lower.contains("127.0.0.1")
+        || lower.contains("::1")
+        || lower.contains("[::1]")
 }
 
 fn redact_proxy_url(url: &str) -> String {
@@ -3138,24 +3171,22 @@ fn build_client_with_proxy(
     let mut builder = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_millis(timeout_ms))
         .redirect(reqwest::redirect::Policy::none());
-    
+
     if ignore_tls {
         builder = builder.danger_accept_invalid_certs(true);
     }
-    
+
     if let Some(proxy_url) = proxy_url {
-        if !proxy_url.is_empty() {
-            // Parse and set proxy for all schemes
-            if proxy_url.starts_with("socks5://") {
-                let proxy = reqwest::Proxy::all(proxy_url)?;
-                builder = builder.proxy(proxy);
-            } else if proxy_url.starts_with("http://") || proxy_url.starts_with("https://") {
-                let proxy = reqwest::Proxy::all(proxy_url)?;
-                builder = builder.proxy(proxy);
-            }
+        if !proxy_url.is_empty()
+            && (proxy_url.starts_with("socks5://")
+                || proxy_url.starts_with("http://")
+                || proxy_url.starts_with("https://"))
+        {
+            let proxy = reqwest::Proxy::all(proxy_url)?;
+            builder = builder.proxy(proxy);
         }
     }
-    
+
     builder.build()
 }
 
@@ -3341,16 +3372,15 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn decode_windows_generic_password_blob_accepts_utf8_and_utf16() {
-        let utf8 = decode_windows_generic_password_blob(br#"{"token":"abc"}"#)
-            .expect("utf8 credential");
+        let utf8 =
+            decode_windows_generic_password_blob(br#"{"token":"abc"}"#).expect("utf8 credential");
         assert_eq!(utf8, r#"{"token":"abc"}"#);
 
         let utf16: Vec<u8> = "zed-session"
             .encode_utf16()
             .flat_map(|code_unit| code_unit.to_le_bytes())
             .collect();
-        let decoded_utf16 =
-            decode_windows_generic_password_blob(&utf16).expect("utf16 credential");
+        let decoded_utf16 = decode_windows_generic_password_blob(&utf16).expect("utf16 credential");
         assert_eq!(decoded_utf16, "zed-session");
     }
 
@@ -4238,8 +4268,14 @@ Saved lockfile
         });
 
         assert_eq!(calls.get(), 2);
-        assert_eq!(first, vec![(CcusageRunnerKind::PnpmDlx, "pnpm".to_string())]);
-        assert_eq!(second, vec![(CcusageRunnerKind::YarnDlx, "yarn".to_string())]);
+        assert_eq!(
+            first,
+            vec![(CcusageRunnerKind::PnpmDlx, "pnpm".to_string())]
+        );
+        assert_eq!(
+            second,
+            vec![(CcusageRunnerKind::YarnDlx, "yarn".to_string())]
+        );
         invalidate_ccusage_runner_cache();
     }
 

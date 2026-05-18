@@ -79,8 +79,8 @@ fn save_tray_anchor(
 ) {
     if let Ok(mut slot) = panel_state_slot().lock() {
         slot.tray_anchor = Some(TrayAnchor {
-            icon_position: icon_position.clone(),
-            icon_size: icon_size.clone(),
+            icon_position: *icon_position,
+            icon_size: *icon_size,
             vertical_anchor,
         });
     }

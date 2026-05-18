@@ -147,7 +147,7 @@ fn build_hidden_browser_request(
     .build()
     .map_err(|error| format!("failed to build hidden browser: {}", error))?;
 
-    for domain in cookie_domains(&source_url, &target_url)? {
+    for domain in cookie_domains(source_url, target_url)? {
         for (name, value) in cookies {
             let cookie = Cookie::build((name.as_str(), value.as_str()))
                 .domain(domain.as_str())
@@ -245,8 +245,7 @@ fn build_fetch_bridge_script(source_url: &str, target_url: &str) -> String {
         .unwrap_or_else(|| "https://dashboard.zed.dev".to_string());
     let source_origin_json =
         serde_json::to_string(&source_origin).unwrap_or_else(|_| "\"\"".to_string());
-    let target_url_json =
-        serde_json::to_string(target_url).unwrap_or_else(|_| "\"\"".to_string());
+    let target_url_json = serde_json::to_string(target_url).unwrap_or_else(|_| "\"\"".to_string());
     format!(
         r#"
 (() => {{
@@ -339,17 +338,22 @@ fn close_hidden_browser(app_handle: &AppHandle, label: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_fetch_bridge_script, cookie_domains, normalize_https_url, parse_cookie_header};
+    use super::{
+        build_fetch_bridge_script, cookie_domains, normalize_https_url, parse_cookie_header,
+    };
 
     #[test]
     fn parse_cookie_header_preserves_value_equals() {
-        let cookies = parse_cookie_header("foo=bar=baz; zed.session=abc={\"sid\":\"123\"}")
-            .expect("cookies");
+        let cookies =
+            parse_cookie_header("foo=bar=baz; zed.session=abc={\"sid\":\"123\"}").expect("cookies");
         assert_eq!(
             cookies,
             vec![
                 ("foo".to_string(), "bar=baz".to_string()),
-                ("zed.session".to_string(), "abc={\"sid\":\"123\"}".to_string())
+                (
+                    "zed.session".to_string(),
+                    "abc={\"sid\":\"123\"}".to_string()
+                )
             ]
         );
     }
@@ -362,8 +366,8 @@ mod tests {
 
     #[test]
     fn normalize_https_url_rejects_non_https_urls() {
-        let error = normalize_https_url("http://example.com", "request url")
-            .expect_err("http should fail");
+        let error =
+            normalize_https_url("http://example.com", "request url").expect_err("http should fail");
         assert!(error.contains("must use https"));
     }
 

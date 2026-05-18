@@ -2,7 +2,12 @@ use crate::plugin_engine::host_api;
 use crate::plugin_engine::manifest::LoadedPlugin;
 use rquickjs::{Array, Context, Ctx, Error, Object, Promise, Runtime, Value};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::Path;
+
+#[cfg(not(test))]
+type RuntimeAppHandle = tauri::AppHandle;
+#[cfg(test)]
+type RuntimeAppHandle = ();
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -52,9 +57,9 @@ pub struct PluginOutput {
 
 pub fn run_probe(
     plugin: &LoadedPlugin,
-    app_data_dir: &PathBuf,
+    app_data_dir: &Path,
     app_version: &str,
-    app_handle: Option<&tauri::AppHandle>,
+    app_handle: Option<&RuntimeAppHandle>,
 ) -> PluginOutput {
     let fallback = error_output(plugin, "runtime error".to_string());
 
@@ -72,7 +77,7 @@ pub fn run_probe(
     let display_name = plugin.manifest.name.clone();
     let entry_script = plugin.entry_script.clone();
     let icon_url = plugin.icon_data_url.clone();
-    let app_data = app_data_dir.clone();
+    let app_data = app_data_dir.to_path_buf();
 
     ctx.with(|ctx| {
         if host_api::inject_host_api(
@@ -355,7 +360,10 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
                                     // ISO-like but missing timezone: assume UTC.
                                     let is_missing_tz =
                                         value.contains('T') && !value.ends_with('Z') && {
-                                            let tail = value.splitn(2, 'T').nth(1).unwrap_or("");
+                                            let tail = value
+                                                .split_once('T')
+                                                .map(|(_, tail)| tail)
+                                                .unwrap_or("");
                                             !tail.contains('+') && !tail.contains('-')
                                         };
                                     if is_missing_tz {

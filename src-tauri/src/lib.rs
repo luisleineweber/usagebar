@@ -1,32 +1,47 @@
+#![cfg_attr(test, allow(dead_code, unused_imports))]
+
 #[cfg(target_os = "macos")]
 mod app_nap;
 mod codex_account_store;
 mod local_http_api;
+#[cfg(not(test))]
 mod panel;
 mod plugin_engine;
 mod provider_secret_store;
+#[cfg(not(test))]
 mod settings_window;
+#[cfg(not(test))]
 mod tray;
 #[cfg(target_os = "macos")]
 mod webkit_config;
 
+#[cfg(not(test))]
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+#[cfg(not(test))]
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(not(test))]
 use std::sync::{Arc, Mutex, OnceLock};
+#[cfg(test)]
+use std::sync::{Mutex, OnceLock};
 
 use base64::Engine;
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+#[cfg(not(test))]
 use tauri::{Emitter, Manager};
+#[cfg(not(test))]
 use tauri_plugin_aptabase::EventTracker;
+#[cfg(not(test))]
 use tauri_plugin_log::{Target, TargetKind};
+#[cfg(not(test))]
 use uuid::Uuid;
 
-#[cfg(desktop)]
+#[cfg(all(desktop, not(test)))]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+#[cfg(not(test))]
 const GLOBAL_SHORTCUT_STORE_KEY: &str = "globalShortcut";
 const APP_STARTED_TRACKED_DAY_KEY_PREFIX: &str = "analytics.app_started_day.";
 const PROVIDER_SECRET_KEYRING_TARGET: &str = "OpenUsage";
@@ -62,11 +77,11 @@ fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
 fn provider_secret_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
     #[cfg(target_os = "windows")]
     {
-        return ProviderSecretEntrySpec {
+        ProviderSecretEntrySpec {
             target: Some(service),
             service: PROVIDER_SECRET_KEYRING_TARGET,
             user: PROVIDER_SECRET_WINDOWS_USER,
-        };
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -234,7 +249,9 @@ fn provider_config_file_paths(app_data_dir: &std::path::Path) -> [PathBuf; 2] {
     ]
 }
 
-fn load_provider_configs_json(app_data_dir: &std::path::Path) -> Result<serde_json::Map<String, JsonValue>, String> {
+fn load_provider_configs_json(
+    app_data_dir: &std::path::Path,
+) -> Result<serde_json::Map<String, JsonValue>, String> {
     for path in provider_config_file_paths(app_data_dir) {
         let text = match std::fs::read_to_string(&path) {
             Ok(text) => text,
@@ -244,12 +261,12 @@ fn load_provider_configs_json(app_data_dir: &std::path::Path) -> Result<serde_js
                     "Could not read provider settings from {}: {}",
                     path.display(),
                     error
-                ))
+                ));
             }
         };
 
-        let json: JsonValue =
-            serde_json::from_str(&text).map_err(|error| format!("Could not parse provider settings: {}", error))?;
+        let json: JsonValue = serde_json::from_str(&text)
+            .map_err(|error| format!("Could not parse provider settings: {}", error))?;
         let configs = json
             .get("providerConfigs")
             .and_then(JsonValue::as_object)
@@ -307,13 +324,22 @@ fn try_parse_json_or_hex_json(text: &str) -> Option<JsonValue> {
 fn json_string_or_object(text: &str) -> Option<JsonValue> {
     let parsed = try_parse_json_or_hex_json(text)?;
     match parsed {
-        JsonValue::String(inner) => try_parse_json_or_hex_json(&inner).or(Some(JsonValue::String(inner))),
+        JsonValue::String(inner) => {
+            try_parse_json_or_hex_json(&inner).or(Some(JsonValue::String(inner)))
+        }
         other => Some(other),
     }
 }
 
-fn json_string_field<'a>(object: &'a serde_json::Map<String, JsonValue>, key: &str) -> Option<&'a str> {
-    object.get(key).and_then(JsonValue::as_str).map(str::trim).filter(|value| !value.is_empty())
+fn json_string_field<'a>(
+    object: &'a serde_json::Map<String, JsonValue>,
+    key: &str,
+) -> Option<&'a str> {
+    object
+        .get(key)
+        .and_then(JsonValue::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
 }
 
 fn decode_base64url_to_json(token: &str) -> Option<JsonValue> {
@@ -414,7 +440,7 @@ fn normalize_codex_auth(json: JsonValue) -> Option<ResolvedCodexAuth> {
     })
 }
 
-fn read_codex_auth_from_path(path: &PathBuf) -> Result<Option<ResolvedCodexAuth>, String> {
+fn read_codex_auth_from_path(path: &std::path::Path) -> Result<Option<ResolvedCodexAuth>, String> {
     let raw_path = path.to_string_lossy().to_string();
     let expanded = if raw_path == "~" {
         dirs::home_dir()
@@ -436,9 +462,8 @@ fn read_codex_auth_from_path(path: &PathBuf) -> Result<Option<ResolvedCodexAuth>
         Err(error) => {
             return Err(format!(
                 "Could not read Codex auth file {}: {}",
-                expanded,
-                error
-            ))
+                expanded, error
+            ));
         }
     };
 
@@ -446,8 +471,8 @@ fn read_codex_auth_from_path(path: &PathBuf) -> Result<Option<ResolvedCodexAuth>
 }
 
 fn read_codex_auth_from_keychain() -> Result<Option<ResolvedCodexAuth>, String> {
-    let entry =
-        Entry::new("OpenUsage", "Codex Auth").map_err(|error| format!("Could not access Codex keychain entry: {}", error))?;
+    let entry = Entry::new("OpenUsage", "Codex Auth")
+        .map_err(|error| format!("Could not access Codex keychain entry: {}", error))?;
 
     match entry.get_password() {
         Ok(value) => Ok(json_string_or_object(&value).and_then(normalize_codex_auth)),
@@ -500,7 +525,7 @@ fn should_track_app_started(last_tracked_day: Option<&str>, today: &str) -> bool
     }
 }
 
-#[cfg(desktop)]
+#[cfg(all(desktop, not(test)))]
 fn track_app_started_once_per_day_per_version(app: &tauri::App) {
     use tauri_plugin_store::StoreExt;
 
@@ -535,19 +560,19 @@ fn track_app_started_once_per_day_per_version(app: &tauri::App) {
     }
 }
 
-#[cfg(not(desktop))]
+#[cfg(all(not(desktop), not(test)))]
 fn track_app_started_once_per_day_per_version(app: &tauri::App) {
     let _ = app.track_event("app_started", None);
 }
 
-#[cfg(desktop)]
+#[cfg(all(desktop, not(test)))]
 fn managed_shortcut_slot() -> &'static Mutex<Option<String>> {
     static SLOT: OnceLock<Mutex<Option<String>>> = OnceLock::new();
     SLOT.get_or_init(|| Mutex::new(None))
 }
 
 /// Shared shortcut handler that toggles the panel when the shortcut is pressed.
-#[cfg(desktop)]
+#[cfg(all(desktop, not(test)))]
 fn handle_global_shortcut(
     app: &tauri::AppHandle,
     event: tauri_plugin_global_shortcut::ShortcutEvent,
@@ -558,12 +583,14 @@ fn handle_global_shortcut(
     }
 }
 
+#[cfg(not(test))]
 pub struct AppState {
     pub plugins: Vec<plugin_engine::manifest::LoadedPlugin>,
     pub app_data_dir: PathBuf,
     pub app_version: String,
 }
 
+#[cfg(not(test))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginMeta {
@@ -582,6 +609,7 @@ pub struct PluginMeta {
     pub primary_candidates: Vec<String>,
 }
 
+#[cfg(not(test))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManifestLineDto {
@@ -591,6 +619,7 @@ pub struct ManifestLineDto {
     pub scope: String,
 }
 
+#[cfg(not(test))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginLinkDto {
@@ -598,6 +627,7 @@ pub struct PluginLinkDto {
     pub url: String,
 }
 
+#[cfg(not(test))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeBatchStarted {
@@ -605,6 +635,7 @@ pub struct ProbeBatchStarted {
     pub plugin_ids: Vec<String>,
 }
 
+#[cfg(not(test))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeResult {
@@ -612,17 +643,20 @@ pub struct ProbeResult {
     pub output: plugin_engine::runtime::PluginOutput,
 }
 
+#[cfg(not(test))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeBatchComplete {
     pub batch_id: String,
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn init_panel(app_handle: tauri::AppHandle) {
     panel::init(&app_handle).expect("Failed to initialize panel");
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn hide_panel(app_handle: tauri::AppHandle) {
     use tauri::Manager;
@@ -631,26 +665,31 @@ fn hide_panel(app_handle: tauri::AppHandle) {
     }
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn reposition_panel(app_handle: tauri::AppHandle, panel_height_px: Option<f64>) {
     panel::reposition_panel(&app_handle, panel_height_px);
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn sync_panel_geometry(panel_height_px: f64) {
     panel::sync_panel_geometry(panel_height_px);
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn apply_panel_bounds(app_handle: tauri::AppHandle, panel_height_px: f64) {
     panel::apply_panel_bounds(&app_handle, panel_height_px);
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn take_pending_panel_view() -> Option<String> {
     take_pending_panel_view_inner()
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn sync_panel_view(app_handle: tauri::AppHandle, view: String) -> Result<(), String> {
     let normalized_view = view.trim().to_string();
@@ -668,6 +707,7 @@ fn sync_panel_view(app_handle: tauri::AppHandle, view: String) -> Result<(), Str
     Ok(())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn show_panel_for_view(app_handle: tauri::AppHandle, view: String) -> Result<(), String> {
     let normalized_view = view.trim().to_string();
@@ -685,6 +725,7 @@ fn show_panel_for_view(app_handle: tauri::AppHandle, view: String) -> Result<(),
     Ok(())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn open_settings_window(
     app_handle: tauri::AppHandle,
@@ -694,6 +735,7 @@ async fn open_settings_window(
     settings_window::open(&app_handle, tab, provider_id)
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn open_devtools(#[allow(unused)] app_handle: tauri::AppHandle) {
     #[cfg(debug_assertions)]
@@ -705,6 +747,7 @@ fn open_devtools(#[allow(unused)] app_handle: tauri::AppHandle) {
     }
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 async fn start_probe_batch(
     app_handle: tauri::AppHandle,
@@ -841,6 +884,7 @@ async fn start_probe_batch(
     })
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     let log_dir = app_handle.path().app_log_dir().map_err(|e| e.to_string())?;
@@ -848,6 +892,7 @@ fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     Ok(log_file.to_string_lossy().to_string())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn set_provider_secret(
     app_handle: tauri::AppHandle,
@@ -948,6 +993,7 @@ fn set_provider_secret(
     Ok(())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn delete_provider_secret(
     app_handle: tauri::AppHandle,
@@ -1013,6 +1059,7 @@ fn delete_provider_secret(
     Ok(())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn list_codex_account_profiles(
     app_handle: tauri::AppHandle,
@@ -1024,6 +1071,7 @@ fn list_codex_account_profiles(
     codex_account_store::list_profiles(&app_data_dir)
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn import_current_codex_account_profile(
     app_handle: tauri::AppHandle,
@@ -1036,7 +1084,11 @@ fn import_current_codex_account_profile(
     let resolved = resolve_current_codex_auth()?;
     let now_ms = now_utc_unix_ms();
     let imported = codex_account_store::ImportedCodexAccount {
-        label: codex_profile_label(resolved.email.as_deref(), resolved.account_id.as_deref(), now_ms),
+        label: codex_profile_label(
+            resolved.email.as_deref(),
+            resolved.account_id.as_deref(),
+            now_ms,
+        ),
         email: resolved.email.clone(),
         account_id: resolved.account_id.clone(),
     };
@@ -1044,8 +1096,13 @@ fn import_current_codex_account_profile(
     let secret_key = format!("account:{}:authJson", profile.profile_id);
 
     #[cfg(target_os = "windows")]
-    provider_secret_store::save_provider_secret(&app_data_dir, "codex", &secret_key, &resolved.auth_json)
-        .map_err(|error| format!("Could not save imported Codex profile auth: {}", error))?;
+    provider_secret_store::save_provider_secret(
+        &app_data_dir,
+        "codex",
+        &secret_key,
+        &resolved.auth_json,
+    )
+    .map_err(|error| format!("Could not save imported Codex profile auth: {}", error))?;
 
     #[cfg(not(target_os = "windows"))]
     {
@@ -1063,6 +1120,7 @@ fn import_current_codex_account_profile(
     })
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn delete_codex_account_profile(
     app_handle: tauri::AppHandle,
@@ -1091,7 +1149,9 @@ fn delete_codex_account_profile(
     delete_provider_secret_service(&service)
         .map_err(|error| format!("Could not remove imported Codex profile auth: {}", error))?;
 
-    if let Some(selected_profile_id) = read_provider_config_string(&app_data_dir, "codex", "selectedAccountProfileId")? {
+    if let Some(selected_profile_id) =
+        read_provider_config_string(&app_data_dir, "codex", "selectedAccountProfileId")?
+    {
         if selected_profile_id.trim() == trimmed_profile_id {
             log::info!(
                 "deleted selected Codex profile '{}'; UI should clear selectedAccountProfileId on next settings load",
@@ -1151,7 +1211,7 @@ fn plugin_is_probe_supported(manifest: &plugin_engine::manifest::PluginManifest)
 
 /// Update the global shortcut registration.
 /// Pass `null` to disable the shortcut, or a shortcut string like "CommandOrControl+Shift+U".
-#[cfg(desktop)]
+#[cfg(all(desktop, not(test)))]
 #[tauri::command]
 fn update_global_shortcut(
     app_handle: tauri::AppHandle,
@@ -1208,6 +1268,7 @@ fn update_global_shortcut(
     Ok(())
 }
 
+#[cfg(not(test))]
 #[tauri::command]
 fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
     let plugins = {
@@ -1271,6 +1332,7 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
         .collect()
 }
 
+#[cfg(not(test))]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
