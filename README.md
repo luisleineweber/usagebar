@@ -8,10 +8,10 @@ UsageBar is a fork of [OpenUsage](https://github.com/robinebers/openusage), redi
 
 ## Download
 
-Windows beta builds are published as GitHub prereleases.
+Windows alpha/beta builds are published as GitHub prereleases.
 
 Release plan:
-- Next public milestone: Alpha 1, once the install/setup/privacy/error-state gate is verified
+- Next public milestone: Alpha 2, as an unsigned Windows technical preview
 - Windows: GitHub prerelease with a NSIS setup `.exe`
 - macOS: still secondary while the Windows fork stabilizes
 
@@ -22,6 +22,8 @@ Release process and preflight checks live in [docs/releasing.md](docs/releasing.
 ## Install, Uninstall, And Data
 
 Alpha and beta Windows builds are distributed from GitHub Releases as a NSIS setup `.exe`.
+
+Alpha 2 signing note: the Windows installer is intentionally unsigned while Authenticode signing is deferred. Windows may show `Unknown publisher` or SmartScreen warnings. Treat Alpha 2 as a technical preview for users comfortable with prerelease desktop software.
 
 Install:
 
@@ -44,7 +46,7 @@ Local data:
 
 ## Alpha Readiness
 
-UsageBar is still pre-release. Alpha 1 means a Windows user can install from GitHub, enable at least one supported provider, refresh and remove it through the UI, and understand what each usage number covers. Before that ships, credential errors, offline mode, provider failures, empty data, privacy, storage, and reporting paths must be visible and documented.
+UsageBar is still pre-release. Alpha 2 means a Windows user can install from GitHub, enable supported providers, refresh usage, understand where each number came from, and report issues with enough context to debug. The Alpha 2 installer is unsigned; Authenticode signing is deferred.
 
 ## What It Does
 
@@ -109,7 +111,7 @@ Want a provider that's not listed? [Open an issue.](https://github.com/luisleine
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
 - Prerelease auto-updates are intentionally conservative because GitHub's `releases/latest` alias does not resolve prereleases. Prerelease builds may open the matching GitHub release page instead of installing in-app.
-- Signed release artifacts and full crash-recovery expectations are full-release work, not an alpha promise.
+- Authenticode-signed Windows artifacts and full crash-recovery expectations are full-release work, not an Alpha 2 promise.
 
 ## Architecture
 
@@ -196,7 +198,7 @@ bun run build:release -- --bundles nsis
 
 If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so the local build can skip Tauri updater signatures. Windows installer builds require Authenticode material by default: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, `WINDOWS_CERTIFICATE`, or `WINDOWS_CERTIFICATE_THUMBPRINT`. The helper signs the final setup executable after the build so the Windows launch prompt can show the certificate publisher. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
 
-For disposable local smoke builds only, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; those installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Public Windows release builds should be Authenticode-signed with the GitHub release workflow; see [docs/releasing.md](docs/releasing.md).
+For Alpha 2 unsigned technical-preview builds, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; those installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Stable/public-confidence Windows builds should be Authenticode-signed; see [docs/releasing.md](docs/releasing.md).
 
 Before pushing a release tag, run the same preflight with `--require-clean` so the tag is cut from a clean worktree.
 

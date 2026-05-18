@@ -6,10 +6,14 @@
 - Local Alpha 2 version metadata.
 - Windows release workflow now requires Authenticode signing material for public installer builds.
 - Tauri Windows bundling now calls the repo-owned Authenticode signing script for signed release artifacts.
+- Alpha 2 is intentionally allowed to ship as an unsigned Windows technical preview while Authenticode signing is deferred.
+- Rust formatting, Clippy, release preflight, and local Rust tests are green for the Alpha 2 readiness slice.
 
 ### Notes
-- Local builds without signing secrets can still produce unsigned installers for smoke testing.
+- Alpha 2 Windows installers can show `Unknown publisher` and SmartScreen warnings because Authenticode signing is deferred.
+- Local builds without signing secrets can still produce unsigned installers for smoke testing and prerelease validation.
 - SmartScreen reputation can still require EV certificate reputation or Microsoft review even after Authenticode signing.
+- Experimental providers remain Alpha limitations when they depend on private session cookies, undocumented endpoints, or fixture-only Windows validation.
 
 ## 0.1.0-alpha.1
 

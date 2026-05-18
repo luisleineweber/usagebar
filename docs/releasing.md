@@ -38,7 +38,7 @@ bun run build:release -- --bundles nsis
 
 If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local builds can still complete without Tauri updater signatures. Windows installer builds require Authenticode material by default. When that material is configured, the helper signs the final NSIS/MSI artifact after the build so the setup executable has a real publisher.
 
-For disposable local smoke builds only, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`. Local artifacts without Windows Authenticode material can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and should not be treated as public release candidates.
+Alpha 2 exception: unsigned Windows prerelease installers are allowed as technical-preview artifacts while Authenticode signing is deferred. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local unsigned builds. GitHub prerelease publishes set this automatically for tags that contain a prerelease suffix such as `v0.1.0-alpha.2`. These artifacts can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and must be described as unsigned in release notes.
 
 ## Windows Code Signing
 
@@ -47,7 +47,7 @@ Windows release artifacts need two separate signatures:
 - Tauri updater signatures: `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 - Windows Authenticode signatures: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, or an already-installed certificate selected by `WINDOWS_CERTIFICATE_THUMBPRINT`.
 
-`src-tauri/tauri.conf.json` calls [scripts/sign-windows.ps1](../scripts/sign-windows.ps1) through Tauri's Windows `signCommand`. `scripts/build-release.mjs` also runs the same script over generated NSIS/MSI artifacts after local builds when Windows signing material exists. In CI, the script fails if no Authenticode signing material is configured. Locally, `build-release.mjs` blocks Windows installer builds without certificate material unless `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` is set.
+`src-tauri/tauri.conf.json` calls [scripts/sign-windows.ps1](../scripts/sign-windows.ps1) through Tauri's Windows `signCommand`. `scripts/build-release.mjs` also runs the same script over generated NSIS/MSI artifacts after local builds when Windows signing material exists. In CI and locally, unsigned Windows installer builds require `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; otherwise missing Authenticode material is a hard failure.
 
 Recommended GitHub secrets:
 
@@ -72,7 +72,7 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 - updater signature files (`.sig`)
 - a Windows setup executable ending in `setup.exe`
 
-The Windows job also fails before packaging if updater signing or Authenticode signing secrets are missing.
+The Windows job always fails before packaging if updater signing secrets are missing. For prerelease tags only, the workflow sets `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` and allows an unsigned installer when Authenticode secrets are missing. Stable tags still require Windows Authenticode signing material.
 
 Current updater channel note:
 
@@ -82,9 +82,10 @@ Current updater channel note:
 
 ## Alpha Gate
 
-Before publishing Alpha 1, verify and record:
+Before publishing Alpha 2, verify and record:
 
 - Windows installer exists as a GitHub release asset or local NSIS artifact.
+- If the installer is unsigned, release notes must say `Unknown publisher` / SmartScreen warnings are expected for this technical preview.
 - Install, uninstall, config/data location, and first-run provider setup are documented.
 - At least one supported provider works from a fresh setup path.
 - Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states do not crash the app.

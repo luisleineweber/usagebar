@@ -1,3 +1,710 @@
+# Close Alpha 2 open and blocked gates
+
+## Executive Summary
+- Work down the report's open and blocked public-release gates.
+- Prefer closing gates with direct verification; where impossible locally, record the blocker with exact evidence.
+- Keep changes scoped to release readiness and Rust hygiene unless a provider promotion is explicitly required.
+
+## Acceptance Criteria
+- [x] Rust fmt gate passes.
+- [x] Rust clippy gate passes or remaining findings are recorded with a scoped waiver.
+- [x] Dirty worktree release-state gate has a concrete evidence summary.
+- [x] Signed artifact/smoke gate is either verified or blocked with exact missing prerequisite.
+- [x] Alpha 2 checkpoint report and breadcrumbs are updated with current gate status.
+
+## Plan
+- [x] Run Rust fmt/clippy and fix actionable hygiene findings.
+- [x] Re-run focused Rust verification.
+- [x] Summarize release worktree state without reverting unrelated changes.
+- [x] Check artifact/signing/smoke prerequisites and record the result.
+- [x] Update the HTML checkpoint, todo, and breadcrumbs.
+
+## Verification Notes
+- Initial `cargo fmt --manifest-path src-tauri\Cargo.toml -- --check` failed on Rust formatting drift.
+- Initial `cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets -- -D warnings` failed on 22 Clippy warnings promoted to errors.
+- `cargo fmt --manifest-path src-tauri\Cargo.toml -- --check` -> passed after mechanical Rust formatting.
+- `cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets -- -D warnings` -> passed after Rust hygiene fixes.
+- `cargo test --manifest-path src-tauri\Cargo.toml --locked -- --nocapture` -> 88 tests passed.
+- `bun run release:check -- --release-tag v0.1.0-alpha.2` -> passed.
+- `bun run release:check -- --release-tag v0.1.0-alpha.2 --require-clean` -> failed only because the working tree is not clean.
+- Dirty worktree summary: 65 tracked files changed, grouped as 39 plugin files, 14 provider docs, 10 Rust/Tauri files, and 2 task files.
+- Signing prerequisite check: `TAURI_SIGNING_PRIVATE_KEY`, `WINDOWS_CERTIFICATE_BASE64`, `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_THUMBPRINT`, `WINDOWS_CERTIFICATE_PASSWORD`, and `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER` are all missing.
+- `bun run build:release -- --bundles nsis` -> blocked by the release helper: it refuses Windows installer builds without Authenticode signing material.
+- `gh secret list -R luisleineweber/usagebar` -> updater signing secrets exist (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`), but no Windows Authenticode certificate secret was listed.
+- `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1 bun run build:release -- --bundles nsis` -> passed for local-only unsigned smoke; produced `UsageBar_0.1.0-alpha.2_x64-setup.exe`.
+- Unsigned NSIS artifact SHA-256: `2F0B268522904D243C11EF010D8220E6957DD9F3078E214B0767EDBFBA9FCB1A`; Authenticode status: `NotSigned`.
+- Direct release EXE smoke was inconclusive because an existing `D:\UsageBar-Release\usagebar.exe` owned `127.0.0.1:6736`.
+- Provider source maturity gate moved from blocked to accepted Alpha limitation in the checkpoint: release notes must keep private/experimental provider limitations explicit, and providers must not be promoted beyond evidence level.
+- User decision: ship Alpha 2 as an unsigned technical preview and defer Windows Authenticode signing.
+- Updated publish workflow and signing script so prerelease tags can publish unsigned Windows installers only when `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; updater signing remains required.
+- Clean unsigned release-binary smoke passed after stopping only the exact old release process at `D:\UsageBar-Release\usagebar.exe`: fresh `src-tauri\target\release\usagebar.exe` owned `127.0.0.1:6736`, and `/v1/usage/not-a-real-provider` returned `404 {"error":"provider_not_found"}`.
+
+# Refine Alpha 2 readiness checkpoint report
+
+## Executive Summary
+- Improve the browser checkpoint so the remaining Alpha 2 release work is easier to act on.
+- Keep the release decision conservative: code/test checkpoint green, public release still held on artifact/smoke gates.
+- Preserve the report as a self-contained HTML file.
+
+## Acceptance Criteria
+- [x] Report has a concrete next-actions section for the open public-release gates.
+- [x] Report copy clearly separates code/test readiness from public release approval.
+- [x] HTML artifact sanity check passes.
+- [x] Breadcrumb evidence is recorded.
+
+## Plan
+- [x] Patch `docs/reports/alpha-2-readiness-checkpoint.html` with clearer next actions and release-gate wording.
+- [x] Run a local sanity check over required report markers and interaction hooks.
+- [x] Review the focused diff.
+- [x] Record completion evidence in breadcrumbs.
+
+## Verification Notes
+- Added `Next Release Actions` cards for Rust hygiene policy, release-state review, and signed Windows artifact smoke.
+- Tightened public-release wording so open gates require evidence or an explicit Alpha 2 waiver.
+- HTML sanity check passed: required markers and interaction hooks found; gate counts were pass=9, open=3.
+
+# Alpha 2 readiness and unknown-provider check
+
+## Executive Summary
+- Check whether Alpha 2 is release-ready from current metadata, docs, and focused verification.
+- Re-check the Windows `unknown provider` paths so bad provider IDs fail cleanly.
+- Fix the Rust test startup blocker so release verification can run locally.
+
+## Acceptance Criteria
+- [x] Version metadata and release docs point to `0.1.0-alpha.2`.
+- [x] Local HTTP API unknown-provider behavior is covered and verified.
+- [x] Tray/provider-detail unknown-provider behavior is covered and verified.
+- [x] Rust unit tests run locally instead of exiting with `STATUS_ENTRYPOINT_NOT_FOUND`.
+- [x] Focused release preflight and relevant tests pass.
+- [x] Breadcrumb evidence is recorded.
+
+## Plan
+- [x] Inspect release metadata, README, changelog, and release docs.
+- [x] Inspect `unknown provider` paths in Rust local API and React tray/detail flow.
+- [x] Isolate Rust unit tests from the Tauri/Wry app runtime startup path.
+- [x] Run focused preflight/tests.
+- [x] Record readiness conclusion and breadcrumbs.
+
+## Verification Notes
+- `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `Cargo.lock`, `CHANGELOG.md`, `README.md`, and `docs/releasing.md` all reference `0.1.0-alpha.2` / `v0.1.0-alpha.2` where expected.
+- `bun run release:check -- --release-tag v0.1.0-alpha.2` -> passed; detected 31 bundled plugins and the expected GitHub updater endpoint.
+- `src-tauri/src/local_http_api/server.rs` returns `404 {"error":"provider_not_found"}` for unknown `/v1/usage/:providerId`, while known uncached providers return 204 and known cached providers return 200.
+- `src/App.test.tsx` covers unknown tray navigation rendering `Provider not found`; `src/pages/provider-detail.test.tsx` covers the null-provider detail state.
+- `bun run test -- src\App.test.tsx src\pages\provider-detail.test.tsx --run` -> 2 files passed, 92 tests passed.
+- `bun run test -- src\hooks\app\use-panel.test.ts --run` -> 1 file passed, 17 tests passed.
+- `bun run lint`, `bun run typecheck`, and `bun run format:check` -> passed.
+- `cargo check --manifest-path src-tauri\Cargo.toml` -> passed.
+- `cargo test --manifest-path src-tauri\Cargo.toml local_http_api -- --nocapture` compiled but the Windows test binary exited with `STATUS_ENTRYPOINT_NOT_FOUND`; Rust assertion coverage could not be executed in this local shell.
+- Readiness call: code/docs/tests are mostly Alpha-2-ready, but public release is not fully green until the Rust test-binary startup issue is resolved or a clean CI run proves the Rust suite.
+- Follow-up fix: Rust unit tests no longer link the desktop Tauri/Wry app runtime in `cfg(test)`; plugin browser bridge calls use a test stub and test-only app-handle aliases.
+- `cargo test --manifest-path src-tauri\Cargo.toml --locked local_http_api -- --nocapture` -> 14 tests passed, including `route_unknown_provider_returns_404`.
+- `cargo test --manifest-path src-tauri\Cargo.toml --locked -- --nocapture` -> 88 tests passed, 0 failed.
+- `bun run test -- src\App.test.tsx src\pages\provider-detail.test.tsx src\hooks\app\use-panel.test.ts --run` -> 3 files passed, 109 tests passed.
+- `bun run release:check -- --release-tag v0.1.0-alpha.2` -> passed.
+- `bun run lint` and `bun run typecheck` -> passed.
+- `cargo check --manifest-path src-tauri\Cargo.toml --locked` -> passed.
+- `cargo fmt --manifest-path src-tauri\Cargo.toml -- --check` and `cargo clippy --manifest-path src-tauri\Cargo.toml --all-targets -- -D warnings` still fail on existing Rust formatting/Clippy debt outside this focused fix.
+- Readiness call after fix: Alpha 2 local code/test readiness is green for the unknown-provider and release-preflight slice; remaining release decision should focus on artifact/signing/smoke, not this Rust test blocker.
+- Created `docs/reports/alpha-2-readiness-checkpoint.html` as a self-contained browser report for the full Alpha 2 checkpoint.
+
+# Harden Warp GraphQL contract fixture
+
+## Executive Summary
+- Reduce the blocked Warp risk by pinning more of the undocumented GraphQL response contract.
+- Keep Warp marked blocked/experimental because the endpoint is still not public documentation.
+- Fail loudly if the app GraphQL response stops returning the expected user output shape.
+
+## Acceptance Criteria
+- [x] Warp parser rejects non-`UserOutput` GraphQL user payloads.
+- [x] Warp tests pin the rejected `__typename` contract-drift case.
+- [x] Warp docs/report state the risk is improved but still blocked by the undocumented endpoint.
+- [x] Focused Warp verification passes and bundled resources are synced.
+
+## Plan
+- [x] Inspect current Warp plugin, tests, and docs.
+- [x] Add response-shape guard and regression.
+- [x] Update docs/report/todo/breadcrumb evidence.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- Added `UserOutput` response-shape guard in `plugins/warp/plugin.js`.
+- Added Warp regression for non-`UserOutput` GraphQL payloads.
+- Updated Warp docs/report to state the contract is better pinned while the endpoint remains undocumented and blocked.
+- `bun run test -- plugins\warp\plugin.test.js --run` -> 1 file passed, 13 tests passed.
+- `node --check plugins\warp\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including Warp.
+- Final combined check for this turn: `bun run test -- plugins\jetbrains-ai-assistant\plugin.test.js plugins\windsurf\plugin.test.js plugins\kiro\plugin.test.js plugins\warp\plugin.test.js --run` -> 4 files passed, 49 tests passed.
+- Final `bun run lint` -> passed.
+- Source/bundled SHA-256 check over JetBrains, Kiro, Windsurf, and Warp returned no differences.
+- Report sanity check confirmed `Blockiert, verbessert`, `UserOutput`, `Offen, verbessert`, and the Windows/runtime test evidence.
+
+# Expand Windows runtime validation fixtures
+
+## Executive Summary
+- Reduce the open Windows/runtime validation risk for local-source providers.
+- Add focused fixture coverage for mixed or degraded runtime states.
+- Keep blocked provider-side endpoint gaps out of scope for this slice.
+
+## Acceptance Criteria
+- [x] JetBrains test covers Windows with an invalid newer IDE quota file and an older valid quota file.
+- [x] Windsurf test covers stable auth failure falling through to a valid Windsurf Next runtime.
+- [x] Kiro test covers malformed newer logs falling through to an older valid log.
+- [x] Report marks the Windows/runtime validation risk as improved with evidence, not fully resolved.
+- [x] Focused provider tests pass and bundled resources are synced.
+
+## Plan
+- [x] Inspect current Kiro, JetBrains, and Windsurf source/tests.
+- [x] Add focused runtime-degradation fixture tests.
+- [x] Update report/todo/breadcrumb evidence.
+- [x] Sync bundled plugins and run verification.
+
+## Verification Notes
+- Added JetBrains regression for invalid newer Windows quota state falling through to an older valid IDE quota file.
+- Added Windsurf regression for stable auth rejection falling through to Windsurf Next.
+- Added Kiro regression for malformed newer Windows logs falling through to an older valid usage log.
+- `bun run test -- plugins\jetbrains-ai-assistant\plugin.test.js plugins\windsurf\plugin.test.js plugins\kiro\plugin.test.js --run` -> 3 files passed, 36 tests passed.
+- `node --check plugins\jetbrains-ai-assistant\plugin.js; node --check plugins\windsurf\plugin.js; node --check plugins\kiro\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including JetBrains, Kiro, and Windsurf.
+- Source/bundled SHA-256 check over JetBrains, Kiro, and Windsurf returned no differences.
+- Report sanity check confirmed the Windows/runtime validation row is `Offen, verbessert` with the three new fixture scenarios.
+- `bun run lint` -> passed.
+
+# Complete provider auth readiness risk closure
+
+## Executive Summary
+- Finish the report-driven provider risk cleanup.
+- Sync runtime bundled plugins with source plugin fixes.
+- Mark every report risk as resolved, blocked, or open with evidence.
+
+## Acceptance Criteria
+- [x] `docs/reports/provider-auth-output-readiness-review.html` includes explicit resolved/blocked/open status for each remaining risk.
+- [x] Source and bundled plugin resources match for the reviewed providers.
+- [x] Focused provider tests pass after the final sync.
+- [x] Report artifact sanity check passes.
+- [x] Final diff check passes.
+
+## Plan
+- [x] Audit current report, tasks, worktree, and bundled resource hashes.
+- [x] Sync bundled plugin resources.
+- [x] Patch the HTML report with an explicit risk-resolution checkpoint.
+- [x] Run focused verification.
+- [x] Update evidence notes and completion status.
+
+## Verification Notes
+- `node ./copy-bundled.cjs` -> bundled 31 plugins; Alibaba and Kiro source drift resolved.
+- Source/bundled SHA-256 check over Abacus, Alibaba, Augment, JetBrains, Kiro, Mistral, Ollama, OpenCode, OpenCode Go, Perplexity, Warp, Windsurf, and Zed returned no differences.
+- `bun run test -- plugins\abacus\plugin.test.js plugins\alibaba\plugin.test.js plugins\augment\plugin.test.js plugins\jetbrains-ai-assistant\plugin.test.js plugins\kiro\plugin.test.js plugins\mistral\plugin.test.js plugins\ollama\plugin.test.js plugins\opencode-go\plugin.test.js plugins\opencode\plugin.test.js plugins\perplexity\plugin.test.js plugins\warp\plugin.test.js plugins\windsurf\plugin.test.js plugins\zed\plugin.test.js --run` -> 13 files passed, 136 tests passed.
+- `node --check` over the same 13 provider `plugin.js` files -> passed.
+- `bun run lint` -> passed.
+- Report sanity check confirmed `Risk Resolution Checkpoint`, `Geloest`, `Blockiert`, `Offen`, `Stand: 2026-05-16`, `Source`, `Auth source`, and `Endpoint`; 71 data rows found.
+- `git --no-pager diff --check -- docs\reports\provider-auth-output-readiness-review.html docs\breadcrumbs.md tasks\todo.md plugins\alibaba\plugin.js plugins\kiro\plugin.js plugins\kiro\plugin.test.js src-tauri\resources\bundled_plugins\alibaba\plugin.js src-tauri\resources\bundled_plugins\kiro\plugin.js src-tauri\resources\bundled_plugins\kiro\plugin.test.js` -> passed with expected CRLF warnings only.
+- Follow-up correction: report now separates resolved provenance/transparency fixes from still-blocked source-maturity risks: private session providers, Ollama/Augment auth-only quota gaps, Zed dashboard-cookie spend, Warp undocumented GraphQL, and broader Windows/runtime validation.
+
+# Harden Zed billing provenance
+
+## Executive Summary
+- Keep Zed's working dashboard-cookie billing path.
+- Keep local telemetry fallback unchanged.
+- Make the remaining billing risk visible through auth and endpoint detail lines.
+
+## Acceptance Criteria
+- [x] Zed dashboard billing output includes detail-only `Auth source`.
+- [x] Zed dashboard billing output includes detail-only `Endpoint`.
+- [x] Zed telemetry fallback still reports `Billing: Dashboard cookie required for spend`.
+- [x] Zed manifest/docs/tests describe and pin the new detail lines.
+- [x] Focused Zed verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Add auth-source tracking for the stored Zed cookie.
+- [x] Add billing endpoint detail output.
+- [x] Update manifest, docs, and tests.
+- [x] Sync bundled plugin files and verify.
+
+## Verification Notes
+- Current official Zed docs still describe plan/usage visibility in the Zed account UI, not a stable public billing API; kept the working dashboard-cookie path.
+- `node --check plugins\zed\plugin.js` -> passed.
+- `bun run test -- plugins\zed\plugin.test.js --run` -> 1 file passed, 11 tests passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `zed`.
+
+# Harden Ollama quota provenance
+
+## Executive Summary
+- Keep Ollama settings-cookie quota parsing unchanged.
+- Keep Cloud-auth-only status unchanged.
+- Make the settings-cookie auth source and endpoint explicit.
+
+## Acceptance Criteria
+- [x] Ollama settings-cookie quota output includes detail-only `Auth source`.
+- [x] Ollama settings-cookie quota output includes detail-only `Endpoint`.
+- [x] Ollama Cloud-auth-only output remains text-only and does not create quota progress.
+- [x] Ollama manifest/docs/tests describe and pin the new detail lines.
+- [x] Focused Ollama verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Track the stored settings-cookie source.
+- [x] Add endpoint/auth detail lines to quota output.
+- [x] Update manifest, docs, and tests.
+- [x] Sync bundled plugin files and verify.
+
+## Verification Notes
+- `node --check plugins\ollama\plugin.js` -> passed.
+- `bun run test -- plugins\ollama\plugin.test.js --run` -> 1 file passed, 14 tests passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `ollama`.
+
+# Harden Augment credit provenance
+
+## Executive Summary
+- Keep Augment dashboard-cookie credit usage unchanged.
+- Keep local Auggie auth detection unchanged.
+- Make credit auth source and endpoint explicit.
+
+## Acceptance Criteria
+- [x] Augment dashboard-credit output includes detail-only `Auth source`.
+- [x] Augment dashboard-credit output includes detail-only `Endpoint`.
+- [x] Auggie-auth-only output remains text-only and does not create credit progress.
+- [x] Augment manifest/docs/tests describe and pin the new detail lines.
+- [x] Focused Augment verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Track stored/env dashboard-cookie source.
+- [x] Add endpoint/auth detail lines to credit output.
+- [x] Update manifest, docs, and tests.
+- [x] Sync bundled plugin files and verify.
+
+## Verification Notes
+- `node --check plugins\augment\plugin.js` -> passed.
+- `bun run test -- plugins\augment\plugin.test.js --run` -> 1 file passed, 9 tests passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `augment`.
+
+# Harden Warp token/endpoint provenance
+
+## Executive Summary
+- Keep Warp's current request-limit GraphQL behavior unchanged.
+- Keep stored-token and env-token login order unchanged.
+- Make token source and endpoint explicit in output.
+
+## Acceptance Criteria
+- [x] Warp output includes detail-only `Auth source`.
+- [x] Warp output includes detail-only `Endpoint`.
+- [x] Metered, unlimited, and missing-limit states keep their existing behavior.
+- [x] Warp manifest/docs/tests describe and pin the new detail lines.
+- [x] Focused Warp verification passes and bundled plugin files are synced.
+
+## Plan
+- [x] Track stored/env token source.
+- [x] Add endpoint/auth detail lines across Warp output states.
+- [x] Update manifest, docs, and tests.
+- [x] Sync bundled plugin files and verify.
+
+## Verification Notes
+- `node --check plugins\warp\plugin.js` -> passed.
+- `bun run test -- plugins\warp\plugin.test.js --run` -> 1 file passed, 13 tests passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `warp`.
+- Broad ranked-provider suite: `bun run test -- plugins\abacus\plugin.test.js plugins\alibaba\plugin.test.js plugins\augment\plugin.test.js plugins\mistral\plugin.test.js plugins\ollama\plugin.test.js plugins\opencode\plugin.test.js plugins\opencode-go\plugin.test.js plugins\perplexity\plugin.test.js plugins\warp\plugin.test.js plugins\windsurf\plugin.test.js plugins\zed\plugin.test.js plugins\kiro\plugin.test.js plugins\jetbrains-ai-assistant\plugin.test.js --run` -> 13 files passed, 140 tests passed.
+- Source/bundled SHA-256 check passed for Zed, Ollama, Augment, and Warp `plugin.js`, `plugin.json`, and `plugin.test.js`.
+- `git diff --check -- ...` for the four-provider slice passed with expected CRLF warnings only.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+
+# Surface ranked OpenCode Zen billing-session source
+
+## Executive Summary
+- Follow the report ranking: OpenCode Zen thirteenth.
+- Keep Zen balance on the signed-in website session path.
+- Make Zen balance source explicit in hidden and folded-in output.
+
+## Acceptance Criteria
+- [x] Hidden OpenCode Zen output includes detail-only Source/Auth source/Endpoint lines.
+- [x] OpenCode Go optional Zen balance output includes the same provenance lines when Zen balance is present.
+- [x] Manifests declare the new detail lines.
+- [x] Docs describe signed-in web-session balance provenance and API-key boundary.
+- [x] Focused OpenCode tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Track OpenCode Zen cookie source through auth loading.
+- [x] Add Zen provenance detail lines to hidden and folded-in output.
+- [x] Update manifests/tests/docs.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- `node --check plugins\opencode\plugin.js; node --check plugins\opencode-go\plugin.js` -> passed.
+- `bun run test -- plugins\opencode\plugin.test.js plugins\opencode-go\plugin.test.js --run` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `opencode` and `opencode-go`.
+- Source/bundled OpenCode `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match for both provider folders.
+- `git --no-pager diff --check -- plugins\opencode\plugin.js plugins\opencode\plugin.json plugins\opencode\plugin.test.js plugins\opencode-go\plugin.js plugins\opencode-go\plugin.json plugins\opencode-go\plugin.test.js docs\providers\opencode.md docs\providers\opencode-go.md tasks\todo.md docs\breadcrumbs.md` -> passed with expected CRLF warnings only.
+
+# Close ranked JetBrains source/version diagnostics
+
+## Executive Summary
+- Follow the report ranking: JetBrains AI Assistant twelfth.
+- Confirm JetBrains already exposes IDE folder and quota XML source.
+- Add the ranked task trail and focused verification.
+
+## Acceptance Criteria
+- [x] JetBrains output includes detail-only IDE and Source lines.
+- [x] JetBrains manifest declares the IDE and Source detail lines.
+- [x] JetBrains docs describe the displayed source/version lines.
+- [x] Focused JetBrains verification passes.
+
+## Plan
+- [x] Review current JetBrains implementation against the ranked recommendation.
+- [x] Confirm docs already include the displayed IDE and Source lines.
+- [x] Run focused JetBrains verification.
+- [x] Record ranked completion notes.
+
+## Verification Notes
+- Current JetBrains code already emits detail-only `IDE` and `Source` lines for the selected quota XML file.
+- Current JetBrains manifest already declares `IDE` and `Source` as detail text lines.
+- Current JetBrains docs already describe those displayed lines.
+- `node --check plugins\jetbrains-ai-assistant\plugin.js` -> passed.
+- `bun run test -- plugins\jetbrains-ai-assistant\plugin.test.js --run` -> passed.
+- Source/bundled JetBrains `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match.
+
+# Surface ranked Mistral admin-session source
+
+## Executive Summary
+- Follow the report ranking: Mistral eleventh.
+- Keep text-only spend/token output.
+- Make admin-session endpoint/auth provenance visible.
+
+## Acceptance Criteria
+- [x] Mistral output includes detail-only Source/Auth source/Endpoint lines.
+- [x] Mistral manifest declares the new detail lines.
+- [x] Docs describe the admin dashboard-session dependency.
+- [x] Existing text-only spend/token behavior remains unchanged.
+- [x] Focused Mistral tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Track Mistral cookie source through auth loading.
+- [x] Add source detail lines to successful output.
+- [x] Update manifest/tests/docs.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- `node --check plugins\mistral\plugin.js` -> passed.
+- `bun run test -- plugins\mistral\plugin.test.js --run` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `mistral`.
+- Source/bundled Mistral `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match.
+- `git --no-pager diff --check -- plugins\mistral\plugin.js plugins\mistral\plugin.json plugins\mistral\plugin.test.js docs\providers\mistral.md tasks\todo.md docs\breadcrumbs.md` -> passed with expected CRLF warnings only.
+
+# Surface ranked Abacus dashboard-session source
+
+## Executive Summary
+- Follow the report ranking: Abacus tenth.
+- Keep the dashboard-session compute-points path.
+- Make cookie source and private endpoints visible in output.
+
+## Acceptance Criteria
+- [x] Abacus output includes detail-only Source/Auth source/Endpoint lines.
+- [x] Abacus manifest declares the new detail lines.
+- [x] Docs describe dashboard-session provenance and API-key spike boundary.
+- [x] Existing zero-total and optional-billing-failure behavior remains unchanged.
+- [x] Focused Abacus tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Track Abacus cookie source through auth loading.
+- [x] Add source detail lines to successful output.
+- [x] Update manifest/tests/docs.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- `node --check plugins\abacus\plugin.js` -> passed.
+- `bun run test -- plugins\abacus\plugin.test.js --run` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `abacus`.
+- Source/bundled Abacus `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match.
+- `git --no-pager diff --check -- plugins\abacus\plugin.js plugins\abacus\plugin.json plugins\abacus\plugin.test.js docs\providers\abacus.md tasks\todo.md docs\breadcrumbs.md` -> passed with expected CRLF warnings only.
+
+# Surface ranked Perplexity billing-session source
+
+## Executive Summary
+- Follow the report ranking: Perplexity ninth.
+- Keep the private billing-session cookie path.
+- Make endpoint/auth source and renewal limits visible.
+
+## Acceptance Criteria
+- [x] Perplexity output includes detail-only Source/Auth source/Endpoint lines.
+- [x] Perplexity manifest declares the new detail lines.
+- [x] Docs state that official API docs expose console billing visibility, not a validated non-cookie balance endpoint.
+- [x] Existing zero/partial pool behavior remains unchanged.
+- [x] Focused Perplexity tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Track Perplexity cookie source through auth loading.
+- [x] Add source detail lines to successful output.
+- [x] Update manifest/tests/docs.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- Current official Perplexity docs checked: API billing/credit visibility is documented for the API Platform/Admin console, not as a stable API-key account-balance endpoint.
+- `node --check plugins\perplexity\plugin.js` -> passed.
+- `bun run test -- plugins\perplexity\plugin.test.js --run` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `perplexity`.
+- Source/bundled Perplexity `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match.
+- `git --no-pager diff --check -- plugins\perplexity\plugin.js plugins\perplexity\plugin.json plugins\perplexity\plugin.test.js docs\providers\perplexity.md tasks\todo.md docs\breadcrumbs.md` -> passed with expected CRLF warnings only.
+
+# Tighten ranked Alibaba diagnostics
+
+## Executive Summary
+- Follow the report ranking: Alibaba eighth.
+- Keep API-key quota flow unchanged.
+- Make endpoint/auth provenance and console-session failures clearer.
+
+## Acceptance Criteria
+- [x] Alibaba output includes detail-only Source/Auth source/Endpoint lines on successful quota fetches.
+- [x] Alibaba manifest declares the new detail lines.
+- [x] Console/session-walled responses produce a specific error message.
+- [x] Unknown plans without real quota limits do not invent fallback limits.
+- [x] Alibaba docs describe the displayed lines and session-walled limitation.
+- [x] Focused Alibaba tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Track API-key source and endpoint through the quota request.
+- [x] Add specific response diagnostics for ConsoleNeedLogin/session-walled errors.
+- [x] Update manifest/tests/docs.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- `node --check plugins\alibaba\plugin.js` -> passed.
+- `bun run test -- plugins\alibaba\plugin.test.js --run` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `alibaba`.
+- Source/bundled Alibaba `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match.
+- `git --no-pager diff --check -- plugins\alibaba\plugin.js plugins\alibaba\plugin.json plugins\alibaba\plugin.test.js src-tauri\resources\bundled_plugins\alibaba\plugin.js src-tauri\resources\bundled_plugins\alibaba\plugin.json src-tauri\resources\bundled_plugins\alibaba\plugin.test.js docs\providers\alibaba.md docs\choices.md tasks\todo.md docs\breadcrumbs.md` -> passed with expected CRLF warnings only.
+
+# Close ranked Kiro source diagnostics
+
+## Executive Summary
+- Follow the report ranking: Kiro seventh.
+- Confirm Kiro already exposes usage source in output.
+- Add the missing ranked task/docs trail.
+
+## Acceptance Criteria
+- [x] Kiro output includes detail-only Source for desktop cache, usage log, live API, stale local fallback, and CLI session states.
+- [x] Kiro manifest declares the Source detail line.
+- [x] Kiro docs describe the displayed Source values.
+- [x] Focused Kiro verification passes.
+
+## Plan
+- [x] Review current Kiro implementation against the ranked recommendation.
+- [x] Patch Kiro docs for Source display values.
+- [x] Run focused Kiro verification.
+- [x] Record ranked completion notes.
+
+## Verification Notes
+- Current Kiro code already emits detail-only Source for desktop cache, usage log, live usage API, stale local fallback after live API failure, and CLI session file states.
+- Current Kiro manifest already declares `Source` as a detail text line.
+- `node --check plugins\kiro\plugin.js` -> passed.
+- `bun run test -- plugins\kiro\plugin.test.js --run` -> passed.
+- Source/bundled Kiro `plugin.js`, `plugin.json`, and `plugin.test.js` SHA-256 hashes match.
+- `rg -n "Desktop cache after live API failure|Usage log after live API failure|Live usage API|CLI session files|Source" plugins\kiro docs\providers\kiro.md` -> confirmed implementation, tests, manifest, and docs.
+
+# Surface ranked Windsurf percent source
+
+## Executive Summary
+- Follow the report ranking: Windsurf sixth.
+- Make percent-only quota source visible in output.
+- Keep existing Cloud quota parsing and percent bars unchanged.
+
+## Acceptance Criteria
+- [x] Windsurf output includes a detail-only Source line naming the cloud quota endpoint.
+- [x] Windsurf output includes a detail-only Quota basis line stating percent-only data.
+- [x] Manifest declares the new detail lines.
+- [x] Docs describe the displayed lines.
+- [x] Focused Windsurf tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Add Windsurf Source and Quota basis output lines.
+- [x] Update manifest/tests/docs.
+- [x] Sync bundled plugin resources.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- `node --check plugins\windsurf\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `windsurf`.
+- `bun run test -- plugins\windsurf\plugin.test.js --run` -> passed.
+- Windsurf now emits detail-only `Source: Windsurf cloud quota endpoint` and `Quota basis: Percent-only daily and weekly buckets`.
+
+# Close ranked Antigravity source diagnostics
+
+## Executive Summary
+- Follow the report ranking: Antigravity fifth.
+- Confirm Antigravity already exposes quota source in output.
+- Add the missing ranked task/docs trail.
+
+## Acceptance Criteria
+- [x] Antigravity output includes detail-only Source for live LS, cached LS, Cloud Code, and no-usable-quota states.
+- [x] Antigravity manifest declares the Source detail line.
+- [x] Antigravity docs describe the displayed Source values.
+- [x] Focused Antigravity verification passes.
+
+## Plan
+- [x] Review current Antigravity implementation against the ranked recommendation.
+- [x] Patch Antigravity docs for Source display values.
+- [x] Run focused Antigravity verification.
+- [x] Record ranked completion notes.
+
+## Verification Notes
+- Current Antigravity code already emits detail-only Source for live LS, cached LS, Cloud Code fallback, and LS-without-usable-quota states.
+- Current Antigravity manifest already declares `Source` as a detail text line.
+- `node --check plugins\antigravity\plugin.js` -> passed.
+- `bun run test -- plugins\antigravity\plugin.test.js --run` -> passed.
+- `rg -n "Live Antigravity language server|Cached live Antigravity language server|Cloud Code fallback|Antigravity language server without usable quota|Source" plugins\antigravity docs\providers\antigravity.md` -> confirmed implementation, tests, manifest, and docs.
+
+# Close ranked Warp endpoint provenance
+
+## Executive Summary
+- Follow the report ranking: Warp fourth.
+- Confirm Warp already exposes the undocumented GraphQL source in output.
+- Add the missing ranked task/docs trail.
+
+## Acceptance Criteria
+- [x] Warp output includes detail-only Source for metered, unlimited, and missing-limit states.
+- [x] Warp tests pin the GraphQL operation name/path and Source output.
+- [x] Warp docs include the Source display line.
+- [x] Focused Warp verification passes.
+
+## Plan
+- [x] Review current Warp implementation against the ranked recommendation.
+- [x] Patch Warp docs for the Source display line.
+- [x] Run focused Warp verification.
+- [x] Record ranked completion notes.
+
+## Verification Notes
+- Current Warp code already emits detail-only `Source: Undocumented Warp app GraphQL request-limit endpoint` for metered, unlimited, and missing-limit states.
+- Current Warp tests already pin `https://app.warp.dev/graphql/v2?op=GetRequestLimitInfo`, operation name `GetRequestLimitInfo`, and the Source output.
+- `node --check plugins\warp\plugin.js` -> passed.
+- `bun run test -- plugins\warp\plugin.test.js --run` -> passed.
+- `rg -n "Undocumented Warp app GraphQL|GetRequestLimitInfo|graphql/v2" plugins\warp docs\providers\warp.md` -> confirmed implementation, tests, and docs.
+
+# Clarify ranked Zed telemetry fallback
+
+## Executive Summary
+- Follow the report ranking: Zed third.
+- Make clear that local telemetry is not billing spend.
+- Keep the existing dashboard-cookie billing path and telemetry fallback unchanged.
+
+## Acceptance Criteria
+- [x] Zed telemetry fallback output includes a detail line stating billing spend needs a dashboard cookie.
+- [x] Empty telemetry fallback keeps the same billing-cookie guidance.
+- [x] Zed manifest declares the new detail line.
+- [x] Docs describe the new billing/fallback separation.
+- [x] Focused Zed tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Add a `Billing` detail line to telemetry fallback output.
+- [x] Update Zed manifest/tests/docs.
+- [x] Sync bundled plugin resources.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- `node --check plugins\zed\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `zed`.
+- `bun run test -- plugins\zed\plugin.test.js --run` -> passed.
+- Zed telemetry fallback now emits detail-only `Billing: Dashboard cookie required for spend`, including the empty telemetry state.
+
+# Surface ranked Ollama quota source
+
+## Executive Summary
+- Follow the report ranking: Ollama second.
+- Show whether Ollama output is settings-cookie quota or Cloud-auth-only status.
+- Keep API-key/local signin as auth evidence only, not quota bars.
+
+## Acceptance Criteria
+- [x] Cookie-backed quota output includes a detail-only Source line.
+- [x] Cloud-auth-only output includes a detail-only Source line.
+- [x] Ollama manifest declares the Source detail line.
+- [x] Docs state the Source line and quota-cookie limitation.
+- [x] Focused Ollama tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Add Ollama Source output for both paths.
+- [x] Update manifest/tests/docs.
+- [x] Sync bundled plugin resources.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- `node --check plugins\ollama\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `ollama`.
+- `bun run test -- plugins\ollama\plugin.test.js --run` -> passed.
+- Ollama now emits detail-only `Source` text for settings-page-cookie quota and Cloud-auth-only status.
+
+# Surface ranked Augment credit source
+
+## Executive Summary
+- Follow the report ranking: Augment first.
+- Show whether Augment output is local Auggie auth only or dashboard-cookie credit usage.
+- Keep the existing cookie-backed credit behavior unchanged until a non-cookie endpoint is validated.
+
+## Acceptance Criteria
+- [x] Auggie-only output includes a detail-only Source line.
+- [x] Dashboard-cookie credit output includes a detail-only Source line.
+- [x] Augment manifest declares the Source detail line.
+- [x] Docs state the Source line and cookie-backed credit limitation.
+- [x] Focused Augment tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Add shared Augment Source output.
+- [x] Update Augment manifest/tests/docs.
+- [x] Sync bundled plugin resources.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+- `node --check plugins\augment\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `augment`.
+- `bun run test -- plugins\augment\plugin.test.js --run` -> passed.
+- Augment now emits detail-only `Source` text for dashboard-session-cookie credit usage and local-Auggie-auth-only status.
+
+# Surface JetBrains quota source
+
+## Executive Summary
+- Show which JetBrains IDE quota file produced the current output.
+- Add the detected IDE/version folder as detail metadata.
+- Keep quota parsing and selection behavior unchanged.
+
+## Acceptance Criteria
+- [x] JetBrains output includes a detail-only IDE line.
+- [x] JetBrains output includes a detail-only source line.
+- [x] Manifest declares the new detail lines.
+- [x] Focused JetBrains tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Derive IDE folder name from the selected quota path.
+- [x] Add IDE/source text lines to output.
+- [x] Update manifest/docs/tests.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- `node --check plugins\jetbrains-ai-assistant\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `jetbrains-ai-assistant`.
+- `bun run test -- plugins\jetbrains-ai-assistant\plugin.test.js --run` -> passed.
+- JetBrains now emits detail-only `IDE` and `Source` lines for the selected quota XML file.
+
+# Surface Kiro usage source
+
+## Executive Summary
+- Show whether Kiro usage came from desktop cache, logs, live API, stale local fallback, or CLI sessions.
+- Keep existing source priority and quota behavior unchanged.
+- Verify the key source paths with focused tests.
+
+## Acceptance Criteria
+- [x] Kiro desktop cache output includes a detail-only source line.
+- [x] Kiro usage-log output includes a detail-only source line.
+- [x] Kiro live API output includes a detail-only source line.
+- [x] Kiro stale-local fallback output includes a detail-only source line.
+- [x] Kiro CLI fallback output includes a detail-only source line.
+- [x] Focused Kiro tests pass and bundled plugin files are synced.
+
+## Plan
+- [x] Track the selected Kiro snapshot source through merge logic.
+- [x] Add source lines to desktop and CLI outputs.
+- [x] Update manifest/test expectations.
+- [x] Sync bundled plugin resources and verify.
+
+## Verification Notes
+- `node --check plugins\kiro\plugin.js` -> passed.
+- `node ./copy-bundled.cjs` -> bundled 31 plugins, including `kiro`.
+- `bun run test -- plugins\kiro\plugin.test.js --run` -> passed.
+- Kiro now emits detail-only `Source` text for desktop cache, usage log, live usage API, stale local fallback after live API failure, and CLI session files.
+
 # Surface Antigravity quota source
 
 ## Executive Summary

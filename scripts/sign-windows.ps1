@@ -10,6 +10,11 @@ function Fail($Message) {
   exit 1
 }
 
+function Allows-UnsignedWindowsInstaller {
+  $value = $env:USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER
+  return $value -eq "1" -or $value -eq "true" -or $value -eq "TRUE" -or $value -eq "True"
+}
+
 function Find-SignTool {
   $candidates = @()
   $kitsRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
@@ -40,7 +45,7 @@ function Import-CodeSigningCertificate {
   }
 
   if (-not $encodedCertificate) {
-    if ($env:CI -eq "true") {
+    if ($env:CI -eq "true" -and -not (Allows-UnsignedWindowsInstaller)) {
       Fail "Missing Windows Authenticode signing material. Set WINDOWS_CERTIFICATE_BASE64 (or WINDOWS_CERTIFICATE) and WINDOWS_CERTIFICATE_PASSWORD, or set WINDOWS_CERTIFICATE_THUMBPRINT on the runner."
     }
 
