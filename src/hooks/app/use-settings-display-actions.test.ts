@@ -5,16 +5,19 @@ const {
   saveDisplayModeMock,
   saveResetTimerDisplayModeMock,
   saveThemeModeMock,
+  saveTimeFormatModeMock,
 } = vi.hoisted(() => ({
   saveThemeModeMock: vi.fn(),
   saveDisplayModeMock: vi.fn(),
   saveResetTimerDisplayModeMock: vi.fn(),
+  saveTimeFormatModeMock: vi.fn(),
 }))
 
 vi.mock("@/lib/settings", () => ({
   saveThemeMode: saveThemeModeMock,
   saveDisplayMode: saveDisplayModeMock,
   saveResetTimerDisplayMode: saveResetTimerDisplayModeMock,
+  saveTimeFormatMode: saveTimeFormatModeMock,
 }))
 
 import { useSettingsDisplayActions } from "@/hooks/app/use-settings-display-actions"
@@ -24,15 +27,18 @@ describe("useSettingsDisplayActions", () => {
     saveThemeModeMock.mockReset()
     saveDisplayModeMock.mockReset()
     saveResetTimerDisplayModeMock.mockReset()
+    saveTimeFormatModeMock.mockReset()
     saveThemeModeMock.mockResolvedValue(undefined)
     saveDisplayModeMock.mockResolvedValue(undefined)
     saveResetTimerDisplayModeMock.mockResolvedValue(undefined)
+    saveTimeFormatModeMock.mockResolvedValue(undefined)
   })
 
   it("applies display-related setting changes", () => {
     const setThemeMode = vi.fn()
     const setDisplayMode = vi.fn()
     const setResetTimerDisplayMode = vi.fn()
+    const setTimeFormatMode = vi.fn()
     const scheduleTrayIconUpdate = vi.fn()
 
     const { result } = renderHook(() =>
@@ -41,6 +47,7 @@ describe("useSettingsDisplayActions", () => {
         setDisplayMode,
         resetTimerDisplayMode: "relative",
         setResetTimerDisplayMode,
+        setTimeFormatMode,
         scheduleTrayIconUpdate,
       })
     )
@@ -71,6 +78,7 @@ describe("useSettingsDisplayActions", () => {
           setDisplayMode: vi.fn(),
           resetTimerDisplayMode: mode,
           setResetTimerDisplayMode,
+          setTimeFormatMode: vi.fn(),
           scheduleTrayIconUpdate: vi.fn(),
         }),
       { initialProps: { mode: "relative" as const } }
@@ -103,6 +111,7 @@ describe("useSettingsDisplayActions", () => {
         setDisplayMode: vi.fn(),
         resetTimerDisplayMode: "relative",
         setResetTimerDisplayMode: vi.fn(),
+        setTimeFormatMode: vi.fn(),
         scheduleTrayIconUpdate: vi.fn(),
       })
     )

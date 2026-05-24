@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { MetricLine } from "@/lib/plugin-types"
-import type { DisplayMode, ResetTimerDisplayMode } from "@/lib/settings"
+import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 import { clamp01, formatCountNumber, formatFixedPrecisionNumber } from "@/lib/utils"
 import { calculateDeficit, calculatePaceStatus, type PaceStatus } from "@/lib/pace-status"
 import {
@@ -83,6 +83,7 @@ export function MetricLineRenderer({
   line,
   displayMode,
   resetTimerDisplayMode,
+  timeFormatMode = "auto",
   onResetTimerDisplayModeToggle,
   now,
   refreshing,
@@ -90,6 +91,7 @@ export function MetricLineRenderer({
   line: MetricLine
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
+  timeFormatMode?: TimeFormatMode
   onResetTimerDisplayModeToggle?: () => void
   now: number
   refreshing?: boolean
@@ -161,7 +163,7 @@ export function MetricLineRenderer({
 
     const resetLabel = line.resetsAt
       ? resetTimerDisplayMode === "absolute"
-        ? formatResetAbsoluteLabel(now, line.resetsAt)
+        ? formatResetAbsoluteLabel(now, line.resetsAt, timeFormatMode)
         : formatResetRelativeLabel(now, line.resetsAt)
       : null
     const resetTooltipText = line.resetsAt
@@ -169,6 +171,7 @@ export function MetricLineRenderer({
           nowMs: now,
           resetsAtIso: line.resetsAt,
           visibleMode: resetTimerDisplayMode,
+          timeFormatMode,
         })
       : null
 

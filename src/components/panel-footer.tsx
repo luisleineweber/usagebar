@@ -45,10 +45,11 @@ function VersionDisplay({
     case "available":
       return (
         <Button
-          variant="secondary"
+          variant="default"
           size="xs"
+          className="rounded-[10px] border-emerald-300 bg-emerald-500 text-white shadow-[0_0_0_3px_rgba(16,185,129,0.22)] hover:bg-emerald-600 dark:border-emerald-300/80 dark:bg-emerald-500 dark:text-white dark:hover:bg-emerald-400"
           onClick={onUpdateInstall}
-          title={updateStatus.url ? "Open GitHub release" : "Download update"}
+          title={updateStatus.url ? "Open GitHub release" : "Download and install update"}
         >
           Update to {updateStatus.version}
         </Button>

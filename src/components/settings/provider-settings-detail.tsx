@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -131,7 +131,6 @@ export function ProviderSettingsDetail({
   const secretUpdatedText = secretKey
     ? formatTimestamp(config?.secrets?.[secretKey]?.updatedAt ?? null)
     : null;
-
   const [workspaceDraft, setWorkspaceDraft] = useState(
     config?.workspaceId ?? "",
   );
@@ -154,10 +153,6 @@ export function ProviderSettingsDetail({
   const sourceValue = (config?.source ?? "manual") as ProviderSourceMode;
   const statusBadgeVariant =
     probeStatus.tone === "success" ? "default" : "outline";
-  const accentStyle = useMemo(
-    () => (plugin.brandColor ? { color: plugin.brandColor } : undefined),
-    [plugin.brandColor],
-  );
   const showManualFields =
     definition.mode === "editable" && sourceValue === "manual";
   const baseSetupHint = isConnected
@@ -252,7 +247,6 @@ export function ProviderSettingsDetail({
   return (
     <section
       className="flex flex-col"
-      style={accentStyle}
       data-testid={`provider-settings-${plugin.id}`}
     >
       {/* Provider header */}
@@ -267,7 +261,7 @@ export function ProviderSettingsDetail({
               Provider configuration
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-semibold tracking-[0.01em]">
+              <h3 className="text-xl font-semibold tracking-[0.01em] text-foreground">
                 {plugin.name}
               </h3>
               <Badge
