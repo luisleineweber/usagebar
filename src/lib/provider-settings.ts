@@ -167,7 +167,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   copilot: {
     mode: "editable",
     title: "Copilot Setup",
-    summary: "Detected from OpenUsage keychain cache or gh CLI auth, with optional organization or enterprise premium-request billing scope.",
+    summary: "Detected from OpenUsage keychain cache or gh CLI auth, showing premium requests plus paid chat quota units when GitHub reports them.",
     statusHint: "Run gh auth login if Copilot is missing. For org-managed licenses, set a billing scope such as org:my-org or enterprise:my-enterprise.",
     connectHint: "Run gh auth login or sign in to Copilot locally, then refresh. For organization or enterprise billing reports, save a billing scope and use a token with billing/admin read access.",
     textField: {
@@ -282,6 +282,13 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       placeholder: "ory_session_...=...; csrftoken=...;",
     },
   },
+  grok: {
+    mode: "automatic",
+    title: "Grok Setup",
+    summary: "Tracks Grok Build credit usage from the local Grok CLI login. Reads the same auth file (~/.grok/auth.json) that the Grok CLI uses.",
+    statusHint: "No manual setup is required once Grok CLI is signed in.",
+    connectHint: "Install Grok CLI, run `grok login`, then retry.",
+  },
   "jetbrains-ai-assistant": {
     mode: "automatic",
     title: "JetBrains AI Setup",
@@ -370,9 +377,9 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   kiro: {
     mode: "automatic",
     title: "Kiro Setup",
-    summary: "Reads local Kiro desktop auth/cache state when present, or local Kiro CLI session metering as a fallback.",
-    statusHint: "Open Kiro desktop or run Kiro CLI on this machine so UsageBar can read local usage state.",
-    connectHint: "Open Kiro, sign in, and load the Kiro account dashboard once. If you only use Kiro CLI, run at least one prompt, then retry.",
+    summary: "Reads local Kiro desktop auth/cache state when present, then Kiro CLI auth for live quota, with local CLI session metering as a degraded fallback.",
+    statusHint: "Open Kiro desktop or run Kiro CLI on this machine so UsageBar can read authenticated usage state.",
+    connectHint: "Open Kiro or run Kiro CLI and sign in. If UsageBar cannot fetch live CLI quota, run at least one CLI prompt so degraded session metering exists.",
   },
   openrouter: {
     mode: "editable",
@@ -552,6 +559,7 @@ export function getProviderSourceLabel(providerId: string, config: ProviderConfi
   if (providerId === "abacus") return "Manual cookie"
   if (providerId === "augment") return config?.secrets?.cookieHeader ? "Auggie auth + dashboard cookie" : "Auggie auth/cookie"
   if (providerId === "deepseek") return config?.secrets?.apiKey ? "Stored DeepSeek API key" : "DeepSeek API key/env"
+  if (providerId === "grok") return "Local Grok CLI auth"
   if (providerId === "codebuff") return config?.secrets?.apiKey ? "Stored Codebuff API token" : "Codebuff API token/env"
   if (providerId === "kimi") return config?.secrets?.apiKey ? "Kimi Code OAuth + Moonshot API key" : "Kimi Code OAuth"
   if (providerId === "kimi-k2") return config?.secrets?.apiKey ? "Stored Moonshot API key" : "Moonshot API key/env"
