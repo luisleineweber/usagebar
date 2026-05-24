@@ -11,6 +11,7 @@ import type {
   GlobalShortcut,
   ResetTimerDisplayMode,
   ThemeMode,
+  TimeFormatMode,
 } from "@/lib/settings"
 
 interface SettingsPageProps {
@@ -29,6 +30,8 @@ interface SettingsPageProps {
   onDisplayModeChange: (value: DisplayMode) => void
   resetTimerDisplayMode: ResetTimerDisplayMode
   onResetTimerDisplayModeChange: (value: ResetTimerDisplayMode) => void
+  timeFormatMode: TimeFormatMode
+  onTimeFormatModeChange: (value: TimeFormatMode) => void
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
@@ -55,6 +58,8 @@ export function SettingsPage({
   onDisplayModeChange,
   resetTimerDisplayMode,
   onResetTimerDisplayModeChange,
+  timeFormatMode,
+  onTimeFormatModeChange,
   globalShortcut,
   onGlobalShortcutChange,
   startOnLogin,
@@ -114,6 +119,8 @@ export function SettingsPage({
           onDisplayModeChange={onDisplayModeChange}
           resetTimerDisplayMode={resetTimerDisplayMode}
           onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
+          timeFormatMode={timeFormatMode}
+          onTimeFormatModeChange={onTimeFormatModeChange}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={onGlobalShortcutChange}
           startOnLogin={startOnLogin}

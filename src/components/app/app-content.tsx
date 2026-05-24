@@ -12,6 +12,7 @@ import type {
   GlobalShortcut,
   ResetTimerDisplayMode,
   ThemeMode,
+  TimeFormatMode,
 } from "@/lib/settings"
 
 type AppContentDerivedProps = {
@@ -34,6 +35,7 @@ export type AppContentActionProps = {
   onDisplayModeChange: (mode: DisplayMode) => void
   onResetTimerDisplayModeChange: (mode: ResetTimerDisplayMode) => void
   onResetTimerDisplayModeToggle: () => void
+  onTimeFormatModeChange?: (mode: TimeFormatMode) => void
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   onStartOnLoginChange: (value: boolean) => void
 }
@@ -64,10 +66,12 @@ export function AppContent({
   const {
     displayMode,
     resetTimerDisplayMode,
+    timeFormatMode,
   } = useAppPreferencesStore(
     useShallow((state) => ({
       displayMode: state.displayMode,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
+      timeFormatMode: state.timeFormatMode,
     }))
   )
   const [transitionKey, setTransitionKey] = useState(activeView)
@@ -105,6 +109,7 @@ export function AppContent({
         onRetryPlugin={onRetryPlugin}
         displayMode={displayMode}
         resetTimerDisplayMode={resetTimerDisplayMode}
+        timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
     ) : (
@@ -115,6 +120,7 @@ export function AppContent({
         onOpenProviderSettings={onOpenProviderSettings}
         displayMode={displayMode}
         resetTimerDisplayMode={resetTimerDisplayMode}
+        timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
     )

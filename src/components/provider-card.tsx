@@ -24,6 +24,7 @@ import {
   REFRESH_COOLDOWN_MS,
   type DisplayMode,
   type ResetTimerDisplayMode,
+  type TimeFormatMode,
 } from "@/lib/settings";
 import type { ManifestLine, MetricLine, PluginLink } from "@/lib/plugin-types";
 import { groupLinesByType } from "@/lib/group-lines-by-type";
@@ -53,6 +54,7 @@ interface ProviderCardProps {
   scopeFilter?: "overview" | "all";
   displayMode: DisplayMode;
   resetTimerDisplayMode?: ResetTimerDisplayMode;
+  timeFormatMode?: TimeFormatMode;
   onResetTimerDisplayModeToggle?: () => void;
   status?: ProviderStatus;
 }
@@ -91,6 +93,7 @@ export function ProviderCard({
   scopeFilter = "all",
   displayMode,
   resetTimerDisplayMode = "relative",
+  timeFormatMode = "auto",
   onResetTimerDisplayModeToggle,
   status,
 }: ProviderCardProps) {
@@ -349,6 +352,7 @@ export function ProviderCard({
                       line={line}
                       displayMode={displayMode}
                       resetTimerDisplayMode={resetTimerDisplayMode}
+                      timeFormatMode={timeFormatMode}
                       onResetTimerDisplayModeToggle={
                         onResetTimerDisplayModeToggle
                       }
@@ -365,6 +369,7 @@ export function ProviderCard({
                       line={line}
                       displayMode={displayMode}
                       resetTimerDisplayMode={resetTimerDisplayMode}
+                      timeFormatMode={timeFormatMode}
                       onResetTimerDisplayModeToggle={
                         onResetTimerDisplayModeToggle
                       }

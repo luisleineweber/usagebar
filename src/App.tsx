@@ -79,6 +79,7 @@ function App() {
     setMenubarIconStyle,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
+    setTimeFormatMode,
     setGlobalShortcut,
     setStartOnLogin,
   } = useAppPreferencesStore(
@@ -93,6 +94,7 @@ function App() {
       setMenubarIconStyle: state.setMenubarIconStyle,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       setResetTimerDisplayMode: state.setResetTimerDisplayMode,
+      setTimeFormatMode: state.setTimeFormatMode,
       setGlobalShortcut: state.setGlobalShortcut,
       setStartOnLogin: state.setStartOnLogin,
     }))
@@ -180,6 +182,10 @@ function App() {
         setResetTimerDisplayMode(update.value)
         return
       }
+      if (update.key === "timeFormatMode") {
+        setTimeFormatMode(update.value)
+        return
+      }
       setMenubarIconStyle(update.value)
       scheduleTrayIconUpdate("settings", 0)
     }).then((dispose) => {
@@ -196,7 +202,7 @@ function App() {
       disposed = true
       unlisten?.()
     }
-  }, [scheduleTrayIconUpdate, setDisplayMode, setMenubarIconStyle, setResetTimerDisplayMode, setThemeMode])
+  }, [scheduleTrayIconUpdate, setDisplayMode, setMenubarIconStyle, setResetTimerDisplayMode, setTimeFormatMode, setThemeMode])
 
   const { applyStartOnLogin } = useSettingsBootstrap({
     setPluginSettings,
@@ -206,6 +212,7 @@ function App() {
     setDisplayMode,
     setMenubarIconStyle,
     setResetTimerDisplayMode,
+    setTimeFormatMode,
     setGlobalShortcut,
     setStartOnLogin,
     setLoadingForPlugins,
@@ -220,11 +227,13 @@ function App() {
     handleDisplayModeChange,
     handleResetTimerDisplayModeChange,
     handleResetTimerDisplayModeToggle,
+    handleTimeFormatModeChange,
   } = useSettingsDisplayActions({
     setThemeMode,
     setDisplayMode,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
+    setTimeFormatMode,
     setMenubarIconStyle,
     scheduleTrayIconUpdate,
   })
@@ -489,6 +498,7 @@ function App() {
         onDisplayModeChange: handleDisplayModeChange,
         onResetTimerDisplayModeChange: handleResetTimerDisplayModeChange,
         onResetTimerDisplayModeToggle: handleResetTimerDisplayModeToggle,
+        onTimeFormatModeChange: handleTimeFormatModeChange,
         onGlobalShortcutChange: handleGlobalShortcutChange,
         onStartOnLoginChange: handleStartOnLoginChange,
       }}

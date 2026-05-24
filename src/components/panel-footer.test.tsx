@@ -126,6 +126,8 @@ describe("PanelFooter", () => {
       />
     )
     const button = screen.getByRole("button", { name: "Update to 0.1.0-beta.7" })
+    expect(button).toHaveAttribute("title", "Download and install update")
+    expect(button).toHaveClass("rounded-[10px]", "bg-emerald-500")
     await userEvent.click(button)
     expect(onInstall).toHaveBeenCalledTimes(1)
   })

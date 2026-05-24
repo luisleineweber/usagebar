@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { ProviderCard } from "@/components/provider-card"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
-import type { DisplayMode, ResetTimerDisplayMode } from "@/lib/settings"
+import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
 interface ProviderDetailPageProps {
   plugin: DisplayPluginState | null
@@ -10,6 +10,7 @@ interface ProviderDetailPageProps {
   onOpenProviderSettings?: (providerId: string) => void
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
+  timeFormatMode?: TimeFormatMode
   onResetTimerDisplayModeToggle?: () => void
 }
 
@@ -20,6 +21,7 @@ export function ProviderDetailPage({
   onOpenProviderSettings,
   displayMode,
   resetTimerDisplayMode,
+  timeFormatMode,
   onResetTimerDisplayModeToggle,
 }: ProviderDetailPageProps) {
   if (!plugin) {
@@ -86,6 +88,7 @@ export function ProviderDetailPage({
         scopeFilter="all"
         displayMode={displayMode}
         resetTimerDisplayMode={resetTimerDisplayMode}
+        timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
     </div>

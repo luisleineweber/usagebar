@@ -4,10 +4,12 @@ import {
   saveMenubarIconStyle,
   saveResetTimerDisplayMode,
   saveThemeMode,
+  saveTimeFormatMode,
   type DisplayMode,
   type MenubarIconStyle,
   type ResetTimerDisplayMode,
   type ThemeMode,
+  type TimeFormatMode,
 } from "@/lib/settings"
 import { notifyDisplayPreferenceUpdated } from "@/lib/display-preference-events"
 
@@ -18,6 +20,7 @@ type UseSettingsDisplayActionsArgs = {
   setDisplayMode: (value: DisplayMode) => void
   resetTimerDisplayMode: ResetTimerDisplayMode
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
+  setTimeFormatMode: (value: TimeFormatMode) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
   scheduleTrayIconUpdate: ScheduleTrayIconUpdate
 }
@@ -27,6 +30,7 @@ export function useSettingsDisplayActions({
   setDisplayMode,
   resetTimerDisplayMode,
   setResetTimerDisplayMode,
+  setTimeFormatMode,
   setMenubarIconStyle,
   scheduleTrayIconUpdate,
 }: UseSettingsDisplayActionsArgs) {
@@ -66,6 +70,16 @@ export function useSettingsDisplayActions({
     handleResetTimerDisplayModeChange(next)
   }, [handleResetTimerDisplayModeChange, resetTimerDisplayMode])
 
+  const handleTimeFormatModeChange = useCallback((mode: TimeFormatMode) => {
+    setTimeFormatMode(mode)
+    void notifyDisplayPreferenceUpdated({ key: "timeFormatMode", value: mode }).catch((error) => {
+      console.error("Failed to publish time format mode update:", error)
+    })
+    void saveTimeFormatMode(mode).catch((error) => {
+      console.error("Failed to save time format mode:", error)
+    })
+  }, [setTimeFormatMode])
+
   const handleMenubarIconStyleChange = useCallback((style: MenubarIconStyle) => {
     setMenubarIconStyle(style)
     scheduleTrayIconUpdate("settings", 0)
@@ -82,6 +96,7 @@ export function useSettingsDisplayActions({
     handleDisplayModeChange,
     handleResetTimerDisplayModeChange,
     handleResetTimerDisplayModeToggle,
+    handleTimeFormatModeChange,
     handleMenubarIconStyleChange,
   }
 }

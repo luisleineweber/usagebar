@@ -72,6 +72,8 @@ export function SettingsWindowApp() {
     setMenubarIconStyle,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
+    timeFormatMode,
+    setTimeFormatMode,
     globalShortcut,
     setGlobalShortcut,
     startOnLogin,
@@ -88,6 +90,8 @@ export function SettingsWindowApp() {
       setMenubarIconStyle: state.setMenubarIconStyle,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       setResetTimerDisplayMode: state.setResetTimerDisplayMode,
+      timeFormatMode: state.timeFormatMode,
+      setTimeFormatMode: state.setTimeFormatMode,
       globalShortcut: state.globalShortcut,
       setGlobalShortcut: state.setGlobalShortcut,
       startOnLogin: state.startOnLogin,
@@ -124,6 +128,7 @@ export function SettingsWindowApp() {
     setDisplayMode,
     setMenubarIconStyle,
     setResetTimerDisplayMode,
+    setTimeFormatMode,
     setGlobalShortcut,
     setStartOnLogin,
     setLoadingForPlugins,
@@ -137,11 +142,13 @@ export function SettingsWindowApp() {
     handleThemeModeChange,
     handleDisplayModeChange,
     handleResetTimerDisplayModeChange,
+    handleTimeFormatModeChange,
   } = useSettingsDisplayActions({
     setThemeMode,
     setDisplayMode,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
+    setTimeFormatMode,
     setMenubarIconStyle,
     scheduleTrayIconUpdate,
   })
@@ -372,6 +379,8 @@ export function SettingsWindowApp() {
           onDisplayModeChange={handleDisplayModeChange}
           resetTimerDisplayMode={resetTimerDisplayMode}
           onResetTimerDisplayModeChange={handleResetTimerDisplayModeChange}
+          timeFormatMode={timeFormatMode}
+          onTimeFormatModeChange={handleTimeFormatModeChange}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={handleGlobalShortcutChange}
           startOnLogin={startOnLogin}

@@ -57,6 +57,7 @@ const ollamaPlugin = {
   id: "ollama",
   name: "Ollama",
   iconUrl: "/ollama.svg",
+  brandColor: "#202020",
   lines: [],
   primaryCandidates: [],
 }
@@ -222,6 +223,22 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/Install Codex CLI, sign in on this machine, then retry\./)).toBeInTheDocument()
     expect(screen.queryByText(/copy the Cookie request header from DevTools/i)).not.toBeInTheDocument()
     expect(screen.getByLabelText("Codex Dashboard Cookie header")).toBeInTheDocument()
+  })
+
+  it("keeps dark provider brand colors off the detail heading", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={ollamaPlugin}
+        enabled
+        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        onEnabledChange={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId("provider-settings-ollama")).not.toHaveStyle({
+      color: "#202020",
+    })
+    expect(screen.getByRole("heading", { name: "Ollama" })).toHaveClass("text-foreground")
   })
 
   it("shows Claude OAuth-first guidance while keeping web cookie fallback editable", () => {
@@ -474,7 +491,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText(/optional organization or enterprise premium-request billing scope/i)).toBeInTheDocument()
+    expect(screen.getByText(/showing premium requests plus paid chat quota units/i)).toBeInTheDocument()
     expect(screen.getByText(/org:ORG or enterprise:SLUG/)).toBeInTheDocument()
     expect(screen.getByLabelText("Copilot Billing scope")).toBeInTheDocument()
   })

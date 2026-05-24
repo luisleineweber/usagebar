@@ -9,12 +9,15 @@ import {
   DISPLAY_MODE_OPTIONS,
   RESET_TIMER_DISPLAY_OPTIONS,
   THEME_OPTIONS,
+  TIME_FORMAT_OPTIONS,
   type AutoUpdateIntervalMinutes,
   type DisplayMode,
   type GlobalShortcut,
   type ResetTimerDisplayMode,
   type ThemeMode,
+  type TimeFormatMode,
 } from "@/lib/settings"
+import { getTimeFormatter } from "@/lib/reset-tooltip"
 import { cn } from "@/lib/utils"
 
 const DENSE_SEGMENTED_GROUP_CLASS = "grid grid-cols-2 gap-2 lg:grid-cols-4"
@@ -31,6 +34,8 @@ type GeneralSettingsPaneProps = {
   onDisplayModeChange: (value: DisplayMode) => void
   resetTimerDisplayMode: ResetTimerDisplayMode
   onResetTimerDisplayModeChange: (value: ResetTimerDisplayMode) => void
+  timeFormatMode: TimeFormatMode
+  onTimeFormatModeChange: (value: TimeFormatMode) => void
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
@@ -46,6 +51,8 @@ export function GeneralSettingsPane({
   onDisplayModeChange,
   resetTimerDisplayMode,
   onResetTimerDisplayModeChange,
+  timeFormatMode,
+  onTimeFormatModeChange,
   globalShortcut,
   onGlobalShortcutChange,
   startOnLogin,
@@ -107,10 +114,7 @@ export function GeneralSettingsPane({
         <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Reset timer display mode">
           {RESET_TIMER_DISPLAY_OPTIONS.map((option) => {
             const isActive = option.value === resetTimerDisplayMode
-            const absoluteTimeExample = new Intl.DateTimeFormat(undefined, {
-              hour: "numeric",
-              minute: "2-digit",
-            }).format(new Date(2026, 1, 2, 11, 4))
+            const absoluteTimeExample = getTimeFormatter(timeFormatMode).format(new Date(2026, 1, 2, 11, 4))
             const example = option.value === "relative" ? "5h 12m" : `today at ${absoluteTimeExample}`
             return (
               <Button
@@ -125,6 +129,42 @@ export function GeneralSettingsPane({
               >
                 <span>{option.label}</span>
                 <span className={cn("text-xs font-normal", isActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                  {example}
+                </span>
+              </Button>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className={SETTINGS_SECTION_CLASS}>
+        <h3 className="mb-0 text-base font-semibold">Time Format</h3>
+        <p className="mb-3 text-sm text-muted-foreground">
+          12-hour or 24-hour clock
+        </p>
+        <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Time format">
+          {TIME_FORMAT_OPTIONS.map((option) => {
+            const isActive = option.value === timeFormatMode
+            const example = getTimeFormatter(option.value).format(new Date(2026, 1, 2, 11, 4))
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                aria-label={option.label}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                className="flex h-auto min-h-14 w-full flex-col items-center gap-0 py-2"
+                onClick={() => onTimeFormatModeChange(option.value)}
+              >
+                <span>{option.label}</span>
+                <span
+                  className={cn(
+                    "text-xs font-normal",
+                    isActive ? "text-primary-foreground/80" : "text-muted-foreground"
+                  )}
+                >
                   {example}
                 </span>
               </Button>

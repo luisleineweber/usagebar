@@ -6,6 +6,7 @@ import type {
   MenubarIconStyle,
   ResetTimerDisplayMode,
   ThemeMode,
+  TimeFormatMode,
 } from "@/lib/settings"
 
 const DISPLAY_PREFERENCES_UPDATED_EVENT = "display-preferences:updated"
@@ -14,6 +15,7 @@ export type DisplayPreferenceUpdate =
   | { key: "themeMode"; value: ThemeMode }
   | { key: "displayMode"; value: DisplayMode }
   | { key: "resetTimerDisplayMode"; value: ResetTimerDisplayMode }
+  | { key: "timeFormatMode"; value: TimeFormatMode }
   | { key: "menubarIconStyle"; value: MenubarIconStyle }
 
 export async function notifyDisplayPreferenceUpdated(update: DisplayPreferenceUpdate): Promise<void> {

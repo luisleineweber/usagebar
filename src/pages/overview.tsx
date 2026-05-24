@@ -1,7 +1,7 @@
 import { ProviderCard } from "@/components/provider-card";
 import { Button } from "@/components/ui/button";
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views";
-import type { DisplayMode, ResetTimerDisplayMode } from "@/lib/settings";
+import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings";
 import { openSettingsWindow } from "@/lib/settings-window";
 
 interface OverviewPageProps {
@@ -9,6 +9,7 @@ interface OverviewPageProps {
   onRetryPlugin?: (pluginId: string) => void;
   displayMode: DisplayMode;
   resetTimerDisplayMode: ResetTimerDisplayMode;
+  timeFormatMode?: TimeFormatMode;
   onResetTimerDisplayModeToggle?: () => void;
 }
 
@@ -17,6 +18,7 @@ export function OverviewPage({
   onRetryPlugin,
   displayMode,
   resetTimerDisplayMode,
+  timeFormatMode,
   onResetTimerDisplayModeToggle,
 }: OverviewPageProps) {
   if (plugins.length === 0) {
@@ -59,6 +61,7 @@ export function OverviewPage({
           scopeFilter="overview"
           displayMode={displayMode}
           resetTimerDisplayMode={resetTimerDisplayMode}
+          timeFormatMode={timeFormatMode}
           onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
         />
       ))}

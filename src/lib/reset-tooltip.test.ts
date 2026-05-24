@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatResetAbsoluteLabel, formatResetRelativeLabel, formatResetTooltipText } from "@/lib/reset-tooltip"
+import { formatResetAbsoluteLabel, formatResetRelativeLabel, formatResetTooltipText, getTimeFormatter } from "@/lib/reset-tooltip"
 
 describe("reset-tooltip", () => {
   it("returns null for invalid reset timestamp", () => {
@@ -26,10 +26,7 @@ describe("reset-tooltip", () => {
   it("formats absolute reset labels with same-day context", () => {
     const nowMs = new Date(2026, 1, 3, 0, 0, 0).getTime()
     const resetsAtIso = new Date(2026, 1, 3, 12, 34, 0).toISOString()
-    const timeText = new Intl.DateTimeFormat(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(Date.parse(resetsAtIso))
+    const timeText = getTimeFormatter("auto").format(Date.parse(resetsAtIso))
 
     expect(formatResetAbsoluteLabel(nowMs, resetsAtIso)).toBe(`Resets today at ${timeText}`)
   })
@@ -37,10 +34,7 @@ describe("reset-tooltip", () => {
   it("formats absolute reset labels with tomorrow context", () => {
     const nowMs = new Date(2026, 1, 3, 22, 0, 0).getTime()
     const resetsAtIso = new Date(2026, 1, 4, 8, 15, 0).toISOString()
-    const timeText = new Intl.DateTimeFormat(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(Date.parse(resetsAtIso))
+    const timeText = getTimeFormatter("auto").format(Date.parse(resetsAtIso))
 
     expect(formatResetAbsoluteLabel(nowMs, resetsAtIso)).toBe(`Resets tomorrow at ${timeText}`)
   })
@@ -67,10 +61,7 @@ describe("reset-tooltip", () => {
   it("shows absolute tooltip text when the visible mode is relative", () => {
     const nowMs = new Date(2026, 1, 3, 0, 0, 0).getTime()
     const resetsAtIso = new Date(2026, 1, 3, 12, 34, 0).toISOString()
-    const timeText = new Intl.DateTimeFormat(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(Date.parse(resetsAtIso))
+    const timeText = getTimeFormatter("auto").format(Date.parse(resetsAtIso))
 
     expect(
       formatResetTooltipText({
