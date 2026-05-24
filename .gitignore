@@ -35,6 +35,9 @@ playwright-report/
 # Agent working files
 docs/choices.md
 docs/breadcrumbs.md
+docs/archive/agent-history/
+tasks/archive/
+docs/competitor-implementation-plan.html
 docs/reports/*.html
 docs/assets/screenshot*.png
 plans/*

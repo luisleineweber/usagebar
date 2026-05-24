@@ -46,7 +46,7 @@ Local data:
 
 ## Alpha Readiness
 
-UsageBar is still pre-release. Alpha 2 means a Windows user can install from GitHub, enable supported providers, refresh usage, understand where each number came from, and report issues with enough context to debug. The Alpha 2 installer is unsigned; Authenticode signing is deferred.
+UsageBar is still pre-release. Alpha 3 means a Windows user can install from GitHub, enable supported providers, refresh usage, understand where each number came from, and report issues with enough context to debug. The Alpha 3 installer is unsigned; Authenticode signing is deferred.
 
 ## What It Does
 
@@ -86,6 +86,7 @@ Status meanings:
 | [**DeepSeek**](docs/providers/deepseek.md) | Experimental | API balance with paid and granted credit breakdown |
 | [**Factory / Droid**](docs/providers/factory.md) | Experimental | Standard and premium usage buckets |
 | [**Gemini**](docs/providers/gemini.md) | Experimental | Gemini quota buckets and reported Code Assist tier |
+| [**Grok**](docs/providers/grok.md) | Experimental | CLI-authenticated billing credits and pay-as-you-go cap |
 | [**JetBrains AI Assistant**](docs/providers/jetbrains-ai-assistant.md) | Supported | Quota, remaining |
 | [**Kilo**](docs/providers/kilo.md) | Experimental | Direct API-key usage endpoint |
 | [**Kimi Code (Moonshot)**](docs/providers/kimi.md) | Experimental | Kimi CLI, kimi.com membership, session and weekly quota from local `kimi login` OAuth; optional official Moonshot API balance via `https://api.moonshot.ai/v1/users/me/balance` |
@@ -111,7 +112,7 @@ Want a provider that's not listed? [Open an issue.](https://github.com/luisleine
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
 - Prerelease auto-updates are intentionally conservative because GitHub's `releases/latest` alias does not resolve prereleases. Prerelease builds may open the matching GitHub release page instead of installing in-app.
-- Authenticode-signed Windows artifacts and full crash-recovery expectations are full-release work, not an Alpha 2 promise.
+- Authenticode-signed Windows artifacts and full crash-recovery expectations are full-release work, not an Alpha 3 promise.
 
 ## Architecture
 
