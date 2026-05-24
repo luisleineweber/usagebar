@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { getVersion } from "@tauri-apps/api/app"
 import { isTauri } from "@tauri-apps/api/core"
-import { check, type Update } from "@tauri-apps/plugin-updater"
+import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { relaunch } from "@tauri-apps/plugin-process"
 
@@ -175,11 +175,10 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
     }
 
     try {
-      const version = await getCurrentVersion()
-      const enabled = !isPrereleaseVersion(version)
-      updaterEnabledRef.current = enabled
+      await getCurrentVersion()
+      updaterEnabledRef.current = true
       updaterEligibilityResolvedRef.current = true
-      return enabled
+      return true
     } catch (err) {
       console.error("Failed to get app version for updater:", err)
       updaterEnabledRef.current = true
@@ -302,31 +301,33 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
 
       let totalBytes: number | null = null
       let downloadedBytes = 0
+      const onDownloadEvent = (event: DownloadEvent) => {
+        if (!mountedRef.current) return
+        if (event.event === "Started") {
+          totalBytes = event.data.contentLength ?? null
+          downloadedBytes = 0
+          setStatus({
+            status: "downloading",
+            progress: totalBytes ? 0 : -1,
+          })
+        } else if (event.event === "Progress") {
+          downloadedBytes += event.data.chunkLength
+          if (totalBytes && totalBytes > 0) {
+            const pct = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
+            setStatus({ status: "downloading", progress: pct })
+          }
+        } else if (event.event === "Finished") {
+          setStatus({ status: "installing" })
+        }
+      }
 
       try {
-        await update.download((event) => {
-          if (!mountedRef.current) return
-          if (event.event === "Started") {
-            totalBytes = event.data.contentLength ?? null
-            downloadedBytes = 0
-            setStatus({
-              status: "downloading",
-              progress: totalBytes ? 0 : -1,
-            })
-          } else if (event.event === "Progress") {
-            downloadedBytes += event.data.chunkLength
-            if (totalBytes && totalBytes > 0) {
-              const pct = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
-              setStatus({ status: "downloading", progress: pct })
-            }
-          } else if (event.event === "Finished") {
-            setStatus({ status: "ready" })
-          }
-        })
-        setStatus({ status: "ready" })
+        await update.downloadAndInstall(onDownloadEvent)
+        await relaunch()
+        setStatus({ status: "idle" })
       } catch (err) {
-        console.error("Update download failed:", err)
-        setStatus({ status: "error", message: "Download failed" })
+        console.error("Update download or install failed:", err)
+        setStatus({ status: "error", message: "Install failed" })
       } finally {
         inFlightRef.current.downloading = false
       }
