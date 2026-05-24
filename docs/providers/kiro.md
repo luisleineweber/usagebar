@@ -6,12 +6,13 @@ Kiro tracks AI coding usage as monthly credits, bonus/free-trial credits, plan m
 
 ## Data Sources
 
-UsageBar prefers Kiro desktop auth state, then resolves usage in this order:
+UsageBar prefers authoritative quota snapshots before local transcript/session sums. It resolves usage in this order:
 
 1. **Local cache:** `state.vscdb` under the Kiro desktop global storage directory.
 2. **Local logs:** `q-client.log` entries containing `GetUsageLimitsCommand` output. Logs add plan and overage metadata that the cache may not include.
-3. **Live fallback:** Kiro/AWS usage API via the desktop refresh token when local data is missing or stale.
-4. **CLI session fallback:** Kiro CLI session files under `~/.kiro/sessions/cli` when desktop auth/cache files are absent.
+3. **Desktop live fallback:** Kiro/AWS usage API via the desktop refresh token when local data is missing or stale.
+4. **CLI live quota:** Kiro CLI auth from `~/AppData/Local/Kiro-Cli/data.sqlite3`, then the same Kiro/AWS usage API.
+5. **Degraded CLI session fallback:** Kiro CLI session files under `~/.kiro/sessions/cli` only when no live quota source works.
 
 If the live fallback fails but local cache/log data exists, UsageBar keeps showing the local data instead of failing the provider.
 
@@ -33,6 +34,11 @@ Auth token:
 - Windows: `~/.aws/sso/cache/kiro-auth-token.json`
 - macOS/Linux: `~/.aws/sso/cache/kiro-auth-token.json`
 
+CLI auth:
+
+- Windows: `~/AppData/Local/Kiro-Cli/data.sqlite3`
+- Table/key: `auth_kv`, usually `kirocli:social:token`
+
 State DB:
 
 - Windows: `~/AppData/Roaming/Kiro/User/globalStorage/state.vscdb`
@@ -50,7 +56,7 @@ Log metadata:
 - Windows: `~/AppData/Roaming/Kiro/logs/*/window*/exthost/kiro.kiroAgent/q-client.log`
 - macOS: `~/Library/Application Support/Kiro/logs/*/window*/exthost/kiro.kiroAgent/q-client.log`
 
-CLI session fallback:
+Degraded CLI session fallback:
 
 - Windows/macOS/Linux: `~/.kiro/sessions/cli/*.json`
 
@@ -58,17 +64,17 @@ CLI session fallback:
 
 | Metric | Source | Format |
 | --- | --- | --- |
-| Credits | cache, log, or live API `usageBreakdowns` | count |
+| Credits | cache, log, desktop live API, or CLI-auth live API `usageBreakdowns` | count |
 | Bonus Credits | `freeTrialUsage`, `freeTrialInfo`, or `bonuses` | count |
 | Plan | log or live API `subscriptionInfo.subscriptionTitle` | badge/detail metadata |
 | Overages | log or live API `overageConfiguration.overageStatus` | badge |
-| CLI Credits | CLI session `metering_usage` values when desktop state is absent | text |
+| CLI Credits | CLI session `metering_usage` values when no live quota source works | text |
 
-## CLI Fallback
+## CLI Sources
 
-UsageBar does not invoke `kiro-cli` from the plugin host. Instead, it reads local Kiro CLI session JSON and sums current-month `metering_usage` credit values. This avoids a new subprocess host API while fixing CLI-only installs where `kiro-cli whoami` works but desktop auth/cache files do not exist.
+UsageBar does not invoke `kiro-cli` from the plugin host. On Windows it first reads the Kiro CLI SQLite auth token from `~/AppData/Local/Kiro-Cli/data.sqlite3`, normalizes the token fields, and fetches the live Kiro/AWS quota snapshot. This is the path that should match Kiro CLI `/usage`, including used credits, limit, percentage, and reset date.
 
-The fallback is intentionally lower fidelity than desktop state: it can show CLI credits used this month, but not bonus credits, overage state, or authoritative plan limits.
+Only if live quota is unavailable does UsageBar read local Kiro CLI session JSON and sum current-month `metering_usage` credit values. That degraded fallback can show CLI credits used this month, but it is not an authoritative account-period quota and cannot show bonus credits, overage state, or plan limits.
 
 ## Troubleshooting
 
@@ -76,7 +82,8 @@ The fallback is intentionally lower fidelity than desktop state: it can show CLI
 
 - Open Kiro desktop and sign in.
 - Confirm `~/.aws/sso/cache/kiro-auth-token.json` exists on Windows.
-- If you only use Kiro CLI, run at least one CLI prompt so `~/.kiro/sessions/cli/*.json` contains metering data.
+- If you only use Kiro CLI, confirm `~/AppData/Local/Kiro-Cli/data.sqlite3` exists after login.
+- If live CLI quota fails, run at least one CLI prompt so `~/.kiro/sessions/cli/*.json` contains degraded metering data.
 
 ### "Kiro session expired."
 

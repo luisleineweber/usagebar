@@ -9,6 +9,7 @@
   const COUNT_FORMAT_REQUESTS = { kind: "count", suffix: "requests" };
   const COUNT_FORMAT_MESSAGES = { kind: "count", suffix: "messages" };
   const COUNT_FORMAT_COMPLETIONS = { kind: "count", suffix: "completions" };
+  const COUNT_FORMAT_QUOTA_UNITS = { kind: "count", suffix: "quota units" };
   const COPILOT_PREMIUM_LIMITS = {
     free: 50,
     student: 300,
@@ -654,7 +655,7 @@
         "Chat",
         snapshots.chat,
         data.quota_reset_date,
-        COUNT_FORMAT_MESSAGES,
+        COUNT_FORMAT_QUOTA_UNITS,
       );
       if (chatLine) lines.push(chatLine);
     }

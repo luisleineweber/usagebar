@@ -4,6 +4,8 @@
   const LOGS_ROOT = "~/Library/Application Support/Kiro/logs"
   const LOG_FILE_NAME = "q-client.log"
   const CLI_SESSIONS_ROOT = "~/.kiro/sessions/cli"
+  const CLI_DB = "~/AppData/Local/Kiro-Cli/data.sqlite3"
+  const CLI_AUTH_TOKEN_KEY = "kirocli:social:token"
   const TOKEN_PATH = "~/.aws/sso/cache/kiro-auth-token.json"
   const PROFILE_PATH = "~/Library/Application Support/Kiro/User/globalStorage/kiro.kiroagent/profile.json"
   const REFRESH_URL = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
@@ -48,7 +50,17 @@
 
   function sanitizeAuth(token) {
     if (!token || typeof token !== "object") return null
+    if (typeof token.access_token === "string" || typeof token.refresh_token === "string") {
+      token = {
+        ...token,
+        accessToken: token.accessToken || token.access_token,
+        refreshToken: token.refreshToken || token.refresh_token,
+        expiresAt: token.expiresAt || token.expires_at,
+        profileArn: token.profileArn || token.profile_arn,
+      }
+    }
     if (token.provider === "Google" || token.provider === "Github") return { ...token, authMethod: "social" }
+    if (token.provider === "google" || token.provider === "github") return { ...token, authMethod: "social" }
     if (token.provider === "ExternalIdp") return { ...token, authMethod: "external_idp" }
     if (token.provider === "Enterprise" || token.provider === "BuilderId" || token.provider === "Internal") {
       return { ...token, authMethod: "IdC" }
@@ -100,12 +112,43 @@
     return ctx.app.platform === "windows" ? "~/.kiro/sessions/cli" : CLI_SESSIONS_ROOT
   }
 
+  function cliDbPath(ctx) {
+    return ctx.app.platform === "windows" ? CLI_DB : null
+  }
+
   function loadAuthState(ctx) {
     const path = tokenPath(ctx)
     const parsed = readJsonFile(ctx, path, "auth token")
     if (!parsed || typeof parsed !== "object") return null
     const token = sanitizeAuth(parsed)
     return token && (token.refreshToken || token.accessToken) ? { path: path, token } : null
+  }
+
+  function readCliAuthValue(ctx) {
+    const dbPath = cliDbPath(ctx)
+    if (!dbPath) return null
+    try {
+      const exactRows = ctx.util.tryParseJson(
+        ctx.host.sqlite.query(dbPath, "SELECT value FROM auth_kv WHERE key = '" + CLI_AUTH_TOKEN_KEY + "' LIMIT 1;")
+      )
+      if (Array.isArray(exactRows) && exactRows.length && typeof exactRows[0].value === "string") return exactRows[0].value
+      const fallbackRows = ctx.util.tryParseJson(
+        ctx.host.sqlite.query(dbPath, "SELECT value FROM auth_kv WHERE key LIKE 'kirocli:%:token' ORDER BY key LIMIT 1;")
+      )
+      return Array.isArray(fallbackRows) && fallbackRows.length && typeof fallbackRows[0].value === "string" ? fallbackRows[0].value : null
+    } catch (e) {
+      ctx.host.log.warn("Kiro CLI auth sqlite read failed: " + String(e))
+      return null
+    }
+  }
+
+  function loadCliAuthState(ctx) {
+    const raw = readCliAuthValue(ctx)
+    if (!raw) return null
+    const parsed = ctx.util.tryParseJson(raw)
+    if (!parsed || typeof parsed !== "object") return null
+    const token = sanitizeAuth(parsed)
+    return token && (token.refreshToken || token.accessToken) ? { path: null, token, source: "Kiro CLI auth" } : null
   }
 
   function monthWindow(nowMs) {
@@ -181,6 +224,7 @@
   }
 
   function saveAuthState(ctx, authState) {
+    if (!authState.path) return false
     try {
       ctx.host.fs.writeText(authState.path, JSON.stringify(authState.token, null, 2))
       return true
@@ -514,7 +558,7 @@
 
   function probe(ctx) {
     const nowMs = ctx.util.parseDateMs(ctx.nowIso) || Date.now()
-    const authState = loadAuthState(ctx)
+    const authState = loadAuthState(ctx) || loadCliAuthState(ctx)
     if (!authState || !authState.token || !authState.token.refreshToken) {
       const cliState = loadCliSessionState(ctx, nowMs)
       if (cliState) return buildCliOutput(ctx, cliState)
@@ -540,6 +584,10 @@
     }
     const snapshot = mergeSnapshots(localState, loggedState, liveState, nowMs)
     if (!snapshot) {
+      if (authState.source === "Kiro CLI auth") {
+        const cliState = loadCliSessionState(ctx, nowMs)
+        if (cliState) return buildCliOutput(ctx, cliState)
+      }
       if (typeof liveError === "string" && liveError) throw liveError
       throw DATA_HINT
     }

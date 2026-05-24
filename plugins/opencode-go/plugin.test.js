@@ -1,106 +1,101 @@
-import { readFileSync } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { makeCtx } from "../test-helpers.js";
+import { readFileSync } from "node:fs"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { makeCtx } from "../test-helpers.js"
 
-const AUTH_PATH = "~/.local/share/opencode/auth.json";
+const AUTH_PATH = "~/.local/share/opencode/auth.json"
 
 const loadPlugin = async () => {
-  await import("./plugin.js");
-  return globalThis.__openusage_plugin;
-};
+  await import("./plugin.js")
+  return globalThis.__openusage_plugin
+}
 
-function setAuth(ctx, value = "go-key") {
+function setAuth(ctx, value = "go-key", extras = {}) {
   ctx.host.fs.writeText(
     AUTH_PATH,
     JSON.stringify({
-      "opencode-go": { type: "api-key", key: value },
-    }),
-  );
+      "opencode-go": { type: "api-key", key: value, ...extras },
+    })
+  )
+}
+
+function setGoSubscriptionAuth(ctx, value = "go-key") {
+  setAuth(ctx, value, { goSubscription: { status: "active" } })
 }
 
 function response(bodyText, status = 200) {
-  return { status, bodyText, headers: {} };
+  return { status, bodyText, headers: {} }
 }
 
-function setZenConfig(ctx, cookieHeader = "auth=test; __Host-auth=test2", workspaceId = "wrk_01TESTWORKSPACE") {
+function setZenConfig(
+  ctx,
+  cookieHeader = "auth=test; __Host-auth=test2",
+  workspaceId = "wrk_01TESTWORKSPACE",
+  payload = { billing: { currentBalance: 12.34 }, goSubscription: { status: "active" } }
+) {
   ctx.host.providerSecrets.read.mockImplementation((key) =>
-    key === "cookieHeader" ? cookieHeader : null,
-  );
+    key === "cookieHeader" ? cookieHeader : null
+  )
   ctx.host.providerConfig = {
     get: vi.fn((key) => {
-      if (key === "source") return "manual";
-      if (key === "workspaceId") return workspaceId;
-      return null;
+      if (key === "source") return "manual"
+      if (key === "workspaceId") return workspaceId
+      return null
     }),
-  };
-  ctx.host.http.request.mockReturnValue(
-    response(JSON.stringify({ billing: { currentBalance: 12.34 } })),
-  );
-  return workspaceId;
+  }
+  ctx.host.http.request.mockReturnValue(response(JSON.stringify(payload)))
+  return workspaceId
 }
 
 function setHistoryQuery(ctx, rows, options = {}) {
-  const list = Array.isArray(rows) ? rows : [];
+  const list = Array.isArray(rows) ? rows : []
   ctx.host.sqlite.query.mockImplementation((dbPath, sql) => {
-    expect(dbPath).toBe("~/.local/share/opencode/opencode.db");
+    expect(dbPath).toBe("~/.local/share/opencode/opencode.db")
 
     if (String(sql).includes("SELECT 1 AS present")) {
       if (options.assertFilters !== false) {
         expect(String(sql)).toContain(
-          "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')",
-        );
-        expect(String(sql)).toContain(
-          "json_extract(data, '$.role') = 'assistant'",
-        );
-        expect(String(sql)).toContain(
-          "json_type(data, '$.cost') IN ('integer', 'real')",
-        );
+          "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')"
+        )
+        expect(String(sql)).toContain("json_extract(data, '$.role') = 'assistant'")
+        expect(String(sql)).toContain("json_type(data, '$.cost') IN ('integer', 'real')")
       }
-      return JSON.stringify(list.length > 0 ? [{ present: 1 }] : []);
+      return JSON.stringify(list.length > 0 ? [{ present: 1 }] : [])
     }
 
     if (options.assertFilters !== false) {
       expect(String(sql)).toContain(
-        "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')",
-      );
-      expect(String(sql)).toContain(
-        "json_extract(data, '$.role') = 'assistant'",
-      );
-      expect(String(sql)).toContain(
-        "json_type(data, '$.cost') IN ('integer', 'real')",
-      );
-      expect(String(sql)).toContain(
-        "COALESCE(json_extract(data, '$.time.created'), time_created)",
-      );
+        "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')"
+      )
+      expect(String(sql)).toContain("json_extract(data, '$.role') = 'assistant'")
+      expect(String(sql)).toContain("json_type(data, '$.cost') IN ('integer', 'real')")
+      expect(String(sql)).toContain("COALESCE(json_extract(data, '$.time.created'), time_created)")
     }
 
-    return JSON.stringify(list);
-  });
+    return JSON.stringify(list)
+  })
 }
 
 describe("opencode-go plugin", () => {
   beforeEach(() => {
-    delete globalThis.__openusage_plugin;
-    vi.resetModules();
-  });
+    delete globalThis.__openusage_plugin
+    vi.resetModules()
+  })
 
   afterEach(() => {
-    vi.restoreAllMocks();
-    vi.useRealTimers();
-  });
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
 
   it("ships plugin metadata with links and expected line layout", () => {
-    const manifest = JSON.parse(
-      readFileSync("plugins/opencode-go/plugin.json", "utf8"),
-    );
+    const manifest = JSON.parse(readFileSync("plugins/opencode-go/plugin.json", "utf8"))
 
-    expect(manifest.id).toBe("opencode-go");
-    expect(manifest.name).toBe("OpenCode");
-    expect(manifest.brandColor).toBe("#000000");
+    expect(manifest.id).toBe("opencode-go")
+    expect(manifest.name).toBe("OpenCode")
+    expect(manifest.brandColor).toBe("#000000")
     expect(manifest.links).toEqual([
       { label: "Console", url: "https://opencode.ai/auth" },
       { label: "Docs", url: "https://opencode.ai/docs/go/" },
-    ]);
+    ])
     expect(manifest.lines).toEqual([
       { type: "progress", label: "5h", scope: "overview", primaryOrder: 1 },
       { type: "text", label: "Zen balance", scope: "detail" },
@@ -109,31 +104,31 @@ describe("opencode-go plugin", () => {
       { type: "text", label: "Zen endpoint", scope: "detail" },
       { type: "progress", label: "Weekly", scope: "detail" },
       { type: "progress", label: "Monthly", scope: "detail" },
-    ]);
-  });
+    ])
+  })
 
   it("throws when neither auth nor local history is present", async () => {
-    const ctx = makeCtx();
-    setHistoryQuery(ctx, []);
+    const ctx = makeCtx()
+    setHistoryQuery(ctx, [])
 
-    const plugin = await loadPlugin();
+    const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow(
-      "OpenCode Go not detected. Log in with OpenCode Go or use it locally first.",
-    );
-  });
+      "OpenCode Go not detected. Log in with OpenCode Go or use it locally first."
+    )
+  })
 
   it("does not render allowance bars from auth alone", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
-    setAuth(ctx);
-    setHistoryQuery(ctx, []);
+    const ctx = makeCtx()
+    setAuth(ctx)
+    setHistoryQuery(ctx, [])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Go");
+    expect(result.plan).toBe("Free")
     expect(result.lines).toEqual([
       {
         type: "badge",
@@ -142,285 +137,383 @@ describe("opencode-go plugin", () => {
         color: "#a3a3a3",
         subtitle: "Zen auth exists, but no local Go usage was found.",
       },
-    ]);
-  });
+    ])
+  })
 
   it("enables with history only when auth is absent", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-06T11:00:00.000Z"), cost: 3 },
-    ]);
+    const ctx = makeCtx()
+    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T11:00:00.000Z"), cost: 3 }])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Go");
-    expect(result.lines[0].used).toBe(25);
-  });
+    expect(result.plan).toBe("Free")
+    expect(result.lines[0]).toMatchObject({
+      type: "progress",
+      label: "Free",
+      used: 0,
+      limit: 200,
+      format: { kind: "count", suffix: "requests" },
+    })
+  })
 
   it("accepts the current opencode auth key entry without assuming subscription usage", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
+    const ctx = makeCtx()
     ctx.host.fs.writeText(
       AUTH_PATH,
       JSON.stringify({
         opencode: { type: "api-key", key: "current-go-key" },
-      }),
-    );
-    setHistoryQuery(ctx, []);
+      })
+    )
+    setHistoryQuery(ctx, [])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Go");
+    expect(result.plan).toBe("Free")
     expect(result.lines[0]).toMatchObject({
       type: "badge",
       label: "Status",
       text: "No Go subscription usage",
-    });
-  });
+    })
+  })
 
   it("accepts current opencode history rows as detection evidence", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
-    ]);
+    const ctx = makeCtx()
+    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 }])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Go");
-    expect(result.lines[0].used).toBe(10);
-  });
+    expect(result.plan).toBe("Free")
+    expect(result.lines[0]).toMatchObject({
+      type: "progress",
+      label: "Free",
+      used: 0,
+      limit: 200,
+      format: { kind: "count", suffix: "requests" },
+    })
+  })
 
   it("tracks free OpenCode usage by 5h request count instead of dollar cost", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
+    const ctx = makeCtx()
     setHistoryQuery(ctx, [
       { createdMs: Date.parse("2026-03-06T06:30:00.000Z"), modelId: "minimax-m2.5-free", cost: 0 },
       { createdMs: Date.parse("2026-03-06T08:00:00.000Z"), modelId: "minimax-m2.5-free", cost: 0 },
       { createdMs: Date.parse("2026-03-06T10:00:00.000Z"), modelId: "minimax-m2.5-free", cost: 0 },
-    ]);
+    ])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Free");
+    expect(result.plan).toBe("Free")
     expect(result.lines).toEqual([
       {
         type: "progress",
-        label: "5h",
+        label: "Free",
         used: 2,
         limit: 200,
         format: { kind: "count", suffix: "requests" },
         resetsAt: "2026-03-06T13:00:00.000Z",
         periodDurationMs: 5 * 60 * 60 * 1000,
       },
-    ]);
-  });
+    ])
+  })
+
+  it("does not count non-free model rows in Free mode", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-19T12:00:00.000Z"))
+
+    const ctx = makeCtx()
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-05-19T10:00:00.000Z"), modelId: "qwen3.6-plus-free", cost: 0 },
+      { createdMs: Date.parse("2026-05-19T10:05:00.000Z"), modelId: "qwen3.6-plus", cost: 0 },
+    ])
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Free")
+    expect(result.lines[0]).toMatchObject({
+      type: "progress",
+      label: "Free",
+      used: 1,
+      limit: 200,
+      format: { kind: "count", suffix: "requests" },
+    })
+  })
 
   it("adds the Zen balance to the Go tab when a Zen cookie is configured", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
-    const workspaceId = setZenConfig(ctx);
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
-    ]);
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    const workspaceId = setZenConfig(ctx)
+    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 }])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
-      method: "GET",
-      headers: expect.objectContaining({
-        Cookie: "auth=test; __Host-auth=test2",
-        Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
-      }),
-    }));
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Cookie: "auth=test; __Host-auth=test2",
+          Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
+        }),
+      })
+    )
     expect(result.lines).toContainEqual({
       type: "text",
       label: "Zen balance",
       value: "$12.34",
       subtitle: "OpenCode Zen pay-as-you-go balance",
-    });
+    })
     expect(result.lines).toContainEqual({
       type: "text",
       label: "Zen source",
       value: "OpenCode Zen signed-in website billing session",
-    });
+    })
     expect(result.lines).toContainEqual({
       type: "text",
       label: "Zen auth source",
       value: "Stored Cookie header",
-    });
+    })
     expect(result.lines).toContainEqual({
       type: "text",
       label: "Zen endpoint",
       value: "https://opencode.ai/_server",
-    });
-  });
+    })
+  })
+
+  it("shows credit-only output when billing has no active Go subscription evidence", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
+
+    const ctx = makeCtx()
+    setZenConfig(ctx, "auth=stored", "wrk_01TESTWORKSPACE", {
+      billing: { currentBalance: 12.34 },
+    })
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), modelId: "glm-5.1", cost: 1.2 },
+      { createdMs: Date.parse("2026-03-05T09:30:00.000Z"), modelId: "glm-5.1", cost: 2.4 },
+    ])
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Free")
+    expect(result.lines).toEqual([
+      {
+        type: "progress",
+        label: "Free",
+        used: 0,
+        limit: 200,
+        format: { kind: "count", suffix: "requests" },
+        resetsAt: "2026-03-06T14:30:00.000Z",
+        periodDurationMs: 5 * 60 * 60 * 1000,
+      },
+    ])
+    expect(result.lines.some((line) => line.label === "5h")).toBe(false)
+    expect(result.lines.some((line) => line.label === "Weekly")).toBe(false)
+    expect(result.lines.some((line) => line.label === "Monthly")).toBe(false)
+  })
+
+  it("does not infer GoSubscription from unstructured billing text", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-19T12:00:00.000Z"))
+
+    const ctx = makeCtx()
+    setZenConfig(ctx, "auth=stored", "wrk_01TESTWORKSPACE", {
+      billing: {
+        currentBalance: 12.34,
+        banner: "OpenCode Go subscription is available. Activate a plan any time.",
+      },
+    })
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-05-19T10:00:00.000Z"), modelId: "qwen3.6-plus-free", cost: 0 },
+    ])
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Free")
+    expect(result.lines).toEqual([
+      {
+        type: "progress",
+        label: "Free",
+        used: 1,
+        limit: 200,
+        format: { kind: "count", suffix: "requests" },
+        resetsAt: "2026-05-19T15:00:00.000Z",
+        periodDurationMs: 5 * 60 * 60 * 1000,
+      },
+    ])
+  })
 
   it("uses the stored Zen cookie before OPENCODE_COOKIE_HEADER", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
-    const workspaceId = setZenConfig(ctx, "auth=stored");
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    const workspaceId = setZenConfig(ctx, "auth=stored")
     ctx.host.env.get.mockImplementation((key) =>
-      key === "OPENCODE_COOKIE_HEADER" ? "auth=stale-env" : null,
-    );
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
-    ]);
+      key === "OPENCODE_COOKIE_HEADER" ? "auth=stale-env" : null
+    )
+    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 }])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
-      method: "GET",
-      headers: expect.objectContaining({
-        Cookie: "auth=stored",
-        Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
-      }),
-    }));
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Cookie: "auth=stored",
+          Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
+        }),
+      })
+    )
     expect(result.lines).toContainEqual({
       type: "text",
       label: "Zen auth source",
       value: "Stored Cookie header",
-    });
-  });
+    })
+  })
 
   it("keeps Go usage visible when the optional Zen balance read fails", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
-    setZenConfig(ctx);
-    ctx.host.http.request.mockReturnValue(response("{}", 500));
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
-    ]);
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    setZenConfig(ctx)
+    ctx.host.http.request.mockReturnValue(response("{}", 500))
+    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 }])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.lines[0]).toMatchObject({ type: "progress", label: "5h", used: 10 });
-    expect(result.lines.some((line) => line.label === "Zen balance")).toBe(false);
+    expect(result.lines[0]).toMatchObject({ type: "progress", label: "5h", used: 10 })
+    expect(result.lines.some((line) => line.label === "Zen balance")).toBe(false)
     expect(ctx.host.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining("opencode-go zen balance read failed: OpenCode Zen request failed"),
-    );
-  });
+      expect.stringContaining("opencode-go zen balance read failed: OpenCode Zen request failed")
+    )
+  })
 
   it("uses row timestamp fallback when JSON timestamp is missing", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 },
-    ]);
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 }])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.lines[0].used).toBe(10);
-    expect(result.lines[0].resetsAt).toBe("2026-03-06T14:30:00.000Z");
-  });
+    expect(result.lines[0].used).toBe(10)
+    expect(result.lines[0].resetsAt).toBe("2026-03-06T14:30:00.000Z")
+  })
 
   it("counts only the rolling 5h window", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
     setHistoryQuery(ctx, [
       { createdMs: Date.parse("2026-03-06T06:30:00.000Z"), cost: 9 },
       { createdMs: Date.parse("2026-03-06T08:00:00.000Z"), cost: 2.4 },
       { createdMs: Date.parse("2026-03-06T10:00:00.000Z"), cost: 1.2 },
-    ]);
+    ])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.lines[0].used).toBe(30);
-    expect(result.lines[0].resetsAt).toBe("2026-03-06T13:00:00.000Z");
-  });
+    expect(result.lines[0].used).toBe(30)
+    expect(result.lines[0].resetsAt).toBe("2026-03-06T13:00:00.000Z")
+  })
 
   it("uses UTC Monday boundaries for weekly aggregation", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
     setHistoryQuery(ctx, [
       { createdMs: Date.parse("2026-03-01T23:59:59.000Z"), cost: 10 },
       { createdMs: Date.parse("2026-03-02T00:00:00.000Z"), cost: 6 },
       { createdMs: Date.parse("2026-03-05T09:00:00.000Z"), cost: 3 },
-    ]);
+    ])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
-    const weeklyLine = result.lines.find((line) => line.label === "Weekly");
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const weeklyLine = result.lines.find((line) => line.label === "Weekly")
 
-    expect(weeklyLine.used).toBe(30);
-    expect(weeklyLine.resetsAt).toBe("2026-03-09T00:00:00.000Z");
-  });
+    expect(weeklyLine.used).toBe(30)
+    expect(weeklyLine.resetsAt).toBe("2026-03-09T00:00:00.000Z")
+  })
 
   it("uses the earliest local usage timestamp as the monthly anchor", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
     setHistoryQuery(ctx, [
       { createdMs: Date.parse("2026-02-25T07:53:16.000Z"), cost: 2.181 },
       { createdMs: Date.parse("2026-03-01T00:00:00.000Z"), cost: 0.2 },
       { createdMs: Date.parse("2026-03-04T12:00:00.000Z"), cost: 0.2904 },
-    ]);
+    ])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
-    const monthlyLine = result.lines.find((line) => line.label === "Monthly");
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const monthlyLine = result.lines.find((line) => line.label === "Monthly")
 
-    expect(monthlyLine.used).toBe(4.5);
-    expect(monthlyLine.resetsAt).toBe("2026-03-25T07:53:16.000Z");
-    expect(monthlyLine.periodDurationMs).toBe(28 * 24 * 60 * 60 * 1000);
-  });
+    expect(monthlyLine.used).toBe(4.5)
+    expect(monthlyLine.resetsAt).toBe("2026-03-25T07:53:16.000Z")
+    expect(monthlyLine.periodDurationMs).toBe(28 * 24 * 60 * 60 * 1000)
+  })
 
   it("clamps percentages at 100", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"));
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
-    const ctx = makeCtx();
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-06T11:00:00.000Z"), cost: 40 },
-    ]);
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T11:00:00.000Z"), cost: 40 }])
 
-    const plugin = await loadPlugin();
-    const result = plugin.probe(ctx);
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
 
-    expect(result.lines[0].used).toBe(100);
-  });
+    expect(result.lines[0].used).toBe(100)
+  })
 
   it("returns a soft empty state when sqlite is unreadable but auth exists", async () => {
-    const ctx = makeCtx();
-    setAuth(ctx);
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
     ctx.host.sqlite.query.mockImplementation(() => {
-      throw new Error("disk I/O error");
-    });
+      throw new Error("disk I/O error")
+    })
 
-    const plugin = await loadPlugin();
+    const plugin = await loadPlugin()
     expect(plugin.probe(ctx)).toEqual({
-      plan: "Go",
+      plan: "GoSubscription",
       lines: [
         {
           type: "badge",
@@ -429,17 +522,17 @@ describe("opencode-go plugin", () => {
           color: "#a3a3a3",
         },
       ],
-    });
-  });
+    })
+  })
 
   it("returns a soft empty state when sqlite returns malformed JSON and auth exists", async () => {
-    const ctx = makeCtx();
-    setAuth(ctx);
-    ctx.host.sqlite.query.mockReturnValue("not-json");
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    ctx.host.sqlite.query.mockReturnValue("not-json")
 
-    const plugin = await loadPlugin();
+    const plugin = await loadPlugin()
     expect(plugin.probe(ctx)).toEqual({
-      plan: "Go",
+      plan: "GoSubscription",
       lines: [
         {
           type: "badge",
@@ -448,6 +541,6 @@ describe("opencode-go plugin", () => {
           color: "#a3a3a3",
         },
       ],
-    });
-  });
-});
+    })
+  })
+})

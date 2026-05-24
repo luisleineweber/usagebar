@@ -8,7 +8,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Windows experimental. UsageBar reads local Kiro desktop auth/cache state when present, or local Kiro CLI session metering as a fallback."
+      "message": "Windows experimental. UsageBar reads local Kiro desktop auth/cache state when present, then Kiro CLI auth for live quota, with local CLI session metering as a degraded fallback."
     }
   },
   "lines": [
