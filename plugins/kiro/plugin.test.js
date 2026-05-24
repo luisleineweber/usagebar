@@ -11,6 +11,7 @@ const LOG_PATH =
   "~/Library/Application Support/Kiro/logs/20260406T235910/window1/exthost/kiro.kiroAgent/q-client.log"
 const WINDOWS_LOG_PATH = "~/AppData/Roaming/Kiro/logs/20260406T235910/window1/exthost/kiro.kiroAgent/q-client.log"
 const WINDOWS_CLI_SESSION_PATH = "~/.kiro/sessions/cli/session-1.json"
+const WINDOWS_CLI_DB_PATH = "~/AppData/Local/Kiro-Cli/data.sqlite3"
 
 const loadPlugin = async () => {
   await import("./plugin.js")
@@ -24,6 +25,15 @@ const makeToken = (overrides = {}) => ({
   authMethod: "social",
   provider: "Google",
   profileArn: "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK",
+  ...overrides,
+})
+
+const makeCliDbToken = (overrides = {}) => ({
+  access_token: "kiro-cli-access-token",
+  refresh_token: "kiro-cli-refresh-token",
+  expires_at: "2026-05-18T23:00:00.000Z",
+  provider: "github",
+  profile_arn: "arn:aws:codewhisperer:us-east-1:699475941385:profile/EHGA3GRVQMUK",
   ...overrides,
 })
 
@@ -184,6 +194,84 @@ describe("kiro plugin", () => {
       value: "CLI session files",
     })
     expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("uses Windows Kiro CLI auth database for exact live credit quota", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    ctx.nowIso = "2026-05-18T21:05:00.000Z"
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (db === WINDOWS_CLI_DB_PATH && String(sql).includes("auth_kv")) {
+        return JSON.stringify([{ value: JSON.stringify(makeCliDbToken()) }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      expect(String(opts.url)).toContain("https://q.us-east-1.amazonaws.com/getUsageLimits?")
+      expect(opts.headers.Authorization).toBe("Bearer kiro-cli-access-token")
+      return {
+        status: 200,
+        headers: {},
+        bodyText: JSON.stringify(
+          makeUsageOutput({
+            nextDateReset: "2026-06-01T00:00:00.000Z",
+            usageBreakdownList: [
+              {
+                resourceType: "CREDIT",
+                currentUsage: 1,
+                currentUsageWithPrecision: 1.07,
+                usageLimit: 50,
+                usageLimitWithPrecision: 50,
+                nextDateReset: "2026-06-01T00:00:00.000Z",
+                displayName: "Credit",
+                displayNamePlural: "Credits",
+                bonuses: [],
+              },
+            ],
+          })
+        ),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Kiro Free")
+    expect(result.lines.find((line) => line.label === "Credits")).toMatchObject({
+      type: "progress",
+      used: 1.07,
+      limit: 50,
+      resetsAt: "2026-06-01T00:00:00.000Z",
+      format: { kind: "count", suffix: "credits" },
+    })
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe("Live usage API")
+  })
+
+  it("falls back to CLI session metering when CLI auth live quota fails", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    ctx.nowIso = "2026-05-10T12:00:00.000Z"
+    writeCliSession(ctx)
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (db === WINDOWS_CLI_DB_PATH && String(sql).includes("auth_kv")) {
+        return JSON.stringify([{ value: JSON.stringify(makeCliDbToken()) }])
+      }
+      return JSON.stringify([])
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 503,
+      headers: {},
+      bodyText: "{}",
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Kiro CLI")
+    expect(result.lines.find((line) => line.label === "CLI Credits")).toMatchObject({
+      value: "0.13 credits used this month",
+      subtitle: "From local Kiro CLI sessions",
+    })
   })
 
   it("uses local usage state and usage log metadata without hitting the network", async () => {

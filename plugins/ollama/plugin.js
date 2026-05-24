@@ -62,7 +62,7 @@
     return null
   }
 
-  function authOnlyResult(ctx, source) {
+  function authOnlyResult(ctx, source, usageValue) {
     return {
       plan: "Ollama Cloud Auth",
       lines: [
@@ -72,7 +72,7 @@
         }),
         ctx.line.text({
           label: "Usage",
-          value: "Settings cookie required",
+          value: usageValue || "Settings cookie required",
         }),
         ctx.line.text({
           label: "Source",
@@ -268,7 +268,19 @@
       if (cloudAuth) return authOnlyResult(ctx, cloudAuth)
       throw "Paste your Ollama Cookie header in Setup before refreshing, or run `ollama signin` / set OLLAMA_API_KEY for Cloud auth detection."
     }
-    var html = fetchSettingsHtml(ctx, cookieHeader.value)
+    var html
+    try {
+      html = fetchSettingsHtml(ctx, cookieHeader.value)
+    } catch (e) {
+      var cloudAuthAfterCookieFailure = readCloudAuth(ctx)
+      if (cloudAuthAfterCookieFailure && String(e).indexOf("Not logged in to Ollama") !== -1) {
+        return authOnlyResult(ctx, cloudAuthAfterCookieFailure, "Settings cookie rejected")
+      }
+      if (cloudAuthAfterCookieFailure && String(e).indexOf("Ollama session cookie expired") !== -1) {
+        return authOnlyResult(ctx, cloudAuthAfterCookieFailure, "Settings cookie expired")
+      }
+      throw e
+    }
     var snapshot = parseSnapshot(html)
 
     var lines = [

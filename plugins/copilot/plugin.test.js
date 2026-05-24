@@ -250,7 +250,7 @@ describe("copilot plugin", () => {
     expect(ctx.host.keychain.writeGenericPassword).not.toHaveBeenCalled();
   });
 
-  it("renders both Premium and Chat lines for paid tier", async () => {
+  it("renders paid tier Chat as quota units, not messages", async () => {
     const ctx = makePluginTestContext();
     setKeychainToken(ctx, "tok");
     mockUsageOk(ctx);
@@ -265,7 +265,7 @@ describe("copilot plugin", () => {
     expect(chat).toBeTruthy();
     expect(chat.used).toBe(50);
     expect(chat.limit).toBe(1000);
-    expect(chat.format).toEqual({ kind: "count", suffix: "messages" });
+    expect(chat.format).toEqual({ kind: "count", suffix: "quota units" });
   });
 
   it("keeps paid tier limits when usage exceeds entitlement", async () => {

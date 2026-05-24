@@ -35,11 +35,11 @@ This keeps the legacy balance line working without making new OpenCode Go users 
 
 When the optional Zen balance line is shown, it also adds detail-only provenance lines:
 
-| Line | Value |
-| --- | --- |
-| `Zen source` | `OpenCode Zen signed-in website billing session` |
+| Line              | Value                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| `Zen source`      | `OpenCode Zen signed-in website billing session`                                     |
 | `Zen auth source` | `Stored Cookie header`, `OPENCODE_COOKIE_HEADER`, or `Legacy keychain Cookie header` |
-| `Zen endpoint` | `https://opencode.ai/_server` |
+| `Zen endpoint`    | `https://opencode.ai/_server`                                                        |
 
 ## Data Source
 
@@ -58,6 +58,8 @@ WHERE json_valid(data)
 
 Only assistant messages with numeric `cost` count for paid Go usage. Free-model assistant messages with `cost: 0` are counted as requests for the Free 5-hour request limit. Missing remote or other-device usage is not estimated.
 
+UsageBar displays the provider plan as either `GoSubscription` or `Free`. It only renders the paid Go `5h`, `Weekly`, and `Monthly` bars when local auth or account payload data contains positive Go subscription evidence. If no subscription is found, UsageBar treats the account as `Free` and shows only the free request usage line. Free-mode counting includes free model rows such as `*-free` and `big-pickle`; paid Go model rows such as `opencode-go/qwen3.6-plus` are ignored unless `GoSubscription` is proven.
+
 ## Limits
 
 OpenUsage uses the current published OpenCode Go subscription limits from the official docs:
@@ -72,7 +74,7 @@ For Free usage, OpenUsage uses the published Free 5-hour request limit:
 
 - `5h`: `200 requests`
 
-Free models have zero local dollar cost, so they are not mapped onto the `$12/$30/$60` Go dollar limits.
+Free accounts are not mapped onto the `$12/$30/$60` Go dollar limits. UsageBar defaults to `Free` unless it finds positive `GoSubscription` evidence.
 
 ## Window Rules
 

@@ -221,6 +221,21 @@ describe("ollama plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Ollama session cookie expired")
   })
 
+  it("keeps OAuth signin visible when the stored settings cookie is expired", async () => {
+    const ctx = makeCtx()
+    mockCookie(ctx)
+    ctx.host.fs.writeText("~/.ollama/id_ed25519", "private")
+    ctx.host.fs.writeText("~/.ollama/id_ed25519.pub", "public")
+    ctx.host.http.request.mockReturnValue(response("", 401))
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Ollama Cloud Auth")
+    expect(result.lines.find((line) => line.label === "Cloud Auth")?.value).toBe("Local signin keys detected")
+    expect(result.lines.find((line) => line.label === "Usage")?.value).toBe("Settings cookie expired")
+  })
+
   it("throws on auth redirects", async () => {
     const ctx = makeCtx()
     mockCookie(ctx)
@@ -228,6 +243,20 @@ describe("ollama plugin", () => {
 
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Not logged in to Ollama")
+  })
+
+  it("keeps API-key auth visible when the stored settings cookie is rejected", async () => {
+    const ctx = makeCtx()
+    mockCookie(ctx)
+    ctx.host.env.get.mockImplementation((name) => (name === "OLLAMA_API_KEY" ? "ollama-key" : null))
+    ctx.host.http.request.mockReturnValue(response("", 302, { location: "/auth/signin" }))
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Ollama Cloud Auth")
+    expect(result.lines.find((line) => line.label === "Cloud Auth")?.value).toBe("API key detected")
+    expect(result.lines.find((line) => line.label === "Usage")?.value).toBe("Settings cookie rejected")
   })
 
   it("throws on signed-out HTML", async () => {
