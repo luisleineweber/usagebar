@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.0-alpha.3
+
+### Highlights
+- Added experimental Grok provider support for CLI-authenticated billing credits, plan labels, and pay-as-you-go cap status.
+- Improved Kiro Windows CLI support by reading the Kiro CLI auth SQLite store before falling back to degraded local session files.
+- Improved Ollama Cloud auth handling so API-key or local signin evidence can show auth status even when the settings cookie is missing, rejected, or expired.
+- Corrected Copilot paid Chat wording to quota units instead of messages when GitHub reports paid quota snapshots.
+- Tightened OpenCode Go subscription gating so paid quota bars require positive subscription evidence while free local usage still renders.
+- Added a Time Format setting for reset-time displays and updated app preference bootstrap/display propagation.
+- Updated prerelease updater flow to download, install, and relaunch from the in-app update action.
+- Bumped app metadata to `0.1.0-alpha.3`.
+
+### Notes
+- Alpha 3 remains an unsigned Windows technical preview while Authenticode signing is deferred.
+- Grok, Kiro, Ollama, Copilot, and OpenCode Go changes depend on provider-local auth files, undocumented endpoints, or provider-reported quota shapes; keep them under the existing Alpha validation expectations.
+- Prerelease update behavior still depends on GitHub release metadata and should be smoke-tested from the final published prerelease.
+
 ## 0.1.0-alpha.2
 
 ### Highlights
