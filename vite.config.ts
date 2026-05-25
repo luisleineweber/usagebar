@@ -1,12 +1,12 @@
-import path from "path";
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
+import path from "path"
+import { defineConfig } from "vite"
+import react from "@vitejs/plugin-react"
+import tailwindcss from "@tailwindcss/vite"
 
 // @ts-expect-error process is a nodejs global
-const host = process.env.TAURI_DEV_HOST;
+const host = process.env.TAURI_DEV_HOST
 // @ts-expect-error process is a nodejs global
-const coverageReportOnly = process.env.USAGEBAR_COVERAGE_REPORT_ONLY === "1";
+const coverageReportOnly = process.env.USAGEBAR_COVERAGE_REPORT_ONLY === "1"
 
 const coverageThresholds = coverageReportOnly
   ? {
@@ -22,7 +22,7 @@ const coverageThresholds = coverageReportOnly
       lines: 90,
       functions: 90,
       statements: 90,
-    };
+    }
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
@@ -60,7 +60,7 @@ export default defineConfig(async () => ({
         // SSR guard branch untestable in jsdom
         "src/hooks/use-dark-mode.ts",
       ],
-      reporter: ["text", "html", "lcov"],
+      reporter: ["text", "html", "lcov", "json-summary"],
       thresholds: coverageThresholds,
     },
   },
@@ -86,4 +86,4 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-}));
+}))

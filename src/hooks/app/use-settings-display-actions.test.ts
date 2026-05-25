@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const {
   saveDisplayModeMock,
+  saveMenubarIconStyleMock,
   saveResetTimerDisplayModeMock,
   saveThemeModeMock,
   saveTimeFormatModeMock,
@@ -11,6 +12,7 @@ const {
   saveDisplayModeMock: vi.fn(),
   saveResetTimerDisplayModeMock: vi.fn(),
   saveTimeFormatModeMock: vi.fn(),
+  saveMenubarIconStyleMock: vi.fn(),
 }))
 
 vi.mock("@/lib/settings", () => ({
@@ -18,6 +20,7 @@ vi.mock("@/lib/settings", () => ({
   saveDisplayMode: saveDisplayModeMock,
   saveResetTimerDisplayMode: saveResetTimerDisplayModeMock,
   saveTimeFormatMode: saveTimeFormatModeMock,
+  saveMenubarIconStyle: saveMenubarIconStyleMock,
 }))
 
 import { useSettingsDisplayActions } from "@/hooks/app/use-settings-display-actions"
@@ -28,10 +31,12 @@ describe("useSettingsDisplayActions", () => {
     saveDisplayModeMock.mockReset()
     saveResetTimerDisplayModeMock.mockReset()
     saveTimeFormatModeMock.mockReset()
+    saveMenubarIconStyleMock.mockReset()
     saveThemeModeMock.mockResolvedValue(undefined)
     saveDisplayModeMock.mockResolvedValue(undefined)
     saveResetTimerDisplayModeMock.mockResolvedValue(undefined)
     saveTimeFormatModeMock.mockResolvedValue(undefined)
+    saveMenubarIconStyleMock.mockResolvedValue(undefined)
   })
 
   it("applies display-related setting changes", () => {
@@ -126,6 +131,108 @@ describe("useSettingsDisplayActions", () => {
       expect(errorSpy).toHaveBeenCalledWith("Failed to save theme mode:", themeError)
       expect(errorSpy).toHaveBeenCalledWith("Failed to save display mode:", displayError)
       expect(errorSpy).toHaveBeenCalledWith("Failed to save reset timer display mode:", resetError)
+    })
+
+    errorSpy.mockRestore()
+  })
+
+  it("applies time format mode change", () => {
+    const setTimeFormatMode = vi.fn()
+
+    const { result } = renderHook(() =>
+      useSettingsDisplayActions({
+        setThemeMode: vi.fn(),
+        setDisplayMode: vi.fn(),
+        resetTimerDisplayMode: "relative",
+        setResetTimerDisplayMode: vi.fn(),
+        setTimeFormatMode,
+        scheduleTrayIconUpdate: vi.fn(),
+      })
+    )
+
+    act(() => {
+      result.current.handleTimeFormatModeChange("24h")
+    })
+
+    expect(setTimeFormatMode).toHaveBeenCalledWith("24h")
+    expect(saveTimeFormatModeMock).toHaveBeenCalledWith("24h")
+  })
+
+  it("applies menubar icon style change", () => {
+    const setMenubarIconStyle = vi.fn()
+    const scheduleTrayIconUpdate = vi.fn()
+
+    const { result } = renderHook(() =>
+      useSettingsDisplayActions({
+        setThemeMode: vi.fn(),
+        setDisplayMode: vi.fn(),
+        resetTimerDisplayMode: "relative",
+        setResetTimerDisplayMode: vi.fn(),
+        setTimeFormatMode: vi.fn(),
+        setMenubarIconStyle,
+        scheduleTrayIconUpdate,
+      })
+    )
+
+    act(() => {
+      result.current.handleMenubarIconStyleChange("donut")
+    })
+
+    expect(setMenubarIconStyle).toHaveBeenCalledWith("donut")
+    expect(scheduleTrayIconUpdate).toHaveBeenCalledWith("settings", 0)
+    expect(saveMenubarIconStyleMock).toHaveBeenCalledWith("donut")
+  })
+
+  it("logs time format save failures", async () => {
+    const saveError = new Error("time format failed")
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    saveTimeFormatModeMock.mockRejectedValueOnce(saveError)
+
+    const { result } = renderHook(() =>
+      useSettingsDisplayActions({
+        setThemeMode: vi.fn(),
+        setDisplayMode: vi.fn(),
+        resetTimerDisplayMode: "relative",
+        setResetTimerDisplayMode: vi.fn(),
+        setTimeFormatMode: vi.fn(),
+        scheduleTrayIconUpdate: vi.fn(),
+      })
+    )
+
+    act(() => {
+      result.current.handleTimeFormatModeChange("12h")
+    })
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith("Failed to save time format mode:", saveError)
+    })
+
+    errorSpy.mockRestore()
+  })
+
+  it("logs menubar icon style save failures", async () => {
+    const saveError = new Error("icon style failed")
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    saveMenubarIconStyleMock.mockRejectedValueOnce(saveError)
+
+    const { result } = renderHook(() =>
+      useSettingsDisplayActions({
+        setThemeMode: vi.fn(),
+        setDisplayMode: vi.fn(),
+        resetTimerDisplayMode: "relative",
+        setResetTimerDisplayMode: vi.fn(),
+        setTimeFormatMode: vi.fn(),
+        setMenubarIconStyle: vi.fn(),
+        scheduleTrayIconUpdate: vi.fn(),
+      })
+    )
+
+    act(() => {
+      result.current.handleMenubarIconStyleChange("merged")
+    })
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith("Failed to save menubar icon style:", saveError)
     })
 
     errorSpy.mockRestore()

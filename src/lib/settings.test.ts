@@ -8,6 +8,7 @@ import {
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
   DEFAULT_THEME_MODE,
+  DEFAULT_TIME_FORMAT_MODE,
   arePluginSettingsEqual,
   getEnabledPluginIds,
   loadAutoUpdateInterval,
@@ -19,6 +20,7 @@ import {
   loadStartOnLogin,
   migrateLegacyTraySettings,
   loadThemeMode,
+  loadTimeFormatMode,
   normalizePluginSettings,
   saveAutoUpdateInterval,
   saveDisplayMode,
@@ -28,6 +30,7 @@ import {
   saveResetTimerDisplayMode,
   saveStartOnLogin,
   saveThemeMode,
+  saveTimeFormatMode,
 } from "@/lib/settings"
 import type { PluginMeta } from "@/lib/plugin-types"
 
@@ -354,5 +357,24 @@ describe("settings", () => {
   it("falls back to default for invalid start on login value", async () => {
     storeState.set("startOnLogin", "invalid")
     await expect(loadStartOnLogin()).resolves.toBe(DEFAULT_START_ON_LOGIN)
+  })
+
+  it("loads default time format mode when missing", async () => {
+    await expect(loadTimeFormatMode()).resolves.toBe(DEFAULT_TIME_FORMAT_MODE)
+  })
+
+  it("loads stored time format mode", async () => {
+    storeState.set("timeFormatMode", "24h")
+    await expect(loadTimeFormatMode()).resolves.toBe("24h")
+  })
+
+  it("saves time format mode", async () => {
+    await saveTimeFormatMode("12h")
+    await expect(loadTimeFormatMode()).resolves.toBe("12h")
+  })
+
+  it("falls back to default for invalid time format mode", async () => {
+    storeState.set("timeFormatMode", "invalid")
+    await expect(loadTimeFormatMode()).resolves.toBe(DEFAULT_TIME_FORMAT_MODE)
   })
 })
