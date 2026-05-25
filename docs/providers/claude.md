@@ -21,35 +21,37 @@ Returns rate limit windows and optional extra credits.
 
 #### Headers
 
-| Header | Required | Value |
-|---|---|---|
-| Authorization | yes | `Bearer <access_token>` |
-| Accept | yes | `application/json` |
-| Content-Type | yes | `application/json` |
-| anthropic-beta | yes | `oauth-2025-04-20` |
+| Header         | Required | Value                   |
+| -------------- | -------- | ----------------------- |
+| Authorization  | yes      | `Bearer <access_token>` |
+| Accept         | yes      | `application/json`      |
+| Content-Type   | yes      | `application/json`      |
+| anthropic-beta | yes      | `oauth-2025-04-20`      |
 
 #### Response
 
 ```jsonc
 {
   "five_hour": {
-    "utilization": 25,              // % used in 5h rolling window
-    "resets_at": "2026-01-28T15:00:00Z"
+    "utilization": 25, // % used in 5h rolling window
+    "resets_at": "2026-01-28T15:00:00Z",
   },
   "seven_day": {
-    "utilization": 40,              // % used in 7-day window
-    "resets_at": "2026-02-01T00:00:00Z"
+    "utilization": 40, // % used in 7-day window
+    "resets_at": "2026-02-01T00:00:00Z",
   },
-  "seven_day_opus": {               // separate weekly Opus limit (optional, plan-dependent)
+  "seven_day_opus": {
+    // separate weekly Opus limit (optional, plan-dependent)
     "utilization": 0,
-    "resets_at": "2026-02-01T00:00:00Z"
+    "resets_at": "2026-02-01T00:00:00Z",
   },
-  "extra_usage": {                  // on-demand overage credits (optional)
+  "extra_usage": {
+    // on-demand overage credits (optional)
     "is_enabled": true,
-    "used_credits": 500,            // cents spent
-    "monthly_limit": 10000,         // cents cap (0 = unlimited)
-    "currency": "USD"
-  }
+    "used_credits": 500, // cents spent
+    "monthly_limit": 10000, // cents cap (0 = unlimited)
+    "currency": "USD",
+  },
 }
 ```
 
@@ -59,22 +61,24 @@ All windows are enforced simultaneously — hitting any limit throttles the user
 
 ### Token Location
 
-**Primary:** `~/.claude/.credentials.json`
+**Primary:** local Claude Code keychain entry `Claude Code-credentials`.
+
+**Fallback:** `~/.claude/.credentials.json`
 
 ```jsonc
 {
   "claudeAiOauth": {
-    "accessToken": "<jwt>",          // OAuth access token (Bearer)
+    "accessToken": "<jwt>", // OAuth access token (Bearer)
     "refreshToken": "<token>",
-    "expiresAt": 1738300000000,      // unix ms
+    "expiresAt": 1738300000000, // unix ms
     "scopes": ["..."],
     "subscriptionType": "pro",
-    "rateLimitTier": "..."
-  }
+    "rateLimitTier": "...",
+  },
 }
 ```
 
-**Fallback:** macOS Keychain, service name `Claude Code-credentials` (same JSON structure).
+Claude Code can leave stale legacy credential files behind after moving the current session into the keychain, so UsageBar prefers a usable keychain value before reading the legacy file. Both locations use the same JSON structure.
 
 **Signed-in fallback metadata:** `~/.claude.json`
 
@@ -82,9 +86,9 @@ All windows are enforced simultaneously — hitting any limit throttles the user
 {
   "oauthAccount": {
     "organizationName": "Example Org",
-    "billingType": "prepaid"
+    "billingType": "prepaid",
   },
-  "primaryApiKey": "sk-ant-api03-..."
+  "primaryApiKey": "sk-ant-api03-...",
 }
 ```
 
@@ -123,7 +127,7 @@ Content-Type: application/json
 ```jsonc
 {
   "access_token": "<new_jwt>",
-  "refresh_token": "<new_refresh_token>",  // may be same as previous
-  "expires_in": 3600                       // seconds
+  "refresh_token": "<new_refresh_token>", // may be same as previous
+  "expires_in": 3600, // seconds
 }
 ```

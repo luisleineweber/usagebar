@@ -1954,9 +1954,13 @@ fn ls_parse_netstat_ports(output: &str, process_pid: i32) -> Vec<i32> {
     ports.into_iter().collect()
 }
 
-const CCUSAGE_VERSION: &str = "18.0.11";
-const CCUSAGE_CLAUDE_PACKAGE_NAME: &str = "ccusage";
-const CCUSAGE_CODEX_PACKAGE_NAME: &str = "@ccusage/codex";
+const CCUSAGE_VERSION: &str = "20.0.2";
+const CCUSAGE_PACKAGE_NAME: &str = "ccusage";
+const CCUSAGE_BIN_NAME: &str = "ccusage";
+const CCUSAGE_LEGACY_VERSION: &str = "18.0.11";
+const CCUSAGE_LEGACY_CLAUDE_PACKAGE_NAME: &str = "ccusage";
+const CCUSAGE_LEGACY_CODEX_PACKAGE_NAME: &str = "@ccusage/codex";
+const CCUSAGE_LEGACY_CODEX_BIN_NAME: &str = "ccusage-codex";
 const CCUSAGE_TIMEOUT_SECS: u64 = 15;
 const CCUSAGE_POLL_INTERVAL_MS: u64 = 100;
 
@@ -1985,6 +1989,12 @@ enum CcusageRunnerKind {
     Npx,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum CcusageCommandFlavor {
+    Current,
+    Legacy,
+}
+
 fn ccusage_runner_order() -> [CcusageRunnerKind; 5] {
     [
         CcusageRunnerKind::Bunx,
@@ -2007,8 +2017,7 @@ fn ccusage_runner_label(kind: CcusageRunnerKind) -> &'static str {
 
 #[derive(Copy, Clone)]
 struct CcusageProviderConfig {
-    package_name: &'static str,
-    npm_exec_bin: &'static str,
+    command_namespace: &'static str,
     home_env_var: &'static str,
 }
 
@@ -2035,21 +2044,26 @@ fn resolve_ccusage_provider(opts: &CcusageQueryOpts, plugin_id: &str) -> Ccusage
 fn ccusage_provider_config(provider: CcusageProvider) -> CcusageProviderConfig {
     match provider {
         CcusageProvider::Claude => CcusageProviderConfig {
-            package_name: CCUSAGE_CLAUDE_PACKAGE_NAME,
-            npm_exec_bin: "ccusage",
+            command_namespace: "claude",
             home_env_var: "CLAUDE_CONFIG_DIR",
         },
         CcusageProvider::Codex => CcusageProviderConfig {
-            package_name: CCUSAGE_CODEX_PACKAGE_NAME,
-            npm_exec_bin: "ccusage-codex",
+            command_namespace: "codex",
             home_env_var: "CODEX_HOME",
         },
     }
 }
 
-fn ccusage_package_spec(provider: CcusageProvider) -> String {
-    let config = ccusage_provider_config(provider);
-    format!("{}@{}", config.package_name, CCUSAGE_VERSION)
+fn ccusage_package_spec() -> String {
+    format!("{}@{}", CCUSAGE_PACKAGE_NAME, CCUSAGE_VERSION)
+}
+
+fn ccusage_legacy_package_spec(provider: CcusageProvider) -> String {
+    let package_name = match provider {
+        CcusageProvider::Claude => CCUSAGE_LEGACY_CLAUDE_PACKAGE_NAME,
+        CcusageProvider::Codex => CCUSAGE_LEGACY_CODEX_PACKAGE_NAME,
+    };
+    format!("{}@{}", package_name, CCUSAGE_LEGACY_VERSION)
 }
 
 fn ccusage_home_override(opts: &CcusageQueryOpts, provider: CcusageProvider) -> Option<&str> {
@@ -2136,12 +2150,30 @@ fn ccusage_runner_candidates(kind: CcusageRunnerKind) -> Vec<String> {
     unique
 }
 
+fn nvm_default_bin_path(home: &Path) -> Option<PathBuf> {
+    let alias_path = home.join(".nvm/alias/default");
+    let version = std::fs::read_to_string(&alias_path).ok()?;
+    let version = version.trim();
+    if version.is_empty() {
+        return None;
+    }
+    let version = if version.starts_with('v') {
+        version.to_string()
+    } else {
+        format!("v{version}")
+    };
+    Some(home.join(".nvm/versions/node").join(version).join("bin"))
+}
+
 fn ccusage_path_entries_with(home: Option<&Path>, existing_path: Option<&OsStr>) -> Vec<PathBuf> {
     let mut entries: Vec<PathBuf> = Vec::new();
 
     if let Some(home) = home {
         entries.push(home.join(".bun/bin"));
         entries.push(home.join(".nvm/current/bin"));
+        if let Some(nvm_bin) = nvm_default_bin_path(home) {
+            entries.push(nvm_bin);
+        }
         entries.push(home.join(".local/bin"));
     }
 
@@ -2283,7 +2315,17 @@ fn collect_ccusage_runners_cached() -> Vec<(CcusageRunnerKind, String)> {
     collect_ccusage_runners_cached_with(collect_ccusage_runners)
 }
 
-fn append_ccusage_common_args(args: &mut Vec<String>, opts: &CcusageQueryOpts) {
+fn append_ccusage_common_args(
+    args: &mut Vec<String>,
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    flavor: CcusageCommandFlavor,
+) {
+    let config = ccusage_provider_config(provider);
+    if flavor == CcusageCommandFlavor::Current {
+        args.push(config.command_namespace.to_string());
+    }
+
     args.extend([
         "daily".to_string(),
         "--json".to_string(),
@@ -2316,9 +2358,17 @@ fn ccusage_runner_args(
     kind: CcusageRunnerKind,
     opts: &CcusageQueryOpts,
     provider: CcusageProvider,
+    flavor: CcusageCommandFlavor,
 ) -> Vec<String> {
-    let config = ccusage_provider_config(provider);
-    let package_spec = ccusage_package_spec(provider);
+    let package_spec = match flavor {
+        CcusageCommandFlavor::Current => ccusage_package_spec(),
+        CcusageCommandFlavor::Legacy => ccusage_legacy_package_spec(provider),
+    };
+    let npm_exec_bin = match (flavor, provider) {
+        (CcusageCommandFlavor::Current, _) => CCUSAGE_BIN_NAME,
+        (CcusageCommandFlavor::Legacy, CcusageProvider::Claude) => CCUSAGE_BIN_NAME,
+        (CcusageCommandFlavor::Legacy, CcusageProvider::Codex) => CCUSAGE_LEGACY_CODEX_BIN_NAME,
+    };
     let mut args: Vec<String> = match kind {
         CcusageRunnerKind::Bunx => {
             #[cfg(target_os = "windows")]
@@ -2346,12 +2396,12 @@ fn ccusage_runner_args(
             "--yes".to_string(),
             format!("--package={package_spec}"),
             "--".to_string(),
-            config.npm_exec_bin.to_string(),
+            npm_exec_bin.to_string(),
         ],
         CcusageRunnerKind::Npx => vec!["--yes".to_string(), package_spec],
     };
 
-    append_ccusage_common_args(&mut args, opts);
+    append_ccusage_common_args(&mut args, opts, provider, flavor);
     args
 }
 
@@ -2415,7 +2465,36 @@ fn run_ccusage_with_runner(
     provider: CcusageProvider,
     plugin_id: &str,
 ) -> (CcusageRunStatus, Option<String>) {
-    let args = ccusage_runner_args(kind, opts, provider);
+    let current = run_ccusage_with_runner_flavor(
+        kind,
+        program,
+        opts,
+        provider,
+        plugin_id,
+        CcusageCommandFlavor::Current,
+    );
+    match current {
+        (CcusageRunStatus::Failed, None) => run_ccusage_with_runner_flavor(
+            kind,
+            program,
+            opts,
+            provider,
+            plugin_id,
+            CcusageCommandFlavor::Legacy,
+        ),
+        other => other,
+    }
+}
+
+fn run_ccusage_with_runner_flavor(
+    kind: CcusageRunnerKind,
+    program: &str,
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    plugin_id: &str,
+    flavor: CcusageCommandFlavor,
+) -> (CcusageRunStatus, Option<String>) {
+    let args = ccusage_runner_args(kind, opts, provider, flavor);
     let enriched_path = ccusage_enriched_path();
     let mut command = std::process::Command::new(program);
     configure_ccusage_command(&mut command, &args, enriched_path.as_deref());
@@ -2426,9 +2505,10 @@ fn run_ccusage_with_runner(
     }
 
     log::info!(
-        "[plugin:{}] ccusage query via {} ({})",
+        "[plugin:{}] ccusage query via {} {:?} ({})",
         plugin_id,
         ccusage_runner_label(kind),
+        flavor,
         program
     );
 
@@ -3804,7 +3884,155 @@ mod tests {
             home_path: None,
             claude_path: None,
         };
-        let expected_claude_package = ccusage_package_spec(CcusageProvider::Claude);
+        let expected_ccusage_package = ccusage_package_spec();
+        assert_eq!(expected_ccusage_package, "ccusage@20.0.2");
+        let expected_npm_exec_package = format!("--package={expected_ccusage_package}");
+        #[cfg(target_os = "windows")]
+        let expected_bunx = vec![
+            "x",
+            "--silent",
+            expected_ccusage_package.as_str(),
+            "claude",
+            "daily",
+            "--json",
+            "--order",
+            "desc",
+            "--since",
+            "20260101",
+            "--until",
+            "20260131",
+        ];
+        #[cfg(not(target_os = "windows"))]
+        let expected_bunx = vec![
+            "--silent",
+            expected_ccusage_package.as_str(),
+            "claude",
+            "daily",
+            "--json",
+            "--order",
+            "desc",
+            "--since",
+            "20260101",
+            "--until",
+            "20260131",
+        ];
+
+        let bunx = ccusage_runner_args(
+            CcusageRunnerKind::Bunx,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Current,
+        );
+        assert_eq!(bunx, expected_bunx);
+
+        let pnpm = ccusage_runner_args(
+            CcusageRunnerKind::PnpmDlx,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Current,
+        );
+        assert_eq!(
+            pnpm,
+            vec![
+                "-s",
+                "dlx",
+                expected_ccusage_package.as_str(),
+                "claude",
+                "daily",
+                "--json",
+                "--order",
+                "desc",
+                "--since",
+                "20260101",
+                "--until",
+                "20260131"
+            ]
+        );
+
+        let yarn = ccusage_runner_args(
+            CcusageRunnerKind::YarnDlx,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Current,
+        );
+        assert_eq!(
+            yarn,
+            vec![
+                "dlx",
+                "-q",
+                expected_ccusage_package.as_str(),
+                "claude",
+                "daily",
+                "--json",
+                "--order",
+                "desc",
+                "--since",
+                "20260101",
+                "--until",
+                "20260131"
+            ]
+        );
+
+        let npm_exec = ccusage_runner_args(
+            CcusageRunnerKind::NpmExec,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Current,
+        );
+        assert_eq!(
+            npm_exec,
+            vec![
+                "exec",
+                "--yes",
+                expected_npm_exec_package.as_str(),
+                "--",
+                "ccusage",
+                "claude",
+                "daily",
+                "--json",
+                "--order",
+                "desc",
+                "--since",
+                "20260101",
+                "--until",
+                "20260131"
+            ]
+        );
+
+        let npx = ccusage_runner_args(
+            CcusageRunnerKind::Npx,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Current,
+        );
+        assert_eq!(
+            npx,
+            vec![
+                "--yes",
+                expected_ccusage_package.as_str(),
+                "claude",
+                "daily",
+                "--json",
+                "--order",
+                "desc",
+                "--since",
+                "20260101",
+                "--until",
+                "20260131"
+            ]
+        );
+    }
+
+    #[test]
+    fn ccusage_runner_args_legacy_fallback_uses_release_age_safe_packages() {
+        let opts = CcusageQueryOpts {
+            provider: None,
+            since: Some("20260101".to_string()),
+            until: Some("20260131".to_string()),
+            home_path: None,
+            claude_path: None,
+        };
+        let expected_claude_package = ccusage_legacy_package_spec(CcusageProvider::Claude);
         let expected_npm_exec_package = format!("--package={expected_claude_package}");
         #[cfg(target_os = "windows")]
         let expected_bunx = vec![
@@ -3834,47 +4062,20 @@ mod tests {
             "20260131",
         ];
 
-        let bunx = ccusage_runner_args(CcusageRunnerKind::Bunx, &opts, CcusageProvider::Claude);
+        let bunx = ccusage_runner_args(
+            CcusageRunnerKind::Bunx,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Legacy,
+        );
         assert_eq!(bunx, expected_bunx);
 
-        let pnpm = ccusage_runner_args(CcusageRunnerKind::PnpmDlx, &opts, CcusageProvider::Claude);
-        assert_eq!(
-            pnpm,
-            vec![
-                "-s",
-                "dlx",
-                expected_claude_package.as_str(),
-                "daily",
-                "--json",
-                "--order",
-                "desc",
-                "--since",
-                "20260101",
-                "--until",
-                "20260131"
-            ]
+        let npm_exec = ccusage_runner_args(
+            CcusageRunnerKind::NpmExec,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Legacy,
         );
-
-        let yarn = ccusage_runner_args(CcusageRunnerKind::YarnDlx, &opts, CcusageProvider::Claude);
-        assert_eq!(
-            yarn,
-            vec![
-                "dlx",
-                "-q",
-                expected_claude_package.as_str(),
-                "daily",
-                "--json",
-                "--order",
-                "desc",
-                "--since",
-                "20260101",
-                "--until",
-                "20260131"
-            ]
-        );
-
-        let npm_exec =
-            ccusage_runner_args(CcusageRunnerKind::NpmExec, &opts, CcusageProvider::Claude);
         assert_eq!(
             npm_exec,
             vec![
@@ -3893,13 +4094,58 @@ mod tests {
                 "20260131"
             ]
         );
+    }
 
-        let npx = ccusage_runner_args(CcusageRunnerKind::Npx, &opts, CcusageProvider::Claude);
+    #[test]
+    fn ccusage_runner_args_codex_use_unified_package_and_bin() {
+        let opts = CcusageQueryOpts {
+            provider: Some("codex".to_string()),
+            since: Some("20260101".to_string()),
+            until: Some("20260131".to_string()),
+            home_path: None,
+            claude_path: None,
+        };
+        let expected_ccusage_package = ccusage_package_spec();
+        let expected_npm_exec_package = format!("--package={expected_ccusage_package}");
+
+        let npm_exec = ccusage_runner_args(
+            CcusageRunnerKind::NpmExec,
+            &opts,
+            CcusageProvider::Codex,
+            CcusageCommandFlavor::Current,
+        );
+        assert_eq!(
+            npm_exec,
+            vec![
+                "exec",
+                "--yes",
+                expected_npm_exec_package.as_str(),
+                "--",
+                "ccusage",
+                "codex",
+                "daily",
+                "--json",
+                "--order",
+                "desc",
+                "--since",
+                "20260101",
+                "--until",
+                "20260131"
+            ]
+        );
+
+        let npx = ccusage_runner_args(
+            CcusageRunnerKind::Npx,
+            &opts,
+            CcusageProvider::Codex,
+            CcusageCommandFlavor::Current,
+        );
         assert_eq!(
             npx,
             vec![
                 "--yes",
-                expected_claude_package.as_str(),
+                expected_ccusage_package.as_str(),
+                "codex",
                 "daily",
                 "--json",
                 "--order",
@@ -3913,53 +4159,58 @@ mod tests {
     }
 
     #[test]
-    fn ccusage_runner_args_codex_use_scoped_package_and_bin() {
-        let opts = CcusageQueryOpts {
-            provider: Some("codex".to_string()),
-            since: Some("20260101".to_string()),
-            until: Some("20260131".to_string()),
-            home_path: None,
-            claude_path: None,
-        };
-        let expected_codex_package = ccusage_package_spec(CcusageProvider::Codex);
-        let expected_npm_exec_package = format!("--package={expected_codex_package}");
+    fn nvm_default_bin_path_resolves_version_with_v_prefix() {
+        let home =
+            std::env::temp_dir().join(format!("usagebar-test-nvm-v-prefix-{}", std::process::id()));
+        let alias_dir = home.join(".nvm/alias");
+        std::fs::create_dir_all(&alias_dir).expect("create alias dir");
+        std::fs::write(alias_dir.join("default"), "v22.16.0").expect("write alias");
 
-        let npm_exec =
-            ccusage_runner_args(CcusageRunnerKind::NpmExec, &opts, CcusageProvider::Codex);
-        assert_eq!(
-            npm_exec,
-            vec![
-                "exec",
-                "--yes",
-                expected_npm_exec_package.as_str(),
-                "--",
-                "ccusage-codex",
-                "daily",
-                "--json",
-                "--order",
-                "desc",
-                "--since",
-                "20260101",
-                "--until",
-                "20260131"
-            ]
-        );
+        let result = nvm_default_bin_path(&home);
 
-        let npx = ccusage_runner_args(CcusageRunnerKind::Npx, &opts, CcusageProvider::Codex);
-        assert_eq!(
-            npx,
-            vec![
-                "--yes",
-                expected_codex_package.as_str(),
-                "daily",
-                "--json",
-                "--order",
-                "desc",
-                "--since",
-                "20260101",
-                "--until",
-                "20260131"
-            ]
+        let _ = std::fs::remove_dir_all(&home);
+        assert_eq!(result, Some(home.join(".nvm/versions/node/v22.16.0/bin")));
+    }
+
+    #[test]
+    fn nvm_default_bin_path_resolves_version_without_v_prefix() {
+        let home = std::env::temp_dir().join(format!(
+            "usagebar-test-nvm-no-v-prefix-{}",
+            std::process::id()
+        ));
+        let alias_dir = home.join(".nvm/alias");
+        std::fs::create_dir_all(&alias_dir).expect("create alias dir");
+        std::fs::write(alias_dir.join("default"), "22.16.0").expect("write alias");
+
+        let result = nvm_default_bin_path(&home);
+
+        let _ = std::fs::remove_dir_all(&home);
+        assert_eq!(result, Some(home.join(".nvm/versions/node/v22.16.0/bin")));
+    }
+
+    #[test]
+    fn nvm_default_bin_path_returns_none_when_alias_missing() {
+        let home =
+            std::env::temp_dir().join(format!("usagebar-test-nvm-no-alias-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+
+        assert_eq!(nvm_default_bin_path(&home), None);
+    }
+
+    #[test]
+    fn ccusage_path_entries_with_includes_nvm_default_version() {
+        let home =
+            std::env::temp_dir().join(format!("usagebar-test-nvm-entries-{}", std::process::id()));
+        let alias_dir = home.join(".nvm/alias");
+        std::fs::create_dir_all(&alias_dir).expect("create alias dir");
+        std::fs::write(alias_dir.join("default"), "22.16.0").expect("write alias");
+
+        let entries = ccusage_path_entries_with(Some(&home), None);
+
+        let _ = std::fs::remove_dir_all(&home);
+        assert!(
+            entries.contains(&home.join(".nvm/versions/node/v22.16.0/bin")),
+            "expected nvm default version bin in entries"
         );
     }
 
@@ -4325,5 +4576,73 @@ Saved lockfile
         assert_eq!(collect_calls.get(), 2);
         assert_eq!(invalidate_calls.get(), 1);
         assert_eq!(run_calls.get(), 2);
+    }
+
+    #[test]
+    fn ccusage_runner_retries_legacy_package_when_current_package_fails() {
+        let test_dir = std::env::temp_dir().join(format!(
+            "usagebar-ccusage-legacy-fallback-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&test_dir).expect("create test dir");
+
+        #[cfg(target_os = "windows")]
+        let runner = {
+            let path = test_dir.join("runner.cmd");
+            std::fs::write(
+                &path,
+                "@echo off\r\n\
+                 echo %* > \"%~dp0args.txt\"\r\n\
+                 echo %* | findstr /C:\"20.0.2\" > nul\r\n\
+                 if %ERRORLEVEL% EQU 0 exit /b 1\r\n\
+                 echo {\"daily\":[]}\r\n\
+                 exit /b 0\r\n",
+            )
+            .expect("write runner");
+            path
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let runner = {
+            use std::io::Write;
+            use std::os::unix::fs::PermissionsExt;
+
+            let path = test_dir.join("runner.sh");
+            let mut file = std::fs::File::create(&path).expect("create runner");
+            writeln!(
+                file,
+                "#!/bin/sh\nprintf '%s' \"$*\" > \"$(dirname \"$0\")/args.txt\"\ncase \"$*\" in *20.0.2*) exit 1 ;; esac\nprintf '{{\"daily\":[]}}\\n'\n"
+            )
+            .expect("write runner");
+            let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&path, perms).expect("chmod runner");
+            path
+        };
+
+        let opts = CcusageQueryOpts::default();
+        let result = run_ccusage_with_runner(
+            CcusageRunnerKind::Npx,
+            runner.to_string_lossy().as_ref(),
+            &opts,
+            CcusageProvider::Claude,
+            "claude",
+        );
+
+        let args = std::fs::read_to_string(test_dir.join("args.txt")).expect("read args");
+        let _ = std::fs::remove_dir_all(&test_dir);
+
+        assert_eq!(
+            result,
+            (
+                CcusageRunStatus::Success,
+                Some(r#"{"daily":[]}"#.to_string())
+            )
+        );
+        assert!(
+            args.contains("ccusage@18.0.11"),
+            "expected legacy fallback args, got {args}"
+        );
     }
 }

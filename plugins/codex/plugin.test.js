@@ -55,10 +55,12 @@ describe("codex plugin", () => {
 
   it("loads auth from keychain when auth file is missing", async () => {
     const ctx = makeCtx()
-    ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify({
-      tokens: { access_token: "keychain-token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.keychain.readGenericPassword.mockReturnValue(
+      JSON.stringify({
+        tokens: { access_token: "keychain-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       expect(opts.headers.Authorization).toBe("Bearer keychain-token")
       return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
@@ -70,15 +72,23 @@ describe("codex plugin", () => {
 
   it("uses CODEX_HOME auth path when env var is set", async () => {
     const ctx = makeCtx()
-    ctx.host.env.get.mockImplementation((name) => (name === "CODEX_HOME" ? "/tmp/codex-home" : null))
-    ctx.host.fs.writeText("/tmp/codex-home/auth.json", JSON.stringify({
-      tokens: { access_token: "env-token" },
-      last_refresh: new Date().toISOString(),
-    }))
-    ctx.host.fs.writeText("~/.config/codex/auth.json", JSON.stringify({
-      tokens: { access_token: "config-token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "CODEX_HOME" ? "/tmp/codex-home" : null
+    )
+    ctx.host.fs.writeText(
+      "/tmp/codex-home/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "env-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
+    ctx.host.fs.writeText(
+      "~/.config/codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "config-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       expect(opts.headers.Authorization).toBe("Bearer env-token")
       return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
@@ -90,14 +100,20 @@ describe("codex plugin", () => {
 
   it("uses ~/.config/codex/auth.json before ~/.codex/auth.json when env is not set", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.config/codex/auth.json", JSON.stringify({
-      tokens: { access_token: "config-token" },
-      last_refresh: new Date().toISOString(),
-    }))
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "legacy-token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.config/codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "config-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "legacy-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       expect(opts.headers.Authorization).toBe("Bearer config-token")
       return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
@@ -109,14 +125,20 @@ describe("codex plugin", () => {
 
   it("falls back to the next auth source when the first source is rejected", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.config/codex/auth.json", JSON.stringify({
-      tokens: { access_token: "stale-config-token" },
-      last_refresh: new Date().toISOString(),
-    }))
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "legacy-token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.config/codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "stale-config-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "legacy-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
 
     const authHeaders = []
     ctx.host.http.request.mockImplementation((opts) => {
@@ -136,15 +158,23 @@ describe("codex plugin", () => {
 
   it("does not fall back when CODEX_HOME is set but missing auth file", async () => {
     const ctx = makeCtx()
-    ctx.host.env.get.mockImplementation((name) => (name === "CODEX_HOME" ? "/tmp/missing-codex-home" : null))
-    ctx.host.fs.writeText("~/.config/codex/auth.json", JSON.stringify({
-      tokens: { access_token: "config-token" },
-      last_refresh: new Date().toISOString(),
-    }))
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "legacy-token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "CODEX_HOME" ? "/tmp/missing-codex-home" : null
+    )
+    ctx.host.fs.writeText(
+      "~/.config/codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "config-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "legacy-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
@@ -159,10 +189,12 @@ describe("codex plugin", () => {
   it("falls back to keychain when auth file is invalid", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText("~/.codex/auth.json", "{bad")
-    ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify({
-      tokens: { access_token: "keychain-token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.keychain.readGenericPassword.mockReturnValue(
+      JSON.stringify({
+        tokens: { access_token: "keychain-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       expect(opts.headers.Authorization).toBe("Bearer keychain-token")
       return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
@@ -199,10 +231,13 @@ describe("codex plugin", () => {
   it("refreshes token and formats usage", async () => {
     const ctx = makeCtx()
     const authPath = "~/.codex/auth.json"
-    ctx.host.fs.writeText(authPath, JSON.stringify({
-      tokens: { access_token: "old", refresh_token: "refresh", account_id: "acc" },
-      last_refresh: "2000-01-01T00:00:00.000Z",
-    }))
+    ctx.host.fs.writeText(
+      authPath,
+      JSON.stringify({
+        tokens: { access_token: "old", refresh_token: "refresh", account_id: "acc" },
+        last_refresh: "2000-01-01T00:00:00.000Z",
+      })
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("oauth/token")) {
         return { status: 200, bodyText: JSON.stringify({ access_token: "new" }) }
@@ -241,10 +276,13 @@ describe("codex plugin", () => {
 
   it("shows Pro Lite as the plan and keeps the multiplier as detail metadata", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: {},
@@ -263,12 +301,49 @@ describe("codex plugin", () => {
     expect(result.lines.find((line) => line.label === "Plan Multiplier")?.value).toBe("5x")
   })
 
+  it("uses zero credits from the response body when the account has no credits", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: {
+        "x-codex-credits-balance": "1000",
+      },
+      bodyText: JSON.stringify({
+        plan_type: "plus",
+        rate_limit: {
+          primary_window: { reset_after_seconds: 60, used_percent: 10 },
+        },
+        credits: {
+          has_credits: false,
+          balance: "0",
+        },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    const credits = result.lines.find((line) => line.label === "Credits")
+    expect(credits).toBeTruthy()
+    expect(credits.used).toBe(1000)
+    expect(credits.limit).toBe(1000)
+  })
+
   it("refreshes keychain auth and writes back to keychain", async () => {
     const ctx = makeCtx()
-    ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify({
-      tokens: { access_token: "old", refresh_token: "refresh", account_id: "acc" },
-      last_refresh: "2000-01-01T00:00:00.000Z",
-    }))
+    ctx.host.keychain.readGenericPassword.mockReturnValue(
+      JSON.stringify({
+        tokens: { access_token: "old", refresh_token: "refresh", account_id: "acc" },
+        last_refresh: "2000-01-01T00:00:00.000Z",
+      })
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("oauth/token")) {
         return { status: 200, bodyText: JSON.stringify({ access_token: "new" }) }
@@ -282,7 +357,7 @@ describe("codex plugin", () => {
     expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalled()
     const [service, payload] = ctx.host.keychain.writeGenericPassword.mock.calls[0]
     expect(service).toBe("Codex Auth")
-    expect(String(payload)).toContain("\"access_token\":\"new\"")
+    expect(String(payload)).toContain('"access_token":"new"')
   })
 
   it("refreshes managed profile auth and writes back to provider secret storage", async () => {
@@ -310,15 +385,20 @@ describe("codex plugin", () => {
 
     expect(ctx.host.providerSecrets.write).toHaveBeenCalledTimes(1)
     expect(ctx.host.providerSecrets.write.mock.calls[0][0]).toBe("account:profile-1:authJson")
-    expect(String(ctx.host.providerSecrets.write.mock.calls[0][1])).toContain("\"access_token\":\"new\"")
+    expect(String(ctx.host.providerSecrets.write.mock.calls[0][1])).toContain(
+      '"access_token":"new"'
+    )
   })
 
   it("omits token lines when ccusage reports no_runner", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -339,10 +419,13 @@ describe("codex plugin", () => {
     vi.setSystemTime(new Date("2026-02-20T16:00:00.000Z"))
 
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -357,8 +440,8 @@ describe("codex plugin", () => {
       status: "ok",
       data: {
         daily: [
-        { date: todayKey, totalTokens: 150, costUSD: 0.75 },
-        { date: "Feb 01, 2026", totalTokens: 300, costUSD: 1.0 },
+          { date: todayKey, totalTokens: 150, costUSD: 0.75 },
+          { date: "Feb 01, 2026", totalTokens: 300, costUSD: 1.0 },
         ],
       },
     })
@@ -393,11 +476,16 @@ describe("codex plugin", () => {
 
   it("passes CODEX_HOME to ccusage via homePath", async () => {
     const ctx = makeCtx()
-    ctx.host.env.get.mockImplementation((name) => (name === "CODEX_HOME" ? "/tmp/codex-home" : null))
-    ctx.host.fs.writeText("/tmp/codex-home/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "CODEX_HOME" ? "/tmp/codex-home" : null
+    )
+    ctx.host.fs.writeText(
+      "/tmp/codex-home/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -415,10 +503,13 @@ describe("codex plugin", () => {
 
   it("queries ccusage on each probe", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -438,10 +529,13 @@ describe("codex plugin", () => {
 
   it("shows empty Today state when ccusage returns ok with empty daily array", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -465,10 +559,13 @@ describe("codex plugin", () => {
 
   it("shows empty Yesterday state when yesterday's totals are zero (regression)", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -483,9 +580,7 @@ describe("codex plugin", () => {
     ctx.host.ccusage.query.mockReturnValue({
       status: "ok",
       data: {
-        daily: [
-        { date: yesterdayKey, totalTokens: 0, costUSD: 0 },
-        ],
+        daily: [{ date: yesterdayKey, totalTokens: 0, costUSD: 0 }],
       },
     })
 
@@ -499,10 +594,13 @@ describe("codex plugin", () => {
 
   it("shows empty Today when history exists but today is missing (regression)", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -511,9 +609,7 @@ describe("codex plugin", () => {
     ctx.host.ccusage.query.mockReturnValue({
       status: "ok",
       data: {
-        daily: [
-        { date: "Feb 01, 2026", totalTokens: 300, costUSD: 1.0 },
-        ],
+        daily: [{ date: "Feb 01, 2026", totalTokens: 300, costUSD: 1.0 }],
       },
     })
 
@@ -537,10 +633,13 @@ describe("codex plugin", () => {
 
   it("adds Yesterday line from codex ccusage format", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -555,9 +654,7 @@ describe("codex plugin", () => {
     ctx.host.ccusage.query.mockReturnValue({
       status: "ok",
       data: {
-        daily: [
-        { date: yesterdayKey, totalTokens: 220, costUSD: 1.1 },
-        ],
+        daily: [{ date: yesterdayKey, totalTokens: 220, costUSD: 1.1 }],
       },
     })
 
@@ -574,10 +671,13 @@ describe("codex plugin", () => {
     vi.setSystemTime(new Date(2026, 2, 1, 12, 0, 0))
     try {
       const ctx = makeCtx()
-      ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-        tokens: { access_token: "token" },
-        last_refresh: new Date().toISOString(),
-      }))
+      ctx.host.fs.writeText(
+        "~/.codex/auth.json",
+        JSON.stringify({
+          tokens: { access_token: "token" },
+          last_refresh: new Date().toISOString(),
+        })
+      )
       ctx.host.http.request.mockReturnValue({
         status: 200,
         headers: { "x-codex-primary-used-percent": "10" },
@@ -603,10 +703,13 @@ describe("codex plugin", () => {
     vi.setSystemTime(new Date(2026, 2, 1, 12, 0, 0))
     try {
       const ctx = makeCtx()
-      ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-        tokens: { access_token: "token" },
-        last_refresh: new Date().toISOString(),
-      }))
+      ctx.host.fs.writeText(
+        "~/.codex/auth.json",
+        JSON.stringify({
+          tokens: { access_token: "token" },
+          last_refresh: new Date().toISOString(),
+        })
+      )
       ctx.host.http.request.mockReturnValue({
         status: 200,
         headers: { "x-codex-primary-used-percent": "10" },
@@ -632,10 +735,13 @@ describe("codex plugin", () => {
     vi.setSystemTime(new Date(2026, 2, 1, 12, 0, 0))
     try {
       const ctx = makeCtx()
-      ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-        tokens: { access_token: "token" },
-        last_refresh: new Date().toISOString(),
-      }))
+      ctx.host.fs.writeText(
+        "~/.codex/auth.json",
+        JSON.stringify({
+          tokens: { access_token: "token" },
+          last_refresh: new Date().toISOString(),
+        })
+      )
       ctx.host.http.request.mockReturnValue({
         status: 200,
         headers: { "x-codex-primary-used-percent": "10" },
@@ -658,10 +764,13 @@ describe("codex plugin", () => {
 
   it("throws token expired when refresh fails", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "old" },
-      last_refresh: "2000-01-01T00:00:00.000Z",
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "old" },
+        last_refresh: "2000-01-01T00:00:00.000Z",
+      })
+    )
     ctx.host.http.request.mockReturnValue({ status: 401, headers: {}, bodyText: "{}" })
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
@@ -669,10 +778,13 @@ describe("codex plugin", () => {
 
   it("throws token conflict when refresh token is reused", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "old", refresh_token: "refresh" },
-      last_refresh: "2000-01-01T00:00:00.000Z",
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "old", refresh_token: "refresh" },
+        last_refresh: "2000-01-01T00:00:00.000Z",
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 400,
       headers: {},
@@ -684,19 +796,25 @@ describe("codex plugin", () => {
 
   it("throws for api key auth", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      OPENAI_API_KEY: "key",
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        OPENAI_API_KEY: "key",
+      })
+    )
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Usage not available for API key")
   })
 
   it("falls back to rate_limit data and review window", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: {},
@@ -722,10 +840,13 @@ describe("codex plugin", () => {
 
   it("omits resetsAt when window lacks reset info", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -744,10 +865,13 @@ describe("codex plugin", () => {
 
   it("uses reset_at when present for resetsAt", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     const now = 1_700_000_000_000
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now)
     const nowSec = Math.floor(now / 1000)
@@ -773,10 +897,13 @@ describe("codex plugin", () => {
 
   it("throws on http and parse errors", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValueOnce({ status: 500, headers: {}, bodyText: "" })
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("HTTP 500")
@@ -787,10 +914,13 @@ describe("codex plugin", () => {
 
   it("shows status badge when no usage data and ccusage failed", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: {},
@@ -809,10 +939,13 @@ describe("codex plugin", () => {
 
   it("throws on usage request failures", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockImplementation(() => {
       throw new Error("boom")
     })
@@ -822,10 +955,13 @@ describe("codex plugin", () => {
 
   it("throws on usage request failure after refresh", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token", refresh_token: "refresh" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token", refresh_token: "refresh" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     let usageCalls = 0
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("oauth/token")) {
@@ -843,10 +979,13 @@ describe("codex plugin", () => {
 
   it("surfaces additional_rate_limits as Spark lines", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     const now = 1_700_000_000_000
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now)
     const nowSec = Math.floor(now / 1000)
@@ -904,10 +1043,13 @@ describe("codex plugin", () => {
 
   it("handles additional_rate_limits with missing fields and fallback labels", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: {},
@@ -942,10 +1084,13 @@ describe("codex plugin", () => {
 
   it("handles missing or empty additional_rate_limits gracefully", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
 
     // Missing field
     ctx.host.http.request.mockReturnValueOnce({
@@ -978,10 +1123,13 @@ describe("codex plugin", () => {
 
   it("throws token expired when refresh retry is unauthorized", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token", refresh_token: "refresh" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token", refresh_token: "refresh" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     let usageCalls = 0
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("oauth/token")) {
@@ -1000,10 +1148,12 @@ describe("codex plugin", () => {
   it("loads keychain auth when env object is unavailable", async () => {
     const ctx = makeCtx()
     ctx.host.env = null
-    ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify({
-      tokens: { access_token: "keychain-token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.keychain.readGenericPassword.mockReturnValue(
+      JSON.stringify({
+        tokens: { access_token: "keychain-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       expect(opts.headers.Authorization).toBe("Bearer keychain-token")
       return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
@@ -1016,10 +1166,13 @@ describe("codex plugin", () => {
   it("ignores blank CODEX_HOME and uses default auth file paths", async () => {
     const ctx = makeCtx()
     ctx.host.env.get.mockImplementation((name) => (name === "CODEX_HOME" ? "   " : null))
-    ctx.host.fs.writeText("~/.config/codex/auth.json", JSON.stringify({
-      tokens: { access_token: "config-token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.config/codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "config-token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       expect(opts.headers.Authorization).toBe("Bearer config-token")
       return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
@@ -1054,10 +1207,13 @@ describe("codex plugin", () => {
 
   it("throws token messages for refresh_token_expired and invalidated", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "old", refresh_token: "refresh" },
-      last_refresh: "2000-01-01T00:00:00.000Z",
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "old", refresh_token: "refresh" },
+        last_refresh: "2000-01-01T00:00:00.000Z",
+      })
+    )
     ctx.host.http.request.mockReturnValueOnce({
       status: 400,
       headers: {},
@@ -1111,10 +1267,13 @@ describe("codex plugin", () => {
 
   it("throws when refresh body is malformed and auth endpoint is unauthorized", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "old", refresh_token: "refresh" },
-      last_refresh: "2000-01-01T00:00:00.000Z",
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "old", refresh_token: "refresh" },
+        last_refresh: "2000-01-01T00:00:00.000Z",
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 401,
       headers: {},
@@ -1127,10 +1286,13 @@ describe("codex plugin", () => {
   it("uses no_runner when ccusage host API is unavailable", async () => {
     const ctx = makeCtx()
     ctx.host.ccusage = null
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -1145,10 +1307,13 @@ describe("codex plugin", () => {
 
   it("handles malformed ccusage result payload as runner_failed", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
@@ -1167,10 +1332,13 @@ describe("codex plugin", () => {
     vi.setSystemTime(new Date("2026-12-15T12:00:00.000Z"))
     try {
       const ctx = makeCtx()
-      ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-        tokens: { access_token: "token" },
-        last_refresh: new Date().toISOString(),
-      }))
+      ctx.host.fs.writeText(
+        "~/.codex/auth.json",
+        JSON.stringify({
+          tokens: { access_token: "token" },
+          last_refresh: new Date().toISOString(),
+        })
+      )
       ctx.host.http.request.mockReturnValue({
         status: 200,
         headers: { "x-codex-primary-used-percent": "10" },
@@ -1206,10 +1374,13 @@ describe("codex plugin", () => {
 
   it("handles non-string retry wrapper exceptions", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.util.retryOnceOnAuth = () => {
       throw new Error("boom")
     }
@@ -1241,10 +1412,13 @@ describe("codex plugin", () => {
 
   it("stores refresh and id tokens when refresh response includes them", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "old", refresh_token: "refresh" },
-      last_refresh: "2000-01-01T00:00:00.000Z",
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "old", refresh_token: "refresh" },
+        last_refresh: "2000-01-01T00:00:00.000Z",
+      })
+    )
 
     const idToken = "header.payload.signature"
     ctx.host.http.request.mockImplementation((opts) => {
@@ -1277,16 +1451,21 @@ describe("codex plugin", () => {
 
   it("adds OpenAI dashboard usage and credits history from stored dashboard cookie", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.writeText("~/.codex/auth.json", JSON.stringify({
-      tokens: { access_token: "token" },
-      last_refresh: new Date().toISOString(),
-    }))
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({
+        tokens: { access_token: "token" },
+        last_refresh: new Date().toISOString(),
+      })
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       headers: { "x-codex-primary-used-percent": "10" },
       bodyText: JSON.stringify({}),
     })
-    ctx.host.providerSecrets.read.mockImplementation((key) => (key === "cookieHeader" ? "session=abc" : null))
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "cookieHeader" ? "session=abc" : null
+    )
     ctx.host.browser.requestWithCookies.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
@@ -1294,20 +1473,24 @@ describe("codex plugin", () => {
           { day: "2026-02-01", totalCreditsUsed: 12.5 },
           { day: "2026-02-02", totalCreditsUsed: 7.5 },
         ],
-        dailyBreakdown: [
-          { day: "2026-02-01", totalCreditsUsed: 3 },
-        ],
+        dailyBreakdown: [{ day: "2026-02-01", totalCreditsUsed: 3 }],
       }),
     })
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(ctx.host.browser.requestWithCookies).toHaveBeenCalledWith(expect.objectContaining({
-      cookieHeader: "session=abc",
-      url: "https://chatgpt.com/codex/cloud/settings/analytics#usage",
-    }))
-    expect(result.lines.find((line) => line.label === "Dashboard Usage 30d")?.value).toBe("20 credits")
-    expect(result.lines.find((line) => line.label === "Credits History 30d")?.value).toBe("3 credits")
+    expect(ctx.host.browser.requestWithCookies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cookieHeader: "session=abc",
+        url: "https://chatgpt.com/codex/cloud/settings/analytics#usage",
+      })
+    )
+    expect(result.lines.find((line) => line.label === "Dashboard Usage 30d")?.value).toBe(
+      "20 credits"
+    )
+    expect(result.lines.find((line) => line.label === "Credits History 30d")?.value).toBe(
+      "3 credits"
+    )
   })
 })

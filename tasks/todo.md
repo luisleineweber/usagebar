@@ -6,6 +6,117 @@ Full historical todo log is archived locally at:
 
 Keep this file short. Add only the current slice, acceptance criteria, and verification. Move completed slices to an ignored archive when they stop being useful for active context.
 
+# Alpha 4 competitor plan: upstream reliability ports
+
+## Executive Summary
+
+- Start Alpha 4 from the competitor implementation plan's first ranked work.
+- Skip Grok reimplementation because Alpha 3 already added it.
+- Port only missing upstream provider reliability fixes with regression tests.
+
+## Acceptance Criteria
+
+- [x] `docs/reports/competitor-implementation-plan.html` is present in this worktree for Alpha 4 context.
+- [x] Codex trusts explicit zero-credit usage responses over stale credit headers.
+- [x] Claude prefers usable keychain credentials over stale legacy credential files.
+- [x] Perplexity upstream group fallback is checked against this fork and documented as superseded.
+- [x] ccusage nvm alias/default path resolution is implemented with Rust tests.
+- [x] ccusage release-age fallback is explicitly deferred with rationale.
+- [x] Focused provider/backend verification passes and bundled plugin files are synced.
+
+## Plan
+
+- [x] Create clean `alpha-4` worktree and import the competitor report.
+- [x] Diff upstream OpenUsage v0.6.24 reliability fixes against this fork.
+- [x] Patch missing Codex and Claude behavior.
+- [x] Evaluate Perplexity group handling against the current fork.
+- [x] Port ccusage nvm alias/default path resolution.
+- [x] Evaluate ccusage release-age fallback scope.
+- [x] Run focused checks and update verification notes.
+
+## Verification Notes
+
+- Imported local report from `D:\UsageBar\usagebar\docs\reports\competitor-implementation-plan.html` into ignored worktree path `docs/reports/competitor-implementation-plan.html`.
+- Upstream checked: OpenUsage `v0.6.24` commits `7c83829` (Codex zero credits), `eb7eaf7` (Claude keychain preference), `f847b24` (Perplexity missing group), `41c2d79` (ccusage nvm alias path), and `38786d0` (ccusage release-age fallback).
+- Perplexity group fallback is superseded in this fork: current `plugins/perplexity/plugin.js` uses `https://www.perplexity.ai/rest/billing/credits` with stored/env cookie auth and has no groups REST path.
+- ccusage release-age fallback deferred: upstream changes ccusage from provider-specific `ccusage@18.0.11` / `@ccusage/codex@18.0.11` to unified `ccusage@20.0.2` plus legacy fallback. That is a shared command-family migration, not a narrow reliability patch; keep it as its own Alpha 4 backend slice with full Claude/Codex ccusage contract tests.
+- `bun install` -> installed this worktree's JS dependencies.
+- `bun run test -- plugins\codex\plugin.test.js plugins\claude\plugin.test.js --run` -> 2 files passed, 131 tests passed.
+- `node --check plugins\codex\plugin.js; node --check plugins\claude\plugin.js` -> passed.
+- `bun run bundle:plugins` -> bundled 32 plugins including `claude` and `codex`.
+- `cargo test --manifest-path src-tauri/Cargo.toml nvm_default_bin_path --lib` -> 3 tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml ccusage_path_entries_with_includes_nvm_default_version --lib` -> 1 test passed.
+- `bun prettier --check docs\providers\claude.md plugins\claude\plugin.js plugins\claude\plugin.test.js plugins\codex\plugin.js plugins\codex\plugin.test.js tasks\todo.md docs\reports\competitor-implementation-plan.html` -> passed.
+- `bun run format:rust:check` -> passed.
+- Source/bundled SHA-256 check for Claude and Codex `plugin.js` / `plugin.test.js` -> passed.
+- `git --no-pager diff --check` -> passed; only expected CRLF conversion warnings were reported.
+- Repo-wide `bun run format:check` still fails on pre-existing untouched files: `.github/workflows/ci.yml`, `.prettierrc.json`, `eslint.config.js`, `package.json`, and `scripts/check-format.mjs`.
+
+# Alpha 4 ccusage release-age fallback
+
+## Executive Summary
+
+- Move local usage queries to the current unified `ccusage` command.
+- Keep the older Claude/Codex package commands as a fallback when the current release is blocked.
+- Preserve local-only usage behavior and avoid UI changes.
+
+## Acceptance Criteria
+
+- [x] Claude ccusage runs `ccusage@20.0.2 claude daily` first.
+- [x] Codex ccusage runs `ccusage@20.0.2 codex daily` first.
+- [x] Legacy fallback retries `ccusage@18.0.11 daily` for Claude and `@ccusage/codex@18.0.11 daily` for Codex after current command failure.
+- [x] API docs describe the current command and legacy fallback.
+- [x] ccusage bump script updates the current ccusage version docs without touching legacy pins.
+- [x] Focused Rust tests pass.
+
+## Plan
+
+- [x] Compare this fork's ccusage backend against upstream OpenUsage `38786d0`.
+- [x] Patch ccusage command flavor and runner args.
+- [x] Update docs and bump script.
+- [x] Run focused Rust tests and formatting checks.
+
+## Verification Notes
+
+- `cargo test --manifest-path src-tauri/Cargo.toml ccusage_runner_args --lib` -> 3 tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml ccusage_runner_retries_legacy_package_when_current_package_fails --lib` -> 1 test passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml ccusage --lib` -> 23 tests passed.
+- `node --check scripts\bump-ccusage-version.mjs` -> passed.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml` -> applied formatting.
+- `bun prettier --write docs\plugins\api.md scripts\bump-ccusage-version.mjs tasks\todo.md` -> applied formatting.
+
+# Alpha 4 local version and main integration
+
+## Executive Summary
+
+- Set local app metadata to Alpha 4.
+- Rebase Alpha 4 work onto current `main`.
+- Merge the rebased branch back into `main`.
+
+## Acceptance Criteria
+
+- [ ] `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json` use `0.1.0-alpha.4`.
+- [ ] README and CHANGELOG describe Alpha 4.
+- [ ] Focused provider/backend checks and release preflight pass.
+- [ ] `alpha-4` is rebased onto current `main`.
+- [ ] `main` contains the Alpha 4 changes.
+
+## Plan
+
+- [x] Bump local version metadata and Alpha 4 notes.
+- [x] Run focused verification before integration.
+- [ ] Commit Alpha 4 work locally.
+- [ ] Rebase `alpha-4` onto `main`.
+- [ ] Merge `alpha-4` into `main`.
+
+## Verification Notes
+
+- `bun run test -- plugins\codex\plugin.test.js plugins\claude\plugin.test.js --run` -> 2 files passed, 131 tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml ccusage --lib` -> 23 tests passed.
+- `bun run release:check` -> passed, release version `0.1.0-alpha.4`, 32 bundled plugins.
+- `bun run format:rust:check` -> passed.
+- `git --no-pager diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
 # Prepare Alpha 3 release
 
 ## Executive Summary

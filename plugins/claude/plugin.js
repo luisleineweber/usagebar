@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   const CRED_FILE = "~/.claude/.credentials.json"
   const ACCOUNT_FILE = "~/.claude.json"
   const KEYCHAIN_SERVICE = "Claude Code-credentials"
@@ -6,7 +6,8 @@
   const REFRESH_URL = "https://platform.claude.com/v1/oauth/token"
   const CLAUDE_WEB_API_BASE = "https://claude.ai/api"
   const DEFAULT_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-  const DEFAULT_SCOPES = "user:profile user:inference user:sessions:claude_code user:mcp_servers"
+  const DEFAULT_SCOPES =
+    "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
 
   function loadOAuthConfig(ctx) {
@@ -57,7 +58,10 @@
   function titleCaseLabel(value) {
     const normalized = readNonEmptyString(value).replace(/[_-]+/g, " ").toLowerCase()
     if (!normalized) return ""
-    return normalized.replace(/(^|\s)([a-z])/g, (match, prefix, letter) => prefix + letter.toUpperCase())
+    return normalized.replace(
+      /(^|\s)([a-z])/g,
+      (match, prefix, letter) => prefix + letter.toUpperCase()
+    )
   }
 
   function formatClaudePlan(ctx, subscriptionType, rateLimitTier) {
@@ -80,7 +84,8 @@
   }
 
   function loadStoredCookieHeader(ctx) {
-    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function")
+      return null
     try {
       return readNonEmptyString(ctx.host.providerSecrets.read("cookieHeader"))
     } catch (e) {
@@ -144,7 +149,14 @@
     if (!Array.isArray(orgs)) return null
     for (let i = 0; i < orgs.length; i++) {
       const org = orgs[i]
-      if (org && Array.isArray(org.capabilities) && org.capabilities.map(String).map((v) => v.toLowerCase()).indexOf("chat") >= 0) {
+      if (
+        org &&
+        Array.isArray(org.capabilities) &&
+        org.capabilities
+          .map(String)
+          .map((v) => v.toLowerCase())
+          .indexOf("chat") >= 0
+      ) {
         return org
       }
     }
@@ -230,8 +242,7 @@
           i += 1
           continue
         }
-        const cp =
-          ((b0 & 0x07) << 18) | ((b1 & 0x3f) << 12) | ((b2 & 0x3f) << 6) | (b3 & 0x3f)
+        const cp = ((b0 & 0x07) << 18) | ((b1 & 0x3f) << 12) | ((b2 & 0x3f) << 6) | (b3 & 0x3f)
         const n = cp - 0x10000
         out += String.fromCharCode(0xd800 + ((n >> 10) & 0x3ff), 0xdc00 + (n & 0x3ff))
         i += 4
@@ -272,9 +283,8 @@
   function extractAccountState(parsed) {
     if (!parsed || typeof parsed !== "object") return null
 
-    const oauthAccount = parsed.oauthAccount && typeof parsed.oauthAccount === "object"
-      ? parsed.oauthAccount
-      : null
+    const oauthAccount =
+      parsed.oauthAccount && typeof parsed.oauthAccount === "object" ? parsed.oauthAccount : null
     const primaryApiKey = readNonEmptyString(parsed.primaryApiKey)
     if (!oauthAccount && !primaryApiKey) return null
 
@@ -316,8 +326,7 @@
     return null
   }
 
-  function loadCredentials(ctx) {
-    // Try file first
+  function loadFileCredentials(ctx) {
     if (ctx.host.fs.exists(CRED_FILE)) {
       try {
         const text = ctx.host.fs.readText(CRED_FILE)
@@ -335,7 +344,10 @@
       }
     }
 
-    // Try keychain fallback
+    return null
+  }
+
+  function loadKeychainCredentials(ctx) {
     try {
       const keychainValue = ctx.host.keychain.readGenericPassword(KEYCHAIN_SERVICE)
       if (keychainValue) {
@@ -352,6 +364,18 @@
     } catch (e) {
       ctx.host.log.info("keychain read failed (may not exist): " + String(e))
     }
+
+    return null
+  }
+
+  function loadCredentials(ctx) {
+    // Recent Claude Code versions keep the current session in Keychain and can
+    // leave stale legacy credential files behind, so Keychain wins when valid.
+    const keychainCredentials = loadKeychainCredentials(ctx)
+    if (keychainCredentials) return keychainCredentials
+
+    const fileCredentials = loadFileCredentials(ctx)
+    if (fileCredentials) return fileCredentials
 
     const accountFileState = loadAccountFile(ctx)
     if (accountFileState) {
@@ -449,7 +473,9 @@
       fullData.claudeAiOauth = oauth
       saveCredentials(ctx, source, fullData)
 
-      ctx.host.log.info("refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s")
+      ctx.host.log.info(
+        "refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s"
+      )
       return newAccessToken
     } catch (e) {
       if (typeof e === "string") throw e
@@ -507,9 +533,8 @@
       const unit = units[i]
       if (abs >= unit.threshold) {
         const scaled = abs / unit.divisor
-        const formatted = scaled >= 10
-          ? Math.round(scaled).toString()
-          : scaled.toFixed(1).replace(/\.0$/, "")
+        const formatted =
+          scaled >= 10 ? Math.round(scaled).toString() : scaled.toFixed(1).replace(/\.0$/, "")
         return sign + formatted + unit.suffix
       }
     }
@@ -578,17 +603,21 @@
     const tokens = Number(dayEntry && dayEntry.totalTokens) || 0
     const cost = usageCostUsd(dayEntry)
     if (tokens > 0) {
-      lines.push(ctx.line.text({
-        label: label,
-        value: costAndTokensLabel({ tokens: tokens, costUSD: cost })
-      }))
+      lines.push(
+        ctx.line.text({
+          label: label,
+          value: costAndTokensLabel({ tokens: tokens, costUSD: cost }),
+        })
+      )
       return
     }
 
-    lines.push(ctx.line.text({
-      label: label,
-      value: costAndTokensLabel({ tokens: 0, costUSD: 0 }, { includeZeroTokens: true })
-    }))
+    lines.push(
+      ctx.line.text({
+        label: label,
+        value: costAndTokensLabel({ tokens: 0, costUSD: 0 }, { includeZeroTokens: true }),
+      })
+    )
   }
 
   function firstUsageWindow(data, keys) {
@@ -615,25 +644,29 @@
     if (found) {
       const used = Number(found.window.utilization)
       if (!Number.isFinite(used)) return
-      lines.push(ctx.line.progress({
-        label: label,
-        used: used,
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(found.window.resets_at),
-        periodDurationMs: 7 * 24 * 60 * 60 * 1000
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: label,
+          used: used,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: ctx.util.toIso(found.window.resets_at),
+          periodDurationMs: 7 * 24 * 60 * 60 * 1000,
+        })
+      )
       return
     }
 
     if (hasUsageKey(data, keys)) {
-      lines.push(ctx.line.progress({
-        label: label,
-        used: 0,
-        limit: 100,
-        format: { kind: "percent" },
-        periodDurationMs: 7 * 24 * 60 * 60 * 1000
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: label,
+          used: 0,
+          limit: 100,
+          format: { kind: "percent" },
+          periodDurationMs: 7 * 24 * 60 * 60 * 1000,
+        })
+      )
     }
   }
 
@@ -676,10 +709,15 @@
       }
     }
     if (totalTokens > 0) {
-      lines.push(ctx.line.text({
-        label: "Last 30 Days",
-        value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
-      }))
+      lines.push(
+        ctx.line.text({
+          label: "Last 30 Days",
+          value: costAndTokensLabel({
+            tokens: totalTokens,
+            costUSD: hasCost ? totalCostNanos / 1e9 : null,
+          }),
+        })
+      )
     }
   }
 
@@ -736,39 +774,50 @@
       return null
     }
 
-    const usage = requestClaudeWebJson(ctx, sessionKey, "/organizations/" + encodeURIComponent(org.uuid) + "/usage", "usage")
+    const usage = requestClaudeWebJson(
+      ctx,
+      sessionKey,
+      "/organizations/" + encodeURIComponent(org.uuid) + "/usage",
+      "usage"
+    )
     if (!usage) return null
 
     const lines = []
     if (usage.five_hour && typeof usage.five_hour.utilization === "number") {
-      lines.push(ctx.line.progress({
-        label: "Session",
-        used: usage.five_hour.utilization,
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(usage.five_hour.resets_at),
-        periodDurationMs: 5 * 60 * 60 * 1000
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Session",
+          used: usage.five_hour.utilization,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: ctx.util.toIso(usage.five_hour.resets_at),
+          periodDurationMs: 5 * 60 * 60 * 1000,
+        })
+      )
     }
     if (usage.seven_day && typeof usage.seven_day.utilization === "number") {
-      lines.push(ctx.line.progress({
-        label: "Weekly",
-        used: usage.seven_day.utilization,
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(usage.seven_day.resets_at),
-        periodDurationMs: 7 * 24 * 60 * 60 * 1000
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Weekly",
+          used: usage.seven_day.utilization,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: ctx.util.toIso(usage.seven_day.resets_at),
+          periodDurationMs: 7 * 24 * 60 * 60 * 1000,
+        })
+      )
     }
     if (usage.seven_day_sonnet && typeof usage.seven_day_sonnet.utilization === "number") {
-      lines.push(ctx.line.progress({
-        label: "Sonnet",
-        used: usage.seven_day_sonnet.utilization,
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(usage.seven_day_sonnet.resets_at),
-        periodDurationMs: 7 * 24 * 60 * 60 * 1000
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Sonnet",
+          used: usage.seven_day_sonnet.utilization,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: ctx.util.toIso(usage.seven_day_sonnet.resets_at),
+          periodDurationMs: 7 * 24 * 60 * 60 * 1000,
+        })
+      )
     }
     appendExtraRateWindow(lines, ctx, usage, "Designs", [
       "seven_day_design",
@@ -799,12 +848,14 @@
       const used = Number(overage.used_credits)
       const limit = Number(overage.monthly_credit_limit)
       if (Number.isFinite(used) && Number.isFinite(limit) && limit > 0) {
-        lines.push(ctx.line.progress({
-          label: "Extra usage spent",
-          used: ctx.fmt.dollars(used),
-          limit: ctx.fmt.dollars(limit),
-          format: { kind: "dollars" }
-        }))
+        lines.push(
+          ctx.line.progress({
+            label: "Extra usage spent",
+            used: ctx.fmt.dollars(used),
+            limit: ctx.fmt.dollars(limit),
+            format: { kind: "dollars" },
+          })
+        )
       }
     }
 
@@ -832,7 +883,9 @@
       const localOnly = buildLocalUsageOnlyResult(ctx)
       if (localOnly) {
         if (creds && creds.account) {
-          ctx.host.log.info("using ccusage fallback with account-file metadata and no OAuth credentials")
+          ctx.host.log.info(
+            "using ccusage fallback with account-file metadata and no OAuth credentials"
+          )
         } else {
           ctx.host.log.info("using ccusage fallback without OAuth credentials")
         }
@@ -898,7 +951,7 @@
       ctx.host.log.error("usage returned error: status=" + resp.status)
       throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
     }
-    
+
     ctx.host.log.info("usage fetch succeeded")
 
     let data
@@ -914,34 +967,40 @@
     }
 
     if (data.five_hour && typeof data.five_hour.utilization === "number") {
-      lines.push(ctx.line.progress({
-        label: "Session",
-        used: data.five_hour.utilization,
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(data.five_hour.resets_at),
-        periodDurationMs: 5 * 60 * 60 * 1000 // 5 hours
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Session",
+          used: data.five_hour.utilization,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: ctx.util.toIso(data.five_hour.resets_at),
+          periodDurationMs: 5 * 60 * 60 * 1000, // 5 hours
+        })
+      )
     }
     if (data.seven_day && typeof data.seven_day.utilization === "number") {
-      lines.push(ctx.line.progress({
-        label: "Weekly",
-        used: data.seven_day.utilization,
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(data.seven_day.resets_at),
-        periodDurationMs: 7 * 24 * 60 * 60 * 1000 // 7 days
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Weekly",
+          used: data.seven_day.utilization,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: ctx.util.toIso(data.seven_day.resets_at),
+          periodDurationMs: 7 * 24 * 60 * 60 * 1000, // 7 days
+        })
+      )
     }
     if (data.seven_day_sonnet && typeof data.seven_day_sonnet.utilization === "number") {
-      lines.push(ctx.line.progress({
-        label: "Sonnet",
-        used: data.seven_day_sonnet.utilization,
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: ctx.util.toIso(data.seven_day_sonnet.resets_at),
-        periodDurationMs: 7 * 24 * 60 * 60 * 1000 // 7 days
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Sonnet",
+          used: data.seven_day_sonnet.utilization,
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: ctx.util.toIso(data.seven_day_sonnet.resets_at),
+          periodDurationMs: 7 * 24 * 60 * 60 * 1000, // 7 days
+        })
+      )
     }
     appendExtraRateWindow(lines, ctx, data, "Designs", [
       "seven_day_design",
@@ -966,14 +1025,18 @@
       const used = data.extra_usage.used_credits
       const limit = data.extra_usage.monthly_limit
       if (typeof used === "number" && typeof limit === "number" && limit > 0) {
-        lines.push(ctx.line.progress({
-          label: "Extra usage spent",
-          used: ctx.fmt.dollars(used),
-          limit: ctx.fmt.dollars(limit),
-          format: { kind: "dollars" }
-        }))
+        lines.push(
+          ctx.line.progress({
+            label: "Extra usage spent",
+            used: ctx.fmt.dollars(used),
+            limit: ctx.fmt.dollars(limit),
+            format: { kind: "dollars" },
+          })
+        )
       } else if (typeof used === "number" && used > 0) {
-        lines.push(ctx.line.text({ label: "Extra usage spent", value: "$" + String(ctx.fmt.dollars(used)) }))
+        lines.push(
+          ctx.line.text({ label: "Extra usage spent", value: "$" + String(ctx.fmt.dollars(used)) })
+        )
       }
     }
 
