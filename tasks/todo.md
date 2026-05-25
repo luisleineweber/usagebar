@@ -95,19 +95,19 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 
 ## Acceptance Criteria
 
-- [ ] `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json` use `0.1.0-alpha.4`.
-- [ ] README and CHANGELOG describe Alpha 4.
-- [ ] Focused provider/backend checks and release preflight pass.
-- [ ] `alpha-4` is rebased onto current `main`.
-- [ ] `main` contains the Alpha 4 changes.
+- [x] `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json` use `0.1.0-alpha.4`.
+- [x] README and CHANGELOG describe Alpha 4.
+- [x] Focused provider/backend checks and release preflight pass.
+- [x] `alpha-4` is rebased onto current `main`.
+- [x] `main` contains the Alpha 4 changes.
 
 ## Plan
 
 - [x] Bump local version metadata and Alpha 4 notes.
 - [x] Run focused verification before integration.
-- [ ] Commit Alpha 4 work locally.
-- [ ] Rebase `alpha-4` onto `main`.
-- [ ] Merge `alpha-4` into `main`.
+- [x] Commit Alpha 4 work locally.
+- [x] Rebase `alpha-4` onto `main`.
+- [x] Merge `alpha-4` into `main`.
 
 ## Verification Notes
 
@@ -116,6 +116,10 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun run release:check` -> passed, release version `0.1.0-alpha.4`, 32 bundled plugins.
 - `bun run format:rust:check` -> passed.
 - `git --no-pager diff --check` -> passed; only expected CRLF conversion warnings were reported.
+- Local commit created: `befa0c8 fix(providers): harden alpha 4 usage reliability`.
+- `git rebase main` in `D:\UsageBar\usagebar-alpha-4` -> completed cleanly.
+- `git merge --ff-only alpha-4` in `D:\UsageBar\usagebar` -> fast-forwarded `main` from `0389215` to `befa0c8`.
+- Post-merge `bun run release:check` on `main` -> passed, release version `0.1.0-alpha.4`, 32 bundled plugins.
 
 # Prepare Alpha 3 release
 
