@@ -35,24 +35,30 @@ describe("claude plugin", () => {
 
     expect(result.plan).toBeNull()
     expect(result.lines.find((line) => line.label === "Status")?.text).toBe("Signed in")
-    expect(result.lines.find((line) => line.label === "Workspace")?.value).toBe("Luis Individual Org")
+    expect(result.lines.find((line) => line.label === "Workspace")?.value).toBe(
+      "Luis Individual Org"
+    )
     expect(result.lines.find((line) => line.label === "Billing")?.value).toBe("Prepaid")
-    expect(result.lines.find((line) => line.label === "Usage")?.value).toContain("OAuth usage unavailable")
+    expect(result.lines.find((line) => line.label === "Usage")?.value).toContain(
+      "OAuth usage unavailable"
+    )
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
   it("uses Claude web session cookie fallback when OAuth credentials are missing", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
-    ctx.host.providerSecrets.read.mockImplementation((key) => (
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
       key === "cookieHeader" ? "other=1; sessionKey=sk-ant-web-session" : null
-    ))
+    )
     ctx.host.http.request.mockImplementation((opts) => {
       expect(opts.headers.Cookie).toBe("sessionKey=sk-ant-web-session")
       if (String(opts.url).endsWith("/organizations")) {
         return {
           status: 200,
-          bodyText: JSON.stringify([{ uuid: "org-1", name: "Claude Team", capabilities: ["chat"] }]),
+          bodyText: JSON.stringify([
+            { uuid: "org-1", name: "Claude Team", capabilities: ["chat"] },
+          ]),
         }
       }
       if (String(opts.url).endsWith("/usage")) {
@@ -158,6 +164,53 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+  })
+
+  it("prefers keychain over a stale credentials file", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = () => true
+    ctx.host.fs.readText = vi.fn(() =>
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: "stale-file-token",
+          refreshToken: "stale-file-refresh",
+          expiresAt: Date.now() - 1000,
+          subscriptionType: "pro",
+        },
+      })
+    )
+    ctx.host.keychain.readGenericPassword.mockReturnValue(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: "keychain-token",
+          refreshToken: "keychain-refresh",
+          expiresAt: Date.now() + 60 * 60 * 1000,
+          subscriptionType: "pro",
+        },
+      })
+    )
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("/v1/oauth/token")) {
+        throw new Error("stale file refresh should not be attempted")
+      }
+      return {
+        status: 200,
+        bodyText: JSON.stringify({
+          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
+        }),
+      }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
+    expect(ctx.host.fs.readText).not.toHaveBeenCalled()
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer keychain-token" }),
+      })
+    )
   })
 
   it("renders usage lines from response", async () => {
@@ -357,7 +410,11 @@ describe("claude plugin", () => {
   it("uses keychain credentials when value is hex-encoded JSON", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
-    const json = JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } }, null, 2)
+    const json = JSON.stringify(
+      { claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } },
+      null,
+      2
+    )
     const hex = Buffer.from(json, "utf8").toString("hex")
     ctx.host.keychain.readGenericPassword.mockReturnValue(hex)
     ctx.host.http.request.mockReturnValue({
@@ -374,7 +431,11 @@ describe("claude plugin", () => {
   it("accepts 0x-prefixed hex keychain credentials", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
-    const json = JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } }, null, 2)
+    const json = JSON.stringify(
+      { claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } },
+      null,
+      2
+    )
     const hex = "0x" + Buffer.from(json, "utf8").toString("hex")
     ctx.host.keychain.readGenericPassword.mockReturnValue(hex)
     ctx.host.http.request.mockReturnValue({
@@ -391,7 +452,11 @@ describe("claude plugin", () => {
   it("decodes hex-encoded UTF-8 correctly (non-ascii json)", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
-    const json = JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pró" } }, null, 2)
+    const json = JSON.stringify(
+      { claudeAiOauth: { accessToken: "token", subscriptionType: "pró" } },
+      null,
+      2
+    )
     const hex = Buffer.from(json, "utf8").toString("hex")
     ctx.host.keychain.readGenericPassword.mockReturnValue(hex)
     ctx.host.http.request.mockReturnValue({
@@ -649,7 +714,11 @@ describe("claude plugin", () => {
       if (String(opts.url).includes("/v1/oauth/token")) {
         return {
           status: 200,
-          bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600, refresh_token: "refresh2" }),
+          bodyText: JSON.stringify({
+            access_token: "new-token",
+            expires_in: 3600,
+            refresh_token: "refresh2",
+          }),
         }
       }
       return {
@@ -832,7 +901,10 @@ describe("claude plugin", () => {
     })
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }),
+        }
       }
       return {
         status: 200,
@@ -862,7 +934,10 @@ describe("claude plugin", () => {
     })
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }) }
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }),
+        }
       }
       return {
         status: 200,
@@ -992,14 +1067,17 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     plugin.probe(ctx)
     expect(
-      ctx.host.http.request.mock.calls.some((call) => String(call[0]?.url).includes("/v1/oauth/token"))
+      ctx.host.http.request.mock.calls.some((call) =>
+        String(call[0]?.url).includes("/v1/oauth/token")
+      )
     ).toBe(false)
   })
 
   it("handles malformed ccusage payload shape as runner_failed", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => true
-    ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "   " } })
+    ctx.host.fs.readText = () =>
+      JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "   " } })
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
@@ -1049,9 +1127,7 @@ describe("claude plugin", () => {
     ctx.host.ccusage.query = vi.fn(() => ({
       status: "ok",
       data: {
-        daily: [
-          { date: todayKey, totalTokens: 150, totalCost: 0.75 },
-        ],
+        daily: [{ date: todayKey, totalTokens: 150, totalCost: 0.75 }],
       },
     }))
 
@@ -1107,7 +1183,9 @@ describe("claude plugin", () => {
   })
 
   describe("token usage: ccusage integration", () => {
-    const CRED_JSON = JSON.stringify({ claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" } })
+    const CRED_JSON = JSON.stringify({
+      claudeAiOauth: { accessToken: "tok", subscriptionType: "pro" },
+    })
     const USAGE_RESPONSE = JSON.stringify({
       five_hour: { utilization: 30, resets_at: "2099-01-01T00:00:00.000Z" },
       seven_day: { utilization: 50, resets_at: "2099-01-01T00:00:00.000Z" },
@@ -1162,8 +1240,16 @@ describe("claude plugin", () => {
       const todayKey = localDayKey(new Date())
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: todayKey, inputTokens: 100, outputTokens: 50, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 150, totalCost: 0.75 },
-          ]),
+          {
+            date: todayKey,
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 150,
+            totalCost: 0.75,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
@@ -1180,8 +1266,16 @@ describe("claude plugin", () => {
       const yesterdayKey = localDayKey(yesterday)
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: yesterdayKey, inputTokens: 80, outputTokens: 40, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 120, totalCost: 0.6 },
-          ]),
+          {
+            date: yesterdayKey,
+            inputTokens: 80,
+            outputTokens: 40,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 120,
+            totalCost: 0.6,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
@@ -1207,9 +1301,25 @@ describe("claude plugin", () => {
 
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: todayLabel, inputTokens: 100, outputTokens: 50, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 150, totalCost: 0.75 },
-            { date: yesterdayLabel, inputTokens: 80, outputTokens: 40, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 120, totalCost: 0.6 },
-          ]),
+          {
+            date: todayLabel,
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 150,
+            totalCost: 0.75,
+          },
+          {
+            date: yesterdayLabel,
+            inputTokens: 80,
+            outputTokens: 40,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 120,
+            totalCost: 0.6,
+          },
+        ]),
       })
 
       const plugin = await loadPlugin()
@@ -1232,8 +1342,16 @@ describe("claude plugin", () => {
       try {
         const ctx = makeProbeCtx({
           ccusageResult: okUsage([
-              { date: "2026-03-01T12:00:00Z", inputTokens: 10, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 10, totalCost: 0.1 },
-            ]),
+            {
+              date: "2026-03-01T12:00:00Z",
+              inputTokens: 10,
+              outputTokens: 0,
+              cacheCreationTokens: 0,
+              cacheReadTokens: 0,
+              totalTokens: 10,
+              totalCost: 0.1,
+            },
+          ]),
         })
         const plugin = await loadPlugin()
         const result = plugin.probe(ctx)
@@ -1251,8 +1369,16 @@ describe("claude plugin", () => {
       try {
         const ctx = makeProbeCtx({
           ccusageResult: okUsage([
-              { date: "2026-03-01T00:30:00+09:00", inputTokens: 20, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 20, totalCost: 0.2 },
-            ]),
+            {
+              date: "2026-03-01T00:30:00+09:00",
+              inputTokens: 20,
+              outputTokens: 0,
+              cacheCreationTokens: 0,
+              cacheReadTokens: 0,
+              totalTokens: 20,
+              totalCost: 0.2,
+            },
+          ]),
         })
         const plugin = await loadPlugin()
         const result = plugin.probe(ctx)
@@ -1270,8 +1396,16 @@ describe("claude plugin", () => {
       try {
         const ctx = makeProbeCtx({
           ccusageResult: okUsage([
-              { date: "2026-03-01T23:30:00-08:00", inputTokens: 30, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 30, totalCost: 0.3 },
-            ]),
+            {
+              date: "2026-03-01T23:30:00-08:00",
+              inputTokens: 30,
+              outputTokens: 0,
+              cacheCreationTokens: 0,
+              cacheReadTokens: 0,
+              totalTokens: 30,
+              totalCost: 0.3,
+            },
+          ]),
         })
         const plugin = await loadPlugin()
         const result = plugin.probe(ctx)
@@ -1287,9 +1421,25 @@ describe("claude plugin", () => {
       const todayKey = localDayKey(new Date())
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: todayKey, inputTokens: 100, outputTokens: 50, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 150, totalCost: 0.5 },
-            { date: "2026-02-01", inputTokens: 200, outputTokens: 100, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 300, totalCost: 1.0 },
-          ]),
+          {
+            date: todayKey,
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 150,
+            totalCost: 0.5,
+          },
+          {
+            date: "2026-02-01",
+            inputTokens: 200,
+            outputTokens: 100,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 300,
+            totalCost: 1.0,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
@@ -1302,8 +1452,16 @@ describe("claude plugin", () => {
     it("shows empty Today/Yesterday and Last 30 Days when today has no entry", async () => {
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: "2026-02-01", inputTokens: 500, outputTokens: 100, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 600, totalCost: 2.0 },
-          ]),
+          {
+            date: "2026-02-01",
+            inputTokens: 500,
+            outputTokens: 100,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 600,
+            totalCost: 2.0,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
@@ -1339,8 +1497,16 @@ describe("claude plugin", () => {
       const todayKey = localDayKey(new Date())
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: todayKey, inputTokens: 500, outputTokens: 100, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 600, totalCost: null },
-          ]),
+          {
+            date: todayKey,
+            inputTokens: 500,
+            outputTokens: 100,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 600,
+            totalCost: null,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
@@ -1354,8 +1520,16 @@ describe("claude plugin", () => {
       const todayKey = localDayKey(new Date())
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: todayKey, inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, totalCost: 0 },
-          ]),
+          {
+            date: todayKey,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 0,
+            totalCost: 0,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
@@ -1371,8 +1545,16 @@ describe("claude plugin", () => {
       const yesterdayKey = localDayKey(yesterday)
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: yesterdayKey, inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 0, totalCost: 0 },
-          ]),
+          {
+            date: yesterdayKey,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 0,
+            totalCost: 0,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
@@ -1386,8 +1568,16 @@ describe("claude plugin", () => {
       const todayKey = localDayKey(new Date())
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: todayKey, inputTokens: 100, outputTokens: 50, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 150, totalCost: 0.5 },
-          ]),
+          {
+            date: todayKey,
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
+            totalTokens: 150,
+            totalCost: 0.5,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       plugin.probe(ctx)
@@ -1442,8 +1632,16 @@ describe("claude plugin", () => {
       const todayKey = localDayKey(new Date())
       const ctx = makeProbeCtx({
         ccusageResult: okUsage([
-            { date: todayKey, inputTokens: 100, outputTokens: 50, cacheCreationTokens: 200, cacheReadTokens: 300, totalTokens: 650, totalCost: 1.0 },
-          ]),
+          {
+            date: todayKey,
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheCreationTokens: 200,
+            cacheReadTokens: 300,
+            totalTokens: 650,
+            totalCost: 1.0,
+          },
+        ]),
       })
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)

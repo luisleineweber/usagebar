@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   const AUTH_FILE = "auth.json"
   const CONFIG_AUTH_PATHS = ["~/.config/codex", "~/.codex"]
   const KEYCHAIN_SERVICE = "Codex Auth"
@@ -246,8 +246,10 @@
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         bodyText:
           "grant_type=refresh_token" +
-          "&client_id=" + encodeURIComponent(CLIENT_ID) +
-          "&refresh_token=" + encodeURIComponent(auth.tokens.refresh_token),
+          "&client_id=" +
+          encodeURIComponent(CLIENT_ID) +
+          "&refresh_token=" +
+          encodeURIComponent(auth.tokens.refresh_token),
         timeoutMs: 15000,
       })
 
@@ -336,6 +338,17 @@
     return Number.isFinite(n) ? n : null
   }
 
+  function readCreditsRemaining(resp, data) {
+    const credits = data && data.credits && typeof data.credits === "object" ? data.credits : null
+    if (credits) {
+      const bodyBalance = readNumber(credits.balance)
+      if (bodyBalance !== null) return bodyBalance
+      if (credits.has_credits === false) return 0
+    }
+
+    return readNumber(resp.headers["x-codex-credits-balance"])
+  }
+
   function formatPlanInfo(ctx, planType) {
     const rawPlan = typeof planType === "string" ? planType.trim() : ""
     if (!rawPlan) return { label: null, multiplier: null }
@@ -352,7 +365,8 @@
   }
 
   function readDashboardCookie(ctx) {
-    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function")
+      return null
     try {
       return readNonEmptyString(ctx.host.providerSecrets.read("cookieHeader"))
     } catch (e) {
@@ -373,7 +387,7 @@
   }
 
   // Period durations in milliseconds
-  var PERIOD_SESSION_MS = 5 * 60 * 60 * 1000    // 5 hours
+  var PERIOD_SESSION_MS = 5 * 60 * 60 * 1000 // 5 hours
   var PERIOD_WEEKLY_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
   function queryTokenUsage(ctx) {
@@ -419,9 +433,8 @@
       const unit = units[i]
       if (abs >= unit.threshold) {
         const scaled = abs / unit.divisor
-        const formatted = scaled >= 10
-          ? Math.round(scaled).toString()
-          : scaled.toFixed(1).replace(/\.0$/, "")
+        const formatted =
+          scaled >= 10 ? Math.round(scaled).toString() : scaled.toFixed(1).replace(/\.0$/, "")
         return sign + formatted + unit.suffix
       }
     }
@@ -569,7 +582,10 @@
     if (!snapshot || typeof snapshot !== "object") return
     const usage = dashboardBreakdownEntries(snapshot.usageBreakdown || snapshot.usage_breakdown)
     const credits = dashboardBreakdownEntries(
-      snapshot.dailyBreakdown || snapshot.daily_breakdown || snapshot.creditHistory || snapshot.credit_history
+      snapshot.dailyBreakdown ||
+        snapshot.daily_breakdown ||
+        snapshot.creditHistory ||
+        snapshot.credit_history
     )
 
     const appendTotal = (label, entries) => {
@@ -586,12 +602,14 @@
     const remaining = readNumber(snapshot.creditsRemaining ?? snapshot.credits_remaining)
     if (remaining !== null && !lines.find((line) => line.label === "Credits")) {
       const limit = Math.max(1000, remaining)
-      lines.push(ctx.line.progress({
-        label: "Credits",
-        used: Math.max(0, limit - remaining),
-        limit: limit,
-        format: { kind: "count", suffix: "credits" },
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Credits",
+          used: Math.max(0, limit - remaining),
+          limit: limit,
+          format: { kind: "count", suffix: "credits" },
+        })
+      )
     }
   }
 
@@ -599,17 +617,21 @@
     const tokens = Number(dayEntry && dayEntry.totalTokens) || 0
     const cost = usageCostUsd(dayEntry)
     if (tokens > 0) {
-      lines.push(ctx.line.text({
-        label: label,
-        value: costAndTokensLabel({ tokens: tokens, costUSD: cost })
-      }))
+      lines.push(
+        ctx.line.text({
+          label: label,
+          value: costAndTokensLabel({ tokens: tokens, costUSD: cost }),
+        })
+      )
       return
     }
 
-    lines.push(ctx.line.text({
-      label: label,
-      value: costAndTokensLabel({ tokens: 0, costUSD: 0 }, { includeZeroTokens: true })
-    }))
+    lines.push(
+      ctx.line.text({
+        label: label,
+        value: costAndTokensLabel({ tokens: 0, costUSD: 0 }, { includeZeroTokens: true }),
+      })
+    )
   }
 
   function probeWithAuthState(ctx, authState) {
@@ -621,7 +643,9 @@
       const accountId = auth.tokens.account_id
 
       if (needsRefresh(ctx, auth, nowMs)) {
-        ctx.host.log.info("token needs refresh (age > " + (REFRESH_AGE_MS / 1000 / 60 / 60 / 24) + " days)")
+        ctx.host.log.info(
+          "token needs refresh (age > " + REFRESH_AGE_MS / 1000 / 60 / 60 / 24 + " days)"
+        )
         const refreshed = refreshToken(ctx, authState)
         if (refreshed) {
           accessToken = refreshed
@@ -678,7 +702,8 @@
       const nowSec = Math.floor(Date.now() / 1000)
       const rateLimit = data.rate_limit || null
       const primaryWindow = rateLimit && rateLimit.primary_window ? rateLimit.primary_window : null
-      const secondaryWindow = rateLimit && rateLimit.secondary_window ? rateLimit.secondary_window : null
+      const secondaryWindow =
+        rateLimit && rateLimit.secondary_window ? rateLimit.secondary_window : null
       const reviewWindow =
         data.code_review_rate_limit && data.code_review_rate_limit.primary_window
           ? data.code_review_rate_limit.primary_window
@@ -688,46 +713,60 @@
       const headerSecondary = readPercent(resp.headers["x-codex-secondary-used-percent"])
 
       if (headerPrimary !== null) {
-        lines.push(ctx.line.progress({
-          label: "Session",
-          used: headerPrimary,
-          limit: 100,
-          format: { kind: "percent" },
-          resetsAt: getResetsAtIso(ctx, nowSec, primaryWindow),
-          periodDurationMs: PERIOD_SESSION_MS
-        }))
-      }
-      if (headerSecondary !== null) {
-        lines.push(ctx.line.progress({
-          label: "Weekly",
-          used: headerSecondary,
-          limit: 100,
-          format: { kind: "percent" },
-          resetsAt: getResetsAtIso(ctx, nowSec, secondaryWindow),
-          periodDurationMs: PERIOD_WEEKLY_MS
-        }))
-      }
-
-      if (lines.length === 0 && data.rate_limit) {
-        if (data.rate_limit.primary_window && typeof data.rate_limit.primary_window.used_percent === "number") {
-          lines.push(ctx.line.progress({
+        lines.push(
+          ctx.line.progress({
             label: "Session",
-            used: data.rate_limit.primary_window.used_percent,
+            used: headerPrimary,
             limit: 100,
             format: { kind: "percent" },
             resetsAt: getResetsAtIso(ctx, nowSec, primaryWindow),
-            periodDurationMs: PERIOD_SESSION_MS
-          }))
-        }
-        if (data.rate_limit.secondary_window && typeof data.rate_limit.secondary_window.used_percent === "number") {
-          lines.push(ctx.line.progress({
+            periodDurationMs: PERIOD_SESSION_MS,
+          })
+        )
+      }
+      if (headerSecondary !== null) {
+        lines.push(
+          ctx.line.progress({
             label: "Weekly",
-            used: data.rate_limit.secondary_window.used_percent,
+            used: headerSecondary,
             limit: 100,
             format: { kind: "percent" },
             resetsAt: getResetsAtIso(ctx, nowSec, secondaryWindow),
-            periodDurationMs: PERIOD_WEEKLY_MS
-          }))
+            periodDurationMs: PERIOD_WEEKLY_MS,
+          })
+        )
+      }
+
+      if (lines.length === 0 && data.rate_limit) {
+        if (
+          data.rate_limit.primary_window &&
+          typeof data.rate_limit.primary_window.used_percent === "number"
+        ) {
+          lines.push(
+            ctx.line.progress({
+              label: "Session",
+              used: data.rate_limit.primary_window.used_percent,
+              limit: 100,
+              format: { kind: "percent" },
+              resetsAt: getResetsAtIso(ctx, nowSec, primaryWindow),
+              periodDurationMs: PERIOD_SESSION_MS,
+            })
+          )
+        }
+        if (
+          data.rate_limit.secondary_window &&
+          typeof data.rate_limit.secondary_window.used_percent === "number"
+        ) {
+          lines.push(
+            ctx.line.progress({
+              label: "Weekly",
+              used: data.rate_limit.secondary_window.used_percent,
+              limit: 100,
+              format: { kind: "percent" },
+              resetsAt: getResetsAtIso(ctx, nowSec, secondaryWindow),
+              periodDurationMs: PERIOD_WEEKLY_MS,
+            })
+          )
         }
       }
 
@@ -739,28 +778,34 @@
           if (!shortName) shortName = name || "Model"
           const rl = entry.rate_limit
           if (rl.primary_window && typeof rl.primary_window.used_percent === "number") {
-            lines.push(ctx.line.progress({
-              label: shortName,
-              used: rl.primary_window.used_percent,
-              limit: 100,
-              format: { kind: "percent" },
-              resetsAt: getResetsAtIso(ctx, nowSec, rl.primary_window),
-              periodDurationMs: typeof rl.primary_window.limit_window_seconds === "number"
-                ? rl.primary_window.limit_window_seconds * 1000
-                : PERIOD_SESSION_MS
-            }))
+            lines.push(
+              ctx.line.progress({
+                label: shortName,
+                used: rl.primary_window.used_percent,
+                limit: 100,
+                format: { kind: "percent" },
+                resetsAt: getResetsAtIso(ctx, nowSec, rl.primary_window),
+                periodDurationMs:
+                  typeof rl.primary_window.limit_window_seconds === "number"
+                    ? rl.primary_window.limit_window_seconds * 1000
+                    : PERIOD_SESSION_MS,
+              })
+            )
           }
           if (rl.secondary_window && typeof rl.secondary_window.used_percent === "number") {
-            lines.push(ctx.line.progress({
-              label: shortName + " Weekly",
-              used: rl.secondary_window.used_percent,
-              limit: 100,
-              format: { kind: "percent" },
-              resetsAt: getResetsAtIso(ctx, nowSec, rl.secondary_window),
-              periodDurationMs: typeof rl.secondary_window.limit_window_seconds === "number"
-                ? rl.secondary_window.limit_window_seconds * 1000
-                : PERIOD_WEEKLY_MS
-            }))
+            lines.push(
+              ctx.line.progress({
+                label: shortName + " Weekly",
+                used: rl.secondary_window.used_percent,
+                limit: 100,
+                format: { kind: "percent" },
+                resetsAt: getResetsAtIso(ctx, nowSec, rl.secondary_window),
+                periodDurationMs:
+                  typeof rl.secondary_window.limit_window_seconds === "number"
+                    ? rl.secondary_window.limit_window_seconds * 1000
+                    : PERIOD_WEEKLY_MS,
+              })
+            )
           }
         }
       }
@@ -768,31 +813,32 @@
       if (reviewWindow) {
         const used = reviewWindow.used_percent
         if (typeof used === "number") {
-          lines.push(ctx.line.progress({
-            label: "Reviews",
-            used: used,
-            limit: 100,
-            format: { kind: "percent" },
-            resetsAt: getResetsAtIso(ctx, nowSec, reviewWindow),
-            periodDurationMs: PERIOD_WEEKLY_MS // code_review_rate_limit is a 7-day window
-          }))
+          lines.push(
+            ctx.line.progress({
+              label: "Reviews",
+              used: used,
+              limit: 100,
+              format: { kind: "percent" },
+              resetsAt: getResetsAtIso(ctx, nowSec, reviewWindow),
+              periodDurationMs: PERIOD_WEEKLY_MS, // code_review_rate_limit is a 7-day window
+            })
+          )
         }
       }
 
-      const creditsBalance = resp.headers["x-codex-credits-balance"]
-      const creditsHeader = readNumber(creditsBalance)
-      const creditsData = data.credits ? readNumber(data.credits.balance) : null
-      const creditsRemaining = creditsHeader ?? creditsData
+      const creditsRemaining = readCreditsRemaining(resp, data)
       if (creditsRemaining !== null) {
         const remaining = creditsRemaining
         const limit = 1000
         const used = Math.max(0, Math.min(limit, limit - remaining))
-        lines.push(ctx.line.progress({
-          label: "Credits",
-          used: used,
-          limit: limit,
-          format: { kind: "count", suffix: "credits" },
-        }))
+        lines.push(
+          ctx.line.progress({
+            label: "Credits",
+            used: used,
+            limit: limit,
+            format: { kind: "count", suffix: "credits" },
+          })
+        )
       }
 
       let plan = null
@@ -851,10 +897,15 @@
         }
 
         if (totalTokens > 0) {
-          lines.push(ctx.line.text({
-            label: "Last 30 Days",
-            value: costAndTokensLabel({ tokens: totalTokens, costUSD: hasCost ? totalCostNanos / 1e9 : null })
-          }))
+          lines.push(
+            ctx.line.text({
+              label: "Last 30 Days",
+              value: costAndTokensLabel({
+                tokens: totalTokens,
+                costUSD: hasCost ? totalCostNanos / 1e9 : null,
+              }),
+            })
+          )
         }
       }
 

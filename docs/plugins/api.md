@@ -6,12 +6,12 @@ This document describes the host APIs available to plugins via the `ctx` object 
 
 ```typescript
 type ProbeContext = {
-  nowIso: string              // Current UTC time (ISO 8601)
+  nowIso: string // Current UTC time (ISO 8601)
   app: {
-    version: string           // App version
-    platform: string          // OS platform (e.g., "macos")
-    appDataDir: string        // App data directory
-    pluginDataDir: string     // Plugin-specific data dir (auto-created)
+    version: string // App version
+    platform: string // OS platform (e.g., "macos")
+    appDataDir: string // App data directory
+    pluginDataDir: string // Plugin-specific data dir (auto-created)
   }
   host: HostApi
 }
@@ -198,8 +198,8 @@ try {
     method: "GET",
     url: "https://api.example.com/usage",
     headers: {
-      "Authorization": "Bearer " + token,
-      "Accept": "application/json",
+      Authorization: "Bearer " + token,
+      Accept: "application/json",
     },
     timeoutMs: 5000,
   })
@@ -470,8 +470,8 @@ Helper functions for formatting values.
 Capitalizes a plan name string.
 
 ```javascript
-ctx.fmt.planLabel("pro")        // "Pro"
-ctx.fmt.planLabel("team_plan")  // "Team_plan"
+ctx.fmt.planLabel("pro") // "Pro"
+ctx.fmt.planLabel("team_plan") // "Team_plan"
 ```
 
 ### `ctx.fmt.resetIn(seconds)`
@@ -479,10 +479,10 @@ ctx.fmt.planLabel("team_plan")  // "Team_plan"
 Formats seconds until reset as human-readable duration.
 
 ```javascript
-ctx.fmt.resetIn(180000)  // "2d 2h"
-ctx.fmt.resetIn(7200)    // "2h 0m"
-ctx.fmt.resetIn(300)     // "5m"
-ctx.fmt.resetIn(30)      // "<1m"
+ctx.fmt.resetIn(180000) // "2d 2h"
+ctx.fmt.resetIn(7200) // "2h 0m"
+ctx.fmt.resetIn(300) // "5m"
+ctx.fmt.resetIn(30) // "<1m"
 ```
 
 ### `ctx.fmt.dollars(cents)`
@@ -490,8 +490,8 @@ ctx.fmt.resetIn(30)      // "<1m"
 Converts cents to dollars.
 
 ```javascript
-ctx.fmt.dollars(1234)  // 12.34
-ctx.fmt.dollars(500)   // 5
+ctx.fmt.dollars(1234) // 12.34
+ctx.fmt.dollars(500) // 5
 ```
 
 ### `ctx.fmt.date(unixMs)`
@@ -499,7 +499,7 @@ ctx.fmt.dollars(500)   // 5
 Formats Unix milliseconds as short date.
 
 ```javascript
-ctx.fmt.date(1704067200000)  // "Jan 1"
+ctx.fmt.date(1704067200000) // "Jan 1"
 ```
 
 ## Utilities
@@ -541,10 +541,10 @@ host.ccusage.query(opts: {
   | { status: "runner_failed" }
 ```
 
-Queries local token usage via provider-specific ccusage CLIs:
+Queries local token usage via provider-focused ccusage commands:
 
-- Claude: [`ccusage`](https://github.com/ryoppippi/ccusage)
-- Codex: [`@ccusage/codex`](https://www.npmjs.com/package/@ccusage/codex)
+- Claude: [`ccusage claude daily`](https://github.com/ryoppippi/ccusage)
+- Codex: [`ccusage codex daily`](https://github.com/ryoppippi/ccusage)
 
 Returns a status envelope:
 
@@ -554,8 +554,10 @@ Returns a status envelope:
 
 ### Behavior
 
-- **Runtime runners**: Executes pinned `ccusage@18.0.11` (Claude) or `@ccusage/codex@18.0.11` (Codex) via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
+- **Runtime runners**: Executes pinned `ccusage@20.0.2` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
 - **Provider-aware**: Resolves provider from `opts.provider` or plugin id (`claude`/`codex`)
+- **Focused commands**: Uses `ccusage claude daily` or `ccusage codex daily`; it intentionally does not use `ccusage daily` because that aggregates all detected agents
+- **Legacy fallback**: If `ccusage@20.0.2` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude or `@ccusage/codex@18.0.11` for Codex
 - **No provider API calls**: Usage is computed from local JSONL session files; the host does not call Claude/Codex (or other provider) APIs, but package runners may contact a package registry to download the `ccusage` CLI if it is not already available locally
 - **Graceful degradation**: returns `no_runner` when no runner exists, `runner_failed` when execution fails
 - **Pricing**: Uses ccusage's built-in LiteLLM pricing data
@@ -566,17 +568,17 @@ The host normalizes only the top-level shape to `{ daily: [...] }`. Inner day fi
 
 Commonly observed fields include:
 
-| Property             | Type            | Notes |
-| -------------------- | --------------- | ----- |
-| `date`               | `string`        | Date label from CLI output (provider/locale-dependent) |
-| `inputTokens`        | `number`        | Present in Claude and Codex |
-| `outputTokens`       | `number`        | Present in Claude and Codex |
-| `cacheCreationTokens`| `number`        | Claude field |
-| `cacheReadTokens`    | `number`        | Claude field |
-| `cachedInputTokens`  | `number`        | Codex field |
-| `totalTokens`        | `number`        | Present in current Claude/Codex outputs |
-| `totalCost`          | `number \| null`| Claude cost field |
-| `costUSD`            | `number`        | Codex cost field |
+| Property              | Type             | Notes                                                  |
+| --------------------- | ---------------- | ------------------------------------------------------ |
+| `date`                | `string`         | Date label from CLI output (provider/locale-dependent) |
+| `inputTokens`         | `number`         | Present in Claude and Codex                            |
+| `outputTokens`        | `number`         | Present in Claude and Codex                            |
+| `cacheCreationTokens` | `number`         | Claude field                                           |
+| `cacheReadTokens`     | `number`         | Claude field                                           |
+| `cachedInputTokens`   | `number`         | Codex field                                            |
+| `totalTokens`         | `number`         | Present in current Claude/Codex outputs                |
+| `totalCost`           | `number \| null` | Claude cost field                                      |
+| `costUSD`             | `number`         | Codex cost field                                       |
 
 ### Example
 
@@ -586,7 +588,9 @@ if (result.status === "ok") {
   for (var i = 0; i < result.data.daily.length; i++) {
     var day = result.data.daily[i]
     var cost = day.totalCost != null ? day.totalCost : day.costUSD
-    ctx.host.log.info(day.date + ": " + (day.totalTokens || 0) + " tokens, $" + (cost != null ? cost : "n/a"))
+    ctx.host.log.info(
+      day.date + ": " + (day.totalTokens || 0) + " tokens, $" + (cost != null ? cost : "n/a")
+    )
   }
 } else if (result.status === "no_runner") {
   ctx.host.log.warn("ccusage unavailable: no package runner found")
