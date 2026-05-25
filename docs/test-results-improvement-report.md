@@ -1,100 +1,96 @@
 # Test Results Improvement Report
 
-Date: 2026-05-24
+Date: 2026-05-24 (updated)
+
+## Executive Summary
+
+- Test count improved materially: 84 test files, 1317 tests (up from 77 files / 1162 tests).
+- Functions coverage now exceeds the 90% release gate.
+- Lines coverage is almost there but still fails by 0.01% in the current strict run.
+- Statements (86.69%) and Branches (80.20%) remain below 90%, primarily due to low coverage in plugin files (opencode, opencode-go, codebuff, etc.).
+- 7 new test files added, 3 existing test files expanded. 84 test files, 1317 tests (up from 77 files / 1162 tests).
+- Alpha 3 is still not release-ready under the current strict coverage gate.
 
 ## Current State
 
-`bun run test:coverage` is useful but not release-actionable enough.
+Latest release-prep result:
 
-Latest result:
+- Test execution: passed, 84 files / 1317 tests.
+- Coverage gate: **FAILED**.
+- Statements: 86.69% / required 90% (+1.39% from 85.30%).
+- Branches: 80.20% / required 90% (+1.53% from 78.67%).
+- Functions: 93.40% / required 90% (+2.44% from 90.96%).
+- Lines: 89.99% / required 90% (+1.34% from 88.65%).
 
-- Test execution: passed, 77 files / 1162 tests.
-- Coverage gate: failed.
-- Statements: 85.3% / required 90%.
-- Branches: 78.67% / required 90%.
-- Functions: 90.96% / required 90%.
-- Lines: 88.65% / required 90%.
+Important distinction: the suite is behavior-green, but release-blocked by coverage policy. Functions pass; lines are 0.01% short; statements and branches are still materially short.
 
-The important distinction is hidden in the long coverage table: the suite is behavior-green, but release-blocked by global coverage thresholds.
+## Changes Made
 
-## Problems
+### New Test Files Added
 
-1. The script name implies a single test result, but the output mixes test pass/fail and coverage policy failure.
-2. Coverage failure is global, so the output does not immediately show the best files to fix first.
-3. New plugin/provider work can lower coverage even when focused tests are good, because low-coverage legacy files are included in the same aggregate.
-4. There is no compact machine-readable summary committed or printed at the end.
-5. Release prep currently needs manual interpretation of a large table.
+| File                                                      | Tests | What it covers                                                                                                                                                                                                                               |
+| --------------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/error-utils.test.ts`                             | 15    | `getErrorMessage` for strings, Error instances, objects, null/undefined, edge cases                                                                                                                                                          |
+| `src/lib/provider-settings.test.ts`                       | 70    | `getProviderSettingsDefinition`, `normalizeProviderConfigs`, `updateProviderConfig`, `setProviderSecretMetadata`, `clearProviderSecretMetadata`, `hasProviderSecret`, `getProviderSourceLabel`, `loadProviderConfigs`, `saveProviderConfigs` |
+| `src/lib/codex-accounts.test.ts`                          | 3     | `listCodexAccountProfiles`, `importCurrentCodexAccountProfile`, `deleteCodexAccountProfile` (invoke wrappers)                                                                                                                                |
+| `src/lib/provider-secrets.test.ts`                        | 2     | `setProviderSecret`, `deleteProviderSecret` (invoke wrappers)                                                                                                                                                                                |
+| `src/lib/panel-window.test.ts`                            | 2     | `showPanelForView`, `syncPanelView` (invoke wrappers)                                                                                                                                                                                        |
+| `src/components/settings/codex-accounts-section.test.tsx` | 15    | Profile loading, import, selection, deletion, error states, stale profile cleanup                                                                                                                                                            |
+| `src/hooks/app/use-provider-statuses.test.ts`             | 7     | Status fetching, eligible plugin filtering, null handling, interval registration                                                                                                                                                             |
 
-## Recommended Changes
+### Expanded Test Files
 
-### 1. Add a Coverage Summary Script
+| File                                                 | Tests added | What was added                                                                                                                              |
+| ---------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/provider-status.test.ts`                    | +23         | `hasProviderStatusIssue`, full `providerStatusLabel` branches, `normalizeStatusPageUrl` edge cases, `fetchProviderStatus` with mocked fetch |
+| `src/lib/utils.test.ts`                              | +7          | `formatCountNumber`, `formatFixedPrecisionNumber` including non-finite edge cases                                                           |
+| `src/lib/settings.test.ts`                           | +4          | `loadTimeFormatMode`, `saveTimeFormatMode` with invalid fallback                                                                            |
+| `src/hooks/app/use-settings-display-actions.test.ts` | +4          | `handleTimeFormatModeChange`, `handleMenubarIconStyleChange`, error logging                                                                 |
 
-Create `scripts/coverage-summary.mjs` that reads `coverage/lcov.info` or JSON coverage output and prints:
+### Per-File Coverage Improvements
 
-- tests passed/failed
-- threshold pass/fail
-- current global coverage
-- distance to threshold
-- lowest 10 files by lines/statements/branches
-- files changed in the current branch with their coverage
+| File                                                 | Before | After  | Notes                                                   |
+| ---------------------------------------------------- | ------ | ------ | ------------------------------------------------------- |
+| `src/lib/error-utils.ts`                             | 54.5%  | ~100%  | All branches and edge cases tested                      |
+| `src/lib/provider-status.ts`                         | 44.4%  | ~100%  | Including fetch, indicator normalization, null handling |
+| `src/lib/provider-settings.ts`                       | 44.6%  | 98.85% | 70 tests covering all exported functions                |
+| `src/lib/codex-accounts.ts`                          | 33.3%  | ~100%  | Simple invoke wrapper functions                         |
+| `src/lib/provider-secrets.ts`                        | 0%     | ~100%  | Simple invoke wrapper functions                         |
+| `src/lib/panel-window.ts`                            | 50%    | ~100%  | Simple invoke wrapper functions                         |
+| `src/lib/settings.ts`                                | 95.45% | 98.86% | Added time format mode load/save/fallback               |
+| `src/hooks/app/use-provider-statuses.ts`             | 75%    | ~95%   | Hook logic, eligibility, error paths                    |
+| `src/hooks/app/use-settings-display-actions.ts`      | 61.1%  | ~86%   | Time format and menubar icon handlers                   |
+| `src/components/settings/codex-accounts-section.tsx` | 33.3%  | 95.71% | Full management UI coverage                             |
+| `src/lib/utils.ts`                                   | 93.75% | ~100%  | formatCountNumber/fixedPrecisionNumber                  |
 
-This makes the next action obvious.
+## Remaining Gap Analysis
 
-### 2. Emit JSON Coverage
+The remaining gap to 90% for statements (3.31% = 340 statements), branches (9.80% = 842 branches), and lines (0.01% = 1 line) is concentrated in plugin files:
 
-Add `json-summary` to the Vitest coverage reporters:
+| Plugin             | Statements | Branches | Uncovered statements (est.) |
+| ------------------ | ---------- | -------- | --------------------------- |
+| opencode           | 63.5%      | 59.34%   | ~110                        |
+| opencode-go        | 68.6%      | 62.11%   | ~95                         |
+| codebuff           | 74.26%     | 74.41%   | ~40                         |
+| alibaba            | 77.46%     | 75.0%    | ~35                         |
+| others (15+ files) | varies     | varies   | ~60                         |
 
-```ts
-reporter: ["text", "html", "lcov", "json-summary"]
-```
+These are large IIFE-based JS files where each test requires understanding the provider's API contract. The source code path tests (non-plugin) in `src/` are at 97.16% statements, 93.72% branches — already well above 90%.
 
-Then `coverage/coverage-summary.json` can drive scripts, CI annotations, and release reports without parsing terminal output.
+## Recommendations
 
-### 3. Split Test Commands By Intent
+1. Keep the strict 90% release gate unchanged unless the release policy is explicitly changed.
+2. Add a very small line-coverage test first to remove the 0.01% line blocker.
+3. To reach 90% statements: add focused tests for the top 5 plugin files (opencode, opencode-go, codebuff, alibaba, etc.).
+4. Branch coverage will need explicit edge-case tests; it will not close from happy-path plugin tests alone.
+5. The `src/lib` directory is now at 97.16% statements, demonstrating the core library is well-tested.
 
-Keep the release gate strict, but add clearer scripts:
+## Rollout Progress
 
-```json
-"test:all": "vitest run",
-"test:coverage:report": "USAGEBAR_COVERAGE_REPORT_ONLY=1 vitest run --coverage.enabled",
-"test:coverage:gate": "vitest run --coverage.enabled",
-"test:release": "bun run check && bun run test:coverage:gate && bun run release:check"
-```
-
-On Windows PowerShell, use a cross-platform env helper or a small Node wrapper instead of shell-specific env syntax.
-
-### 4. Track Changed-File Coverage Separately
-
-Do not weaken the global gate. Add a non-blocking changed-file report so a PR can say:
-
-- changed files covered well
-- global legacy debt still below threshold
-- exact debt owners listed
-
-This prevents new work from being blamed vaguely for old aggregate debt.
-
-### 5. Add Coverage Debt Targets
-
-Based on the latest output, first targets should be:
-
-- `plugins/opencode/plugin.js`
-- `plugins/opencode-go/plugin.js`
-- `src/components/settings/provider-inputs-section.tsx`
-- `src/lib/provider-settings.ts`
-- `src/hooks/app/use-settings-tray-actions.ts`
-- `src/lib/provider-status.ts`
-
-These are low enough to move the global numbers faster than adding tests to already healthy files.
-
-## Release Policy Recommendation
-
-For Alpha 3, keep `bun run test:coverage` as a blocker because repo policy says coverage minimums must pass before PR/release. Do not lower thresholds during release prep.
-
-The practical next slice is a coverage-focused PR:
-
-1. Add `json-summary` reporter.
-2. Add `scripts/coverage-summary.mjs`.
-3. Add targeted tests for the six debt files above.
-4. Re-run `bun run test:coverage`.
-5. Only then tag Alpha 3.
-
+- [x] Step 1-3: Tooling (json-summary reporter, coverage-summary.mjs, run-coverage-report.mjs) — already in place from prior work.
+- [x] Step 4: Package scripts in package.json — already in place.
+- [x] Step 5: Add `test:coverage:report` and `test:coverage:summary`.
+- [x] Steps 6-7: Targeted tests for priority debt files (provider-settings, provider-status, error-utils, codex-accounts-section, etc.).
+- [x] Step 8: Reached 90% functions.
+- [ ] Future: Close the remaining 0.01% line coverage gap.
+- [ ] Future: Plugin file statement/branch coverage to close remaining gap.
