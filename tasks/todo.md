@@ -82,6 +82,37 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun prettier --check plugins\opencode-go\plugin.js plugins\opencode-go\plugin.json plugins\opencode-go\plugin.test.js src-tauri\resources\bundled_plugins\opencode-go\plugin.js src-tauri\resources\bundled_plugins\opencode-go\plugin.json src-tauri\resources\bundled_plugins\opencode-go\plugin.test.js tasks\todo.md` -> passed.
 - `git --no-pager diff --check -- plugins\opencode-go src-tauri\resources\bundled_plugins\opencode-go tasks\todo.md` -> passed; only expected CRLF conversion warnings were reported.
 
+# OpenCode Free dashboard bar
+
+## Executive Summary
+
+- Show OpenCode Free usage on the dashboard when the provider reports the Free plan.
+- Keep paid OpenCode Go dashboard behavior unchanged.
+- Verify the manifest contract and plugin tests.
+
+## Acceptance Criteria
+
+- [x] OpenCode Free progress line is declared as an overview line.
+- [x] OpenCode paid `5h` progress line remains an overview line.
+- [x] Bundled OpenCode plugin manifest is synced.
+- [x] Focused tests and syntax checks pass.
+
+## Plan
+
+- [x] Add `Free` overview metadata to `plugins/opencode-go/plugin.json`.
+- [x] Update the OpenCode Go manifest regression test.
+- [x] Sync bundled plugin resources.
+- [x] Run focused verification and record results.
+
+## Verification Notes
+
+- Added `Free` as an overview progress line in `plugins/opencode-go/plugin.json`; existing paid `5h` overview line remains unchanged.
+- Updated `plugins/opencode-go/plugin.test.js` manifest regression coverage.
+- `bun run bundle:plugins` -> bundled 32 plugins including `opencode-go`; bundled manifest contains the `Free` overview line.
+- `bun run test -- plugins\opencode-go\plugin.test.js --run` -> 1 file passed, 20 tests passed.
+- `node --check plugins\opencode-go\plugin.js` -> passed.
+- `bun prettier --check plugins\opencode-go\plugin.json plugins\opencode-go\plugin.test.js src-tauri\resources\bundled_plugins\opencode-go\plugin.json tasks\todo.md` -> passed.
+
 # Alpha 4 competitor plan: upstream reliability ports
 
 ## Executive Summary

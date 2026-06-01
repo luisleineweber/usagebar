@@ -29,6 +29,12 @@
       "primaryOrder": 1
     },
     {
+      "type": "progress",
+      "label": "Free",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
       "type": "text",
       "label": "Zen balance",
       "scope": "detail"
@@ -61,8 +67,6 @@
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "opencode.ai"
-    ]
+    "httpDomains": ["opencode.ai"]
   }
 }
