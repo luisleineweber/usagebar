@@ -1,94 +1,81 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react"
 import {
   AlertCircle,
   CheckCircle2,
   ClipboardCopy,
+  ExternalLink,
   KeyRound,
   RefreshCw,
   ShieldCheck,
   Trash2,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { CodexAccountsSection } from "@/components/settings/codex-accounts-section";
-import type { PluginState } from "@/hooks/app/types";
-import type { PluginMeta } from "@/lib/plugin-types";
-import type { ProviderConfig } from "@/lib/provider-settings";
-import { getErrorMessage } from "@/lib/error-utils";
+} from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { CodexAccountsSection } from "@/components/settings/codex-accounts-section"
+import type { PluginState } from "@/hooks/app/types"
+import { captureProviderCookieHeader } from "@/lib/guided-cookie-login"
+import type { PluginMeta } from "@/lib/plugin-types"
+import type { ProviderConfig } from "@/lib/provider-settings"
+import { getErrorMessage } from "@/lib/error-utils"
 import {
   getProviderSettingsDefinition,
   getProviderSourceLabel,
   hasProviderSecret,
   type ProviderSourceMode,
-} from "@/lib/provider-settings";
-import { cn } from "@/lib/utils";
+} from "@/lib/provider-settings"
+import { cn } from "@/lib/utils"
 
 export type ProviderSettingsDetailProps = {
-  plugin: PluginMeta;
-  enabled: boolean;
-  config?: ProviderConfig;
-  state?: PluginState;
-  onEnabledChange: (enabled: boolean) => void;
-  onRetry?: () => void;
-  onOpenInTray?: () => void;
-  onConfigChange?: (
-    providerId: string,
-    patch: Partial<ProviderConfig>,
-  ) => Promise<void>;
-  onSecretSave?: (
-    providerId: string,
-    secretKey: string,
-    value: string,
-  ) => Promise<void>;
-  onSecretDelete?: (providerId: string, secretKey: string) => Promise<void>;
-};
+  plugin: PluginMeta
+  enabled: boolean
+  config?: ProviderConfig
+  state?: PluginState
+  onEnabledChange: (enabled: boolean) => void
+  onRetry?: () => void
+  onOpenInTray?: () => void
+  onConfigChange?: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
+  onSecretSave?: (providerId: string, secretKey: string, value: string) => Promise<void>
+  onSecretDelete?: (providerId: string, secretKey: string) => Promise<void>
+}
 
 function formatTimestamp(timestamp: number | null | undefined): string | null {
-  if (!timestamp || !Number.isFinite(timestamp)) return null;
+  if (!timestamp || !Number.isFinite(timestamp)) return null
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(timestamp);
+  }).format(timestamp)
 }
 
 function getProbeStatus(
   plugin: PluginMeta,
   state: PluginState | undefined,
-  enabled: boolean,
+  enabled: boolean
 ): { tone: "muted" | "info" | "error" | "success"; label: string } {
   if (plugin.supportState === "comingSoonOnWindows") {
     return {
       tone: "muted",
       label: plugin.supportMessage ?? "Coming soon on Windows.",
-    };
+    }
   }
-  if (state?.loading)
-    return { tone: "info", label: "Refreshing provider status..." };
-  if (state?.error) return { tone: "error", label: state.error };
-  if (state?.data)
-    return { tone: "success", label: "Provider responded successfully." };
+  if (state?.loading) return { tone: "info", label: "Refreshing provider status..." }
+  if (state?.error) return { tone: "error", label: state.error }
+  if (state?.data) return { tone: "success", label: "Provider responded successfully." }
   // No probe has run yet — give an actionable hint.
   if (!enabled)
     return {
       tone: "muted",
       label: "Enable this provider, then click Retry to run the first check.",
-    };
+    }
   return {
     tone: "muted",
     label: "Click Retry to run the first check for this provider.",
-  };
+  }
 }
 
-function ProviderIconMask({
-  iconUrl,
-  brandColor,
-}: {
-  iconUrl: string;
-  brandColor?: string;
-}) {
+function ProviderIconMask({ iconUrl, brandColor }: { iconUrl: string; brandColor?: string }) {
   return (
     <span
       aria-hidden
@@ -105,7 +92,7 @@ function ProviderIconMask({
         maskPosition: "center",
       }}
     />
-  );
+  )
 }
 
 export function ProviderSettingsDetail({
@@ -120,142 +107,153 @@ export function ProviderSettingsDetail({
   onSecretSave,
   onSecretDelete,
 }: ProviderSettingsDetailProps) {
-  const definition = getProviderSettingsDefinition(plugin.id);
-  const probeStatus = getProbeStatus(plugin, state, enabled);
-  const isConnected = Boolean(state?.data);
-  const lastSuccessText = formatTimestamp(state?.lastSuccessAt ?? null);
-  const secretKey = definition.secretField?.key;
-  const secretPresent = secretKey
-    ? hasProviderSecret(config, secretKey)
-    : false;
+  const definition = getProviderSettingsDefinition(plugin.id)
+  const probeStatus = getProbeStatus(plugin, state, enabled)
+  const isConnected = Boolean(state?.data)
+  const lastSuccessText = formatTimestamp(state?.lastSuccessAt ?? null)
+  const secretKey = definition.secretField?.key
+  const secretPresent = secretKey ? hasProviderSecret(config, secretKey) : false
   const secretUpdatedText = secretKey
     ? formatTimestamp(config?.secrets?.[secretKey]?.updatedAt ?? null)
-    : null;
-  const [workspaceDraft, setWorkspaceDraft] = useState(
-    config?.workspaceId ?? "",
-  );
-  const [secretDraft, setSecretDraft] = useState("");
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [isSavingSecret, setIsSavingSecret] = useState(false);
+    : null
+  const [workspaceDraft, setWorkspaceDraft] = useState(config?.workspaceId ?? "")
+  const [secretDraft, setSecretDraft] = useState("")
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [isSavingConfig, setIsSavingConfig] = useState(false)
+  const [isSavingSecret, setIsSavingSecret] = useState(false)
+  const [isGuidedLoginOpen, setIsGuidedLoginOpen] = useState(false)
 
   useEffect(() => {
-    setWorkspaceDraft(config?.workspaceId ?? "");
-  }, [config?.workspaceId, plugin.id]);
+    setWorkspaceDraft(config?.workspaceId ?? "")
+  }, [config?.workspaceId, plugin.id])
 
   useEffect(() => {
-    setSecretDraft("");
-    setSaveError(null);
-    setSaveMessage(null);
-  }, [plugin.id]);
+    setSecretDraft("")
+    setSaveError(null)
+    setSaveMessage(null)
+  }, [plugin.id])
 
-  const sourceValue = (config?.source ?? "manual") as ProviderSourceMode;
-  const statusBadgeVariant =
-    probeStatus.tone === "success" ? "default" : "outline";
-  const showManualFields =
-    definition.mode === "editable" && sourceValue === "manual";
+  const sourceValue = (config?.source ?? "manual") as ProviderSourceMode
+  const statusBadgeVariant = probeStatus.tone === "success" ? "default" : "outline"
+  const showManualFields = definition.mode === "editable" && sourceValue === "manual"
   const baseSetupHint = isConnected
     ? definition.statusHint
-    : (definition.connectHint ?? definition.statusHint);
+    : (definition.connectHint ?? definition.statusHint)
   const setupHint =
     plugin.supportState === "comingSoonOnWindows"
       ? (plugin.supportMessage ?? "Coming soon on Windows.")
       : plugin.supportState === "experimental" && plugin.supportMessage
         ? `${plugin.supportMessage} ${baseSetupHint}`
-        : baseSetupHint;
+        : baseSetupHint
   const hasEditableSettings = Boolean(
-    definition.sourceOptions || definition.secretField || definition.textField,
-  );
-  const groupClass = "border-t border-border/55 py-4";
-  const groupTitleClass =
-    "text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground";
+    definition.sourceOptions || definition.secretField || definition.textField
+  )
+  const groupClass = "border-t border-border/55 py-4"
+  const groupTitleClass = "text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
 
   const handleSourceChange = async (value: string) => {
-    if (!onConfigChange) return;
-    const nextSource = value === "auto" ? "auto" : "manual";
-    setSaveError(null);
-    setSaveMessage(null);
-    setIsSavingConfig(true);
+    if (!onConfigChange) return
+    const nextSource = value === "auto" ? "auto" : "manual"
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsSavingConfig(true)
     try {
-      await onConfigChange(plugin.id, { source: nextSource });
-      setSaveMessage(
-        `Source set to ${nextSource === "manual" ? "Manual" : "Automatic"}.`,
-      );
+      await onConfigChange(plugin.id, { source: nextSource })
+      setSaveMessage(`Source set to ${nextSource === "manual" ? "Manual" : "Automatic"}.`)
     } catch (error) {
-      setSaveError(getErrorMessage(error, "Failed to save source."));
+      setSaveError(getErrorMessage(error, "Failed to save source."))
     } finally {
-      setIsSavingConfig(false);
+      setIsSavingConfig(false)
     }
-  };
+  }
 
   const handleWorkspaceSave = async () => {
-    if (!definition.textField || !onConfigChange) return;
-    setSaveError(null);
-    setSaveMessage(null);
-    setIsSavingConfig(true);
+    if (!definition.textField || !onConfigChange) return
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsSavingConfig(true)
     try {
       await onConfigChange(plugin.id, {
         workspaceId: workspaceDraft.trim() || undefined,
-      });
-      setSaveMessage("Workspace override saved.");
+      })
+      setSaveMessage("Workspace override saved.")
     } catch (error) {
-      setSaveError(getErrorMessage(error, "Failed to save workspace."));
+      setSaveError(getErrorMessage(error, "Failed to save workspace."))
     } finally {
-      setIsSavingConfig(false);
+      setIsSavingConfig(false)
     }
-  };
+  }
 
   const handleSecretSave = async () => {
-    if (!definition.secretField || !onSecretSave) return;
-    const trimmed = secretDraft.trim();
+    if (!definition.secretField || !onSecretSave) return
+    const trimmed = secretDraft.trim()
     if (!trimmed) {
-      setSaveError("Paste a cookie header before saving.");
-      setSaveMessage(null);
-      return;
+      setSaveError("Paste a cookie header before saving.")
+      setSaveMessage(null)
+      return
     }
-    setSaveError(null);
-    setSaveMessage(null);
-    setIsSavingSecret(true);
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsSavingSecret(true)
     try {
-      await onSecretSave(plugin.id, definition.secretField.key, trimmed);
-      setSecretDraft("");
-      setSaveMessage("Secret stored securely for this app.");
+      await onSecretSave(plugin.id, definition.secretField.key, trimmed)
+      setSecretDraft("")
+      setSaveMessage("Secret stored securely for this app.")
     } catch (error) {
-      setSaveError(getErrorMessage(error, "Failed to save secret."));
+      setSaveError(getErrorMessage(error, "Failed to save secret."))
     } finally {
-      setIsSavingSecret(false);
+      setIsSavingSecret(false)
     }
-  };
+  }
 
   const handleSecretDelete = async () => {
-    if (!definition.secretField || !onSecretDelete) return;
-    setSaveError(null);
-    setSaveMessage(null);
-    setIsSavingSecret(true);
+    if (!definition.secretField || !onSecretDelete) return
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsSavingSecret(true)
     try {
-      await onSecretDelete(plugin.id, definition.secretField.key);
-      setSecretDraft("");
-      setSaveMessage("Stored secret removed.");
+      await onSecretDelete(plugin.id, definition.secretField.key)
+      setSecretDraft("")
+      setSaveMessage("Stored secret removed.")
     } catch (error) {
-      setSaveError(getErrorMessage(error, "Failed to clear secret."));
+      setSaveError(getErrorMessage(error, "Failed to clear secret."))
     } finally {
-      setIsSavingSecret(false);
+      setIsSavingSecret(false)
     }
-  };
+  }
+
+  const handleGuidedCookieLogin = async () => {
+    const login = definition.guidedCookieLogin
+    if (!login || !onSecretSave) return
+
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsGuidedLoginOpen(true)
+    try {
+      const result = await captureProviderCookieHeader({
+        providerId: plugin.id,
+        windowTitle: login.windowTitle,
+        loginUrl: login.loginUrl,
+        successUrlContains: login.successUrlContains,
+        cookieUrls: login.cookieUrls,
+      })
+      await onSecretSave(plugin.id, login.secretKey, result.cookieHeader)
+      setSecretDraft("")
+      setSaveMessage(login.successMessage)
+    } catch (error) {
+      setSaveError(getErrorMessage(error, "Guided login failed."))
+    } finally {
+      setIsGuidedLoginOpen(false)
+    }
+  }
 
   return (
-    <section
-      className="flex flex-col"
-      data-testid={`provider-settings-${plugin.id}`}
-    >
+    <section className="flex flex-col" data-testid={`provider-settings-${plugin.id}`}>
       {/* Provider header */}
       <div className="border-b border-border/60 pb-5">
         <div className="flex min-w-0 items-start gap-3">
-          <ProviderIconMask
-            iconUrl={plugin.iconUrl}
-            brandColor={plugin.brandColor}
-          />
+          <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} />
           <div className="min-w-0 flex-1">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Provider configuration
@@ -278,21 +276,14 @@ export function ProviderSettingsDetail({
                 <Badge variant="outline">Experimental</Badge>
               )}
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {definition.summary}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{definition.summary}</p>
           </div>
         </div>
 
         {/* Action row separated from title to avoid cramped flex-wrap */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
           {onOpenInTray && (
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={onOpenInTray}
-            >
+            <Button type="button" variant="outline" size="xs" onClick={onOpenInTray}>
               Open in tray
             </Button>
           )}
@@ -304,9 +295,7 @@ export function ProviderSettingsDetail({
               onClick={onRetry}
               disabled={state?.loading}
             >
-              <RefreshCw
-                className={cn("size-3", state?.loading && "animate-spin")}
-              />
+              <RefreshCw className={cn("size-3", state?.loading && "animate-spin")} />
               Retry
             </Button>
           )}
@@ -364,9 +353,7 @@ export function ProviderSettingsDetail({
                 aria-label="Copy error to clipboard"
                 className="ml-auto mt-0.5 shrink-0 rounded p-1 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => {
-                  navigator.clipboard
-                    .writeText(probeStatus.label)
-                    .catch(console.error);
+                  navigator.clipboard.writeText(probeStatus.label).catch(console.error)
                 }}
               >
                 <ClipboardCopy className="size-3.5" />
@@ -395,9 +382,7 @@ export function ProviderSettingsDetail({
                   aria-label={`${plugin.name} source`}
                   className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
                   value={sourceValue}
-                  onChange={(event) =>
-                    void handleSourceChange(event.target.value)
-                  }
+                  onChange={(event) => void handleSourceChange(event.target.value)}
                   disabled={isSavingConfig}
                 >
                   {definition.sourceOptions.map((option) => (
@@ -407,17 +392,36 @@ export function ProviderSettingsDetail({
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {
-                    definition.sourceOptions.find(
-                      (option) => option.value === sourceValue,
-                    )?.hint
-                  }
+                  {definition.sourceOptions.find((option) => option.value === sourceValue)?.hint}
                 </p>
               </div>
             )}
 
             {showManualFields && definition.secretField && (
               <div className="space-y-3">
+                {definition.guidedCookieLogin && (
+                  <div className="rounded-md border border-border/55 bg-muted/25 px-3 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Guided login
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Opens a provider login window and stores only the captured Cookie header after
+                      the target usage page loads.
+                    </p>
+                    <Button
+                      type="button"
+                      size="xs"
+                      className="mt-3"
+                      onClick={() => void handleGuidedCookieLogin()}
+                      disabled={isGuidedLoginOpen || !onSecretSave}
+                    >
+                      <ExternalLink className="size-3" />
+                      {isGuidedLoginOpen
+                        ? "Waiting for login..."
+                        : definition.guidedCookieLogin.buttonLabel}
+                    </Button>
+                  </div>
+                )}
                 <div className="rounded-md border border-border/55 bg-muted/25 px-3 py-2.5">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     Secret state
@@ -428,8 +432,7 @@ export function ProviderSettingsDetail({
                       : "No secret stored"}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Secrets are stored by the app and are not shown again after
-                    saving.
+                    Secrets are stored by the app and are not shown again after saving.
                   </p>
                 </div>
                 <div>
@@ -505,27 +508,20 @@ export function ProviderSettingsDetail({
 
             {!hasEditableSettings && (
               <p className="text-sm text-muted-foreground">
-                This provider currently relies on local auto-detection and does
-                not expose editable settings yet.
+                This provider currently relies on local auto-detection and does not expose editable
+                settings yet.
               </p>
             )}
 
             {plugin.id === "codex" && (
-              <CodexAccountsSection
-                config={config}
-                onConfigChange={onConfigChange}
-              />
+              <CodexAccountsSection config={config} onConfigChange={onConfigChange} />
             )}
 
-            {saveMessage && (
-              <p className="text-xs text-primary">{saveMessage}</p>
-            )}
-            {saveError && (
-              <p className="text-xs text-destructive">{saveError}</p>
-            )}
+            {saveMessage && <p className="text-xs text-primary">{saveMessage}</p>}
+            {saveError && <p className="text-xs text-destructive">{saveError}</p>}
           </div>
         </div>
       </div>
     </section>
-  );
+  )
 }

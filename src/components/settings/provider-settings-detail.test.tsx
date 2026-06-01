@@ -1,7 +1,13 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail"
+
+const guidedLoginMock = vi.hoisted(() => vi.fn())
+
+vi.mock("@/lib/guided-cookie-login", () => ({
+  captureProviderCookieHeader: guidedLoginMock,
+}))
 
 const codexPlugin = {
   id: "codex",
@@ -48,7 +54,8 @@ const codebuffPlugin = {
   name: "Codebuff",
   iconUrl: "/codebuff.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Use a stored Codebuff API token, CODEBUFF_API_KEY, or codebuff login credentials to fetch credits and weekly rate limits.",
+  supportMessage:
+    "Windows experimental. Use a stored Codebuff API token, CODEBUFF_API_KEY, or codebuff login credentials to fetch credits and weekly rate limits.",
   lines: [],
   primaryCandidates: [],
 }
@@ -99,7 +106,8 @@ const kiloPlugin = {
   name: "Kilo",
   iconUrl: "/kilo.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Use a stored Kilo API key or KILO_API_KEY to fetch usage. CLI fallback is not wired yet.",
+  supportMessage:
+    "Windows experimental. Use a stored Kilo API key or KILO_API_KEY to fetch usage. CLI fallback is not wired yet.",
   lines: [],
   primaryCandidates: [],
 }
@@ -125,7 +133,8 @@ const zedPlugin = {
   name: "Zed",
   iconUrl: "/zed.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback.",
+  supportMessage:
+    "Windows experimental. Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback.",
   lines: [],
   primaryCandidates: [],
 }
@@ -135,7 +144,8 @@ const syntheticPlugin = {
   name: "Synthetic",
   iconUrl: "/synthetic.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Use a stored Synthetic API key or SYNTHETIC_API_KEY to fetch quota data.",
+  supportMessage:
+    "Windows experimental. Use a stored Synthetic API key or SYNTHETIC_API_KEY to fetch quota data.",
   lines: [],
   primaryCandidates: [],
 }
@@ -145,7 +155,8 @@ const augmentPlugin = {
   name: "Augment",
   iconUrl: "/augment.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Run `auggie login` for local auth detection; save an Augment Cookie header for dashboard credit usage.",
+  supportMessage:
+    "Windows experimental. Run `auggie login` for local auth detection; save an Augment Cookie header for dashboard credit usage.",
   lines: [],
   primaryCandidates: [],
 }
@@ -155,7 +166,8 @@ const alibabaPlugin = {
   name: "Alibaba Coding Plan",
   iconUrl: "/alibaba.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Save an Alibaba API key in Setup or set ALIBABA_API_KEY, then use ALIBABA_REGION if you need a non-default region.",
+  supportMessage:
+    "Windows experimental. Save an Alibaba API key in Setup or set ALIBABA_API_KEY, then use ALIBABA_REGION if you need a non-default region.",
   lines: [],
   primaryCandidates: [],
 }
@@ -165,7 +177,8 @@ const vertexAiPlugin = {
   name: "Vertex AI",
   iconUrl: "/vertex-ai.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Uses gcloud application-default credentials and Cloud Monitoring quota data.",
+  supportMessage:
+    "Windows experimental. Uses gcloud application-default credentials and Cloud Monitoring quota data.",
   lines: [],
   primaryCandidates: [],
 }
@@ -175,7 +188,8 @@ const zaiPlugin = {
   name: "Z.ai",
   iconUrl: "/zai.svg",
   supportState: "experimental" as const,
-  supportMessage: "Experimental on Windows. Save a Z.ai API key in Setup, or set ZAI_API_KEY / GLM_API_KEY before launching UsageBar.",
+  supportMessage:
+    "Experimental on Windows. Save a Z.ai API key in Setup, or set ZAI_API_KEY / GLM_API_KEY before launching UsageBar.",
   lines: [],
   primaryCandidates: [],
 }
@@ -185,7 +199,8 @@ const minimaxPlugin = {
   name: "MiniMax",
   iconUrl: "/minimax.svg",
   supportState: "experimental" as const,
-  supportMessage: "Experimental on Windows. Save a MiniMax API key in Setup, or set MINIMAX_API_KEY / MINIMAX_CN_API_KEY before launching UsageBar.",
+  supportMessage:
+    "Experimental on Windows. Save a MiniMax API key in Setup, or set MINIMAX_API_KEY / MINIMAX_CN_API_KEY before launching UsageBar.",
   lines: [],
   primaryCandidates: [],
 }
@@ -195,7 +210,8 @@ const ampPlugin = {
   name: "Amp",
   iconUrl: "/amp.svg",
   supportState: "experimental" as const,
-  supportMessage: "Windows experimental. Save an Amp API key in Setup, or run amp login so UsageBar can read local Amp credentials.",
+  supportMessage:
+    "Windows experimental. Save an Amp API key in Setup, or run amp login so UsageBar can read local Amp credentials.",
   lines: [],
   primaryCandidates: [],
 }
@@ -209,19 +225,33 @@ const antigravityPlugin = {
 }
 
 describe("ProviderSettingsDetail", () => {
+  beforeEach(() => {
+    guidedLoginMock.mockReset()
+  })
+
   it("shows connection guidance for a disconnected provider", () => {
     render(
       <ProviderSettingsDetail
         plugin={codexPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
     expect(screen.getByText("How to connect")).toBeInTheDocument()
-    expect(screen.getByText(/Install Codex CLI, sign in on this machine, then retry\./)).toBeInTheDocument()
-    expect(screen.queryByText(/copy the Cookie request header from DevTools/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Install Codex CLI, sign in on this machine, then retry\./)
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/copy the Cookie request header from DevTools/i)
+    ).not.toBeInTheDocument()
     expect(screen.getByLabelText("Codex Dashboard Cookie header")).toBeInTheDocument()
   })
 
@@ -230,7 +260,13 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={ollamaPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
@@ -246,13 +282,23 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={claudePlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Run `claude` CLI and sign in on this machine, then retry\./)).toBeInTheDocument()
-    expect(screen.queryByText(/copy the Cookie request header containing sessionKey from DevTools/i)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(/Run `claude` CLI and sign in on this machine, then retry\./)
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(/copy the Cookie request header containing sessionKey from DevTools/i)
+    ).not.toBeInTheDocument()
     expect(screen.getByLabelText("Claude Claude web Cookie header")).toBeInTheDocument()
   })
 
@@ -261,7 +307,13 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={codexPlugin}
         enabled
-        state={{ data: null, loading: true, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: true,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
@@ -296,7 +348,13 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={ollamaPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
         onSecretSave={onSecretSave}
       />
@@ -316,13 +374,25 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={ollamaPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Reads Ollama settings-page quota from a stored cookie header and can detect Cloud auth/)).toBeInTheDocument()
-    expect(screen.getByText(/Run `ollama signin` or set OLLAMA_API_KEY to confirm Cloud auth/)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Reads Ollama settings-page quota from a stored cookie header and can detect Cloud auth/
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Run `ollama signin` or set OLLAMA_API_KEY to confirm Cloud auth/)
+    ).toBeInTheDocument()
     expect(screen.getByText(/settings-page quota percentages/)).toBeInTheDocument()
     expect(screen.getByLabelText("Ollama Cookie header")).toBeInTheDocument()
   })
@@ -336,7 +406,13 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={ollamaPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
         onSecretSave={onSecretSave}
       />
@@ -346,7 +422,11 @@ describe("ProviderSettingsDetail", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save secret" }))
 
     await waitFor(() => {
-      expect(screen.getByText("Saved Ollama cookie header, but could not read it back from a fresh system credential vault lookup: Element not found")).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          "Saved Ollama cookie header, but could not read it back from a fresh system credential vault lookup: Element not found"
+        )
+      ).toBeInTheDocument()
     })
   })
 
@@ -358,7 +438,13 @@ describe("ProviderSettingsDetail", () => {
         plugin={ollamaPlugin}
         enabled
         config={{ secrets: { cookieHeader: { updatedAt: Date.now() } } }}
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
         onSecretDelete={onSecretDelete}
       />
@@ -380,7 +466,13 @@ describe("ProviderSettingsDetail", () => {
         plugin={opencodePlugin}
         enabled
         config={{ source: "manual", workspaceId: "wrk_old" }}
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
         onConfigChange={onConfigChange}
       />
@@ -404,7 +496,13 @@ describe("ProviderSettingsDetail", () => {
         plugin={opencodePlugin}
         enabled
         config={{ source: "manual" }}
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
         onConfigChange={onConfigChange}
       />
@@ -423,14 +521,22 @@ describe("ProviderSettingsDetail", () => {
         plugin={opencodePlugin}
         enabled
         config={{ source: "manual" }}
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
     expect(screen.getByText(/sign in at https:\/\/opencode.ai/i)).toBeInTheDocument()
     expect(screen.getByText(/copy the full Cookie request header/i)).toBeInTheDocument()
-    expect(screen.getByText(/This is separate from the OpenCode Go subscription\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(/This is separate from the OpenCode Go subscription\./)
+    ).toBeInTheDocument()
     expect(screen.getByText(/Do not paste Set-Cookie\./)).toBeInTheDocument()
   })
 
@@ -439,14 +545,28 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={opencodeGoPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
     expect(screen.getByText("OpenCode")).toBeInTheDocument()
-    expect(screen.getByText(/Tracks OpenCode Go subscription limit usage from local OpenCode auth and SQLite history\./)).toBeInTheDocument()
-    expect(screen.getByText(/~\/\.local\/share\/opencode\/auth\.json and ~\/\.local\/share\/opencode\/opencode\.db exist/)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Tracks OpenCode Go subscription limit usage from local OpenCode auth and SQLite history\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /~\/\.local\/share\/opencode\/auth\.json and ~\/\.local\/share\/opencode\/opencode\.db exist/
+      )
+    ).toBeInTheDocument()
     expect(screen.queryByLabelText("OpenCode Cookie header")).not.toBeInTheDocument()
     expect(screen.queryByLabelText("OpenCode Workspace ID")).not.toBeInTheDocument()
   })
@@ -456,14 +576,30 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={openrouterPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches OpenRouter credits and key-rate data from a stored management key or OPENROUTER_API_KEY\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a management key in the OpenRouter dashboard/i)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the credits and key endpoints\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches OpenRouter credits and key-rate data from a stored management key or OPENROUTER_API_KEY\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Create a management key in the OpenRouter dashboard/i)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for the credits and key endpoints\./
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows explicit DeepSeek API-key guidance", () => {
@@ -471,14 +607,32 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={deepseekPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches DeepSeek API balance from a stored API key or DEEPSEEK_API_KEY-compatible env vars\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a DeepSeek API key in the platform dashboard, save it here or set DEEPSEEK_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for https:\/\/api\.deepseek\.com\/user\/balance\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches DeepSeek API balance from a stored API key or DEEPSEEK_API_KEY-compatible env vars\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Create a DeepSeek API key in the platform dashboard, save it here or set DEEPSEEK_API_KEY, then retry\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for https:\/\/api\.deepseek\.com\/user\/balance\./
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows optional Copilot billing scope guidance", () => {
@@ -486,12 +640,20 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={copilotPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/showing premium requests plus paid chat quota units/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/showing premium requests plus paid chat quota units/i)
+    ).toBeInTheDocument()
     expect(screen.getByText(/org:ORG or enterprise:SLUG/)).toBeInTheDocument()
     expect(screen.getByLabelText("Copilot Billing scope")).toBeInTheDocument()
   })
@@ -501,14 +663,30 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={codebuffPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches Codebuff credit balance and weekly rate limits from a stored API token, CODEBUFF_API_KEY, or local codebuff login credentials\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Codebuff API key at https:\/\/www\.codebuff\.com\/api-keys/)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for Codebuff usage and subscription endpoints\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches Codebuff credit balance and weekly rate limits from a stored API token, CODEBUFF_API_KEY, or local codebuff login credentials\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Create a Codebuff API key at https:\/\/www\.codebuff\.com\/api-keys/)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for Codebuff usage and subscription endpoints\./
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows explicit Moonshot API balance guidance", () => {
@@ -516,14 +694,32 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={kimiK2Plugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches official Kimi Open Platform API balance from Moonshot using a stored API key or MOONSHOT_API_KEY-compatible env vars\. This is separate from the Kimi Code subscription provider\./)).toBeInTheDocument()
-    expect(screen.getByText(/It calls https:\/\/api\.moonshot\.ai\/v1\/users\/me\/balance and does not read kimi\.com memberships or Kimi Code CLI quotas\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for https:\/\/api\.moonshot\.ai\/v1\/users\/me\/balance\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches official Kimi Open Platform API balance from Moonshot using a stored API key or MOONSHOT_API_KEY-compatible env vars\. This is separate from the Kimi Code subscription provider\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /It calls https:\/\/api\.moonshot\.ai\/v1\/users\/me\/balance and does not read kimi\.com memberships or Kimi Code CLI quotas\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for https:\/\/api\.moonshot\.ai\/v1\/users\/me\/balance\./
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows unified Kimi Code and Moonshot API balance guidance", () => {
@@ -531,13 +727,27 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={kimiPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Tracks Kimi CLI \/ kimi\.com membership quota from local `kimi login` OAuth and can also show official Moonshot API billing balance from an API key\./)).toBeInTheDocument()
-    expect(screen.getByText(/Run `kimi login` for session and weekly quota; save a Moonshot API key only if you also want official API billing balance\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Tracks Kimi CLI \/ kimi\.com membership quota from local `kimi login` OAuth and can also show official Moonshot API billing balance from an API key\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Run `kimi login` for session and weekly quota; save a Moonshot API key only if you also want official API billing balance\./
+      )
+    ).toBeInTheDocument()
     expect(screen.getByLabelText("Kimi Code (Moonshot) Moonshot API key")).toBeInTheDocument()
   })
 
@@ -546,14 +756,30 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={kiloPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches Kilo usage from a stored API key or KILO_API_KEY\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Kilo API key at https:\/\/kilo\.com, save it here or set KILO_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Kilo tRPC usage endpoint\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Fetches Kilo usage from a stored API key or KILO_API_KEY\./)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Create a Kilo API key at https:\/\/kilo\.com, save it here or set KILO_API_KEY, then retry\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for the Kilo tRPC usage endpoint\./
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows explicit Warp token guidance", () => {
@@ -561,14 +787,32 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={warpPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars through an undocumented app endpoint\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Warp API key in Warp Settings -> Platform -> API Keys, save it here or set WARP_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the undocumented request-limit GraphQL endpoint\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches Warp request limits from a stored token or WARP_API_KEY-compatible env vars through an undocumented app endpoint\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Create a Warp API key in Warp Settings -> Platform -> API Keys, save it here or set WARP_API_KEY, then retry\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for the undocumented request-limit GraphQL endpoint\./
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows explicit Zed local-telemetry guidance", () => {
@@ -576,15 +820,76 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={zedPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches Zed dashboard billing spend from a signed-in dashboard Cookie header, then replays that session inside an embedded browser context\./)).toBeInTheDocument()
-    expect(screen.getByText(/Open the Zed AI Usage page at https:\/\/dashboard\.zed\.dev\/org_<id>\/billing\/usage, open DevTools -> Network, click the usage request, copy only the Cookie value/)).toBeInTheDocument()
-    expect(screen.getByText(/Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches Zed dashboard billing spend from a signed-in dashboard Cookie header, then replays that session inside an embedded browser context\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Use guided dashboard login, sign in to Zed in the opened window/)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback\./
+      )
+    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Connect dashboard" })).toBeInTheDocument()
     expect(screen.getByLabelText("Zed Cookie header")).toBeInTheDocument()
+  })
+
+  it("captures and stores Zed dashboard cookies through guided login", async () => {
+    guidedLoginMock.mockResolvedValueOnce({
+      cookieHeader: "zed.session=abc; c15t=def",
+      finalUrl: "https://dashboard.zed.dev/org_123/billing/usage",
+      cookieCount: 2,
+    })
+    const onSecretSave = vi.fn(async () => undefined)
+
+    render(
+      <ProviderSettingsDetail
+        plugin={zedPlugin}
+        enabled
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
+        onEnabledChange={vi.fn()}
+        onSecretSave={onSecretSave}
+      />
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Connect dashboard" }))
+
+    await waitFor(() => {
+      expect(guidedLoginMock).toHaveBeenCalledWith({
+        providerId: "zed",
+        windowTitle: "Connect Zed dashboard",
+        loginUrl: "https://dashboard.zed.dev/account",
+        successUrlContains: "/billing/usage",
+        cookieUrls: [
+          "https://dashboard.zed.dev/account",
+          "https://cloud.zed.dev/frontend/billing/usage",
+        ],
+      })
+    })
+    expect(onSecretSave).toHaveBeenCalledWith("zed", "cookieHeader", "zed.session=abc; c15t=def")
+    expect(
+      screen.getByText("Dashboard cookie captured. No email or password was stored.")
+    ).toBeInTheDocument()
   })
 
   it("shows no editable inputs for auto-detected providers", () => {
@@ -592,12 +897,22 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={cursorPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText("This provider currently relies on local auto-detection and does not expose editable settings yet.")).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "This provider currently relies on local auto-detection and does not expose editable settings yet."
+      )
+    ).toBeInTheDocument()
     expect(screen.queryByLabelText("Cursor source")).not.toBeInTheDocument()
   })
 
@@ -606,14 +921,30 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={syntheticPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches Synthetic quota data from a stored API key or SYNTHETIC_API_KEY\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Synthetic API key at https:\/\/api\.synthetic\.new, save it here or set SYNTHETIC_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the quotas endpoint\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Fetches Synthetic quota data from a stored API key or SYNTHETIC_API_KEY\./)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Create a Synthetic API key at https:\/\/api\.synthetic\.new, save it here or set SYNTHETIC_API_KEY, then retry\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for the quotas endpoint\./
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows explicit Augment cookie guidance", () => {
@@ -621,12 +952,22 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={augmentPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Detects local Auggie auth and fetches dashboard credit usage from a signed-in web session Cookie header\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Detects local Auggie auth and fetches dashboard credit usage from a signed-in web session Cookie header\./
+      )
+    ).toBeInTheDocument()
     expect(screen.getByText(/Run `auggie login` to confirm local Augment auth/)).toBeInTheDocument()
     expect(screen.getByLabelText("Augment Cookie header")).toBeInTheDocument()
   })
@@ -636,14 +977,32 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={alibabaPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches 5-hour, weekly, and monthly Coding Plan request quotas from a stored API key or ALIBABA_API_KEY/)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Coding Plan API key, save it here or set ALIBABA_API_KEY, then retry/)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches 5-hour, weekly, and monthly Coding Plan request quotas from a stored API key or ALIBABA_API_KEY/
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Create a Coding Plan API key, save it here or set ALIBABA_API_KEY, then retry/
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint\./
+      )
+    ).toBeInTheDocument()
   })
 
   it("shows explicit Vertex AI gcloud guidance", () => {
@@ -651,12 +1010,22 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={vertexAiPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Detected from gcloud application-default credentials and Cloud Monitoring quota metrics\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Detected from gcloud application-default credentials and Cloud Monitoring quota metrics\./
+      )
+    ).toBeInTheDocument()
     expect(screen.getByText(/gcloud auth application-default login/)).toBeInTheDocument()
     expect(screen.getByText(/GOOGLE_CLOUD_PROJECT/)).toBeInTheDocument()
   })
@@ -666,14 +1035,32 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={zaiPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches Z\.ai GLM Coding quota data from a stored API key, ZAI_API_KEY, or GLM_API_KEY\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a Z\.ai API key in the console, save it here or set ZAI_API_KEY \/ GLM_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the subscription and quota endpoints\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches Z\.ai GLM Coding quota data from a stored API key, ZAI_API_KEY, or GLM_API_KEY\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Create a Z\.ai API key in the console, save it here or set ZAI_API_KEY \/ GLM_API_KEY, then retry\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for the subscription and quota endpoints\./
+      )
+    ).toBeInTheDocument()
     expect(screen.getByLabelText("Z.ai API key")).toBeInTheDocument()
   })
 
@@ -682,14 +1069,32 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={minimaxPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches MiniMax Coding Plan quota data from a stored API key or MiniMax environment variables\./)).toBeInTheDocument()
-    expect(screen.getByText(/Create a MiniMax API key, save it here or set MINIMAX_API_KEY \/ MINIMAX_CN_API_KEY, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Coding Plan remains endpoint\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches MiniMax Coding Plan quota data from a stored API key or MiniMax environment variables\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Create a MiniMax API key, save it here or set MINIMAX_API_KEY \/ MINIMAX_CN_API_KEY, then retry\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for the Coding Plan remains endpoint\./
+      )
+    ).toBeInTheDocument()
     expect(screen.getByLabelText("MiniMax API key")).toBeInTheDocument()
   })
 
@@ -698,14 +1103,32 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={ampPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Fetches Amp balance from a stored API key or the local Amp CLI secrets file\./)).toBeInTheDocument()
-    expect(screen.getByText(/Save an Amp API key here, or install Amp Code CLI and run `amp login`, then retry\./)).toBeInTheDocument()
-    expect(screen.getByText(/UsageBar stores it in the app credential vault and uses it for the Amp internal balance endpoint\./)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Fetches Amp balance from a stored API key or the local Amp CLI secrets file\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Save an Amp API key here, or install Amp Code CLI and run `amp login`, then retry\./
+      )
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /UsageBar stores it in the app credential vault and uses it for the Amp internal balance endpoint\./
+      )
+    ).toBeInTheDocument()
     expect(screen.getByLabelText("Amp API key")).toBeInTheDocument()
   })
 
@@ -714,12 +1137,24 @@ describe("ProviderSettingsDetail", () => {
       <ProviderSettingsDetail
         plugin={antigravityPlugin}
         enabled
-        state={{ data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
         onEnabledChange={vi.fn()}
       />
     )
 
-    expect(screen.getByText(/Stored credentials keep working after a one-time sign-in/i)).toBeInTheDocument()
-    expect(screen.getByText(/Open Antigravity locally once to sign in, then UsageBar can keep reading the stored credentials even after the IDE closes\./i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Stored credentials keep working after a one-time sign-in/i)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Open Antigravity locally once to sign in, then UsageBar can keep reading the stored credentials even after the IDE closes\./i
+      )
+    ).toBeInTheDocument()
   })
 })
