@@ -184,6 +184,57 @@ describe("opencode-go plugin", () => {
     })
   })
 
+  it("renders Go usage when local auth exists with paid OpenCode rows", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
+
+    const ctx = makeCtx()
+    setAuth(ctx)
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-05-26T10:00:00.000Z"), modelId: "qwen3.6-plus", cost: 1.2 },
+    ])
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("GoSubscription")
+    expect(result.lines[0]).toMatchObject({
+      type: "progress",
+      label: "5h",
+      used: 10,
+      limit: 100,
+      format: { kind: "percent" },
+    })
+    expect(result.lines.some((line) => line.label === "Free")).toBe(false)
+  })
+
+  it("keeps authenticated free-only OpenCode rows on the Free plan", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
+
+    const ctx = makeCtx()
+    setAuth(ctx)
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-05-26T10:00:00.000Z"), modelId: "qwen3.6-plus-free", cost: 0 },
+    ])
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Free")
+    expect(result.lines).toEqual([
+      {
+        type: "progress",
+        label: "Free",
+        used: 1,
+        limit: 200,
+        format: { kind: "count", suffix: "requests" },
+        resetsAt: "2026-05-26T15:00:00.000Z",
+        periodDurationMs: 5 * 60 * 60 * 1000,
+      },
+    ])
+  })
+
   it("accepts current opencode history rows as detection evidence", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))

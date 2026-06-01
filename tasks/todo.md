@@ -47,6 +47,40 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `git --no-pager diff --check -- <touched files>` -> passed; only expected CRLF conversion warnings were reported.
 - `bun run check` still stops on pre-existing `package.json` formatting outside this slice.
 
+# Alpha 3 OpenCode Go subscription detection
+
+## Executive Summary
+
+- Restore paid OpenCode Go usage display for real local Go installs.
+- Keep Free-mode request counting for accounts that only have free-model rows.
+- Add regression coverage for the Alpha 3 false-Free case.
+
+## Acceptance Criteria
+
+- [x] Authenticated local paid/non-free OpenCode rows render `GoSubscription` usage bars.
+- [x] Free-only local rows still render the `Free` request-count bar.
+- [x] Structured account subscription evidence still works.
+- [x] Focused OpenCode Go plugin checks pass and bundled files are synced.
+
+## Plan
+
+- [x] Add a helper that treats local paid/non-free history as Go usage evidence only when local auth exists.
+- [x] Use that helper to avoid the Alpha 3 permanent-Free path.
+- [x] Add regression tests for auth + paid rows and auth + Free-only rows.
+- [x] Sync bundled plugin resources and run focused verification.
+
+## Verification Notes
+
+- Local auth shape checked without printing secrets: `~/.local/share/opencode/auth.json` exists with an `opencode-go` API entry and no structured `goSubscription` metadata.
+- Added `hasPaidGoUsage` so local auth plus paid/non-free history rows restores `GoSubscription` bars.
+- Free-only rows still return the `Free` request-count progress line.
+- Existing structured active subscription tests still pass.
+- `bun run test -- plugins\opencode-go\plugin.test.js --run` -> 1 file passed, 22 tests passed.
+- `node --check plugins\opencode-go\plugin.js` -> passed.
+- `bun run bundle:plugins` -> bundled 32 plugins including `opencode-go`.
+- Source/bundled SHA-256 check for OpenCode Go `plugin.js`, `plugin.json`, and `plugin.test.js` -> matched.
+- `bun prettier --check plugins\opencode-go\plugin.js plugins\opencode-go\plugin.json plugins\opencode-go\plugin.test.js src-tauri\resources\bundled_plugins\opencode-go\plugin.js src-tauri\resources\bundled_plugins\opencode-go\plugin.json src-tauri\resources\bundled_plugins\opencode-go\plugin.test.js tasks\todo.md` -> passed.
+- `git --no-pager diff --check -- plugins\opencode-go src-tauri\resources\bundled_plugins\opencode-go tasks\todo.md` -> passed; only expected CRLF conversion warnings were reported.
 
 # Alpha 4 competitor plan: upstream reliability ports
 

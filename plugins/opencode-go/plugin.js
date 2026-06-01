@@ -606,6 +606,15 @@
     return true
   }
 
+  function hasPaidGoUsage(rows) {
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]
+      if (row.cost > 0) return true
+      if (!isFreeModel(row.modelId)) return true
+    }
+    return false
+  }
+
   function nextRollingReset(rows, nowMs) {
     const startMs = nowMs - FIVE_HOURS_MS
     let oldest = null
@@ -832,14 +841,15 @@
     const zen = tryLoadZenBalance(ctx)
     const hasGoSubscription =
       (authProfile && authProfile.tier === PLAN.go) || (zen && zen.hasActiveGoSubscription)
-    if (!hasGoSubscription) {
+    const hasAuthenticatedPaidGoUsage = !!authProfile && hasPaidGoUsage(rowsResult.rows)
+    if (!hasGoSubscription && !hasAuthenticatedPaidGoUsage) {
       const freeLines = buildFreeUsageLines(ctx, rowsResult.rows, readNowMs())
       return { plan: PLAN.free, lines: freeLines }
     }
 
     const progressLines = buildProgressLines(ctx, rowsResult.rows, readNowMs())
     return {
-      plan: isFreeOnlyUsage(rowsResult.rows) ? PLAN.free : PLAN.go,
+      plan: PLAN.go,
       lines: zen ? progressLines.concat(zen.lines) : progressLines,
     }
   }
