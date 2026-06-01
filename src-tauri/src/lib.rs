@@ -292,6 +292,45 @@ fn read_provider_config_string(
         .map(str::to_string))
 }
 
+fn validate_guided_cookie_capture_request(
+    provider_id: &str,
+    login_url: &str,
+    success_url_contains: &str,
+    cookie_urls: &[String],
+) -> Result<(), String> {
+    let provider_id = provider_id.trim();
+    let login_url = login_url.trim();
+    let success_url_contains = success_url_contains.trim();
+
+    match provider_id {
+        "zed" => {
+            let allowed_cookie_urls = [
+                "https://dashboard.zed.dev/account",
+                "https://cloud.zed.dev/frontend/billing/usage",
+            ];
+            if login_url != "https://dashboard.zed.dev/account" {
+                return Err("Zed guided login URL is not allowed".to_string());
+            }
+            if success_url_contains != "/billing/usage" {
+                return Err("Zed guided login success marker is not allowed".to_string());
+            }
+            if cookie_urls.is_empty() {
+                return Err("Zed guided login requires cookie URLs".to_string());
+            }
+            for url in cookie_urls {
+                if !allowed_cookie_urls.contains(&url.trim()) {
+                    return Err("Zed guided login cookie URL is not allowed".to_string());
+                }
+            }
+            Ok(())
+        }
+        _ => Err(format!(
+            "guided cookie login is not enabled for provider '{}'",
+            provider_id
+        )),
+    }
+}
+
 fn try_parse_json_or_hex_json(text: &str) -> Option<JsonValue> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
@@ -733,6 +772,38 @@ async fn open_settings_window(
     provider_id: Option<String>,
 ) -> Result<(), String> {
     settings_window::open(&app_handle, tab, provider_id)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn capture_provider_cookie_header(
+    app_handle: tauri::AppHandle,
+    provider_id: String,
+    window_title: String,
+    login_url: String,
+    success_url_contains: String,
+    cookie_urls: Vec<String>,
+) -> Result<plugin_engine::browser_bridge::GuidedCookieCaptureResponse, String> {
+    validate_guided_cookie_capture_request(
+        &provider_id,
+        &login_url,
+        &success_url_contains,
+        &cookie_urls,
+    )?;
+    log::info!(
+        "starting guided cookie login for provider='{}'",
+        provider_id.trim()
+    );
+    plugin_engine::browser_bridge::capture_cookies_interactively(
+        &app_handle,
+        &plugin_engine::browser_bridge::GuidedCookieCaptureParams {
+            provider_id,
+            window_title,
+            login_url,
+            success_url_contains,
+            cookie_urls,
+        },
+    )
 }
 
 #[cfg(not(test))]
@@ -1369,6 +1440,7 @@ pub fn run() {
             sync_panel_view,
             show_panel_for_view,
             open_settings_window,
+            capture_provider_cookie_header,
             open_devtools,
             start_probe_batch,
             list_plugins,
@@ -1465,7 +1537,8 @@ mod tests {
         app_started_day_key, is_missing_credential_error, plugin_is_probe_supported,
         plugin_support_for_current_platform, provider_secret_entry_spec, provider_secret_label,
         provider_secret_service, should_track_app_started, store_pending_panel_view,
-        take_pending_panel_view_inner, verify_provider_secret_write_with_fresh_lookup,
+        take_pending_panel_view_inner, validate_guided_cookie_capture_request,
+        verify_provider_secret_write_with_fresh_lookup,
     };
     use crate::plugin_engine::manifest::{
         HostCapabilities, PlatformSupport, PluginManifest, WindowsSupportConfig,
@@ -1545,6 +1618,44 @@ mod tests {
         ));
         assert!(is_missing_credential_error("credential not found"));
         assert!(!is_missing_credential_error("permission denied"));
+    }
+
+    #[test]
+    fn guided_cookie_capture_allows_only_known_zed_urls() {
+        let cookie_urls = vec![
+            "https://dashboard.zed.dev/account".to_string(),
+            "https://cloud.zed.dev/frontend/billing/usage".to_string(),
+        ];
+
+        assert_eq!(
+            validate_guided_cookie_capture_request(
+                "zed",
+                "https://dashboard.zed.dev/account",
+                "/billing/usage",
+                &cookie_urls,
+            ),
+            Ok(())
+        );
+
+        assert_eq!(
+            validate_guided_cookie_capture_request(
+                "zed",
+                "https://evil.example/account",
+                "/billing/usage",
+                &cookie_urls,
+            ),
+            Err("Zed guided login URL is not allowed".to_string())
+        );
+
+        assert_eq!(
+            validate_guided_cookie_capture_request(
+                "ollama",
+                "https://ollama.com/settings",
+                "/settings",
+                &["https://ollama.com/settings".to_string()],
+            ),
+            Err("guided cookie login is not enabled for provider 'ollama'".to_string())
+        );
     }
 
     #[test]

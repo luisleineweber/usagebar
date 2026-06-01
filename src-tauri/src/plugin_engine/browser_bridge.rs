@@ -29,6 +29,24 @@ pub struct BrowserRequestResponse {
     pub final_url: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuidedCookieCaptureParams {
+    pub provider_id: String,
+    pub window_title: String,
+    pub login_url: String,
+    pub success_url_contains: String,
+    pub cookie_urls: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuidedCookieCaptureResponse {
+    pub cookie_header: String,
+    pub final_url: String,
+    pub cookie_count: usize,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BrowserBridgePayload {
@@ -40,6 +58,11 @@ struct BrowserBridgePayload {
 
 enum BrowserChannelMessage {
     Success(BrowserRequestResponse),
+    Error(String),
+}
+
+enum CookieCaptureMessage {
+    Success(GuidedCookieCaptureResponse),
     Error(String),
 }
 
@@ -107,6 +130,193 @@ pub fn request_with_cookies(
             Err("browser-backed billing request cancelled unexpectedly".to_string())
         }
     }
+}
+
+pub fn capture_cookies_interactively(
+    app_handle: &AppHandle,
+    req: &GuidedCookieCaptureParams,
+) -> Result<GuidedCookieCaptureResponse, String> {
+    let provider_id = req.provider_id.trim();
+    if provider_id.is_empty() {
+        return Err("provider is required".to_string());
+    }
+
+    let login_url = normalize_https_url(&req.login_url, "login url")?;
+    let success_url_contains = req.success_url_contains.trim();
+    if success_url_contains.is_empty() {
+        return Err("success URL marker is required".to_string());
+    }
+
+    let mut cookie_urls = Vec::new();
+    for value in &req.cookie_urls {
+        cookie_urls.push(normalize_https_url(value, "cookie url")?);
+    }
+    if cookie_urls.is_empty() {
+        return Err("at least one cookie URL is required".to_string());
+    }
+
+    let title = req.window_title.trim();
+    let title = if title.is_empty() {
+        "Connect provider"
+    } else {
+        title
+    };
+    let label = format!("openusage-cookie-login-{}-{}", provider_id, Uuid::new_v4());
+    let (tx, rx) = mpsc::channel::<CookieCaptureMessage>();
+    let sender = Arc::new(Mutex::new(Some(tx)));
+
+    let app_for_build = app_handle.clone();
+    let label_for_build = label.clone();
+    let login_url_for_build = login_url.clone();
+    let success_marker_for_build = success_url_contains.to_string();
+    let cookie_urls_for_build = cookie_urls.clone();
+    let title_for_build = title.to_string();
+    let sender_for_build = Arc::clone(&sender);
+
+    app_handle
+        .run_on_main_thread(move || {
+            if let Err(error) = build_cookie_capture_window(
+                &app_for_build,
+                &label_for_build,
+                &title_for_build,
+                &login_url_for_build,
+                &success_marker_for_build,
+                &cookie_urls_for_build,
+                sender_for_build,
+            ) {
+                send_cookie_capture_message(
+                    &sender,
+                    CookieCaptureMessage::Error(format!("guided login setup failed: {}", error)),
+                );
+                close_hidden_browser(&app_for_build, &label_for_build);
+            }
+        })
+        .map_err(|error| format!("guided login unavailable: {}", error))?;
+
+    match rx.recv() {
+        Ok(CookieCaptureMessage::Success(response)) => Ok(response),
+        Ok(CookieCaptureMessage::Error(error)) => Err(error),
+        Err(_) => Err("guided login cancelled unexpectedly".to_string()),
+    }
+}
+
+fn build_cookie_capture_window(
+    app_handle: &AppHandle,
+    label: &str,
+    title: &str,
+    login_url: &str,
+    success_url_contains: &str,
+    cookie_urls: &[String],
+    sender: Arc<Mutex<Option<mpsc::Sender<CookieCaptureMessage>>>>,
+) -> Result<(), String> {
+    let app_for_nav = app_handle.clone();
+    let label_for_nav = label.to_string();
+    let success_marker = success_url_contains.to_string();
+    let cookie_urls_for_nav = cookie_urls.to_vec();
+    let sender_for_nav = Arc::clone(&sender);
+
+    let window = WebviewWindowBuilder::new(
+        app_handle,
+        label,
+        WebviewUrl::External(
+            login_url
+                .parse::<Url>()
+                .map_err(|error| format!("invalid login url: {}", error))?,
+        ),
+    )
+    .title(title)
+    .inner_size(1040.0, 760.0)
+    .visible(true)
+    .on_navigation(move |url| {
+        let current = url.to_string();
+        if !current.contains(&success_marker) {
+            return true;
+        }
+
+        let Some(window) = app_for_nav.get_webview_window(&label_for_nav) else {
+            send_cookie_capture_message(
+                &sender_for_nav,
+                CookieCaptureMessage::Error("guided login window disappeared".to_string()),
+            );
+            return false;
+        };
+
+        let result = cookie_header_for_urls(&window, &cookie_urls_for_nav).map(
+            |(cookie_header, cookie_count)| GuidedCookieCaptureResponse {
+                cookie_header,
+                final_url: current.clone(),
+                cookie_count,
+            },
+        );
+
+        match result {
+            Ok(response) => send_cookie_capture_message(
+                &sender_for_nav,
+                CookieCaptureMessage::Success(response),
+            ),
+            Err(error) => {
+                send_cookie_capture_message(&sender_for_nav, CookieCaptureMessage::Error(error))
+            }
+        }
+        close_hidden_browser(&app_for_nav, &label_for_nav);
+        false
+    })
+    .build()
+    .map_err(|error| format!("failed to build guided login window: {}", error))?;
+
+    let app_for_close = app_handle.clone();
+    let label_for_close = label.to_string();
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+            send_cookie_capture_message(
+                &sender,
+                CookieCaptureMessage::Error(
+                    "guided login was closed before cookies were captured".to_string(),
+                ),
+            );
+            close_hidden_browser(&app_for_close, &label_for_close);
+        }
+    });
+
+    Ok(())
+}
+
+fn cookie_header_for_urls(
+    window: &tauri::WebviewWindow,
+    cookie_urls: &[String],
+) -> Result<(String, usize), String> {
+    let mut pairs = Vec::<String>::new();
+    let mut seen = Vec::<String>::new();
+
+    for value in cookie_urls {
+        let url = value
+            .parse::<Url>()
+            .map_err(|error| format!("invalid cookie url: {}", error))?;
+        let cookies = window
+            .cookies_for_url(url)
+            .map_err(|error| format!("failed to read guided login cookies: {}", error))?;
+        for cookie in cookies {
+            let name = cookie.name().trim();
+            if name.is_empty() {
+                continue;
+            }
+            let key = format!("{}={}", name, cookie.value());
+            if seen.iter().any(|existing| existing == &key) {
+                continue;
+            }
+            seen.push(key);
+            pairs.push(format!("{}={}", name, cookie.value()));
+        }
+    }
+
+    if pairs.is_empty() {
+        return Err(
+            "guided login reached the target page but no cookies were available".to_string(),
+        );
+    }
+
+    let cookie_count = pairs.len();
+    Ok((pairs.join("; "), cookie_count))
 }
 
 fn build_hidden_browser_request(
@@ -323,6 +533,16 @@ fn parse_bridge_result(url: &Url) -> Result<BrowserChannelMessage, String> {
 fn send_browser_message(
     sender: &Arc<Mutex<Option<mpsc::Sender<BrowserChannelMessage>>>>,
     message: BrowserChannelMessage,
+) {
+    let maybe_sender = sender.lock().ok().and_then(|mut slot| slot.take());
+    if let Some(tx) = maybe_sender {
+        let _ = tx.send(message);
+    }
+}
+
+fn send_cookie_capture_message(
+    sender: &Arc<Mutex<Option<mpsc::Sender<CookieCaptureMessage>>>>,
+    message: CookieCaptureMessage,
 ) {
     let maybe_sender = sender.lock().ok().and_then(|mut slot| slot.take());
     if let Some(tx) = maybe_sender {

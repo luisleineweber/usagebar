@@ -22,16 +22,16 @@ Fallback path:
 
 ## Setup on Windows
 
-1. Sign in at `https://dashboard.zed.dev/account`.
-2. Open the Zed AI Usage page. In the screenshot, this is the dashboard route ending in `/billing/usage`, for example `https://dashboard.zed.dev/org_<id>/billing/usage`.
-3. Open browser DevTools with `F12` or `Ctrl+Shift+I`, then select the `Network` tab.
-4. Refresh the page if the request list is empty.
-5. Click the request named `usage`. In the screenshot, it is selected in the Network request list and the Headers panel shows `:path /org_<id>/billing/usage`.
-6. In `Headers -> Request Headers`, copy the full value of the `Cookie` header only. It is the long semicolon-separated line shown under `Cookie:`.
-7. Paste that cookie header into `Settings -> Providers -> Zed -> Cookie header`.
-8. Refresh the provider.
+1. Open `Settings -> Providers -> Zed`.
+2. Click `Connect dashboard`.
+3. Sign in to Zed in the opened dashboard window.
+4. Navigate to the Zed AI Usage page. The route must include `/billing/usage`, for example `https://dashboard.zed.dev/org_<id>/billing/usage`.
+5. UsageBar captures the dashboard cookies for the configured Zed domains, stores only the resulting `Cookie` header in the app credential vault, and closes the login window.
+6. Refresh the provider.
 
-Copy the request header named exactly `Cookie`. Do not paste the `Set-Cookie` response header, the whole Headers panel, or the dashboard URL.
+UsageBar does not read or store email, password, form fields, or page content during guided login. It stores only the same dashboard `Cookie` header that the old manual setup required.
+
+Manual fallback: open browser DevTools, select the `Network` tab, click the request named `usage`, then copy the request header named exactly `Cookie` from `Headers -> Request Headers`. Do not paste the `Set-Cookie` response header, the whole Headers panel, or the dashboard URL.
 
 If the pasted cookie comes from an old browser session, the billing request can still return `401`. Re-capture the header from the live page if that happens.
 
@@ -44,7 +44,7 @@ If you skip the cookie setup, UsageBar falls back to the local Zed telemetry log
 - **Usage endpoint:** `GET https://cloud.zed.dev/frontend/billing/usage`
 - **Subscription endpoint:** `GET https://cloud.zed.dev/frontend/billing/subscriptions/current`
 - **Auth:** browser session via `Cookie` header
-- **Runtime path:** hidden browser window loads `https://dashboard.zed.dev/account`, injects the captured cookies into the browser store, then fetches the billing endpoints with `credentials: "include"`
+- **Runtime path:** guided login captures dashboard cookies after `/billing/usage`; hidden browser window later loads `https://dashboard.zed.dev/account`, injects the captured cookies into the browser store, then fetches the billing endpoints with `credentials: "include"`
 - **Observed payload shape:** `plan`, `current_usage.token_spend_in_cents`, `current_usage.token_spend.{spend_in_cents, limit_in_cents, updated_at}`, `portal_url`
 - **Observed subscription shape:** `subscription.period.{start_at,end_at}` for the current billing window; `end_at` is used as the spend reset date
 
@@ -94,4 +94,4 @@ Local telemetry is a fallback for Zed-hosted agent activity only. It is not a bi
 
 - Windows support state: `experimental`
 - Contract coverage: focused plugin tests, provider-settings detail tests, and host keychain API tests
-- Remaining gap: automatic dashboard-session import is not implemented; billing spend still depends on a manually supplied dashboard `Cookie` header
+- Remaining gap: Zed still has no official billing API/token path here; billing spend depends on a dashboard session cookie captured by guided login or manual fallback

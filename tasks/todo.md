@@ -6,6 +6,48 @@ Full historical todo log is archived locally at:
 
 Keep this file short. Add only the current slice, acceptance criteria, and verification. Move completed slices to an ignored archive when they stop being useful for active context.
 
+# Zed guided dashboard login
+
+## Executive Summary
+
+- Replace manual-only Zed cookie capture with a guided login window.
+- Store only the captured dashboard cookie header, never email/password/form data.
+- Keep the login flow generic so other cookie providers can adopt it later.
+
+## Acceptance Criteria
+
+- [x] Zed settings expose a guided dashboard login action.
+- [x] Captured cookies are stored via the existing provider secret path as `cookieHeader`.
+- [x] The guided login model is provider-configurable for later providers.
+- [x] Tests cover Zed guided-login UI and settings configuration.
+- [x] Focused frontend/Rust verification passes.
+
+## Plan
+
+- [x] Add reusable guided cookie login settings metadata.
+- [x] Add a Tauri command/browser bridge for visible cookie capture.
+- [x] Wire the settings UI to invoke capture and save secret metadata.
+- [x] Update Zed copy/docs guidance.
+- [x] Run focused tests and checks.
+
+## Verification Notes
+
+- Added `guidedCookieLogin` provider metadata for Zed with login URL, success URL marker, cookie URLs, target secret key, and success message.
+- Added visible guided cookie capture through Tauri WebView. It closes after reaching `/billing/usage` and returns only a composed Cookie header.
+- Added server-side Zed URL allowlist for guided cookie capture so the IPC cannot capture arbitrary provider/site cookies.
+- Zed settings now show `Connect dashboard`; successful capture saves `cookieHeader` through the existing provider secret save callback and does not expose the cookie value in UI.
+- Updated `docs/providers/zed.md`, `docs/choices.md`, and `docs/breadcrumbs.md`.
+- `bun run test -- src\components\settings\provider-settings-detail.test.tsx src\lib\provider-settings.test.ts --run` -> 2 files passed, 103 tests passed.
+- `cargo test --manifest-path src-tauri\Cargo.toml guided_cookie_capture --lib` -> 1 test passed.
+- `cargo check --manifest-path src-tauri\Cargo.toml` -> passed.
+- `cargo fmt --manifest-path src-tauri\Cargo.toml --check` -> passed.
+- `bun prettier --check src\components\settings\provider-settings-detail.tsx src\components\settings\provider-settings-detail.test.tsx src\lib\provider-settings.ts src\lib\provider-settings.test.ts src\lib\guided-cookie-login.ts docs\providers\zed.md docs\choices.md docs\breadcrumbs.md tasks\todo.md` -> passed.
+- `bun run lint` -> passed.
+- `bun run typecheck` -> passed.
+- `git --no-pager diff --check -- <touched files>` -> passed; only expected CRLF conversion warnings were reported.
+- `bun run check` still stops on pre-existing `package.json` formatting outside this slice.
+
+
 # Alpha 4 competitor plan: upstream reliability ports
 
 ## Executive Summary

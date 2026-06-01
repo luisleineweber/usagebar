@@ -69,6 +69,23 @@ describe("getProviderSettingsDefinition", () => {
     expect(def.secretField?.key).toBe("cookieHeader")
     expect(def.sourceOptions).toBeUndefined()
   })
+
+  it("defines reusable guided cookie login metadata for Zed", () => {
+    const def = getProviderSettingsDefinition("zed")
+
+    expect(def.guidedCookieLogin).toEqual({
+      buttonLabel: "Connect dashboard",
+      windowTitle: "Connect Zed dashboard",
+      loginUrl: "https://dashboard.zed.dev/account",
+      successUrlContains: "/billing/usage",
+      cookieUrls: [
+        "https://dashboard.zed.dev/account",
+        "https://cloud.zed.dev/frontend/billing/usage",
+      ],
+      secretKey: "cookieHeader",
+      successMessage: "Dashboard cookie captured. No email or password was stored.",
+    })
+  })
 })
 
 describe("normalizeProviderConfigs", () => {
