@@ -98,6 +98,7 @@ describe("opencode-go plugin", () => {
     ])
     expect(manifest.lines).toEqual([
       { type: "progress", label: "5h", scope: "overview", primaryOrder: 1 },
+      { type: "progress", label: "Free", scope: "overview", primaryOrder: 1 },
       { type: "text", label: "Zen balance", scope: "detail" },
       { type: "text", label: "Zen source", scope: "detail" },
       { type: "text", label: "Zen auth source", scope: "detail" },
