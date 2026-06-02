@@ -6,6 +6,41 @@ Full historical todo log is archived locally at:
 
 Keep this file short. Add only the current slice, acceptance criteria, and verification. Move completed slices to an ignored archive when they stop being useful for active context.
 
+# Publish Alpha 4 release
+
+## Executive Summary
+
+- Publish the current `main` state as Alpha 4.
+- Include the provider reliability, Zed login, and OpenCode Free overview fixes already in `HEAD`.
+- Keep generated/untracked local files out of the release unless already tracked.
+
+## Acceptance Criteria
+
+- [x] `CHANGELOG.md` describes all Alpha 4 user-facing/provider changes.
+- [x] Release verification passes or exact blockers are documented.
+- [ ] Git tag `v0.1.0-alpha.4` points at the release commit.
+- [ ] `main` and the release tag are pushed.
+- [ ] GitHub prerelease `v0.1.0-alpha.4` is created with the previous release body structure.
+
+## Plan
+
+- [x] Mirror the Alpha 3 release body structure.
+- [x] Update Alpha 4 release notes and breadcrumbs.
+- [x] Run release preflight and relevant checks.
+- [ ] Commit release-note updates with a conventional commit.
+- [ ] Create/push the Alpha 4 tag and GitHub prerelease.
+
+## Verification Notes
+
+- Previous release body fetched with `gh release view v0.1.0-alpha.3 --json body,tagName,name,isPrerelease,isDraft`.
+- Release commits since Alpha 3: `befa0c8`, `1477eeb`, `5c9e71a`, `e5bd292`, `67b5e57`.
+- Local untracked file `docs/feature-roadmap-plan.html` is left out of release prep unless explicitly added later.
+- `bun run release:check` -> passed, release version `0.1.0-alpha.4`, 32 bundled plugins.
+- `bun run check` -> passed after formatting `package.json`; accidental package diff was reverted because it had no semantic release change.
+- `bun run format:rust:check` -> passed.
+- `git --no-pager diff --check` -> passed; only expected CRLF conversion warnings were reported.
+- `bun run test:coverage` -> 84 files passed, 1323 tests passed, but strict global gate failed: statements 86.64%, branches 80.24%, lines 89.95%; functions 93.29% passed. Alpha 4 continues the Alpha 3 coverage waiver pattern.
+
 # Zed guided dashboard login
 
 ## Executive Summary
