@@ -8,6 +8,9 @@
 - Ported Claude credential loading preference so usable keychain credentials win over stale legacy credential files.
 - Hardened ccusage local usage discovery with nvm alias/default path resolution.
 - Updated ccusage local usage execution to prefer `ccusage@20.0.2 claude|codex daily` with release-age-safe legacy fallback commands.
+- Added guided Zed dashboard login so users can capture the billing cookie through a visible provider login window.
+- Restored paid OpenCode Go usage detection for local authenticated installs that only expose API-key auth metadata.
+- Added OpenCode Free usage to the dashboard overview while keeping paid OpenCode Go overview behavior unchanged.
 - Bumped app metadata to `0.1.0-alpha.4`.
 
 ### Notes
@@ -15,6 +18,8 @@
 - Alpha 4 remains an unsigned Windows technical preview while Authenticode signing is deferred.
 - Perplexity's upstream missing-group fix is superseded in this fork by the current billing credits endpoint integration.
 - ccusage behavior remains local-data only; package runners may contact the package registry when the pinned CLI is not available locally.
+- Zed guided login stores only the captured dashboard cookie header through the existing provider secret path.
+- OpenCode Go remains conservative: Free-only history stays on the Free request-count bar, while paid/non-free local history requires local auth evidence.
 
 ## 0.1.0-alpha.3
 
