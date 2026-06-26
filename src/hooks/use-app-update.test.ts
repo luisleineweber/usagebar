@@ -122,7 +122,7 @@ describe("useAppUpdate", () => {
         {
           draft: false,
           tag_name: "v0.1.0-beta.6",
-          html_url: "https://github.com/Loues000/usagebar/releases/tag/v0.1.0-beta.6",
+          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-beta.6",
         },
       ],
     } as Response)
@@ -134,7 +134,7 @@ describe("useAppUpdate", () => {
     expect(result.current.updateStatus).toEqual({
       status: "available",
       version: "0.1.0-beta.6",
-      url: "https://github.com/Loues000/usagebar/releases/tag/v0.1.0-beta.6",
+      url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-beta.6",
     })
   })
 
@@ -196,7 +196,7 @@ describe("useAppUpdate", () => {
         {
           draft: false,
           tag_name: "v0.1.0-beta.6",
-          html_url: "https://github.com/Loues000/usagebar/releases/tag/v0.1.0-beta.6",
+          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-beta.6",
         },
       ],
     } as Response)
