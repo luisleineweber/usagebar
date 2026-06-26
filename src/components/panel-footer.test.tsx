@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
@@ -74,18 +74,28 @@ describe("PanelFooter", () => {
     expect(screen.getByText("Paused")).toBeTruthy()
   })
 
-  it("shows a readable alpha label instead of raw semver in idle state", () => {
+  it("shows a readable alpha label instead of raw semver in idle state", async () => {
+    const onUpdateCheck = vi.fn()
     render(
       <PanelFooter
         version="0.1.0-alpha.1"
         autoUpdateNextAt={null}
         updateStatus={idle}
         onUpdateInstall={noop}
-        {...footerProps}
+        showAbout={false}
+        onShowAbout={noop}
+        onCloseAbout={noop}
+        onUpdateCheck={onUpdateCheck}
       />
     )
     const button = screen.getByRole("button", { name: "UsageBar Alpha 1" })
-    expect(button).toHaveAttribute("title", "UsageBar 0.1.0-alpha.1")
+    expect(button).toHaveAttribute(
+      "title",
+      "UsageBar 0.1.0-alpha.1. Right-click to check for updates."
+    )
+
+    fireEvent.contextMenu(button)
+    expect(onUpdateCheck).toHaveBeenCalledTimes(1)
   })
 
   it("shows downloading state", () => {
@@ -149,24 +159,30 @@ describe("PanelFooter", () => {
     expect(onInstall).toHaveBeenCalledTimes(1)
   })
 
-  it("shows retryable updates soon state for update check failures", async () => {
+  it("keeps version dialog on left-click and update check on right-click after check failures", async () => {
     const onUpdateCheck = vi.fn()
+    const onShowAbout = vi.fn()
     render(
       <PanelFooter
-        version="0.0.0"
+        version="0.1.0-alpha.4"
         autoUpdateNextAt={null}
         updateStatus={{ status: "error", message: "Update check failed" }}
         onUpdateInstall={noop}
         showAbout={false}
-        onShowAbout={noop}
+        onShowAbout={onShowAbout}
         onCloseAbout={noop}
         onUpdateCheck={onUpdateCheck}
       />
     )
 
-    const retryButton = screen.getByRole("button", { name: "Updates soon" })
-    expect(retryButton).toBeTruthy()
-    await userEvent.click(retryButton)
+    const versionButton = screen.getByRole("button", { name: "UsageBar Alpha 4" })
+    expect(screen.queryByRole("button", { name: "Updates soon" })).toBeNull()
+
+    await userEvent.click(versionButton)
+    expect(onShowAbout).toHaveBeenCalledTimes(1)
+    expect(onUpdateCheck).not.toHaveBeenCalled()
+
+    fireEvent.contextMenu(versionButton)
     expect(onUpdateCheck).toHaveBeenCalledTimes(1)
   })
 
