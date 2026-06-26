@@ -1,20 +1,20 @@
-import { useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { AboutDialog } from "@/components/about-dialog";
-import type { UpdateStatus } from "@/hooks/use-app-update";
-import { useNowTicker } from "@/hooks/use-now-ticker";
-import { APP_NAME } from "@/lib/project-metadata";
+import { useMemo } from "react"
+import { Button } from "@/components/ui/button"
+import { AboutDialog } from "@/components/about-dialog"
+import type { UpdateStatus } from "@/hooks/use-app-update"
+import { useNowTicker } from "@/hooks/use-now-ticker"
+import { APP_NAME } from "@/lib/project-metadata"
 
 interface PanelFooterProps {
-  version: string;
-  autoUpdateNextAt: number | null;
-  updateStatus: UpdateStatus;
-  onUpdateInstall: () => void;
-  onUpdateCheck: () => void;
-  onRefreshAll?: () => void;
-  showAbout: boolean;
-  onShowAbout: () => void;
-  onCloseAbout: () => void;
+  version: string
+  autoUpdateNextAt: number | null
+  updateStatus: UpdateStatus
+  onUpdateInstall: () => void
+  onUpdateCheck: () => void
+  onRefreshAll?: () => void
+  showAbout: boolean
+  onShowAbout: () => void
+  onCloseAbout: () => void
 }
 
 function formatFooterVersionLabel(version: string): string {
@@ -35,12 +35,27 @@ function VersionDisplay({
   onUpdateCheck,
   onVersionClick,
 }: {
-  version: string;
-  updateStatus: UpdateStatus;
-  onUpdateInstall: () => void;
-  onUpdateCheck: () => void;
-  onVersionClick: () => void;
+  version: string
+  updateStatus: UpdateStatus
+  onUpdateInstall: () => void
+  onUpdateCheck: () => void
+  onVersionClick: () => void
 }) {
+  const versionButton = (
+    <button
+      type="button"
+      onClick={onVersionClick}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        onUpdateCheck()
+      }}
+      className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+      title={`${APP_NAME} ${version}. Right-click to check for updates.`}
+    >
+      {formatFooterVersionLabel(version)}
+    </button>
+  )
+
   switch (updateStatus.status) {
     case "available":
       return (
@@ -53,7 +68,7 @@ function VersionDisplay({
         >
           Update to {updateStatus.version}
         </Button>
-      );
+      )
     case "downloading":
       return (
         <span className="text-xs text-muted-foreground">
@@ -61,7 +76,7 @@ function VersionDisplay({
             ? `Downloading update ${updateStatus.progress}%`
             : "Downloading update..."}
         </span>
-      );
+      )
     case "ready":
       return (
         <Button
@@ -72,40 +87,20 @@ function VersionDisplay({
         >
           Restart to update
         </Button>
-      );
+      )
     case "installing":
-      return (
-        <span className="text-xs text-muted-foreground">Installing...</span>
-      );
+      return <span className="text-xs text-muted-foreground">Installing...</span>
     case "error":
       if (updateStatus.message === "Update check failed") {
-        return (
-          <button
-            type="button"
-            onClick={onUpdateCheck}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-            title={updateStatus.message}
-          >
-            Updates soon
-          </button>
-        );
+        return versionButton
       }
       return (
         <span className="text-xs text-destructive" title={updateStatus.message}>
           Update failed
         </span>
-      );
+      )
     default:
-      return (
-        <button
-          type="button"
-          onClick={onVersionClick}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          title={`${APP_NAME} ${version}`}
-        >
-          {formatFooterVersionLabel(version)}
-        </button>
-      );
+      return versionButton
   }
 }
 
@@ -123,18 +118,18 @@ export function PanelFooter({
   const now = useNowTicker({
     enabled: Boolean(autoUpdateNextAt),
     resetKey: autoUpdateNextAt,
-  });
+  })
 
   const countdownLabel = useMemo(() => {
-    if (!autoUpdateNextAt) return "Paused";
-    const remainingMs = Math.max(0, autoUpdateNextAt - now);
-    const totalSeconds = Math.ceil(remainingMs / 1000);
+    if (!autoUpdateNextAt) return "Paused"
+    const remainingMs = Math.max(0, autoUpdateNextAt - now)
+    const totalSeconds = Math.ceil(remainingMs / 1000)
     if (totalSeconds >= 60) {
-      const minutes = Math.ceil(totalSeconds / 60);
-      return `Next update in ${minutes}m`;
+      const minutes = Math.ceil(totalSeconds / 60)
+      return `Next update in ${minutes}m`
     }
-    return `Next update in ${totalSeconds}s`;
-  }, [autoUpdateNextAt, now]);
+    return `Next update in ${totalSeconds}s`
+  }, [autoUpdateNextAt, now])
 
   return (
     <>
@@ -159,14 +154,10 @@ export function PanelFooter({
             {countdownLabel}
           </button>
         ) : (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {countdownLabel}
-          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">{countdownLabel}</span>
         )}
       </div>
-      {showAbout && (
-        <AboutDialog version={version} onClose={onCloseAbout} />
-      )}
+      {showAbout && <AboutDialog version={version} onClose={onCloseAbout} />}
     </>
-  );
+  )
 }
