@@ -1,5 +1,5 @@
 export const APP_NAME = "UsageBar"
-export const PROJECT_REPO = "Loues000/usagebar"
+export const PROJECT_REPO = "luisleineweber/usagebar"
 export const PROJECT_REPO_URL = `https://github.com/${PROJECT_REPO}`
 export const PROJECT_ISSUES_URL = `${PROJECT_REPO_URL}/issues`
 export const PROJECT_RELEASES_URL = `${PROJECT_REPO_URL}/releases`

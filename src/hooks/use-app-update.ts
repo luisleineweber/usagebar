@@ -26,7 +26,7 @@ interface UseAppUpdateOptions {
   repo?: string
 }
 
-const DEFAULT_RELEASE_REPO = "Loues000/usagebar"
+const DEFAULT_RELEASE_REPO = "luisleineweber/usagebar"
 
 export function isPrereleaseVersion(version: string): boolean {
   return version.trim().includes("-")
