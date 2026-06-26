@@ -14,9 +14,25 @@
   "lines": [
     {
       "type": "progress",
-      "label": "Premium",
+      "label": "AI Credits",
       "scope": "overview",
       "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Included Credits",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "Billing Mode",
+      "scope": "detail"
+    },
+    {
+      "type": "progress",
+      "label": "Legacy Premium",
+      "scope": "detail"
     },
     {
       "type": "progress",
@@ -31,14 +47,12 @@
     },
     {
       "type": "text",
-      "label": "Premium Requests",
+      "label": "Legacy Premium Requests",
       "scope": "detail"
     }
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "api.github.com"
-    ]
+    "httpDomains": ["api.github.com"]
   }
 }

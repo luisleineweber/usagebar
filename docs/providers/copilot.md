@@ -1,6 +1,6 @@
 # GitHub Copilot
 
-Tracks GitHub Copilot usage quotas for both paid and free tier users.
+Tracks GitHub Copilot usage for usage-based AI-credit plans, legacy annual request-based plans, and free/limited accounts.
 
 ## Windows status
 
@@ -35,11 +35,24 @@ gh auth switch
 Once authenticated via gh CLI, the plugin caches the token in the OpenUsage keychain together with the active login so later probes stay aligned with the selected `gh` account.
 If Windows Credential Manager lookup misses even though `gh` is already logged in, OpenUsage now falls back to the CLI's own `gh auth token` command before reporting a logged-out state.
 
+## Billing model
+
+GitHub moved Copilot billing to usage-based AI Credits on 2026-06-01. UsageBar now treats Copilot as dual-mode:
+
+- `usage_based` - current paid plans such as Pro, Pro+, Max, Business, and Enterprise. The plugin shows AI-credit terminology and only renders exact credit progress when GitHub returns credit fields in the payload.
+- `legacy_request_based` - existing annual Pro/Pro+ accounts that still expose `quota_snapshots.premium_interactions`. The plugin keeps these as legacy request lines.
+- `free_limited` - Free/Student/limited quota payloads. Chat and Completions keep the provider-reported counters.
+
+UsageBar does not invent remaining AI-credit values. If GitHub returns plan data without stable credit usage fields, the plugin shows the known included-credit allowance for the plan when available and a clear unavailable state for exact usage.
+
+`billingScope` is the preferred config key for legacy billing-scope lookups. The older `workspaceId` key still works as an alias.
+
 ## API
 
 **Endpoint:** `https://api.github.com/copilot_internal/user`
 
 **Headers:**
+
 ```
 Authorization: token <token>
 Accept: application/json
@@ -49,7 +62,7 @@ User-Agent: GitHubCopilotChat/0.26.7
 X-Github-Api-Version: 2025-04-01
 ```
 
-### Response (Paid Tier)
+### Response (Legacy request-based tier)
 
 ```json
 {
@@ -72,7 +85,7 @@ X-Github-Api-Version: 2025-04-01
 }
 ```
 
-### Response (Free Tier)
+### Response (Free or limited tier)
 
 ```json
 {
@@ -92,26 +105,30 @@ X-Github-Api-Version: 2025-04-01
 
 ## Displayed Lines
 
-| Line         | Tier | Description |
-|--------------|------|-------------|
-| Premium      | Paid | Premium requests used out of the provider-reported entitlement or the documented plan allowance |
-| Chat         | Paid | Chat quota units used out of provider-reported `entitlement` when available; percent fallback only when GitHub omits the exact chat cap |
-| Chat         | Free | Chat messages used out of `monthly_quotas.chat` |
-| Completions  | Free | Code completions used out of `monthly_quotas.completions` |
-| Premium Requests | Detail | Official GitHub billing API premium-request usage when the token can access billing usage |
+| Line                    | Tier               | Description                                                                                                                             |
+| ----------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Billing Mode            | All detected modes | `AI-credit usage-based`, `Legacy request-based`, or omitted when no usable data exists                                                  |
+| AI Credits              | Usage-based paid   | AI Credits used out of included credits when GitHub returns exact credit usage fields                                                   |
+| Included Credits        | Usage-based paid   | Known monthly included credits for Pro, Pro+, Max, Business, or Enterprise when exact remaining usage is unavailable                    |
+| Legacy Premium          | Legacy annual paid | Premium requests used out of the provider-reported entitlement or the documented legacy plan allowance                                  |
+| Chat                    | Legacy annual paid | Chat quota units used out of provider-reported `entitlement` when available; percent fallback only when GitHub omits the exact chat cap |
+| Chat                    | Free               | Chat messages used out of `monthly_quotas.chat`                                                                                         |
+| Completions             | Free               | Code completions used out of `monthly_quotas.completions`                                                                               |
+| Legacy Premium Requests | Detail             | Legacy GitHub billing API premium-request usage when the token can access billing usage                                                 |
 
 All progress lines include:
+
 - `resetsAt` - ISO timestamp of next quota reset
 - `periodDurationMs` - 30-day period (`2592000000ms`)
 
-Current GitHub plan docs list monthly premium request allowances as Free 50, Student 300, Pro 300, Pro+ 1,500, Business 300 per user, and Enterprise 1,000 per user. UsageBar uses provider-reported `entitlement` first, then those documented limits only when the Copilot payload names a known plan. GitHub's April 2026 Copilot usage-limit docs also describe session and weekly limits as usage/token limits, so paid Chat snapshots are displayed as quota units rather than user prompt/message counts. GitHub has announced a move from request-based billing to usage-based billing starting June 1, 2026, so this mapping should be rechecked before promoting Copilot beyond `experimental`.
+Current GitHub plan docs list monthly AI-credit allowances as Pro 1,500, Pro+ 7,000, Max 20,000, Business 1,900 per user, and Enterprise 3,900 per user. Legacy request-based fallback limits remain Free 50, Student 300, Pro 300, Pro+ 1,500, Business 300 per user, and Enterprise 1,000 per user. UsageBar uses provider-reported `entitlement` first, then documented fallback limits only when the Copilot payload names a known plan. GitHub's Copilot usage-limit docs describe legacy paid Chat snapshots as usage/token limits, so those snapshots are displayed as quota units rather than user prompt/message counts.
 
 ## Errors
 
-| Condition       | Message                                           |
-|-----------------|---------------------------------------------------|
-| No token found  | "Not logged in. Run `gh auth login` first."       |
-| 401/403         | "Token invalid. Run `gh auth login` to re-auth."  |
-| HTTP error      | "Usage request failed (HTTP {status})..."         |
-| Network error   | "Usage request failed. Check your connection."    |
-| Invalid JSON    | "Usage response invalid. Try again later."        |
+| Condition      | Message                                          |
+| -------------- | ------------------------------------------------ |
+| No token found | "Not logged in. Run `gh auth login` first."      |
+| 401/403        | "Token invalid. Run `gh auth login` to re-auth." |
+| HTTP error     | "Usage request failed (HTTP {status})..."        |
+| Network error  | "Usage request failed. Check your connection."   |
+| Invalid JSON   | "Usage response invalid. Try again later."       |
