@@ -28,12 +28,25 @@ export type PluginLink = {
   url: string
 }
 
+export type ProbeErrorCategory =
+  | "credentialMissing"
+  | "credentialUnavailable"
+  | "credentialUnreadable"
+  | "credentialInvalid"
+  | "credentialExpired"
+  | "providerResponse"
+  | "unknown"
+
 export type PluginOutput = {
   providerId: string
   displayName: string
   plan?: string
   lines: MetricLine[]
   iconUrl: string
+  error?: {
+    category: ProbeErrorCategory
+    message: string
+  }
   history?: UsageHistory
 }
 

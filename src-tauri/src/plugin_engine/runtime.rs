@@ -1,5 +1,8 @@
 use crate::plugin_engine::host_api;
 use crate::plugin_engine::manifest::LoadedPlugin;
+use crate::plugin_engine::probe_error::{
+    ProbeError, ProbeErrorCategory, classify_legacy_probe_error,
+};
 use rquickjs::{Array, Context, Ctx, Error, Object, Promise, Runtime, Value};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -53,6 +56,8 @@ pub struct PluginOutput {
     pub plan: Option<String>,
     pub lines: Vec<MetricLine>,
     pub icon_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ProbeError>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<UsageHistory>,
 }
@@ -169,7 +174,7 @@ pub fn run_probe(
 
         let result_value: Value = match probe_fn.call((probe_ctx,)) {
             Ok(r) => r,
-            Err(_) => return error_output(plugin, extract_error_string(&ctx)),
+            Err(_) => return probe_error_output(plugin, extract_probe_error(&ctx)),
         };
         let result: Object = if result_value.is_promise() {
             let promise: Promise = match result_value.into_promise() {
@@ -183,7 +188,7 @@ pub fn run_probe(
                 Err(Error::WouldBlock) => {
                     return error_output(plugin, "probe() returned unresolved promise".to_string());
                 }
-                Err(_) => return error_output(plugin, extract_error_string(&ctx)),
+                Err(_) => return probe_error_output(plugin, extract_probe_error(&ctx)),
             }
         } else {
             match result_value.into_object() {
@@ -204,12 +209,21 @@ pub fn run_probe(
         };
         let history = parse_history(&result);
 
+        let error = lines.iter().find_map(|line| match line {
+            MetricLine::Badge { label, text, .. } if label == "Error" => Some(ProbeError {
+                category: classify_legacy_probe_error(text),
+                message: text.clone(),
+            }),
+            _ => None,
+        });
+
         PluginOutput {
             provider_id: plugin_id,
             display_name,
             plan,
             lines,
             icon_url,
+            error,
             history,
         }
     })
@@ -703,30 +717,64 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
     Ok(out)
 }
 
-fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
+pub(crate) fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
+    let error = ProbeError {
+        category: classify_legacy_probe_error(&message),
+        message: message.clone(),
+    };
+    probe_error_output(plugin, error)
+}
+
+fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput {
     PluginOutput {
         provider_id: plugin.manifest.id.clone(),
         display_name: plugin.manifest.name.clone(),
         plan: None,
-        lines: vec![error_line(message)],
+        lines: vec![error_line(error.message.clone())],
         icon_url: plugin.icon_data_url.clone(),
+        error: Some(error),
         history: None,
     }
 }
 
-fn extract_error_string(ctx: &Ctx<'_>) -> String {
+fn extract_probe_error(ctx: &Ctx<'_>) -> ProbeError {
     let exc = ctx.catch();
     if exc.is_null() || exc.is_undefined() {
-        return "The plugin failed, try again or contact plugin author.".to_string();
+        return ProbeError {
+            category: ProbeErrorCategory::Unknown,
+            message: "The plugin failed, try again or contact plugin author.".to_string(),
+        };
+    }
+    if let Some(object) = exc.as_object() {
+        let message = object
+            .get::<_, String>("message")
+            .ok()
+            .filter(|message| !message.trim().is_empty());
+        let category = object
+            .get::<_, String>("category")
+            .ok()
+            .and_then(|value| ProbeErrorCategory::from_wire_name(&value));
+        if let Some(message) = message {
+            return ProbeError {
+                category: category.unwrap_or_else(|| classify_legacy_probe_error(&message)),
+                message,
+            };
+        }
     }
     if let Some(str_val) = exc.as_string() {
         let message: String = str_val.to_string().unwrap_or_default();
         let trimmed = message.trim();
         if !trimmed.is_empty() {
-            return trimmed.to_string();
+            return ProbeError {
+                category: classify_legacy_probe_error(trimmed),
+                message: trimmed.to_string(),
+            };
         }
     }
-    "The plugin failed, try again or contact plugin author.".to_string()
+    ProbeError {
+        category: ProbeErrorCategory::Unknown,
+        message: "The plugin failed, try again or contact plugin author.".to_string(),
+    }
 }
 
 fn error_line(message: String) -> MetricLine {
@@ -813,6 +861,42 @@ mod tests {
         );
         let output = run_probe(&plugin, &temp_app_dir("async"), "0.0.0", None);
         assert_eq!(error_text(output), "boom");
+    }
+
+    #[test]
+    fn run_probe_preserves_structured_error_category() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    const error = new Error("Cursor auth state could not be read");
+                    error.category = "credentialUnavailable";
+                    throw error;
+                }
+            };
+            "#,
+        );
+        let output = run_probe(&plugin, &temp_app_dir("structured-error"), "0.0.0", None);
+        let error = output.error.expect("structured probe error");
+        assert_eq!(error.category, ProbeErrorCategory::CredentialUnavailable);
+        assert_eq!(error.message, "Cursor auth state could not be read");
+    }
+
+    #[test]
+    fn run_probe_preserves_unstructured_error_object_message() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    throw new Error("specific failure detail");
+                }
+            };
+            "#,
+        );
+        let output = run_probe(&plugin, &temp_app_dir("object-error"), "0.0.0", None);
+        let error = output.error.expect("probe error");
+        assert_eq!(error.category, ProbeErrorCategory::Unknown);
+        assert_eq!(error.message, "specific failure detail");
     }
 
     #[test]

@@ -10,6 +10,7 @@ mod local_http_api;
 #[cfg(not(test))]
 mod panel;
 mod plugin_engine;
+mod probe_coordinator;
 mod provider_secret_store;
 #[cfg(not(test))]
 mod settings_window;
@@ -21,8 +22,6 @@ mod webkit_config;
 #[cfg(not(test))]
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-#[cfg(not(test))]
-use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(not(test))]
 use std::sync::{Arc, Mutex, OnceLock};
 #[cfg(test)]
@@ -670,6 +669,7 @@ pub struct AppState {
     pub plugins: Vec<plugin_engine::manifest::LoadedPlugin>,
     pub app_data_dir: PathBuf,
     pub app_version: String,
+    pub probe_coordinator: Arc<Mutex<probe_coordinator::ProbeCoordinator>>,
 }
 
 #[cfg(not(test))]
@@ -943,15 +943,24 @@ async fn start_probe_batch(
         });
     }
 
-    let remaining = Arc::new(AtomicUsize::new(selected_plugins.len()));
-    for plugin in selected_plugins {
+    let coordinator = {
+        let locked = state.lock().map_err(|e| e.to_string())?;
+        Arc::clone(&locked.probe_coordinator)
+    };
+    let providers_to_start = coordinator
+        .lock()
+        .map_err(|e| e.to_string())?
+        .reserve_batch(batch_id.clone(), &response_plugin_ids)?;
+    let providers_to_start: HashSet<String> = providers_to_start.into_iter().collect();
+
+    for plugin in selected_plugins
+        .into_iter()
+        .filter(|plugin| providers_to_start.contains(&plugin.manifest.id))
+    {
         let handle = app_handle.clone();
-        let completion_handle = app_handle.clone();
-        let bid = batch_id.clone();
-        let completion_bid = batch_id.clone();
         let data_dir = app_data_dir.clone();
         let version = app_version.clone();
-        let counter = Arc::clone(&remaining);
+        let coordinator = Arc::clone(&coordinator);
 
         tauri::async_runtime::spawn_blocking(move || {
             let plugin_id = plugin.manifest.id.clone();
@@ -959,7 +968,7 @@ async fn start_probe_batch(
                 plugin_engine::runtime::run_probe(&plugin, &data_dir, &version, Some(&handle))
             }));
 
-            match result {
+            let output = match result {
                 Ok(output) => {
                     let has_error = output.lines.iter().any(|line| {
                         matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")
@@ -974,25 +983,36 @@ async fn start_probe_batch(
                         );
                         local_http_api::cache_successful_output(&output);
                     }
-                    let _ = handle.emit(
-                        "probe:result",
-                        ProbeResult {
-                            batch_id: bid,
-                            output,
-                        },
-                    );
+                    output
                 }
                 Err(_) => {
                     log::error!("probe {} panicked", plugin_id);
+                    plugin_engine::runtime::error_output(
+                        &plugin,
+                        "provider probe panicked".to_string(),
+                    )
                 }
-            }
+            };
 
-            if counter.fetch_sub(1, Ordering::SeqCst) == 1 {
-                log::info!("probe batch {} complete", completion_bid);
-                let _ = completion_handle.emit(
+            let completion = coordinator
+                .lock()
+                .expect("probe coordinator lock poisoned")
+                .complete_provider(&plugin_id);
+            for result_batch_id in &completion.result_batch_ids {
+                let _ = handle.emit(
+                    "probe:result",
+                    ProbeResult {
+                        batch_id: result_batch_id.clone(),
+                        output: output.clone(),
+                    },
+                );
+            }
+            for completed_batch_id in completion.completed_batch_ids {
+                log::info!("probe batch {} complete", completed_batch_id);
+                let _ = handle.emit(
                     "probe:batch-complete",
                     ProbeBatchComplete {
-                        batch_id: completion_bid,
+                        batch_id: completed_batch_id,
                     },
                 );
             }
@@ -1583,6 +1603,9 @@ pub fn run() {
                 plugins,
                 app_data_dir,
                 app_version: app.package_info().version.to_string(),
+                probe_coordinator: Arc::new(Mutex::new(
+                    probe_coordinator::ProbeCoordinator::default(),
+                )),
             }));
 
             tray::create(app.handle())?;

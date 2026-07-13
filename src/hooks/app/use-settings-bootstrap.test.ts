@@ -16,6 +16,7 @@ const {
   loadPluginSettingsMock,
   loadResetTimerDisplayModeMock,
   loadStartOnLoginMock,
+  loadSurfacePinsMock,
   loadThemeModeMock,
   loadTimeFormatModeMock,
   migrateLegacyTraySettingsMock,
@@ -36,6 +37,7 @@ const {
   loadPluginSettingsMock: vi.fn(),
   loadResetTimerDisplayModeMock: vi.fn(),
   loadStartOnLoginMock: vi.fn(),
+  loadSurfacePinsMock: vi.fn(),
   loadThemeModeMock: vi.fn(),
   loadTimeFormatModeMock: vi.fn(),
   migrateLegacyTraySettingsMock: vi.fn(),
@@ -62,6 +64,7 @@ vi.mock("@/lib/settings", () => ({
   DEFAULT_MENUBAR_ICON_STYLE: "provider",
   DEFAULT_RESET_TIMER_DISPLAY_MODE: "relative",
   DEFAULT_START_ON_LOGIN: false,
+  DEFAULT_SURFACE_PINS: [],
   DEFAULT_THEME_MODE: "system",
   DEFAULT_TIME_FORMAT_MODE: "auto",
   getProbeEligiblePluginIds: getProbeEligiblePluginIdsMock,
@@ -72,6 +75,7 @@ vi.mock("@/lib/settings", () => ({
   loadPluginSettings: loadPluginSettingsMock,
   loadResetTimerDisplayMode: loadResetTimerDisplayModeMock,
   loadStartOnLogin: loadStartOnLoginMock,
+  loadSurfacePins: loadSurfacePinsMock,
   loadThemeMode: loadThemeModeMock,
   loadTimeFormatMode: loadTimeFormatModeMock,
   migrateLegacyTraySettings: migrateLegacyTraySettingsMock,
@@ -93,6 +97,7 @@ function createArgs() {
     setGlobalShortcut: vi.fn(),
     setStartOnLogin: vi.fn(),
     setMenubarIconStyle: vi.fn(),
+    setSurfacePins: vi.fn(),
     setLoadingForPlugins: vi.fn(),
     setErrorForPlugins: vi.fn(),
     startBatch: vi.fn().mockResolvedValue(undefined),
@@ -115,6 +120,7 @@ describe("useSettingsBootstrap", () => {
     loadPluginSettingsMock.mockReset()
     loadResetTimerDisplayModeMock.mockReset()
     loadStartOnLoginMock.mockReset()
+    loadSurfacePinsMock.mockReset()
     loadThemeModeMock.mockReset()
     loadTimeFormatModeMock.mockReset()
     migrateLegacyTraySettingsMock.mockReset()
@@ -144,6 +150,7 @@ describe("useSettingsBootstrap", () => {
     loadGlobalShortcutMock.mockResolvedValue("CommandOrControl+Shift+O")
     loadMenubarIconStyleMock.mockResolvedValue("provider")
     loadStartOnLoginMock.mockResolvedValue(true)
+    loadSurfacePinsMock.mockResolvedValue([])
     migrateLegacyTraySettingsMock.mockResolvedValue(undefined)
     savePluginSettingsMock.mockResolvedValue(undefined)
     getProbeEligiblePluginIdsMock.mockReturnValue(["codex"])
