@@ -303,14 +303,6 @@ export function useTrayIcon({
         )
         .catch((error) => {
           console.error("Failed to render tray icon:", error)
-          const fallbackPath = trayGaugeIconPathRef.current
-          if (!fallbackPath) return undefined
-          return Promise.all([
-            tray.setIcon(fallbackPath),
-            tray.setIconAsTemplate(useTemplateIconRef.current),
-            setTrayTitle(supportsNativeTrayTitle ? providerPercentText : ""),
-            setTrayTooltip(tooltipText),
-          ])
         })
         .finally(finalizeUpdate)
     }, delayMs)

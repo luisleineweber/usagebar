@@ -26,7 +26,12 @@ import {
   type ResetTimerDisplayMode,
   type TimeFormatMode,
 } from "@/lib/settings";
-import type { ManifestLine, MetricLine, PluginLink } from "@/lib/plugin-types";
+import type {
+  ManifestLine,
+  MetricLine,
+  PluginLink,
+  ProbeErrorCategory,
+} from "@/lib/plugin-types";
 import { groupLinesByType } from "@/lib/group-lines-by-type";
 import {
   hasProviderStatusIssue,
@@ -45,6 +50,7 @@ interface ProviderCardProps {
   showSeparator?: boolean;
   loading?: boolean;
   error?: string | null;
+  errorCategory?: ProbeErrorCategory | null;
   lines?: MetricLine[];
   skeletonLines?: ManifestLine[];
   lastManualRefreshAt?: number | null;
@@ -85,6 +91,7 @@ export function ProviderCard({
   showSeparator = true,
   loading = false,
   error = null,
+  errorCategory = null,
   lines = [],
   skeletonLines = [],
   lastManualRefreshAt,
@@ -298,7 +305,7 @@ export function ProviderCard({
         {/* ── Error states ── */}
         {error && !hasRetainedContent && (
           <div className="space-y-1.5">
-            <PluginError message={error} />
+            <PluginError message={error} category={errorCategory} />
             {/* Surface the last-success time so users can judge staleness at a glance. */}
             {lastUpdatedAt != null && (
               <p className="text-xs text-muted-foreground pl-0.5">

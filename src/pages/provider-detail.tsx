@@ -44,11 +44,7 @@ export function ProviderDetailPage({
       )
     }
 
-    return (
-      <div className="text-center text-muted-foreground py-8">
-        Provider not found
-      </div>
-    )
+    return <div className="text-center text-muted-foreground py-8">Provider not found</div>
   }
 
   const hasRuntimeData = Boolean(plugin.data || plugin.lastSettledData)
@@ -81,6 +77,7 @@ export function ProviderDetailPage({
         showSeparator={false}
         loading={plugin.loading}
         error={plugin.error}
+        errorCategory={plugin.errorCategory}
         lines={plugin.data?.lines ?? plugin.lastSettledData?.lines ?? []}
         skeletonLines={plugin.meta.lines}
         lastManualRefreshAt={plugin.lastManualRefreshAt}

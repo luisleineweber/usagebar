@@ -68,11 +68,13 @@ export function AppContent({
     displayMode,
     resetTimerDisplayMode,
     timeFormatMode,
+    surfacePins,
   } = useAppPreferencesStore(
     useShallow((state) => ({
       displayMode: state.displayMode,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       timeFormatMode: state.timeFormatMode,
+      surfacePins: state.surfacePins,
     }))
   )
   const [transitionKey, setTransitionKey] = useState(activeView)
@@ -112,6 +114,7 @@ export function AppContent({
         resetTimerDisplayMode={resetTimerDisplayMode}
         timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
+        surfacePins={surfacePins}
       />
     ) : activeView === "history" ? (
       <HistoryPage plugins={displayPlugins} />
