@@ -1,0 +1,942 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UsageBar Feature Roadmap Plan</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f0f2f5;
+      --panel: #ffffff;
+      --panel-2: #eef2f7;
+      --text: #141e2b;
+      --muted: #5c6a7a;
+      --line: #d5dce6;
+      --blue: #2563eb;
+      --green: #15803d;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --purple: #7c3aed;
+      --cyan: #0891b2;
+      --pink: #be185d;
+      --shadow: 0 18px 45px rgba(20, 31, 46, 0.1);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111418;
+        --panel: #181d23;
+        --panel-2: #202833;
+        --text: #eef3f8;
+        --muted: #a6b1bf;
+        --line: #323b48;
+        --blue: #6ea8ff;
+        --green: #65c785;
+        --amber: #f0b766;
+        --red: #ff7b7b;
+        --purple: #b49cff;
+        --cyan: #67e8f9;
+        --pink: #f472b6;
+        --shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    a { color: var(--blue); }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 7px;
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    button:hover { border-color: var(--blue); }
+    button[aria-pressed="true"] {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
+    }
+    .wrap {
+      max-width: 1220px;
+      margin: 0 auto;
+      padding: 24px 18px 44px;
+    }
+    header {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 18px;
+      align-items: stretch;
+      margin-bottom: 18px;
+    }
+    .hero, .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    .hero {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 3.8vw, 48px);
+      line-height: 1.04;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 10px; }
+    .sub {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--panel-2);
+    }
+    .stat strong { display: block; font-size: 22px; }
+    .stat span { display: block; color: var(--muted); font-size: 11px; }
+    .preview {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .tier-labels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .tier {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid var(--line);
+    }
+    .tier.p0 { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
+    .tier.p1 { background: #fff7ed; color: #b45309; border-color: #fed7aa; }
+    .tier.p2 { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+    .tier.p3 { background: #f0f9ff; color: #1d4ed8; border-color: #bae6fd; }
+    @media (prefers-color-scheme: dark) {
+      .tier.p0 { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+      .tier.p1 { background: #451a03; color: #fdba74; border-color: #78350f; }
+      .tier.p2 { background: #052e16; color: #86efac; border-color: #166534; }
+      .tier.p3 { background: #0c1929; color: #93c5fd; border-color: #1e3a5f; }
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 10px 0 14px;
+      background: var(--bg);
+    }
+    nav button { font-size: 13px; white-space: nowrap; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+    .card { padding: 18px; }
+    .card p, .card li { color: var(--muted); }
+    ul { margin: 8px 0 0; padding-left: 18px; }
+    li { margin: 5px 0; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--panel-2);
+      white-space: nowrap;
+    }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .feature {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--panel-2);
+      min-height: 100%;
+    }
+    .feature h3 { font-size: 14px; }
+    .feature .src { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .feature .desc { font-size: 13px; margin-bottom: 8px; }
+    .feature .steps { font-size: 12px; padding-left: 16px; margin: 6px 0; }
+    .feature .steps li { margin: 3px 0; }
+    .feature .result { font-size: 12px; color: var(--green); margin-top: 6px; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .step-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--panel);
+      text-align: center;
+      font-size: 12px;
+    }
+    .step-box .num {
+      display: inline-flex;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel-2); color: var(--text); }
+    tr:last-child td { border-bottom: 0; }
+    code {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-size: 0.9em;
+    }
+    footer {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 24px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    @media (max-width: 900px) {
+      header { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .span-3, .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: auto; }
+      .flow { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Cross-project audit — 2026-06-01</p>
+          <h1>UsageBar Feature Roadmap</h1>
+          <p class="sub">28 feature gaps identified across 16 projects (openusage, opencode-usage, ccsage, CodexBar, Win-CodexBar). Prioritized by impact and effort. Each feature includes first implementation steps and wanted result.</p>
+        </div>
+        <div class="stats">
+          <div class="stat"><strong>28</strong><span>Feature gaps</span></div>
+          <div class="stat"><strong>16</strong><span>Projects reviewed</span></div>
+          <div class="stat"><strong>5</strong><span>Tiers (P0-P3)</span></div>
+        </div>
+        <div class="tier-labels">
+          <span class="tier p0">P0 — Immediate</span>
+          <span class="tier p1">P1 — Next</span>
+          <span class="tier p2">P2 — Soon</span>
+          <span class="tier p3">P3 — Later</span>
+        </div>
+      </section>
+      <aside class="preview card">
+        <p style="font-size:13px;margin:0 0 4px;color:var(--muted)">Source projects</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+          <div><b style="color:var(--blue)">opencode-usage</b><br>CLI aggregator</div>
+          <div><b style="color:var(--purple)">ccusage</b><br>6 cost CLIs</div>
+          <div><b style="color:var(--amber)">CodexBar</b><br>macOS origin</div>
+          <div><b style="color:var(--cyan)">Win-CodexBar</b><br>Windows port</div>
+          <div><b style="color:var(--muted)">openusage</b><br>Upstream v0.6.24</div>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">Verdict: UsageBar has more providers (32 vs 20 upstream) but lacks charts, multi-account, pace prediction, and rich UX.</p>
+      </aside>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <button type="button" data-tab="p0" aria-pressed="true">P0 — Cost Charts</button>
+      <button type="button" data-tab="p1" aria-pressed="false">P1 — Core UX</button>
+      <button type="button" data-tab="p2" aria-pressed="false">P2 — Power Features</button>
+      <button type="button" data-tab="p3" aria-pressed="false">P3 — Polish</button>
+      <button type="button" data-tab="matrix" aria-pressed="false">Full Matrix</button>
+      <button type="button" data-tab="pathing" aria-pressed="false">Pathing</button>
+    </nav>
+
+    <main>
+      <!-- P0: Cost History Charts -->
+      <section id="p0" class="section active">
+        <div class="grid">
+          <article class="card span-12">
+            <h2 style="color:var(--red)">P0 — Cost History Charts</h2>
+            <p>Highest-value feature gap. CodexBar has 4 interactive chart types in the menu. UsageBar shows text lines. This is the single biggest UX differentiator we can add.</p>
+          </article>
+          <article class="span-6">
+            <div class="feature">
+              <h3>Cost Summary KPIs + 30-day Bar Chart</h3>
+              <div class="src">Source: CodexBar · CostHistoryChartMenuView.swift</div>
+              <div class="desc">Show Today / 7d / 30d spend KPIs plus interactive 30-day bar chart with daily spend, token, and request counts. Hover for per-day model breakdown.</div>
+              <b>First steps:</b>
+              <ol class="steps">
+                <li>Add <code>ProviderCostSummary</code> type to <code>src/lib/plugin-types.ts</code></li>
+                <li>Update plugin runtime to accept optional cost payload in Rust host</li>
+                <li>Convert Codex/Claude ccusage daily results into structured costSummary</li>
+                <li>Build <code>CostSummaryCard</code> React component (KPIs + compact 30-day bars)</li>
+                <li>Add detail page cost tab with daily table, model breakdown, copy/export</li>
+              </ol>
+              <div class="result">✓ Interactive cost history with KPIs and 30-day bars for Codex and Claude</div>
+              <div class="tags" style="margin-top:6px"><span class="tag">~3 days</span><span class="tag">P0</span><span class="tag">No new deps</span></div>
+            </div>
+          </article>
+          <article class="span-6">
+            <div class="feature">
+              <h3>OpenAI Admin API Provider</h3>
+              <div class="src">Source: CodexBar · OpenAIAPIUsageFetcher.swift</div>
+              <div class="desc">Add separate <code>openai-api</code> provider that uses Admin API keys to fetch real platform spend. Separate from Codex subscription usage.</div>
+              <b>First steps:</b>
+              <ol class="steps">
+                <li>Create <code>plugins/openai-api/</code> with Admin API key secret setup</li>
+                <li>Fetch <code>/v1/organization/costs</code> with 1-day buckets grouped by line_item</li>
+                <li>Fetch <code>/v1/organization/usage/completions</code> with model grouping</li>
+                <li>Normalize into ProviderCostSummary shape</li>
+              </ol>
+              <div class="result">✓ Real OpenAI platform spend visible alongside Codex subscription bars</div>
+              <div class="tags" style="margin-top:6px"><span class="tag">~3-5 days</span><span class="tag">P0</span><span class="tag">Admin API key</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- P1: Core UX Improvements -->
+      <section id="p1" class="section">
+        <div class="grid">
+          <article class="card span-12">
+            <h2 style="color:var(--amber)">P1 — Core UX Improvements</h2>
+            <p>Medium-effort, high-impact features that transform daily usage from "functional" to "delightful."</p>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Proactive Token Refresh</h3>
+              <div class="src">Source: opencode-usage · plugin-adapters.ts (lines 614-693)</div>
+              <div class="desc">Background job that checks JWT expiry on all provider tokens and proactively refreshes stale ones before they expire. Respects cooldown periods between refreshes.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Add Tauri background timer command</li>
+                <li>Port JWT expiry check from plugin-adapters.ts</li>
+                <li>Wire refresh flows per provider (Codex OAuth, Claude OAuth)</li>
+                <li>Add settings toggle for auto-refresh</li>
+              </ol>
+              <div class="result">✓ Users stop hitting expired token errors</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P1</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Local SQLite Reader + Pricing Engine</h3>
+              <div class="src">Source: opencode-usage · loader.ts + pricing.ts</div>
+              <div class="desc">Read OpenCode/Claude/Codex local databases to show per-query token usage and API-equivalent cost using built-in pricing tables for 25+ models.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Port <code>loader.ts</code> SQLite queries to Rust (rusqlite)</li>
+                <li>Port <code>pricing.ts</code> model pricing table</li>
+                <li>Add "Local Usage" section to provider detail view</li>
+                <li>Show daily token/cost breakdown by model</li>
+              </ol>
+              <div class="result">✓ Detailed local usage data — no competitor has this</div>
+              <div class="tags"><span class="tag">~3 days</span><span class="tag">P1</span><span class="tag">High value</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Usage Pace + Run-Out Risk</h3>
+              <div class="src">Source: CodexBar · UsagePace.swift + Win-CodexBar · usage_pace.rs</div>
+              <div class="desc">Calculate if current usage pace will exhaust quota before reset. Show ETA, reserve %, run-out probability, and pace stage (on track / ahead / behind).</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Port <code>UsagePace</code> struct/logic to TypeScript</li>
+                <li>Add pace calculation to probe state hook</li>
+                <li>Render PaceBadge on provider cards</li>
+                <li>Show run-out ETA in detail view</li>
+              </ol>
+              <div class="result">✓ Users know if they'll run out before reset</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P1</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Session Quota Notifications</h3>
+              <div class="src">Source: CodexBar · SessionQuotaNotifications.swift + Win-CodexBar · session_quota.rs</div>
+              <div class="desc">Detect when session quota depletes (0%) or restores (>0%). Post desktop notification on transition. Track state between app restarts.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Track <code>lastKnownSessionRemaining</code> per provider</li>
+                <li>Detect transitions in probe response handling</li>
+                <li>Use Tauri notification plugin to post alerts</li>
+                <li>Persist state for restart survival</li>
+              </ol>
+              <div class="result">✓ Users get notified when quota depletes or restores</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P1</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Config Atomic Writes + Backups</h3>
+              <div class="src">Source: opencode-usage · config-service.ts</div>
+              <div class="desc">Temp-file + rename pattern for all config mutations. Auto-backup before every write. Rollback to latest backup. Prevents config corruption on crash.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Extract config write utility in Rust backend</li>
+                <li>Implement atomic write pattern (write tmp → rename)</li>
+                <li>Add backup directory with timestamped snapshots</li>
+                <li>Add settings UI for backup/restore</li>
+              </ol>
+              <div class="result">✓ Config corruption eliminated</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P1</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Proxy Support (fix docs/impl gap)</h3>
+              <div class="src">Source: openusage · config.rs + reqwest socks feature</div>
+              <div class="desc">SOCKS5/HTTP proxy for all provider API calls. Documented in <code>docs/proxy.md</code> but never implemented — <code>~/.usagebar/config.json</code> exists in docs but nothing reads it.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Add <code>config.rs</code> module to Rust backend</li>
+                <li>Add <code>socks</code> feature to reqwest dependency</li>
+                <li>Parse proxy config with auth redaction + localhost bypass</li>
+                <li>Apply proxy to all HTTP plugin requests</li>
+              </ol>
+              <div class="result">✓ Corporate firewall users can finally use proxy</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P1</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- P2: Power Features -->
+      <section id="p2" class="section">
+        <div class="grid">
+          <article class="card span-12">
+            <h2 style="color:var(--green)">P2 — Power Features</h2>
+            <p>Significant capability expansions. These transform UsageBar from a viewer into a management tool.</p>
+          </article>
+          <article class="span-6">
+            <div class="feature">
+              <h3>Multi-Account Management</h3>
+              <div class="src">Source: opencode-usage + CodexBar + Win-CodexBar</div>
+              <div class="desc">Full account CRUD across providers: add/remove/switch Codex and Anthropic accounts. OAuth flow for new accounts. Per-account usage, history, workspace attribution.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Port Codex multi-account store adapter from opencode-usage</li>
+                <li>Build account management UI (list, add, remove, switch)</li>
+                <li>Add OAuth flow for adding new accounts</li>
+                <li>Add account-scoped probe routing</li>
+              </ol>
+              <div class="result">✓ Handle multiple Codex/Anthropic accounts seamlessly</div>
+              <div class="tags"><span class="tag">~5 days</span><span class="tag">P2</span><span class="tag">Major UX</span></div>
+            </div>
+          </article>
+          <article class="span-6">
+            <div class="feature">
+              <h3>Rich Tray Icon + Animations</h3>
+              <div class="src">Source: CodexBar · IconRenderer.swift (1041 lines)</div>
+              <div class="desc">Per-provider mascots rendered in tray icon. Morph loading animation, blink/wiggle/tilt effects. 5 loading patterns. Status overlay dots for incidents.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Design SVG mascot set per provider (Codex, Claude, etc.)</li>
+                <li>Add tray icon rendering with canvas compositing</li>
+                <li>Implement loading animation engine</li>
+                <li>Add status overlay system for provider incidents</li>
+              </ol>
+              <div class="result">✓ Delightful animated tray icons unique to each provider</div>
+              <div class="tags"><span class="tag">~4 days</span><span class="tag">P2</span><span class="tag">Visual polish</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Per-Model Cost Breakdown</h3>
+              <div class="src">Source: ccsage apps</div>
+              <div class="desc">Show per-model input/output/cache tokens and cost in provider detail. Group daily usage by model. Model-level drill-down for any date range.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Update ccusage runner to request per-model breakdown</li>
+                <li>Parse model breakdown in Codex/Claude plugins</li>
+                <li>Build model breakdown table component</li>
+                <li>Add date range filter for model analysis</li>
+              </ol>
+              <div class="result">✓ Users see exactly which models cost the most</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P2</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Battery-Aware Refresh</h3>
+              <div class="src">Source: CodexBar · OpenAIWebRefreshPolicyContext</div>
+              <div class="desc">Skip non-forced refreshes on battery power. Reduce menu redraw churn. Adaptive idle scheduling. Settings toggle for battery saver mode.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Detect power status via Windows API</li>
+                <li>Gate non-forced probe requests on battery</li>
+                <li>Extend refresh interval when on battery</li>
+                <li>Add battery saver setting</li>
+              </ol>
+              <div class="result">✓ Longer battery life on laptops</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P2</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>5-Hour Billing Blocks</h3>
+              <div class="src">Source: ccsage · apps/ccusage/src/commands/blocks.ts</div>
+              <div class="desc">Claude's native billing unit analysis: show active block with burn rate, projected total tokens/cost, gap detection between blocks.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Add <code>blocks</code> command to ccusage runner</li>
+                <li>Parse block projection data in plugin</li>
+                <li>Render block visualization in Claude detail view</li>
+                <li>Show active block burn rate ticket</li>
+              </ol>
+              <div class="result">✓ See exactly where you are in Claude's billing cycle</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P2</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- P3: Polish & Ecosystem -->
+      <section id="p3" class="section">
+        <div class="grid">
+          <article class="card span-12">
+            <h2 style="color:var(--blue)">P3 — Polish & Ecosystem</h2>
+            <p>Lower impact or higher effort. Valuable for specific users or long-term product maturity.</p>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>i18n System</h3>
+              <div class="src">Source: Win-CodexBar · locale.rs (2924 lines)</div>
+              <div class="desc">Full internationalization with locale key enum, React context provider, settings persistence. English + Chinese initially. Coverage validation script.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Port <code>LocaleKey</code> enum from Win-CodexBar locale.rs</li>
+                <li>Build React i18n context provider with locale switching</li>
+                <li>Add English and Chinese locale resource files</li>
+                <li>Wire settings persistence for language preference</li>
+                <li>Add coverage validation script that checks all keys are translated</li>
+              </ol>
+              <div class="result">✓ Full i18n supporting English and Chinese with coverage validation</div>
+              <div class="tags"><span class="tag">~3 days</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Privacy Redaction Mode</h3>
+              <div class="src">Source: CodexBar · PersonalInfoRedactor.swift</div>
+              <div class="desc">"Hide personal info" toggle redacts emails, account IDs, plan names from all UI surfaces. Centralized redactor for logs and screenshots.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Build <code>PersonalInfoRedactor</code> utility with regex patterns</li>
+                <li>Add redaction rules for emails, account IDs, and plan names</li>
+                <li>Wire "Hide personal info" toggle in settings</li>
+                <li>Apply redaction to all UI surfaces and exported logs</li>
+              </ol>
+              <div class="result">✓ PII hidden from screenshots, screen sharing, and exports</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>CLI Tool</h3>
+              <div class="src">Source: Win-CodexBar + opencode-usage</div>
+              <div class="desc">Standalone CLI with subcommands: <code>usagebar usage</code>, <code>usagebar cost</code>, <code>usagebar config validate/dump</code>. JSON + text output. Background job support.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Add Tauri CLI plugin binary target to Cargo.toml</li>
+                <li>Implement <code>usage</code> subcommand with JSON and text output</li>
+                <li>Implement <code>cost</code> subcommand with date range filtering</li>
+                <li>Implement <code>config validate</code> and <code>config dump</code> subcommands</li>
+                <li>Add background job runner mode for scheduled tasks</li>
+              </ol>
+              <div class="result">✓ Standalone CLI for scripting, automation, and headless environments</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>NanoGPT Provider</h3>
+              <div class="src">Source: Win-CodexBar</div>
+              <div class="desc">NanoGPT API-key credits tracking. Simple provider that fetches current credit balance and usage history via API key.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Create <code>plugins/nanogpt/</code> with API key secret setup</li>
+                <li>Fetch credits balance from NanoGPT API</li>
+                <li>Fetch usage history with date range</li>
+                <li>Normalize into standard provider shape for probe display</li>
+              </ol>
+              <div class="result">✓ NanoGPT credit balance and usage visible in UsageBar</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Infini Provider</h3>
+              <div class="src">Source: Win-CodexBar</div>
+              <div class="desc">Infini session and weekly quota tracking via API key. Shows current session usage and weekly allowance consumption.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Create <code>plugins/infini/</code> with API key secret setup</li>
+                <li>Fetch session quota from Infini API</li>
+                <li>Fetch weekly quota with consumption breakdown</li>
+                <li>Normalize into standard provider shape for probe display</li>
+              </ol>
+              <div class="result">✓ Infini session and weekly quota visible in UsageBar</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>MCP Server Integration</h3>
+              <div class="src">Source: ccsage · apps/mcp/</div>
+              <div class="desc">Expose UsageBar data via Model Context Protocol. Claude Desktop / Cursor can query usage. HTTP + stdio transport.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Create MCP server plugin with stdio transport</li>
+                <li>Expose tools: get-usage, get-cost, list-providers, get-pace</li>
+                <li>Add HTTP transport option for remote access</li>
+                <li>Add enable/disable toggle in settings</li>
+              </ol>
+              <div class="result">✓ Claude Desktop and Cursor can query usage data via MCP</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Consecutive Failure Gates</h3>
+              <div class="src">Source: CodexBar · UsageStore.swift failureGates</div>
+              <div class="desc">Per-provider failure counters. Back off after N consecutive failures. Separate gates for usage fetch vs cost fetch.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Add per-provider failure counters in Rust state</li>
+                <li>Implement exponential backoff after N consecutive failures</li>
+                <li>Create separate failure gates for usage and cost fetch paths</li>
+                <li>Reset counters on first successful response</li>
+              </ol>
+              <div class="result">✓ No more spam retries when a provider API is down</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Desktop Widgets</h3>
+              <div class="src">Source: CodexBar · WidgetKit</div>
+              <div class="desc">Windows desktop widget showing provider usage snapshot. Provider switcher. Uses Widget Snapshot data format.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Design <code>WidgetSnapshot</code> data format for provider state</li>
+                <li>Build Windows desktop widget renderer with overlay API</li>
+                <li>Add provider switcher dropdown in widget</li>
+                <li>Implement auto-refresh with configurable interval</li>
+              </ol>
+              <div class="result">✓ Always-visible usage snapshot on Windows desktop</div>
+              <div class="tags"><span class="tag">~5 days</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Debug Infrastructure Pane</h3>
+              <div class="src">Source: CodexBar · PreferencesDebugPane.swift</div>
+              <div class="desc">Debug pane with: resolved binary paths, PATH composition, per-provider debug logs, loading animation replay, cookie/token resolution status.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Build <code>DebugPane</code> React component in settings</li>
+                <li>Show resolved ccusage binary paths and versions</li>
+                <li>Show PATH environment variable composition</li>
+                <li>Add per-provider debug log viewer with filtering</li>
+                <li>Add token/cookie resolution status indicators</li>
+                <li>Add loading animation replay for diagnostics</li>
+              </ol>
+              <div class="result">✓ Developers can diagnose provider issues without digging through files</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Historical Pace Backfill</h3>
+              <div class="src">Source: CodexBar · UsageStore+HistoricalPace.swift</div>
+              <div class="desc">Backfill historical usage data for accurate long-term pace. Handle zero-usage days. DST-safe time boundaries.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Add history store in Rust using SQLite for daily snapshots</li>
+                <li>Backfill daily usage data with provider-specific queries</li>
+                <li>Handle zero-usage days correctly in pace calculations</li>
+                <li>Use DST-safe UTC date boundaries for all time windows</li>
+                <li>Expose history API to pace calculator and chart components</li>
+              </ol>
+              <div class="result">✓ Long-term accurate pace predictions with historical context</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Screen Confetti</h3>
+              <div class="src">Source: CodexBar · ScreenConfettiOverlayController.swift</div>
+              <div class="desc">Fun confetti animation when weekly limit resets after active use. Opt-in via settings.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Build confetti overlay component using canvas particles</li>
+                <li>Trigger animation on weekly quota reset detection</li>
+                <li>Add opt-in toggle in settings</li>
+                <li>Implement gravity, collision, and fade animation physics</li>
+              </ol>
+              <div class="result">✓ Fun celebration when weekly quota resets after active use</div>
+              <div class="tags"><span class="tag">~1 day</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Advanced Cookie Import</h3>
+              <div class="src">Source: Win-CodexBar · browser/ (detection, cookies, cache, watchdog)</div>
+              <div class="desc">Multi-browser cookie import (Chrome, Edge, Brave, Firefox, Opera, Vivaldi). AES-GCM decryption. Cookie cache + freshness watchdog. Per-provider source picker.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Port browser cookie readers for Chrome, Edge, and Brave (Chromium)</li>
+                <li>Add Firefox cookie reader with profile detection</li>
+                <li>Add Opera and Vivaldi support</li>
+                <li>Implement AES-GCM cookie decryption for Chromium browsers</li>
+                <li>Build cookie cache with freshness watchdog</li>
+                <li>Build per-provider source picker in settings UI</li>
+              </ol>
+              <div class="result">✓ Import auth cookies from any major browser with auto-refresh</div>
+              <div class="tags"><span class="tag">~3 days</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>Commander Web Server</h3>
+              <div class="src">Source: opencode-usage · commander/server.ts</div>
+              <div class="desc">Full REST API extending existing HTTP API. Config editing, account management, background jobs with streaming logs and cancellation.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Extend HTTP API with RESTful route structure</li>
+                <li>Add config editing endpoints (get/set/delete key-value)</li>
+                <li>Add account management endpoints (create/read/update/delete)</li>
+                <li>Build background job system with streaming logs and cancellation</li>
+                <li>Expose OpenAPI docs at /docs endpoint</li>
+              </ol>
+              <div class="result">✓ Full HTTP API for programmatic control and automation</div>
+              <div class="tags"><span class="tag">~5 days</span><span class="tag">P3</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>DWM Dark Caption</h3>
+              <div class="src">Source: Win-CodexBar · window subclassing</div>
+              <div class="desc">Apply native dark mode to the Windows title bar via <code>DWMWA_USE_IMMERSIVE_DARK_MODE</code>. Matches system theme and updates on theme change.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Port window subclassing from Win-CodexBar</li>
+                <li>Detect system color scheme at Tauri window creation</li>
+                <li>Apply <code>DWMWA_USE_IMMERSIVE_DARK_MODE</code> attribute</li>
+                <li>Watch theme change events and re-apply on toggle</li>
+                <li>Handle Windows 10 (20H1+) vs Windows 11 API shape differences</li>
+              </ol>
+              <div class="result">✓ Native dark title bar that matches system theme on Windows</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P3</span><span class="tag">Windows</span></div>
+            </div>
+          </article>
+          <article class="span-4">
+            <div class="feature">
+              <h3>WSL Support</h3>
+              <div class="src">Source: Win-CodexBar · wsl.rs</div>
+              <div class="desc">Execute ccusage and CLI tools inside Windows Subsystem for Linux. Auto-detect WSL distributions, map filesystem paths, pipe output back to UsageBar.</div>
+              <b>Steps:</b>
+              <ol class="steps">
+                <li>Port <code>wsl.rs</code> module from Win-CodexBar</li>
+                <li>Detect installed WSL distributions at startup</li>
+                <li>Execute CLI tools via <code>wsl.exe</code> with proper argument passing</li>
+                <li>Map WSL filesystem paths to Windows paths for config discovery</li>
+                <li>Handle WSL1 vs WSL2 process model differences</li>
+              </ol>
+              <div class="result">✓ UsageBar works with Linux-native tools installed inside WSL</div>
+              <div class="tags"><span class="tag">~2 days</span><span class="tag">P3</span><span class="tag">Windows</span></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Full Matrix -->
+      <section id="matrix" class="section">
+        <div class="grid">
+          <article class="card span-12">
+            <h2>Complete Feature Gap Matrix</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Feature</th>
+                  <th>Source project</th>
+                  <th>Tier</th>
+                  <th>Effort</th>
+                  <th>Impact</th>
+                  <th>First step</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>1</td><td>Cost Summary KPIs + 30-day chart</td><td>CodexBar</td><td><span class="tier p0">P0</span></td><td>3d</td><td>⭐⭐⭐</td><td>Add ProviderCostSummary type</td></tr>
+                <tr><td>2</td><td>OpenAI Admin API provider</td><td>CodexBar</td><td><span class="tier p0">P0</span></td><td>3-5d</td><td>⭐⭐⭐</td><td>Create openai-api plugin</td></tr>
+                <tr><td>3</td><td>Proactive token refresh</td><td>opencode-usage</td><td><span class="tier p1">P1</span></td><td>2d</td><td>⭐⭐⭐</td><td>Add Tauri background timer</td></tr>
+                <tr><td>4</td><td>Local SQLite reader + pricing</td><td>opencode-usage</td><td><span class="tier p1">P1</span></td><td>3d</td><td>⭐⭐⭐</td><td>Port loader.ts to Rust</td></tr>
+                <tr><td>5</td><td>Usage pace + run-out risk</td><td>CodexBar</td><td><span class="tier p1">P1</span></td><td>2d</td><td>⭐⭐⭐</td><td>Port UsagePace struct</td></tr>
+                <tr><td>6</td><td>Session quota notifications</td><td>CodexBar</td><td><span class="tier p1">P1</span></td><td>1d</td><td>⭐⭐</td><td>Track lastKnownSessionRemaining</td></tr>
+                <tr><td>7</td><td>Config atomic writes + backups</td><td>opencode-usage</td><td><span class="tier p1">P1</span></td><td>1d</td><td>⭐⭐</td><td>Extract config write utility</td></tr>
+                <tr><td>8</td><td>Proxy support (fix gap)</td><td>openusage</td><td><span class="tier p1">P1</span></td><td>1d</td><td>⭐⭐</td><td>Add config.rs module</td></tr>
+                <tr><td>9</td><td>Multi-account management</td><td>opencode-usage + CodexBar + Win-CodexBar</td><td><span class="tier p2">P2</span></td><td>5d</td><td>⭐⭐⭐</td><td>Port Codex multi-account adapter</td></tr>
+                <tr><td>10</td><td>Rich tray icon + animations</td><td>CodexBar</td><td><span class="tier p2">P2</span></td><td>4d</td><td>⭐⭐</td><td>Design SVG mascots</td></tr>
+                <tr><td>11</td><td>Per-model cost breakdown</td><td>ccusage</td><td><span class="tier p2">P2</span></td><td>2d</td><td>⭐⭐</td><td>Update ccusage runner flags</td></tr>
+                <tr><td>12</td><td>Battery-aware refresh</td><td>CodexBar</td><td><span class="tier p2">P2</span></td><td>1d</td><td>⭐⭐</td><td>Detect power status</td></tr>
+                <tr><td>13</td><td>5-hour billing blocks</td><td>ccusage</td><td><span class="tier p2">P2</span></td><td>2d</td><td>⭐⭐</td><td>Add blocks command to runner</td></tr>
+                <tr><td>14</td><td>i18n system</td><td>Win-CodexBar</td><td><span class="tier p3">P3</span></td><td>3d</td><td>⭐⭐</td><td>Port LocaleKey enum</td></tr>
+                <tr><td>15</td><td>Privacy redaction mode</td><td>CodexBar</td><td><span class="tier p3">P3</span></td><td>1d</td><td>⭐</td><td>Build PersonalInfoRedactor</td></tr>
+                <tr><td>16</td><td>CLI tool</td><td>Win-CodexBar + opencode-usage</td><td><span class="tier p3">P3</span></td><td>2d</td><td>⭐⭐</td><td>Add Tauri CLI plugin</td></tr>
+                <tr><td>17</td><td>NanoGPT provider</td><td>Win-CodexBar</td><td><span class="tier p3">P3</span></td><td>1d</td><td>⭐</td><td>Create nanogpt plugin</td></tr>
+                <tr><td>18</td><td>Infini provider</td><td>Win-CodexBar</td><td><span class="tier p3">P3</span></td><td>1d</td><td>⭐</td><td>Create infini plugin</td></tr>
+                <tr><td>19</td><td>MCP server integration</td><td>ccusage</td><td><span class="tier p3">P3</span></td><td>2d</td><td>⭐⭐</td><td>Create MCP server plugin</td></tr>
+                <tr><td>20</td><td>Consecutive failure gates</td><td>CodexBar</td><td><span class="tier p3">P3</span></td><td>1d</td><td>⭐</td><td>Add failure counters</td></tr>
+                <tr><td>21</td><td>Desktop widgets</td><td>CodexBar</td><td><span class="tier p3">P3</span></td><td>5d</td><td>⭐</td><td>Design WidgetSnapshot format</td></tr>
+                <tr><td>22</td><td>Debug infrastructure pane</td><td>CodexBar</td><td><span class="tier p3">P3</span></td><td>2d</td><td>⭐</td><td>Build DebugPane component</td></tr>
+                <tr><td>23</td><td>Historical pace backfill</td><td>CodexBar</td><td><span class="tier p3">P3</span></td><td>2d</td><td>⭐</td><td>Add history store</td></tr>
+                <tr><td>24</td><td>Screen confetti</td><td>CodexBar</td><td><span class="tier p3">P3</span></td><td>1d</td><td>⭐</td><td>Build confetti overlay</td></tr>
+                <tr><td>25</td><td>Advanced cookie import</td><td>Win-CodexBar</td><td><span class="tier p3">P3</span></td><td>3d</td><td>⭐⭐</td><td>Port browser cookie readers</td></tr>
+                <tr><td>26</td><td>Commander web server</td><td>opencode-usage</td><td><span class="tier p3">P3</span></td><td>5d</td><td>⭐⭐</td><td>Extend HTTP API</td></tr>
+                <tr><td>27</td><td>DWM dark caption</td><td>Win-CodexBar</td><td><span class="tier p3">P3</span></td><td>2d</td><td>⭐</td><td>Port window subclassing</td></tr>
+                <tr><td>28</td><td>WSL support</td><td>Win-CodexBar</td><td><span class="tier p3">P3</span></td><td>2d</td><td>⭐</td><td>Port wsl.rs module</td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="card span-12">
+            <h2>Implementation Flow</h2>
+            <div class="flow">
+              <div class="step-box"><div class="num">1</div><b>P0: Cost Charts</b><br>Types → Runtime → Plugins → UI → Detail</div>
+              <div class="step-box"><div class="num">2</div><b>P1: Core UX</b><br>Token refresh + SQLite reader + Pace + Notifications + Atomic config + Proxy</div>
+              <div class="step-box"><div class="num">3</div><b>P2: Power</b><br>Multi-account + Tray icons + Model breakdown + Battery + Billing blocks</div>
+              <div class="step-box"><div class="num">4</div><b>P3: Polish</b><br>i18n + Redaction + CLI + Widgets + MCP + Debug + Confetti + Cookie import</div>
+            </div>
+            <p style="font-size:13px;margin-top:12px">Each phase builds on the previous. P0 can start immediately and adds visible value. P1 fixes daily pain points. P2-3 rounds out the product over time.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Pathing -->
+      <section id="pathing" class="section">
+        <div class="grid">
+          <article class="card span-12">
+            <h2>Document Pathing & Completion Log</h2>
+            <p>This artifact was created 2026-06-01 as a comprehensive feature gap audit and roadmap spanning 16 projects. All 28 features are now fully specified with source references, descriptions, implementation steps, expected results, effort estimates, and priority tiers.</p>
+          </article>
+          <article class="card span-5">
+            <h3>Document Structure</h3>
+            <table>
+              <thead><tr><th>Section</th><th>Features</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>P0 — Cost Charts</td><td>2</td><td>Fully specified with steps, results, effort</td></tr>
+                <tr><td>P1 — Core UX</td><td>6</td><td>Fully specified with steps, results, effort</td></tr>
+                <tr><td>P2 — Power Features</td><td>5</td><td>Fully specified with steps, results, effort</td></tr>
+                <tr><td>P3 — Polish & Ecosystem</td><td>15</td><td>Fully specified with steps, results, effort</td></tr>
+                <tr><td>Full Matrix</td><td>28</td><td>Complete table — tier, effort, impact, first step</td></tr>
+                <tr><td><strong>Pathing</strong></td><td>—</td><td>This section — document map and changelog</td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="card span-7">
+            <h3>Completion Log</h3>
+            <div style="font-size:13px">
+              <p><strong>2026-06-01 — Initial scaffold:</strong> Document created with cross-project audit of 16 projects. P0, P1, and P2 sections completed with full specifications including implementation steps and expected results. P3 section left with placeholder cards (description and tags only, no steps or results). Full Matrix table with all 28 features completed.</p>
+              <p><strong>2026-06-01 — Finalization:</strong> All 12 placeholder P3 cards filled in with implementation steps and expected results. Two missing features from the matrix table added as new cards to P3 section: DWM Dark Caption (#27) and WSL Support (#28). Combined "NanoGPT + Infini" card split into two separate cards matching the matrix entries. Pathing section added for document discoverability and change tracking.</p>
+              <p style="color:var(--green)"><strong>Status: Complete.</strong> All 28 features now have: source reference, description, implementation steps, expected result, effort estimate, and priority tier.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Generated from <code>D:\UsageBar</code>. Sources: openusage v0.6.24, opencode-usage, ccsage monorepo (6 apps + 2 packages), CodexBar (macOS), Win-CodexBar. Static artifact — no external runtime deps.
+    </footer>
+  </div>
+
+  <script>
+    const buttons = Array.from(document.querySelectorAll("nav button[data-tab]"));
+    const sections = Array.from(document.querySelectorAll(".section"));
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.dataset.tab;
+        buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+        sections.forEach((s) => s.classList.toggle("active", s.id === id));
+      });
+    });
+  </script>
+</body>
+</html>
