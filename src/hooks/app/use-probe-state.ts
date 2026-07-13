@@ -61,6 +61,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           lastSettledData: existing?.lastSettledData ?? existing?.data ?? null,
           loading: true,
           error: null,
+          errorCategory: null,
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -81,6 +82,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
           lastSettledData: existing?.lastSettledData ?? existing?.data ?? null,
           loading: false,
           error,
+          errorCategory: null,
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -104,21 +106,19 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
         return {
           ...prev,
           [output.providerId]: {
-            data: errorMessage ? existing?.data ?? existing?.lastSettledData ?? null : output,
+            data: errorMessage ? (existing?.data ?? existing?.lastSettledData ?? null) : output,
             lastSettledData: errorMessage
-              ? existing?.lastSettledData ?? existing?.data ?? null
+              ? (existing?.lastSettledData ?? existing?.data ?? null)
               : output,
             history: errorMessage
               ? existing?.history
               : appendUsageHistory(existing?.history, output, capturedAt),
             loading: false,
             error: errorMessage,
-            lastManualRefreshAt: !errorMessage && isManual
-              ? capturedAt
-              : existing?.lastManualRefreshAt ?? null,
-            lastSuccessAt: !errorMessage
-              ? capturedAt
-              : existing?.lastSuccessAt ?? null,
+            errorCategory: errorMessage ? (output.error?.category ?? "unknown") : null,
+            lastManualRefreshAt:
+              !errorMessage && isManual ? capturedAt : (existing?.lastManualRefreshAt ?? null),
+            lastSuccessAt: !errorMessage ? capturedAt : (existing?.lastSuccessAt ?? null),
           },
         }
       })

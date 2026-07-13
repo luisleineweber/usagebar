@@ -50,6 +50,10 @@ describe("useProbeState", () => {
         providerId: "codex",
         displayName: "Codex",
         iconUrl: "/codex.svg",
+        error: {
+          category: "credentialExpired",
+          message: "Not signed in",
+        },
         lines: [{ type: "badge", label: "Error", text: "Not signed in" }],
       })
     })
@@ -57,6 +61,7 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex).toMatchObject({
       loading: false,
       error: "Not signed in",
+      errorCategory: "credentialExpired",
       data: {
         providerId: "codex",
         displayName: "Codex",

@@ -26,6 +26,7 @@ pub mod browser_bridge {
 }
 pub mod host_api;
 pub mod manifest;
+pub mod probe_error;
 pub mod runtime;
 
 use manifest::LoadedPlugin;
