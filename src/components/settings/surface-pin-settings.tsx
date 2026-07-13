@@ -1,11 +1,7 @@
 import { makeTrayBarsSvg, TRAY_BRAND_FOREGROUND } from "@/lib/tray-bars-icon"
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import type { PluginMeta } from "@/lib/plugin-types"
-import {
-  MAX_SURFACE_PINS,
-  type MenubarIconStyle,
-  type SurfacePin,
-} from "@/lib/settings"
+import { MAX_SURFACE_PINS, type MenubarIconStyle, type SurfacePin } from "@/lib/settings"
 import { cn } from "@/lib/utils"
 
 type PinCandidate = {
@@ -61,6 +57,7 @@ export function SurfacePinSettings({
     foregroundColor: TRAY_BRAND_FOREGROUND,
   })
   const trayPreviewUrl = `data:image/svg+xml,${encodeURIComponent(traySvg)}`
+  const previewBarsById = new Map(preview.bars.map((bar) => [bar.id, bar]))
 
   const updatePin = (index: number, key: string) => {
     if (!key) {
@@ -99,7 +96,7 @@ export function SurfacePinSettings({
               <select
                 id={`surface-pin-${index}`}
                 value={selectedKey}
-                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-9 w-full rounded-md border border-input bg-background px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 onChange={(event) => updatePin(index, event.target.value)}
               >
                 <option value="">{pin ? "Remove metric" : "No metric"}</option>
@@ -131,7 +128,7 @@ export function SurfacePinSettings({
                         role="radio"
                         aria-checked={active}
                         className={cn(
-                          "h-7 rounded-sm px-2 text-xs font-medium transition-colors",
+                          "h-7 rounded-sm px-2 text-xs font-medium transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
                           active
                             ? "bg-background text-foreground"
                             : "text-muted-foreground hover:text-foreground"
@@ -161,10 +158,12 @@ export function SurfacePinSettings({
         </div>
         <div className="mt-3 space-y-2" aria-label="Pinned metric widget preview">
           {pins.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Pins appear here and in multi-bar tray styles.</p>
+            <p className="text-xs text-muted-foreground">
+              Pins appear here and in multi-bar tray styles.
+            </p>
           ) : (
-            pins.map((pin, index) => {
-              const bar = preview.bars[index]
+            pins.map((pin) => {
+              const bar = previewBarsById.get(`${pin.providerId}:${pin.metricLabel}`)
               const percent = formatPercent(bar?.fraction)
               return (
                 <div key={getPinKey(pin)} className="text-xs">
@@ -180,7 +179,9 @@ export function SurfacePinSettings({
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={
-                        typeof bar?.fraction === "number" ? Math.round(bar.fraction * 100) : undefined
+                        typeof bar?.fraction === "number"
+                          ? Math.round(bar.fraction * 100)
+                          : undefined
                       }
                     >
                       <div

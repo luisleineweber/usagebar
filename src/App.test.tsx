@@ -889,7 +889,9 @@ describe("App", () => {
     render(<App />);
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
-    await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(state.renderTrayBarsIconMock).toHaveBeenCalled(),
+    );
     expect(state.traySetTitleMock).not.toHaveBeenCalled();
   });
 
@@ -956,7 +958,10 @@ describe("App", () => {
 
     await waitFor(() =>
       expect(state.renderTrayBarsIconMock).toHaveBeenLastCalledWith(
-        expect.objectContaining({ providerIconUrl: "icon-b", percentText: "70%" }),
+        expect.objectContaining({
+          providerIconUrl: "icon-b",
+          percentText: "70%",
+        }),
       ),
     );
     await waitFor(() =>
@@ -1933,7 +1938,9 @@ describe("App", () => {
       eventState.handlers.get("display-preferences:updated")?.({
         payload: {
           key: "surfacePins",
-          value: [{ providerId: "a", metricLabel: "Session", presentation: "bar" }],
+          value: [
+            { providerId: "a", metricLabel: "Session", presentation: "bar" },
+          ],
         },
       });
     });

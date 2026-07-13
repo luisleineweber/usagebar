@@ -1,7 +1,13 @@
 import { ProviderCard } from "@/components/provider-card";
+import { SurfacePinWidget } from "@/components/surface-pin-widget";
 import { Button } from "@/components/ui/button";
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views";
-import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings";
+import type {
+  DisplayMode,
+  ResetTimerDisplayMode,
+  SurfacePin,
+  TimeFormatMode,
+} from "@/lib/settings";
 import { openSettingsWindow } from "@/lib/settings-window";
 
 interface OverviewPageProps {
@@ -11,6 +17,7 @@ interface OverviewPageProps {
   resetTimerDisplayMode: ResetTimerDisplayMode;
   timeFormatMode?: TimeFormatMode;
   onResetTimerDisplayModeToggle?: () => void;
+  surfacePins?: SurfacePin[];
 }
 
 export function OverviewPage({
@@ -20,6 +27,7 @@ export function OverviewPage({
   resetTimerDisplayMode,
   timeFormatMode,
   onResetTimerDisplayModeToggle,
+  surfacePins = [],
 }: OverviewPageProps) {
   if (plugins.length === 0) {
     return (
@@ -42,6 +50,7 @@ export function OverviewPage({
 
   return (
     <div>
+      <SurfacePinWidget pins={surfacePins} plugins={plugins} displayMode={displayMode} />
       {plugins.map((plugin, index) => (
         <ProviderCard
           key={plugin.meta.id}
@@ -50,6 +59,7 @@ export function OverviewPage({
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}
           error={plugin.error}
+          errorCategory={plugin.errorCategory}
           lines={plugin.data?.lines ?? plugin.lastSettledData?.lines ?? []}
           skeletonLines={plugin.meta.lines}
           lastManualRefreshAt={plugin.lastManualRefreshAt}

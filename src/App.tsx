@@ -34,17 +34,17 @@ import type { ActiveView } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
-import { listenPluginSettingsUpdated, notifyPluginSettingsUpdated } from "@/lib/plugin-settings-events"
+import {
+  listenPluginSettingsUpdated,
+  notifyPluginSettingsUpdated,
+} from "@/lib/plugin-settings-events"
 import { listenDisplayPreferenceUpdated } from "@/lib/display-preference-events"
 
 const TRAY_PROBE_DEBOUNCE_MS = 500
 const TRAY_SETTINGS_DEBOUNCE_MS = 2000
 
 function App() {
-  const {
-    activeView,
-    setActiveView,
-  } = useAppUiStore(
+  const { activeView, setActiveView } = useAppUiStore(
     useShallow((state) => ({
       activeView: state.activeView,
       setActiveView: state.setActiveView,
@@ -154,15 +154,17 @@ function App() {
     void listenPluginSettingsUpdated((nextSettings) => {
       setPluginSettings(nextSettings)
       scheduleTrayIconUpdate("settings", 0)
-    }).then((dispose) => {
-      if (disposed) {
-        dispose()
-        return
-      }
-      unlisten = dispose
-    }).catch((error) => {
-      console.error("Failed to listen for plugin settings updates:", error)
     })
+      .then((dispose) => {
+        if (disposed) {
+          dispose()
+          return
+        }
+        unlisten = dispose
+      })
+      .catch((error) => {
+        console.error("Failed to listen for plugin settings updates:", error)
+      })
 
     return () => {
       disposed = true
@@ -199,21 +201,31 @@ function App() {
       }
       setMenubarIconStyle(update.value)
       scheduleTrayIconUpdate("settings", 0)
-    }).then((dispose) => {
-      if (disposed) {
-        dispose()
-        return
-      }
-      unlisten = dispose
-    }).catch((error) => {
-      console.error("Failed to listen for display preference updates:", error)
     })
+      .then((dispose) => {
+        if (disposed) {
+          dispose()
+          return
+        }
+        unlisten = dispose
+      })
+      .catch((error) => {
+        console.error("Failed to listen for display preference updates:", error)
+      })
 
     return () => {
       disposed = true
       unlisten?.()
     }
-  }, [scheduleTrayIconUpdate, setDisplayMode, setMenubarIconStyle, setResetTimerDisplayMode, setSurfacePins, setTimeFormatMode, setThemeMode])
+  }, [
+    scheduleTrayIconUpdate,
+    setDisplayMode,
+    setMenubarIconStyle,
+    setResetTimerDisplayMode,
+    setSurfacePins,
+    setTimeFormatMode,
+    setThemeMode,
+  ])
 
   const { applyStartOnLogin } = useSettingsBootstrap({
     setPluginSettings,
@@ -251,23 +263,17 @@ function App() {
     scheduleTrayIconUpdate,
   })
 
-  const {
-    handleAutoUpdateIntervalChange,
-    handleGlobalShortcutChange,
-    handleStartOnLoginChange,
-  } = useSettingsSystemActions({
-    pluginSettings,
-    setAutoUpdateInterval,
-    setAutoUpdateNextAt,
-    setGlobalShortcut,
-    setStartOnLogin,
-    applyStartOnLogin,
-  })
+  const { handleAutoUpdateIntervalChange, handleGlobalShortcutChange, handleStartOnLoginChange } =
+    useSettingsSystemActions({
+      pluginSettings,
+      setAutoUpdateInterval,
+      setAutoUpdateNextAt,
+      setGlobalShortcut,
+      setStartOnLogin,
+      applyStartOnLogin,
+    })
 
-  const {
-    handleReorder,
-    handleToggle,
-  } = useSettingsPluginActions({
+  const { handleReorder, handleToggle } = useSettingsPluginActions({
     pluginSettings,
     setPluginSettings,
     setLoadingForPlugins,
@@ -295,14 +301,15 @@ function App() {
     }
   }, [setProviderConfigs])
 
-  const { displayPlugins, navPlugins, selectedPlugin, resolvedSelectedPlugin, hasResolvedViews } = useAppPluginViews({
-    activeView,
-    setActiveView,
-    pluginSettings,
-    pluginsMeta,
-    pluginStates,
-    providerStatuses,
-  })
+  const { displayPlugins, navPlugins, selectedPlugin, resolvedSelectedPlugin, hasResolvedViews } =
+    useAppPluginViews({
+      activeView,
+      setActiveView,
+      pluginSettings,
+      pluginsMeta,
+      pluginStates,
+      providerStatuses,
+    })
 
   const providerConfigsRef = useRef(providerConfigs)
   useEffect(() => {
@@ -311,105 +318,121 @@ function App() {
 
   const catchUpProbeIdsRef = useRef<Set<string>>(new Set())
 
-  const persistProviderConfigs = useCallback(async (nextConfigs: typeof providerConfigs) => {
-    setProviderConfigs(nextConfigs)
-    await saveProviderConfigs(nextConfigs)
-  }, [setProviderConfigs])
+  const persistProviderConfigs = useCallback(
+    async (nextConfigs: typeof providerConfigs) => {
+      setProviderConfigs(nextConfigs)
+      await saveProviderConfigs(nextConfigs)
+    },
+    [setProviderConfigs]
+  )
 
-  const handleProviderConfigChange = useCallback(async (
-    providerId: string,
-    patch: Partial<ProviderConfig>
-  ) => {
-    const nextConfigs = updateProviderConfig(providerConfigsRef.current, providerId, patch)
-    await persistProviderConfigs(nextConfigs)
-  }, [persistProviderConfigs])
-
-  const handleProviderSecretSave = useCallback(async (
-    providerId: string,
-    secretKey: string,
-    value: string
-  ) => {
-    try {
-      await setProviderSecret(providerId, secretKey, value)
-      const nextConfigs = setProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
+  const handleProviderConfigChange = useCallback(
+    async (providerId: string, patch: Partial<ProviderConfig>) => {
+      const nextConfigs = updateProviderConfig(providerConfigsRef.current, providerId, patch)
       await persistProviderConfigs(nextConfigs)
-    } catch (error) {
-      console.error("Failed to save provider secret:", error)
-      throw error
-    }
-  }, [persistProviderConfigs])
+    },
+    [persistProviderConfigs]
+  )
 
-  const handleProviderSecretDelete = useCallback(async (
-    providerId: string,
-    secretKey: string
-  ) => {
-    try {
-      await deleteProviderSecret(providerId, secretKey)
-      const nextConfigs = clearProviderSecretMetadata(providerConfigsRef.current, providerId, secretKey)
-      await persistProviderConfigs(nextConfigs)
-    } catch (error) {
-      console.error("Failed to delete provider secret:", error)
-      throw error
-    }
-  }, [persistProviderConfigs])
+  const handleProviderSecretSave = useCallback(
+    async (providerId: string, secretKey: string, value: string) => {
+      try {
+        await setProviderSecret(providerId, secretKey, value)
+        const nextConfigs = setProviderSecretMetadata(
+          providerConfigsRef.current,
+          providerId,
+          secretKey
+        )
+        await persistProviderConfigs(nextConfigs)
+      } catch (error) {
+        console.error("Failed to save provider secret:", error)
+        throw error
+      }
+    },
+    [persistProviderConfigs]
+  )
 
-  const handlePanelFocus = useCallback((targetView?: ActiveView) => {
-    void Promise.all([
-      loadThemeMode(),
-      loadDisplayMode(),
-      loadResetTimerDisplayMode(),
-      loadMenubarIconStyle(),
-      loadSurfacePins(pluginsMeta),
-    ])
-      .then(([
-        nextThemeMode,
-        nextDisplayMode,
-        nextResetTimerDisplayMode,
-        nextMenubarIconStyle,
-        nextSurfacePins,
-      ]) => {
-        setThemeMode(nextThemeMode)
-        setDisplayMode(nextDisplayMode)
-        setResetTimerDisplayMode(nextResetTimerDisplayMode)
-        setMenubarIconStyle(nextMenubarIconStyle)
-        setSurfacePins(nextSurfacePins)
-        scheduleTrayIconUpdate("settings", 0)
-      })
-      .catch((error) => {
-        console.error("Failed to refresh display preferences on panel focus:", error)
-      })
+  const handleProviderSecretDelete = useCallback(
+    async (providerId: string, secretKey: string) => {
+      try {
+        await deleteProviderSecret(providerId, secretKey)
+        const nextConfigs = clearProviderSecretMetadata(
+          providerConfigsRef.current,
+          providerId,
+          secretKey
+        )
+        await persistProviderConfigs(nextConfigs)
+      } catch (error) {
+        console.error("Failed to delete provider secret:", error)
+        throw error
+      }
+    },
+    [persistProviderConfigs]
+  )
 
-    if (!pluginSettings) return
-    const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
-    const explicitTargetView = targetView?.trim()
-
-    const idsToRefresh = explicitTargetView && explicitTargetView !== "home" && explicitTargetView !== "settings"
-      ? supportedEnabledIds.filter((id) => id === explicitTargetView)
-      : activeView !== "home" && activeView !== "settings"
-      ? supportedEnabledIds.filter((id) => id === activeView)
-      : supportedEnabledIds.filter((id) => {
-          const state = pluginStates[id]
-          if (!state) return true
-          if (state.loading) return false
-          return state.error !== null || state.data === null
+  const handlePanelFocus = useCallback(
+    (targetView?: ActiveView) => {
+      void Promise.all([
+        loadThemeMode(),
+        loadDisplayMode(),
+        loadResetTimerDisplayMode(),
+        loadMenubarIconStyle(),
+        loadSurfacePins(pluginsMeta),
+      ])
+        .then(
+          ([
+            nextThemeMode,
+            nextDisplayMode,
+            nextResetTimerDisplayMode,
+            nextMenubarIconStyle,
+            nextSurfacePins,
+          ]) => {
+            setThemeMode(nextThemeMode)
+            setDisplayMode(nextDisplayMode)
+            setResetTimerDisplayMode(nextResetTimerDisplayMode)
+            setMenubarIconStyle(nextMenubarIconStyle)
+            setSurfacePins(nextSurfacePins)
+            scheduleTrayIconUpdate("settings", 0)
+          }
+        )
+        .catch((error) => {
+          console.error("Failed to refresh display preferences on panel focus:", error)
         })
 
-    for (const id of idsToRefresh) {
-      handleRetryPlugin(id)
-    }
-  }, [
-    activeView,
-    handleRetryPlugin,
-    pluginSettings,
-    pluginStates,
-    pluginsMeta,
-    scheduleTrayIconUpdate,
-    setDisplayMode,
-    setMenubarIconStyle,
-    setSurfacePins,
-    setResetTimerDisplayMode,
-    setThemeMode,
-  ])
+      if (!pluginSettings) return
+      const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
+      const explicitTargetView = targetView?.trim()
+
+      const idsToRefresh =
+        explicitTargetView && explicitTargetView !== "home" && explicitTargetView !== "settings"
+          ? supportedEnabledIds.filter((id) => id === explicitTargetView)
+          : activeView !== "home" && activeView !== "settings"
+            ? supportedEnabledIds.filter((id) => id === activeView)
+            : supportedEnabledIds.filter((id) => {
+                const state = pluginStates[id]
+                if (!state) return true
+                if (state.loading) return false
+                return state.error !== null || state.data === null
+              })
+
+      for (const id of idsToRefresh) {
+        handleRetryPlugin(id)
+      }
+    },
+    [
+      activeView,
+      handleRetryPlugin,
+      pluginSettings,
+      pluginStates,
+      pluginsMeta,
+      scheduleTrayIconUpdate,
+      setDisplayMode,
+      setMenubarIconStyle,
+      setSurfacePins,
+      setResetTimerDisplayMode,
+      setThemeMode,
+    ]
+  )
 
   useEffect(() => {
     if (!pluginSettings) return
@@ -419,7 +442,12 @@ function App() {
       if (catchUpProbeIdsRef.current.has(id)) return false
       const state = pluginStates[id]
       if (!state) return true
-      return !state.loading && state.data === null && state.error === null && state.lastSuccessAt === null
+      return (
+        !state.loading &&
+        state.data === null &&
+        state.error === null &&
+        state.lastSuccessAt === null
+      )
     })
 
     if (idsToCatchUp.length === 0) return
@@ -443,7 +471,14 @@ function App() {
         console.error("Failed to start catch-up probe batch:", error)
         setErrorForPlugins(idsToCatchUp, "Failed to start probe")
       })
-  }, [pluginSettings, pluginStates, pluginsMeta, setErrorForPlugins, setLoadingForPlugins, startBatch])
+  }, [
+    pluginSettings,
+    pluginStates,
+    pluginsMeta,
+    setErrorForPlugins,
+    setLoadingForPlugins,
+    startBatch,
+  ])
 
   const pluginSettingsRef = useRef(pluginSettings)
   useEffect(() => {

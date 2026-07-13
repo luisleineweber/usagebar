@@ -1,8 +1,18 @@
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import type { ProbeErrorCategory } from "@/lib/plugin-types"
 
 type PluginErrorProps = {
   message: string
+  category?: ProbeErrorCategory | null
+}
+
+const CREDENTIAL_ERROR_LABELS: Partial<Record<ProbeErrorCategory, string>> = {
+  credentialMissing: "Credentials missing",
+  credentialUnavailable: "Credentials unavailable",
+  credentialUnreadable: "Credentials unreadable",
+  credentialInvalid: "Credentials invalid",
+  credentialExpired: "Credentials expired",
 }
 
 function formatMessage(message: string) {
@@ -21,14 +31,18 @@ function formatMessage(message: string) {
   )
 }
 
-export function PluginError({ message }: PluginErrorProps) {
+export function PluginError({ message, category }: PluginErrorProps) {
+  const categoryLabel = category ? CREDENTIAL_ERROR_LABELS[category] : null
   return (
     <Alert
       variant="destructive"
       className="flex items-center gap-2 [&>svg]:static [&>svg]:translate-y-0 [&>svg~*]:pl-0 [&>svg+div]:translate-y-0"
     >
       <AlertCircle className="h-4 w-4" />
-      <AlertDescription className="select-text cursor-text">{formatMessage(message)}</AlertDescription>
+      <AlertDescription className="select-text cursor-text">
+        {categoryLabel ? <div className="font-medium">{categoryLabel}</div> : null}
+        <div>{formatMessage(message)}</div>
+      </AlertDescription>
     </Alert>
   )
 }

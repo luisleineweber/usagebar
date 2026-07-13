@@ -12,4 +12,11 @@ describe("PluginError", () => {
     render(<PluginError message="Check `config.json` file" />)
     expect(screen.getByText("config.json")).toBeInTheDocument()
   })
+
+  it("identifies credential boundary failures", () => {
+    render(<PluginError message="Vault access denied" category="credentialUnavailable" />)
+
+    expect(screen.getByText("Credentials unavailable")).toBeInTheDocument()
+    expect(screen.getByText("Vault access denied")).toBeInTheDocument()
+  })
 })

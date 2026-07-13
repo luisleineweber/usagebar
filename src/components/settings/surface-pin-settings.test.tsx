@@ -36,14 +36,14 @@ const preview = {
   providerPercentText: "42%",
 }
 
-function renderSettings(pins: SurfacePin[], onPinsChange = vi.fn()) {
+function renderSettings(pins: SurfacePin[], onPinsChange = vi.fn(), trayPreview = preview) {
   render(
     <SurfacePinSettings
       plugins={plugins}
       pins={pins}
       onPinsChange={onPinsChange}
       menubarIconStyle="bars"
-      preview={preview}
+      preview={trayPreview}
     />
   )
   return onPinsChange
@@ -103,5 +103,23 @@ describe("SurfacePinSettings", () => {
     )
     expect(screen.queryByRole("progressbar", { name: "Weekly preview" })).not.toBeInTheDocument()
     expect(screen.getByText("73%")).toBeInTheDocument()
+  })
+
+  it("matches preview values by pin identity when unavailable pins are omitted", () => {
+    renderSettings(
+      [
+        { providerId: "codex", metricLabel: "Session", presentation: "text" },
+        { providerId: "claude", metricLabel: "Weekly", presentation: "text" },
+      ],
+      vi.fn(),
+      {
+        ...preview,
+        bars: [{ id: "claude:Weekly", fraction: 0.73 }],
+      }
+    )
+    const widget = screen.getByLabelText("Pinned metric widget preview")
+
+    expect(within(widget).getByText("--%")).toBeInTheDocument()
+    expect(within(widget).getByText("73%")).toBeInTheDocument()
   })
 })

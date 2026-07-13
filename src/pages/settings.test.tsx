@@ -8,7 +8,13 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 let latestOnDragEnd: ((event: any) => void) | undefined
 
 vi.mock("@dnd-kit/core", () => ({
-  DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd?: (event: any) => void }) => {
+  DndContext: ({
+    children,
+    onDragEnd,
+  }: {
+    children: ReactNode
+    onDragEnd?: (event: any) => void
+  }) => {
     latestOnDragEnd = onDragEnd
     return <div data-testid="dnd-context">{children}</div>
   },
@@ -71,7 +77,13 @@ const providers: SettingsPluginState[] = [
       lines: [],
       primaryCandidates: [],
     },
-    state: { data: null, loading: false, error: null, lastManualRefreshAt: null, lastSuccessAt: null },
+    state: {
+      data: null,
+      loading: false,
+      error: null,
+      lastManualRefreshAt: null,
+      lastSuccessAt: null,
+    },
     config: { source: "manual", workspaceId: "wrk_123" },
   },
   {
@@ -91,7 +103,13 @@ const providers: SettingsPluginState[] = [
       lines: [],
       primaryCandidates: [],
     },
-    state: { data: null, loading: false, error: "Not signed in", lastManualRefreshAt: null, lastSuccessAt: null },
+    state: {
+      data: null,
+      loading: false,
+      error: "Not signed in",
+      lastManualRefreshAt: null,
+      lastSuccessAt: null,
+    },
   },
 ]
 
@@ -179,7 +197,7 @@ describe("SettingsPage", () => {
 
   it("renders global settings on the General tab", () => {
     render(<TestHarness />)
-expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
+    expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
     expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
   })

@@ -104,17 +104,11 @@ export function SettingsPage({
           variant="line"
           className="mt-4 h-auto w-fit gap-0 rounded-none border-b border-border/55 bg-transparent p-0 pb-0"
         >
-          <TabsTrigger
-            value="general"
-            className="gap-2 rounded-none px-4 pb-2.5 pt-0.5 text-sm"
-          >
+          <TabsTrigger value="general" className="gap-2 rounded-none px-4 pb-2.5 pt-0.5 text-sm">
             <Settings2 className="size-4" />
             General
           </TabsTrigger>
-          <TabsTrigger
-            value="providers"
-            className="gap-2 rounded-none px-4 pb-2.5 pt-0.5 text-sm"
-          >
+          <TabsTrigger value="providers" className="gap-2 rounded-none px-4 pb-2.5 pt-0.5 text-sm">
             <Blocks className="size-4" />
             Providers
           </TabsTrigger>

@@ -38,7 +38,9 @@ export function SettingsWindowApp() {
   const initialTargetRef = useRef(parseSettingsWindowLocation(window.location.search))
   const autoCloseTimerRef = useRef<number | null>(null)
   const scheduleAutoCloseRef = useRef<() => void>(() => {})
-  const [settingsTab, setSettingsTab] = useState<SettingsWindowTab>(initialTargetRef.current.tab ?? "general")
+  const [settingsTab, setSettingsTab] = useState<SettingsWindowTab>(
+    initialTargetRef.current.tab ?? "general"
+  )
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(
     initialTargetRef.current.providerId ?? null
   )
@@ -162,18 +164,15 @@ export function SettingsWindowApp() {
     scheduleTrayIconUpdate,
   })
 
-  const {
-    handleAutoUpdateIntervalChange,
-    handleGlobalShortcutChange,
-    handleStartOnLoginChange,
-  } = useSettingsSystemActions({
-    pluginSettings,
-    setAutoUpdateInterval,
-    setAutoUpdateNextAt,
-    setGlobalShortcut,
-    setStartOnLogin,
-    applyStartOnLogin,
-  })
+  const { handleAutoUpdateIntervalChange, handleGlobalShortcutChange, handleStartOnLoginChange } =
+    useSettingsSystemActions({
+      pluginSettings,
+      setAutoUpdateInterval,
+      setAutoUpdateNextAt,
+      setGlobalShortcut,
+      setStartOnLogin,
+      applyStartOnLogin,
+    })
 
   const { handleReorder, handleToggle } = useSettingsPluginActions({
     pluginSettings,
@@ -211,9 +210,11 @@ export function SettingsWindowApp() {
       clearAutoCloseTimer()
       autoCloseTimerRef.current = window.setTimeout(() => {
         autoCloseTimerRef.current = null
-        void getCurrentWindow().hide().catch((error) => {
-          console.error("Failed to auto-close settings window:", error)
-        })
+        void getCurrentWindow()
+          .hide()
+          .catch((error) => {
+            console.error("Failed to auto-close settings window:", error)
+          })
       }, SETTINGS_AUTO_CLOSE_DELAY_MS)
     }
 
@@ -279,11 +280,13 @@ export function SettingsWindowApp() {
       if (event.payload.providerId !== undefined) {
         setSelectedProviderId(event.payload.providerId ?? null)
       }
-    }).then((dispose) => {
-      unlisten = dispose
-    }).catch((error) => {
-      console.error("Failed to listen for settings window events:", error)
     })
+      .then((dispose) => {
+        unlisten = dispose
+      })
+      .catch((error) => {
+        console.error("Failed to listen for settings window events:", error)
+      })
 
     return () => {
       unlisten?.()
@@ -364,7 +367,6 @@ export function SettingsWindowApp() {
         })
         return
       }
-
     },
     []
   )
