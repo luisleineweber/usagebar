@@ -9,7 +9,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Experimental on Windows. Save a Mistral Cookie header or set MISTRAL_COOKIE_HEADER before probing."
+      "message": "Experimental on Windows. Save a Mistral Admin API key; browser-session cookies remain a compatibility fallback."
     }
   },
   "links": [
@@ -66,8 +66,6 @@
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "admin.mistral.ai"
-    ]
+    "httpDomains": ["admin.mistral.ai", "console.mistral.ai"]
   }
 }

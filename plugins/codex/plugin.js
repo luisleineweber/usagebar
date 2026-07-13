@@ -634,6 +634,72 @@
     )
   }
 
+  function localDayPeriod(dayKey) {
+    const match = String(dayKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (!match) return null
+    const start = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    const end = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1)
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return null
+    return { periodStart: start.toISOString(), periodEnd: end.toISOString() }
+  }
+
+  function historyNumber(value) {
+    const number = Number(value)
+    return Number.isFinite(number) && number >= 0 ? number : null
+  }
+
+  function historyMetrics(row) {
+    const metrics = {}
+    const inputTokens = historyNumber(row && row.inputTokens)
+    const outputTokens = historyNumber(row && row.outputTokens)
+    const cacheReadTokens = historyNumber(
+      row && (row.cacheReadTokens ?? row.cachedInputTokens)
+    )
+    const cacheCreationTokens = historyNumber(row && row.cacheCreationTokens)
+    const reasoningTokens = historyNumber(row && row.reasoningTokens)
+    const totalTokens = historyNumber(row && row.totalTokens)
+    const costUsd = usageCostUsd(row) ?? historyNumber(row && row.cost)
+    if (inputTokens !== null) metrics.inputTokens = inputTokens
+    if (outputTokens !== null) metrics.outputTokens = outputTokens
+    if (cacheReadTokens !== null) metrics.cacheReadTokens = cacheReadTokens
+    if (cacheCreationTokens !== null) metrics.cacheCreationTokens = cacheCreationTokens
+    if (reasoningTokens !== null) metrics.reasoningTokens = reasoningTokens
+    if (totalTokens !== null) metrics.totalTokens = totalTokens
+    if (costUsd !== null) metrics.costUsd = costUsd
+    return metrics
+  }
+
+  function buildTokenUsageHistory(tokenUsage) {
+    const entries = []
+    const daily = tokenUsage && Array.isArray(tokenUsage.daily) ? tokenUsage.daily : []
+    for (let i = 0; i < daily.length; i++) {
+      const day = daily[i]
+      const period = localDayPeriod(dayKeyFromUsageDate(day && day.date))
+      if (!period) continue
+      const breakdowns = Array.isArray(day.modelBreakdowns)
+        ? day.modelBreakdowns
+        : Array.isArray(day.model_breakdowns)
+          ? day.model_breakdowns
+          : []
+      if (breakdowns.length > 0) {
+        for (let j = 0; j < breakdowns.length; j++) {
+          const breakdown = breakdowns[j]
+          const model = String(
+            (breakdown && (breakdown.modelName || breakdown.model || breakdown.name)) || ""
+          ).trim()
+          const metrics = historyMetrics(breakdown)
+          if (Object.keys(metrics).length === 0) continue
+          entries.push({ ...period, ...(model ? { model } : {}), ...metrics })
+        }
+      } else {
+        const metrics = historyMetrics(day)
+        if (Object.keys(metrics).length === 0) continue
+        entries.push({ ...period, ...(day.project ? { project: String(day.project) } : {}), ...metrics })
+      }
+    }
+    return { version: 1, source: "ccusage", timeZone: "system-local", entries }
+  }
+
   function probeWithAuthState(ctx, authState) {
     const auth = authState.auth
 
@@ -915,7 +981,14 @@
         lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
       }
 
-      return { plan: plan, lines: lines }
+      return {
+        plan: plan,
+        lines: lines,
+        history:
+          tokenUsageResult.status === "ok"
+            ? buildTokenUsageHistory(tokenUsageResult.data)
+            : undefined,
+      }
     }
 
     if (auth.OPENAI_API_KEY) {

@@ -39,12 +39,26 @@
       "type": "text",
       "label": "Endpoint",
       "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Yesterday",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Last 2 days",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Last 30 days",
+      "scope": "detail"
     }
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "opencode.ai"
-    ]
+    "sqlite": true,
+    "httpDomains": ["opencode.ai"]
   }
 }

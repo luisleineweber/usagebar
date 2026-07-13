@@ -2,14 +2,15 @@
 
 > Reverse-engineered from app bundle and language server binary. May change without notice.
 
-Antigravity is essentially a Google-branded fork of [Windsurf](windsurf.md) - both use the same Codeium language server binary and Connect-RPC protocol. The discovery, port probing, and RPC endpoints are nearly identical. The main differences: Antigravity uses fraction-based quota instead of credits, and local LS requests do not require an API key. Once signed in, UsageBar can keep reading the stored SQLite/OAuth credentials even when the Antigravity IDE is closed; only the live LS path needs the app running.
+Antigravity retains a Codeium-family local language server, but Antigravity 2.0 quota is tracked primarily through stored Google OAuth credentials and project-scoped Cloud Code calls. Once signed in, UsageBar can refresh quota while the IDE is closed; the local language server is a secondary compatibility path.
 
-In OpenUsage, Antigravity is treated as a grouped-quota provider. Both the overview card and provider detail page show grouped quota buckets only: `Gemini Pro`, `Gemini Flash`, `Gemini Image`, and `Claude`. Unknown quota is shown as unavailable, never as exhausted.
+The preferred output matches Antigravity 2.0's shared pools: `Gemini session`, `Gemini weekly`, `Claude/GPT session`, and `Claude/GPT weekly`. The older per-model endpoint remains a detail fallback. Unknown quota is shown as unavailable, never as exhausted or full.
 
 Provider detail output also includes `Source` so local diagnostics are visible:
 
 - `Live Antigravity language server`
 - `Cached live Antigravity language server`
+- `Cloud Code quota summary`
 - `Cloud Code fallback`
 - `Antigravity language server without usable quota`
 
@@ -18,9 +19,9 @@ Provider detail output also includes `Source` so local diagnostics are visible:
 - **Vendor:** Google (internal codename "Jetski")
 - **Protocol:** Connect RPC v1 (JSON over HTTP) on local language server
 - **Service:** `exa.language_server_pb.LanguageServerService`
-- **Auth:** CSRF token from process args, Google OAuth tokens from SQLite, optional API key in LS metadata
+- **Auth:** CSRF token from process args; Google OAuth access/refresh tokens from SQLite
 - **Quota:** fraction (`0.0-1.0`, where `1.0` means 100% remaining)
-- **Quota window:** 5 hours
+- **Quota windows:** five-hour session and weekly baseline pools
 - **Timestamps:** ISO 8601
 - **Requires:** Antigravity IDE running for LS mode only; signed-in local credentials are enough for Cloud Code fallback after the IDE closes
 
@@ -46,11 +47,11 @@ Port and CSRF token change on every IDE restart. The LS may use HTTPS with a sel
 
 ## Headers (all local requests)
 
-| Header | Required | Value |
-|---|---|---|
-| Content-Type | yes | `application/json` |
-| Connect-Protocol-Version | yes | `1` |
-| x-codeium-csrf-token | yes | `<csrf_token>` from process args |
+| Header                   | Required | Value                            |
+| ------------------------ | -------- | -------------------------------- |
+| Content-Type             | yes      | `application/json`               |
+| Connect-Protocol-Version | yes      | `1`                              |
+| x-codeium-csrf-token     | yes      | `<csrf_token>` from process args |
 
 ## Endpoints
 
@@ -85,8 +86,8 @@ The CSRF token authenticates the local request. When an API key is available fro
     "planStatus": {
       "planInfo": {
         "planName": "Pro", // "Free" | "Pro" | "Teams" | "Ultra"
-        "teamsTier": "TEAMS_TIER_PRO"
-      }
+        "teamsTier": "TEAMS_TIER_PRO",
+      },
     },
     "cascadeModelConfigData": {
       "clientModelConfigs": [
@@ -95,21 +96,21 @@ The CSRF token authenticates the local request. When an API key is available fro
           "modelOrAlias": { "model": "MODEL_PLACEHOLDER_M7" },
           "quotaInfo": {
             "remainingFraction": 1,
-            "resetTime": "2026-02-07T14:23:01Z"
-          }
-        }
+            "resetTime": "2026-02-07T14:23:01Z",
+          },
+        },
       ],
       "clientModelSorts": [
         {
           "groups": [
             {
-              "modelLabels": ["Gemini 3 Pro (High)"]
-            }
-          ]
-        }
-      ]
-    }
-  }
+              "modelLabels": ["Gemini 3 Pro (High)"],
+            },
+          ],
+        },
+      ],
+    },
+  },
 }
 ```
 
@@ -142,21 +143,21 @@ POST http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetCom
 {
   "clientModelConfigs": [
     // same shape as GetUserStatus.userStatus.cascadeModelConfigData.clientModelConfigs
-  ]
+  ],
 }
 ```
 
 ## Available Models
 
-| Display Name | Internal ID | Provider |
-|---|---|---|
-| Gemini 3 Flash | 1018 | Google |
-| Gemini 3 Pro (High) | 1008 | Google |
-| Gemini 3 Pro (Low) | 1007 | Google |
-| Claude Sonnet 4.5 | 333 | Anthropic (proxied) |
-| Claude Sonnet 4.5 (Thinking) | 334 | Anthropic (proxied) |
-| Claude Opus 4.6 (Thinking) | `MODEL_PLACEHOLDER_M26` | Anthropic (proxied) |
-| GPT-OSS 120B (Medium) | 342 | OpenAI (proxied) |
+| Display Name                 | Internal ID             | Provider            |
+| ---------------------------- | ----------------------- | ------------------- |
+| Gemini 3 Flash               | 1018                    | Google              |
+| Gemini 3 Pro (High)          | 1008                    | Google              |
+| Gemini 3 Pro (Low)           | 1007                    | Google              |
+| Claude Sonnet 4.5            | 333                     | Anthropic (proxied) |
+| Claude Sonnet 4.5 (Thinking) | 334                     | Anthropic (proxied) |
+| Claude Opus 4.6 (Thinking)   | `MODEL_PLACEHOLDER_M26` | Anthropic (proxied) |
+| GPT-OSS 120B (Medium)        | 342                     | OpenAI (proxied)    |
 
 Models are dynamic. OpenUsage reads labels and IDs from runtime responses rather than relying on a hardcoded list.
 
@@ -216,23 +217,50 @@ client_id=1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.
 
 Response: `{ "access_token": "ya29...", "expires_in": 3599 }`
 
-## Cloud Code API (fallback)
+## Cloud Code API (primary)
 
-When the language server is not running, or when LS data has no usable numeric fractions, OpenUsage falls back to Google's Cloud Code API.
+UsageBar first resolves the account's Cloud AI Companion project. A quota response without this project is rejected because projectless model requests can falsely report `100%` remaining.
 
-### fetchAvailableModels
+### loadCodeAssist
+
+```text
+POST <base>/v1internal:loadCodeAssist
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"metadata":{"ideType":"ANTIGRAVITY"}}
+```
+
+UsageBar reads `cloudaicompanionProject` and the paid/current tier. Without a non-empty project, remote quota remains unavailable.
+
+### retrieveUserQuotaSummary
+
+```text
+POST <base>/v1internal:retrieveUserQuotaSummary
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{"project":"<cloudaicompanionProject>"}
+```
+
+When all four semantic buckets parse, this endpoint supplies the Gemini and Claude/GPT session and weekly lines. Root/wrapped responses, camel/snake-case fields, and tagged remaining-fraction variants are accepted conservatively. Any missing bucket falls through to the model endpoint.
+
+### fetchAvailableModels fallback
 
 ```text
 POST https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels
 Authorization: Bearer <access_token>
 Content-Type: application/json
 User-Agent: antigravity
+
+{"project":"<cloudaicompanionProject>"}
 ```
 
 Base URLs tried in order:
 
 1. `https://daily-cloudcode-pa.googleapis.com`
-2. `https://cloudcode-pa.googleapis.com`
+2. `https://daily-cloudcode-pa.sandbox.googleapis.com`
+3. `https://cloudcode-pa.googleapis.com`
 
 #### Response
 
@@ -244,23 +272,23 @@ Base URLs tried in order:
       "model": "gemini-3-pro",
       "quotaInfo": {
         "remainingFraction": 0.8,
-        "resetTime": "2026-02-08T10:00:00Z"
-      }
-    }
+        "resetTime": "2026-02-08T10:00:00Z",
+      },
+    },
   },
   "agentModelSorts": [
     {
       "groups": [
         {
-          "modelIds": ["gemini-3-pro"]
-        }
-      ]
-    }
-  ]
+          "modelIds": ["gemini-3-pro"],
+        },
+      ],
+    },
+  ],
 }
 ```
 
-Returns 401/403 if the token is invalid or expired, which triggers refresh-and-retry.
+HTTP 401 triggers one refresh-and-retry when a refresh token exists. HTTP 403 is treated as an account, region, or plan entitlement failure and does not trigger OAuth refresh. Throttling and transient host failures use bounded host fallback.
 
 The response includes all provisioned models. OpenUsage filters out non-user-facing entries using:
 
@@ -272,21 +300,20 @@ User-facing placeholder-backed IDs such as `MODEL_PLACEHOLDER_M9` and `MODEL_PLA
 
 ## Plugin Strategy
 
-1. Read `antigravityAuthStatus` from SQLite for the optional API key.
-2. Read `jetskiStateSync.agentManagerInitState` from SQLite and decode OAuth tokens.
-3. Probe the LS first when the IDE is running:
+1. Read and decode `antigravityUnifiedStateSync.oauthToken` from SQLite.
+2. Use a valid cached access token, valid SQLite access token, or one OAuth refresh attempt.
+3. Call `loadCodeAssist` and require `cloudaicompanionProject`.
+4. Prefer `retrieveUserQuotaSummary`; render only when all four session/weekly buckets parse.
+5. Fall back to project-scoped `fetchAvailableModels` and preserve its model-family detail lines.
+6. If remote quota is unavailable, probe the local language server:
    a. Discover the Antigravity LS process.
    b. Probe ports with `GetUnleashData`.
    c. Call `GetUserStatus`.
    d. Fall back to `GetCommandModelConfigs` when needed.
-4. Parse LS quota carefully:
+7. Parse LS quota carefully:
    a. Keep `remainingFraction` only when it is a valid numeric `0..1`.
    b. Keep `resetTime` only when it is usable.
    c. Use `clientModelSorts` ordering when present.
    d. Render grouped quota lines only.
-5. If LS has no usable numeric fractions, or the IDE is not running, fall back to Cloud Code:
-   a. Try proto access token, cached refreshed token, then API key.
-   b. Respect `agentModelSorts` ordering when present.
-   c. Refresh via Google OAuth if Cloud Code returns auth failures and a refresh token exists.
-6. If neither LS nor Cloud Code yields usable fractions, show `Quota unavailable`.
-7. If both local and remote strategies fail completely, throw `"Start Antigravity and try again."`
+8. Cache only fully parsed live LS output until its reset window; invalidate it afterward.
+9. If neither remote nor local paths yield usable fractions, show an explicit unavailable/error state.

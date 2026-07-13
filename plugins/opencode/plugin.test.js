@@ -12,7 +12,9 @@ function response(bodyText, status = 200) {
 }
 
 function setManualCookie(ctx, cookieHeader = "auth=test; __Host-auth=test2") {
-  ctx.host.providerSecrets.read.mockImplementation((key) => (key === "cookieHeader" ? cookieHeader : null))
+  ctx.host.providerSecrets.read.mockImplementation((key) =>
+    key === "cookieHeader" ? cookieHeader : null
+  )
 }
 
 function setWorkspace(ctx, workspaceId = "wrk_01TESTWORKSPACE") {
@@ -26,6 +28,24 @@ function setWorkspace(ctx, workspaceId = "wrk_01TESTWORKSPACE") {
   return workspaceId
 }
 
+function setOpenCodeDb(ctx, path = "~/.local/share/opencode/opencode.db") {
+  ctx.host.fs.writeText(path, "sqlite fixture marker")
+}
+
+function setCostHistoryQuery(ctx, rows) {
+  const list = Array.isArray(rows) ? rows : []
+  ctx.host.sqlite.query.mockImplementation((dbPath, sql) => {
+    expect(dbPath).toBe("~/.local/share/opencode/opencode.db")
+    expect(String(sql)).toContain(
+      "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')"
+    )
+    expect(String(sql)).toContain("json_extract(data, '$.role') = 'assistant'")
+    expect(String(sql)).toContain("json_type(data, '$.cost') IN ('integer', 'real')")
+    expect(String(sql)).toContain("COALESCE(json_extract(data, '$.time.created'), time_created)")
+    return JSON.stringify(list)
+  })
+}
+
 describe("opencode plugin", () => {
   beforeEach(() => {
     delete globalThis.__openusage_plugin
@@ -36,31 +56,40 @@ describe("opencode plugin", () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
 
-    expect(() => plugin.probe(ctx)).toThrow("Set OPENCODE_COOKIE_HEADER to your OpenCode cookie header.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Set OPENCODE_COOKIE_HEADER to your OpenCode cookie header."
+    )
   })
 
   it("shows Zen pay-as-you-go balance from the billing response", async () => {
     const ctx = makeCtx()
     setManualCookie(ctx)
     const workspaceId = setWorkspace(ctx)
+    ctx.host.sqlite.query.mockImplementation(() => {
+      throw new Error("missing db")
+    })
     ctx.host.http.request.mockReturnValue(
-      response(JSON.stringify({
-        billing: {
-          currentBalance: 12.34,
-        },
-      }))
+      response(
+        JSON.stringify({
+          billing: {
+            currentBalance: 12.34,
+          },
+        })
+      )
     )
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
-      method: "GET",
-      headers: expect.objectContaining({
-        Cookie: "auth=test; __Host-auth=test2",
-        Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
-      }),
-    }))
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          Cookie: "auth=test; __Host-auth=test2",
+          Referer: `https://opencode.ai/workspace/${workspaceId}/billing`,
+        }),
+      })
+    )
     expect(result.lines).toEqual([
       {
         type: "text",
@@ -86,28 +115,168 @@ describe("opencode plugin", () => {
     ])
   })
 
-  it("prefers the stored cookie over OPENCODE_COOKIE_HEADER", async () => {
+  it("skips local cost windows when the OpenCode database is missing or unreadable", async () => {
     const ctx = makeCtx()
-    setManualCookie(ctx, "auth=stored")
+    setManualCookie(ctx)
     setWorkspace(ctx)
-    ctx.host.env.get.mockImplementation((key) => (key === "OPENCODE_COOKIE_HEADER" ? "auth=stale-env" : null))
+    ctx.host.sqlite.query.mockImplementation(() => {
+      throw new Error("unable to open database file")
+    })
     ctx.host.http.request.mockReturnValue(
-      response(JSON.stringify({
-        billing: {
-          currentBalance: 12.34,
-        },
-      }))
+      response(
+        JSON.stringify({
+          billing: {
+            currentBalance: 8,
+          },
+        })
+      )
     )
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
-      headers: expect.objectContaining({
-        Cookie: "auth=stored",
-      }),
-    }))
-    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored Cookie header")
+    expect(result.lines.map((line) => line.label)).toEqual([
+      "Balance",
+      "Source",
+      "Auth source",
+      "Endpoint",
+    ])
+    expect(result.lines[0]).toMatchObject({ label: "Balance", value: "$8.00" })
+  })
+
+  it("renders zero local cost windows when the database has no history rows", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-03-06T12:00:00.000Z"
+    setManualCookie(ctx)
+    setWorkspace(ctx)
+    setOpenCodeDb(ctx)
+    setCostHistoryQuery(ctx, [])
+    ctx.host.http.request.mockReturnValue(
+      response(
+        JSON.stringify({
+          billing: {
+            currentBalance: 8,
+          },
+        })
+      )
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.slice(-3)).toEqual([
+      {
+        type: "text",
+        label: "Yesterday",
+        value: "$0.00",
+        subtitle: "Local OpenCode assistant spend",
+      },
+      {
+        type: "text",
+        label: "Last 2 days",
+        value: "$0.00",
+        subtitle: "Local OpenCode assistant spend",
+      },
+      {
+        type: "text",
+        label: "Last 30 days",
+        value: "$0.00",
+        subtitle: "Local OpenCode assistant spend",
+      },
+    ])
+  })
+
+  it("aggregates local OpenCode costs for yesterday, last two days, and last thirty days", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-03-06T12:00:00.000Z"
+    setManualCookie(ctx)
+    setWorkspace(ctx)
+    setOpenCodeDb(ctx)
+    setCostHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-02-03T23:59:59.000Z"), cost: 99 },
+      { createdMs: Date.parse("2026-02-05T00:00:00.000Z"), cost: 1.25 },
+      { createdMs: Date.parse("2026-03-04T10:00:00.000Z"), cost: 2 },
+      { createdMs: Date.parse("2026-03-05T09:00:00.000Z"), cost: 3.5 },
+      { createdMs: Date.parse("2026-03-06T09:00:00.000Z"), cost: 4.75 },
+    ])
+    ctx.host.http.request.mockReturnValue(
+      response(
+        JSON.stringify({
+          billing: {
+            currentBalance: 8,
+          },
+        })
+      )
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Yesterday")?.value).toBe("$3.50")
+    expect(result.lines.find((line) => line.label === "Last 2 days")?.value).toBe("$10.25")
+    expect(result.lines.find((line) => line.label === "Last 30 days")?.value).toBe("$11.50")
+    expect(result.history).toMatchObject({
+      version: 1,
+      source: "opencode-sqlite",
+      timeZone: "UTC",
+    })
+    expect(result.history.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          periodStart: "2026-03-05T00:00:00.000Z",
+          costUsd: 3.5,
+        }),
+        expect.objectContaining({
+          periodStart: "2026-03-06T00:00:00.000Z",
+          costUsd: 4.75,
+        }),
+      ])
+    )
+  })
+
+  it("declares local OpenCode cost detail lines in the manifest", () => {
+    const manifest = JSON.parse(readFileSync("plugins/opencode/plugin.json", "utf8"))
+
+    expect(manifest.capabilities.sqlite).toBe(true)
+    expect(manifest.lines).toEqual(
+      expect.arrayContaining([
+        { type: "text", label: "Yesterday", scope: "detail" },
+        { type: "text", label: "Last 2 days", scope: "detail" },
+        { type: "text", label: "Last 30 days", scope: "detail" },
+      ])
+    )
+  })
+
+  it("prefers the stored cookie over OPENCODE_COOKIE_HEADER", async () => {
+    const ctx = makeCtx()
+    setManualCookie(ctx, "auth=stored")
+    setWorkspace(ctx)
+    ctx.host.env.get.mockImplementation((key) =>
+      key === "OPENCODE_COOKIE_HEADER" ? "auth=stale-env" : null
+    )
+    ctx.host.http.request.mockReturnValue(
+      response(
+        JSON.stringify({
+          billing: {
+            currentBalance: 12.34,
+          },
+        })
+      )
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Cookie: "auth=stored",
+        }),
+      })
+    )
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe(
+      "Stored Cookie header"
+    )
   })
 
   it("keeps standalone Zen hidden because Zen balance is surfaced through OpenCode Go", () => {
@@ -121,13 +290,15 @@ describe("opencode plugin", () => {
     setManualCookie(ctx)
     setWorkspace(ctx)
     ctx.host.http.request.mockReturnValue(
-      response(JSON.stringify({
-        data: {
-          zen: {
-            balanceCents: 0,
+      response(
+        JSON.stringify({
+          data: {
+            zen: {
+              balanceCents: 0,
+            },
           },
-        },
-      }))
+        })
+      )
     )
 
     const plugin = await loadPlugin()
@@ -155,11 +326,16 @@ describe("opencode plugin", () => {
     setManualCookie(ctx)
     const workspaceId = setWorkspace(ctx, "wrk_01KGFHEAF5E5M17063C23DR6ZH")
     ctx.host.http.request
-      .mockReturnValueOnce(response(JSON.stringify({
-        customerID: null,
-        paymentMethodID: null,
-      })))
-      .mockReturnValueOnce(response(`
+      .mockReturnValueOnce(
+        response(
+          JSON.stringify({
+            customerID: null,
+            paymentMethodID: null,
+          })
+        )
+      )
+      .mockReturnValueOnce(
+        response(`
         <script>
           _$HY.r["billing.get[\\"${workspaceId}\\"]"] = $R[15];
           $R[22]($R[16], $R[25] = {
@@ -169,18 +345,22 @@ describe("opencode plugin", () => {
             monthlyUsage: 0
           });
         </script>
-      `))
+      `)
+      )
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(ctx.host.http.request).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      method: "GET",
-      url: `https://opencode.ai/workspace/${workspaceId}/billing`,
-      headers: expect.objectContaining({
-        Cookie: "auth=test; __Host-auth=test2",
-      }),
-    }))
+    expect(ctx.host.http.request).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "GET",
+        url: `https://opencode.ai/workspace/${workspaceId}/billing`,
+        headers: expect.objectContaining({
+          Cookie: "auth=test; __Host-auth=test2",
+        }),
+      })
+    )
     expect(result.lines[0]).toMatchObject({ label: "Balance", value: "$0.00" })
   })
 
@@ -192,7 +372,9 @@ describe("opencode plugin", () => {
 
     const plugin = await loadPlugin()
 
-    expect(() => plugin.probe(ctx)).toThrow("OpenCode Zen has no billing usage data for this workspace.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "OpenCode Zen has no billing usage data for this workspace."
+    )
   })
 
   it("surfaces missing balance fields as a workspace-or-response-shape problem", async () => {
@@ -200,10 +382,12 @@ describe("opencode plugin", () => {
     setManualCookie(ctx)
     const workspaceId = setWorkspace(ctx, "wrk_shapeproblem")
     ctx.host.http.request.mockReturnValue(
-      response(JSON.stringify({
-        usage: { percent: 50 },
-        plan: { name: "Team" },
-      }))
+      response(
+        JSON.stringify({
+          usage: { percent: 50 },
+          plan: { name: "Team" },
+        })
+      )
     )
 
     const plugin = await loadPlugin()

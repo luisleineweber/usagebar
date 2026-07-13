@@ -1,9 +1,15 @@
-(function () {
+;(function () {
   var BASE_URL = "https://opencode.ai"
   var SERVER_URL = BASE_URL + "/_server"
   var WORKSPACES_SERVER_ID = "def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f"
   var SUBSCRIPTION_SERVER_ID = "7abeebee372f304e050aaaf92be863f4a86490e382f8c79db68fd94040d691b4"
   var COOKIE_HEADER_SERVICE = "OpenCode Cookie Header"
+  var OPENCODE_DB_PATHS = [
+    "~/.local/share/opencode/opencode.db",
+    "~/Library/Application Support/opencode/opencode.db",
+    "~/AppData/Local/opencode/opencode.db",
+  ]
+  var HISTORY_PROVIDER_SQL = "'opencode-go', 'opencode'"
 
   function randomInstanceId() {
     return "server-fn:" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2)
@@ -34,7 +40,8 @@
   }
 
   function readProviderSecret(ctx, key) {
-    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function")
+      return null
     try {
       var value = ctx.host.providerSecrets.read(key)
       if (typeof value !== "string") return null
@@ -80,12 +87,15 @@
   function requestServer(ctx, opts) {
     var request = {
       method: opts.method,
-      url: opts.method === "GET"
-        ? SERVER_URL + "?id=" + encodeURIComponent(opts.serverId) +
+      url:
+        opts.method === "GET"
+          ? SERVER_URL +
+            "?id=" +
+            encodeURIComponent(opts.serverId) +
             (opts.args && opts.args.length
               ? "&args=" + encodeURIComponent(JSON.stringify(opts.args))
               : "")
-        : SERVER_URL,
+          : SERVER_URL,
       headers: {
         Accept: "text/javascript, application/json;q=0.9, */*;q=0.8",
         Cookie: opts.cookieHeader,
@@ -271,6 +281,132 @@
     return "$" + rounded.toFixed(2)
   }
 
+  function readNumber(value) {
+    var number = Number(value)
+    return Number.isFinite(number) ? number : null
+  }
+
+  function startOfUtcDay(ms) {
+    var date = new Date(ms)
+    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  }
+
+  function resolveOpenCodeDbPath(ctx) {
+    if (ctx.host.fs && typeof ctx.host.fs.exists === "function") {
+      for (var i = 0; i < OPENCODE_DB_PATHS.length; i += 1) {
+        try {
+          if (ctx.host.fs.exists(OPENCODE_DB_PATHS[i])) return OPENCODE_DB_PATHS[i]
+        } catch {}
+      }
+    }
+    return OPENCODE_DB_PATHS[0]
+  }
+
+  function loadCostHistoryRows(ctx, dbPath, sinceMs, untilMs) {
+    if (!ctx.host.sqlite || typeof ctx.host.sqlite.query !== "function") {
+      return { ok: false, rows: [] }
+    }
+
+    var sql = `
+      SELECT
+        CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) AS createdMs,
+        CAST(json_extract(data, '$.cost') AS REAL) AS cost
+      FROM message
+      WHERE json_valid(data)
+        AND json_extract(data, '$.providerID') IN (${HISTORY_PROVIDER_SQL})
+        AND json_extract(data, '$.role') = 'assistant'
+        AND json_type(data, '$.cost') IN ('integer', 'real')
+        AND CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) >= ${Math.floor(sinceMs)}
+        AND CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) < ${Math.floor(untilMs)}
+    `
+
+    try {
+      var raw = ctx.host.sqlite.query(dbPath, sql)
+      var parsed = Array.isArray(raw) ? raw : ctx.util.tryParseJson(raw)
+      if (!Array.isArray(parsed)) return { ok: false, rows: [] }
+
+      var rows = []
+      for (var i = 0; i < parsed.length; i += 1) {
+        var row = parsed[i]
+        if (!row || typeof row !== "object") continue
+        var createdMs = readNumber(row.createdMs)
+        var cost = readNumber(row.cost)
+        if (createdMs === null || createdMs < sinceMs || createdMs >= untilMs) continue
+        if (cost === null || cost < 0) continue
+        rows.push({ createdMs: createdMs, cost: cost })
+      }
+      return { ok: true, rows: rows }
+    } catch {
+      return { ok: false, rows: [] }
+    }
+  }
+
+  function formatCostWindow(rows, startMs, endMs) {
+    var total = 0
+    for (var i = 0; i < rows.length; i += 1) {
+      var row = rows[i]
+      if (row.createdMs < startMs || row.createdMs >= endMs) continue
+      total += row.cost
+    }
+    return formatDollars(total)
+  }
+
+  function buildCostReport(ctx) {
+    var nowMs = Date.parse(ctx.nowIso || "")
+    if (!Number.isFinite(nowMs)) nowMs = Date.now()
+    var todayStartMs = startOfUtcDay(nowMs)
+    var yesterdayStartMs = todayStartMs - 24 * 60 * 60 * 1000
+    var last2StartMs = todayStartMs - 2 * 24 * 60 * 60 * 1000
+    var last30StartMs = todayStartMs - 30 * 24 * 60 * 60 * 1000
+    var dbPath = resolveOpenCodeDbPath(ctx)
+    var result = loadCostHistoryRows(ctx, dbPath, last30StartMs, nowMs)
+    if (!result.ok) return { lines: [], history: undefined }
+
+    var dailyCosts = new Map()
+    for (var i = 0; i < result.rows.length; i += 1) {
+      var row = result.rows[i]
+      var dayStartMs = startOfUtcDay(row.createdMs)
+      dailyCosts.set(dayStartMs, (dailyCosts.get(dayStartMs) || 0) + row.cost)
+    }
+    var entries = Array.from(dailyCosts.entries())
+      .sort(function (a, b) {
+        return a[0] - b[0]
+      })
+      .map(function (entry) {
+        return {
+          periodStart: new Date(entry[0]).toISOString(),
+          periodEnd: new Date(entry[0] + 24 * 60 * 60 * 1000).toISOString(),
+          costUsd: entry[1],
+        }
+      })
+
+    return {
+      lines: [
+        ctx.line.text({
+          label: "Yesterday",
+          value: formatCostWindow(result.rows, yesterdayStartMs, todayStartMs),
+          subtitle: "Local OpenCode assistant spend",
+        }),
+        ctx.line.text({
+          label: "Last 2 days",
+          value: formatCostWindow(result.rows, last2StartMs, nowMs),
+          subtitle: "Local OpenCode assistant spend",
+        }),
+        ctx.line.text({
+          label: "Last 30 days",
+          value: formatCostWindow(result.rows, last30StartMs, nowMs),
+          subtitle: "Local OpenCode assistant spend",
+        }),
+      ],
+      history: {
+        version: 1,
+        source: "opencode-sqlite",
+        timeZone: "UTC",
+        entries: entries,
+      },
+    }
+  }
+
   function readZenBalance(ctx, text) {
     var parsed = ctx.util.tryParseJson(text)
     var balance = parsed ? findBalanceValue(parsed, [], 0) : null
@@ -300,11 +436,7 @@
       var summary = summarizeBillingShape(result.parsed)
       if (ctx.host.log && typeof ctx.host.log.warn === "function") {
         ctx.host.log.warn(
-          "opencode zen billing response missing balance for " +
-            workspaceId +
-            " (" +
-            summary +
-            ")"
+          "opencode zen billing response missing balance for " + workspaceId + " (" + summary + ")"
         )
       }
       throw (
@@ -344,26 +476,32 @@
     }
     if (balance === null) balance = parseZenBalance(ctx, text, workspaceId)
 
+    var lines = [
+      ctx.line.text({
+        label: "Balance",
+        value: formatDollars(balance),
+        subtitle: "OpenCode Zen pay-as-you-go balance",
+      }),
+      ctx.line.text({
+        label: "Source",
+        value: "OpenCode Zen signed-in website billing session",
+      }),
+      ctx.line.text({
+        label: "Auth source",
+        value: cookieHeader.source,
+      }),
+      ctx.line.text({
+        label: "Endpoint",
+        value: SERVER_URL,
+      }),
+    ]
+
+    var costReport = buildCostReport(ctx)
+    for (var i = 0; i < costReport.lines.length; i += 1) lines.push(costReport.lines[i])
+
     return {
-      lines: [
-        ctx.line.text({
-          label: "Balance",
-          value: formatDollars(balance),
-          subtitle: "OpenCode Zen pay-as-you-go balance",
-        }),
-        ctx.line.text({
-          label: "Source",
-          value: "OpenCode Zen signed-in website billing session",
-        }),
-        ctx.line.text({
-          label: "Auth source",
-          value: cookieHeader.source,
-        }),
-        ctx.line.text({
-          label: "Endpoint",
-          value: SERVER_URL,
-        }),
-      ],
+      lines: lines,
+      history: costReport.history,
     }
   }
 

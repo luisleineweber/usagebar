@@ -80,15 +80,66 @@ describe("mistral plugin", () => {
     vi.resetModules()
   })
 
-  it("throws when no cookie header is configured", async () => {
+  it("throws when no admin API key or cookie header is configured", async () => {
     const ctx = makeCtx()
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("prefers the stored Admin API key and calls the official usage endpoint", async () => {
+    const ctx = makeCtx()
+    ctx.host.providerSecrets.read.mockImplementation((key) => {
+      if (key === "adminApiKey") return "admin-key"
+      if (key === "cookieHeader") return "ory_session_x=cookie"
+      return null
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(usagePayload),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: expect.stringContaining("https://console.mistral.ai/api/admin/usage?"),
+        headers: expect.objectContaining({ "x-api-key": "admin-key" }),
+      })
+    )
+    expect(ctx.host.http.request.mock.calls[0][0].headers.Cookie).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe(
+      "Stored Admin API key"
+    )
+    expect(result.lines.find((line) => line.label === "Source")?.value).toBe("Mistral Admin API")
+  })
+
+  it("uses MISTRAL_ADMIN_API_KEY before cookie fallbacks", async () => {
+    const ctx = makeCtx()
+    ctx.host.env.get.mockImplementation((name) => {
+      if (name === "MISTRAL_ADMIN_API_KEY") return "env-admin-key"
+      if (name === "MISTRAL_COOKIE_HEADER") return "ory_session_x=cookie"
+      return null
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(usagePayload),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(ctx.host.http.request.mock.calls[0][0].headers["x-api-key"]).toBe("env-admin-key")
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe(
+      "MISTRAL_ADMIN_API_KEY"
+    )
+  })
+
   it("fetches current monthly usage and computes cost", async () => {
     const ctx = makeCtx()
-    ctx.host.providerSecrets.read.mockReturnValue("ory_session_x=abc; csrftoken=csrf")
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "cookieHeader" ? "ory_session_x=abc; csrftoken=csrf" : null
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify(usagePayload),
@@ -119,14 +170,16 @@ describe("mistral plugin", () => {
     expect(result.lines.find((line) => line.label === "Endpoint")?.value).toContain(
       "https://admin.mistral.ai/api/billing/v2/usage?"
     )
-    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
-      method: "GET",
-      url: expect.stringContaining("https://admin.mistral.ai/api/billing/v2/usage?"),
-      headers: expect.objectContaining({
-        Cookie: "ory_session_x=abc; csrftoken=csrf",
-        "X-CSRFTOKEN": "csrf",
-      }),
-    }))
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining("https://admin.mistral.ai/api/billing/v2/usage?"),
+        headers: expect.objectContaining({
+          Cookie: "ory_session_x=abc; csrftoken=csrf",
+          "X-CSRFTOKEN": "csrf",
+        }),
+      })
+    )
   })
 
   it("prefers stored secrets before MISTRAL_COOKIE_HEADER", async () => {
@@ -135,7 +188,9 @@ describe("mistral plugin", () => {
       if (name === "MISTRAL_COOKIE_HEADER") return "ory_session_x=env"
       return null
     })
-    ctx.host.providerSecrets.read.mockReturnValue("ory_session_x=stored")
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "cookieHeader" ? "ory_session_x=stored" : null
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({ completion: { models: {} }, prices: [] }),
@@ -144,15 +199,21 @@ describe("mistral plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
-      headers: expect.objectContaining({ Cookie: "ory_session_x=stored" }),
-    }))
-    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("Stored Cookie header")
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Cookie: "ory_session_x=stored" }),
+      })
+    )
+    expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe(
+      "Stored Cookie header"
+    )
   })
 
   it("uses MISTRAL_SESSION when cookie headers are absent", async () => {
     const ctx = makeCtx()
-    ctx.host.env.get.mockImplementation((name) => (name === "MISTRAL_SESSION" ? "session-token" : null))
+    ctx.host.env.get.mockImplementation((name) =>
+      name === "MISTRAL_SESSION" ? "session-token" : null
+    )
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({ completion: { models: {} }, prices: [] }),
@@ -161,15 +222,19 @@ describe("mistral plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(ctx.host.http.request).toHaveBeenCalledWith(expect.objectContaining({
-      headers: expect.objectContaining({ Cookie: "ory_session_mistral=session-token" }),
-    }))
+    expect(ctx.host.http.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Cookie: "ory_session_mistral=session-token" }),
+      })
+    )
     expect(result.lines.find((line) => line.label === "Auth source")?.value).toBe("MISTRAL_SESSION")
   })
 
   it("throws session expired on auth status", async () => {
     const ctx = makeCtx()
-    ctx.host.providerSecrets.read.mockReturnValue("ory_session_x=abc")
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "cookieHeader" ? "ory_session_x=abc" : null
+    )
     ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "" })
 
     const plugin = await loadPlugin()

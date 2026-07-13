@@ -1,6 +1,6 @@
 # Perplexity
 
-> Experimental Windows path. Uses a signed-in web billing session via a manual Cookie header or matching env vars.
+> Experimental Windows path. Uses a signed-in web billing session captured through guided login, a manual Cookie header, or matching env vars.
 
 ## Overview
 
@@ -27,7 +27,7 @@ If none of those are present, the plugin throws:
 
 1. Sign in to `https://www.perplexity.ai` in a browser.
 2. Open DevTools and load a billing or credits request.
-3. Copy the full `Cookie` request header.
+3. Prefer **Connect Perplexity** in UsageBar provider settings. Manual fallback: copy the full `Cookie` request header.
 4. Paste it into UsageBar Settings for Perplexity.
 
 Do not paste:
@@ -52,11 +52,11 @@ Zero-value pools are rendered as `0 credits` text rather than fake progress bars
 
 Successful output also includes detail-only provenance lines:
 
-| Line | Value |
-| --- | --- |
-| `Source` | `Private Perplexity billing-session endpoint` |
+| Line          | Value                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `Source`      | `Private Perplexity billing-session endpoint`                                                          |
 | `Auth source` | `Stored Cookie header`, `PERPLEXITY_COOKIE_HEADER`, `PERPLEXITY_COOKIE`, or `PERPLEXITY_SESSION_TOKEN` |
-| `Endpoint` | `https://www.perplexity.ai/rest/billing/credits` |
+| `Endpoint`    | `https://www.perplexity.ai/rest/billing/credits`                                                       |
 
 Current Perplexity API docs describe billing, credit balance, and usage visibility in the API Platform/Admin console, but do not document a stable API-key balance endpoint that returns these account credit pools. UsageBar therefore keeps this provider experimental and cookie-backed.
 

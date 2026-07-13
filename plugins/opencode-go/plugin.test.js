@@ -123,7 +123,7 @@ describe("opencode-go plugin", () => {
     vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
     const ctx = makeCtx()
-    setAuth(ctx)
+    setAuth(ctx, "go-key", { goSubscription: { status: "canceled" } })
     setHistoryQuery(ctx, [])
 
     const plugin = await loadPlugin()
@@ -185,12 +185,12 @@ describe("opencode-go plugin", () => {
     })
   })
 
-  it("renders Go usage when local auth exists with paid OpenCode rows", async () => {
+  it("does not treat stale paid history as a current Go subscription", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
 
     const ctx = makeCtx()
-    setAuth(ctx)
+    setAuth(ctx, "go-key", { goSubscription: { status: "canceled" } })
     setHistoryQuery(ctx, [
       { createdMs: Date.parse("2026-05-26T10:00:00.000Z"), modelId: "qwen3.6-plus", cost: 1.2 },
     ])
@@ -198,15 +198,15 @@ describe("opencode-go plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("GoSubscription")
+    expect(result.plan).toBe("Free")
     expect(result.lines[0]).toMatchObject({
       type: "progress",
-      label: "5h",
-      used: 10,
-      limit: 100,
-      format: { kind: "percent" },
+      label: "Free",
+      used: 0,
+      limit: 200,
+      format: { kind: "count", suffix: "requests" },
     })
-    expect(result.lines.some((line) => line.label === "Free")).toBe(false)
+    expect(result.lines.some((line) => line.label === "5h")).toBe(false)
   })
 
   it("keeps authenticated free-only OpenCode rows on the Free plan", async () => {

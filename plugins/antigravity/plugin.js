@@ -1,9 +1,12 @@
-(function () {
+;(function () {
   var LS_SERVICE = "exa.language_server_pb.LanguageServerService"
   var CLOUD_CODE_URLS = [
     "https://daily-cloudcode-pa.googleapis.com",
+    "https://daily-cloudcode-pa.sandbox.googleapis.com",
     "https://cloudcode-pa.googleapis.com",
   ]
+  var LOAD_CODE_ASSIST_PATH = "/v1internal:loadCodeAssist"
+  var QUOTA_SUMMARY_PATH = "/v1internal:retrieveUserQuotaSummary"
   var FETCH_MODELS_PATH = "/v1internal:fetchAvailableModels"
   var GOOGLE_OAUTH_URL = "https://oauth2.googleapis.com/token"
   var GOOGLE_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
@@ -13,13 +16,13 @@
   var QUOTA_PERIOD_MS = 5 * 60 * 60 * 1000
   var LIVE_USAGE_CACHE_FILE = "last-live-usage.json"
   var BLACKLISTED_MODEL_IDS = {
-    "MODEL_CHAT_20706": true,
-    "MODEL_CHAT_23310": true,
-    "MODEL_GOOGLE_GEMINI_2_5_FLASH": true,
-    "MODEL_GOOGLE_GEMINI_2_5_FLASH_THINKING": true,
-    "MODEL_GOOGLE_GEMINI_2_5_FLASH_LITE": true,
-    "MODEL_GOOGLE_GEMINI_2_5_PRO": true,
-    "MODEL_PLACEHOLDER_M19": true,
+    MODEL_CHAT_20706: true,
+    MODEL_CHAT_23310: true,
+    MODEL_GOOGLE_GEMINI_2_5_FLASH: true,
+    MODEL_GOOGLE_GEMINI_2_5_FLASH_THINKING: true,
+    MODEL_GOOGLE_GEMINI_2_5_FLASH_LITE: true,
+    MODEL_GOOGLE_GEMINI_2_5_PRO: true,
+    MODEL_PLACEHOLDER_M19: true,
   }
   var EXTRA_IMAGE_MODEL_KEY = "gemini-3-pro-image"
   var EXTRA_IMAGE_MODEL_ID = "MODEL_PLACEHOLDER_M9"
@@ -38,29 +41,30 @@
     other: 4,
   }
   var AUTO_GROUP_GEMINI_PRO_ID_SET = {
-    "model_placeholder_m7": true,
-    "model_placeholder_m8": true,
-    "model_placeholder_m36": true,
-    "model_placeholder_m37": true,
+    model_placeholder_m7: true,
+    model_placeholder_m8: true,
+    model_placeholder_m36: true,
+    model_placeholder_m37: true,
   }
   var AUTO_GROUP_GEMINI_FLASH_ID_SET = {
-    "model_placeholder_m18": true,
+    model_placeholder_m18: true,
   }
   var AUTO_GROUP_GEMINI_IMAGE_ID_SET = {
-    "model_placeholder_m9": true,
+    model_placeholder_m9: true,
   }
   var AUTO_GROUP_CLAUDE_ID_SET = {
-    "model_claude_4_5_sonnet": true,
-    "model_claude_4_5_sonnet_thinking": true,
-    "model_placeholder_m12": true,
-    "model_placeholder_m26": true,
-    "model_placeholder_m35": true,
-    "model_openai_gpt_oss_120b_medium": true,
+    model_claude_4_5_sonnet: true,
+    model_claude_4_5_sonnet_thinking: true,
+    model_placeholder_m12: true,
+    model_placeholder_m26: true,
+    model_placeholder_m35: true,
+    model_openai_gpt_oss_120b_medium: true,
   }
   var AUTO_GROUP_GEMINI_PRO_ID_PATTERN = /^gemini-\d+(?:\.\d+)?-pro-(high|low)(?:-|$)/
   var AUTO_GROUP_GEMINI_FLASH_ID_PATTERN = /^gemini-\d+(?:\.\d+)?-flash(?:-|$)/
   var AUTO_GROUP_GEMINI_IMAGE_ID_PATTERN = /^gemini-\d+(?:\.\d+)?-pro-image(?:-|$)/
-  var AUTO_GROUP_GEMINI_PRO_LABEL_PATTERN = /^gemini \d+(?:\.\d+)? pro(?: \((high|low)\)| (high|low))\b/
+  var AUTO_GROUP_GEMINI_PRO_LABEL_PATTERN =
+    /^gemini \d+(?:\.\d+)? pro(?: \((high|low)\)| (high|low))\b/
   var AUTO_GROUP_GEMINI_FLASH_LABEL_PATTERN = /^gemini \d+(?:\.\d+)? flash\b/
   var AUTO_GROUP_GEMINI_IMAGE_LABEL_PATTERN = /^gemini \d+(?:\.\d+)? pro image\b/
 
@@ -111,7 +115,8 @@
   }
 
   function stateDbPath(ctx) {
-    if (ctx.app.platform === "windows") return "~/AppData/Roaming/Antigravity/User/globalStorage/state.vscdb"
+    if (ctx.app.platform === "windows")
+      return "~/AppData/Roaming/Antigravity/User/globalStorage/state.vscdb"
     if (ctx.app.platform === "linux") return "~/.config/Antigravity/User/globalStorage/state.vscdb"
     return "~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb"
   }
@@ -192,9 +197,10 @@
   }
 
   function currentTimeMs(ctx) {
-    var parsed = ctx && ctx.util && typeof ctx.util.parseDateMs === "function"
-      ? ctx.util.parseDateMs(ctx.nowIso)
-      : null
+    var parsed =
+      ctx && ctx.util && typeof ctx.util.parseDateMs === "function"
+        ? ctx.util.parseDateMs(ctx.nowIso)
+        : null
     return typeof parsed === "number" && isFinite(parsed) ? parsed : Date.now()
   }
 
@@ -202,9 +208,10 @@
     var latestMs = null
     for (var i = 0; i < lines.length; i++) {
       var resetsAt = parseResetTime(lines[i] && lines[i].resetsAt)
-      var resetMs = resetsAt && ctx.util && typeof ctx.util.parseDateMs === "function"
-        ? ctx.util.parseDateMs(resetsAt)
-        : null
+      var resetMs =
+        resetsAt && ctx.util && typeof ctx.util.parseDateMs === "function"
+          ? ctx.util.parseDateMs(resetsAt)
+          : null
       if (typeof resetMs !== "number" || !isFinite(resetMs)) continue
       if (latestMs === null || resetMs > latestMs) latestMs = resetMs
     }
@@ -225,11 +232,14 @@
 
   function cacheLiveUsage(ctx, output) {
     try {
-      ctx.host.fs.writeText(liveUsageCachePath(ctx), JSON.stringify({
-        plan: typeof output.plan === "string" && output.plan.trim() ? output.plan : null,
-        lines: output.lines,
-        lastSeenResetAt: latestResetTimeIso(ctx, output.lines),
-      }))
+      ctx.host.fs.writeText(
+        liveUsageCachePath(ctx),
+        JSON.stringify({
+          plan: typeof output.plan === "string" && output.plan.trim() ? output.plan : null,
+          lines: output.lines,
+          lastSeenResetAt: latestResetTimeIso(ctx, output.lines),
+        })
+      )
     } catch (e) {
       ctx.host.log.warn("failed to cache live Antigravity usage: " + String(e))
     }
@@ -242,9 +252,10 @@
       var parsed = ctx.util.tryParseJson(ctx.host.fs.readText(path))
       if (!parsed || !Array.isArray(parsed.lines) || parsed.lines.length === 0) return null
       var nowMs = currentTimeMs(ctx)
-      var cachedResetMs = typeof ctx.util.parseDateMs === "function"
-        ? ctx.util.parseDateMs(parsed.lastSeenResetAt)
-        : null
+      var cachedResetMs =
+        typeof ctx.util.parseDateMs === "function"
+          ? ctx.util.parseDateMs(parsed.lastSeenResetAt)
+          : null
       if (typeof cachedResetMs === "number" && isFinite(cachedResetMs) && cachedResetMs <= nowMs) {
         deleteCachedLiveUsage(ctx, "cached reset window elapsed")
         return null
@@ -260,24 +271,28 @@
         if (typeof line.limit !== "number" || !isFinite(line.limit) || line.limit <= 0) return null
         if (!line.format || line.format.kind !== "percent") return null
         var resetsAt = parseResetTime(line.resetsAt)
-        var resetMs = resetsAt && typeof ctx.util.parseDateMs === "function"
-          ? ctx.util.parseDateMs(resetsAt)
-          : null
+        var resetMs =
+          resetsAt && typeof ctx.util.parseDateMs === "function"
+            ? ctx.util.parseDateMs(resetsAt)
+            : null
         if (typeof resetMs === "number" && isFinite(resetMs) && resetMs <= nowMs) {
           droppedExpiredLines = true
           continue
         }
-        lines.push(ctx.line.progress({
-          label: line.label,
-          used: line.used,
-          limit: line.limit,
-          format: { kind: "percent" },
-          resetsAt: resetsAt,
-          periodDurationMs: typeof line.periodDurationMs === "number" && isFinite(line.periodDurationMs)
-            ? line.periodDurationMs
-            : QUOTA_PERIOD_MS,
-          color: typeof line.color === "string" ? line.color : undefined,
-        }))
+        lines.push(
+          ctx.line.progress({
+            label: line.label,
+            used: line.used,
+            limit: line.limit,
+            format: { kind: "percent" },
+            resetsAt: resetsAt,
+            periodDurationMs:
+              typeof line.periodDurationMs === "number" && isFinite(line.periodDurationMs)
+                ? line.periodDurationMs
+                : QUOTA_PERIOD_MS,
+            color: typeof line.color === "string" ? line.color : undefined,
+          })
+        )
       }
 
       if (lines.length === 0) {
@@ -299,10 +314,13 @@
 
   function cacheToken(ctx, accessToken, expiresInSeconds) {
     try {
-      ctx.host.fs.writeText(ctx.app.pluginDataDir + "/auth.json", JSON.stringify({
-        accessToken: accessToken,
-        expiresAtMs: Date.now() + (expiresInSeconds || 3600) * 1000,
-      }))
+      ctx.host.fs.writeText(
+        ctx.app.pluginDataDir + "/auth.json",
+        JSON.stringify({
+          accessToken: accessToken,
+          expiresAtMs: Date.now() + (expiresInSeconds || 3600) * 1000,
+        })
+      )
     } catch (e) {
       ctx.host.log.warn("failed to cache refreshed token: " + String(e))
     }
@@ -316,16 +334,23 @@
         url: GOOGLE_OAUTH_URL,
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         bodyText:
-          "client_id=" + encodeURIComponent(GOOGLE_CLIENT_ID) +
-          "&client_secret=" + encodeURIComponent(GOOGLE_CLIENT_SECRET) +
-          "&refresh_token=" + encodeURIComponent(refreshTokenValue) +
+          "client_id=" +
+          encodeURIComponent(GOOGLE_CLIENT_ID) +
+          "&client_secret=" +
+          encodeURIComponent(GOOGLE_CLIENT_SECRET) +
+          "&refresh_token=" +
+          encodeURIComponent(refreshTokenValue) +
           "&grant_type=refresh_token",
         timeoutMs: 15000,
       })
       if (resp.status < 200 || resp.status >= 300) return null
       var body = ctx.util.tryParseJson(resp.bodyText)
       if (!body || !body.access_token) return null
-      cacheToken(ctx, body.access_token, typeof body.expires_in === "number" ? body.expires_in : 3600)
+      cacheToken(
+        ctx,
+        body.access_token,
+        typeof body.expires_in === "number" ? body.expires_in : 3600
+      )
       return {
         accessToken: body.access_token,
         expiresInSeconds: typeof body.expires_in === "number" ? body.expires_in : 3600,
@@ -363,6 +388,10 @@
       if (isCachedTokenUsable(cached)) {
         status.triedCloudCode = true
         var cachedRawData = requestCloudCode(ctx, cached.accessToken)
+        if (cachedRawData && cachedRawData.forbidden) {
+          status.sawForbidden = true
+          return null
+        }
         if (cachedRawData && !cachedRawData.authFailed) return cachedRawData
         if (cachedRawData && cachedRawData.authFailed) {
           sawAuthFailure = true
@@ -382,6 +411,10 @@
       if (isProtoAccessTokenUsable(dbTokens)) {
         status.triedCloudCode = true
         var dbData = requestCloudCode(ctx, dbTokens.accessToken)
+        if (dbData && dbData.forbidden) {
+          status.sawForbidden = true
+          return null
+        }
         if (dbData && !dbData.authFailed) return dbData
         if (dbData && dbData.authFailed) {
           sawAuthFailure = true
@@ -408,13 +441,19 @@
       if (refreshed && refreshed.accessToken) {
         status.triedCloudCode = true
         var refreshedData = requestCloudCode(ctx, refreshed.accessToken)
+        if (refreshedData && refreshedData.forbidden) {
+          status.sawForbidden = true
+          return null
+        }
         if (refreshedData && !refreshedData.authFailed) return refreshedData
         if (refreshedData && refreshedData.authFailed) {
           status.sawAuthFailure = true
           ctx.host.log.warn("refresh succeeded but Cloud Code still rejected the refreshed token")
         } else {
           status.sawCloudCodeTransientFailure = true
-          ctx.host.log.warn("refresh succeeded but refreshed token did not yield usable Cloud Code data")
+          ctx.host.log.warn(
+            "refresh succeeded but refreshed token did not yield usable Cloud Code data"
+          )
         }
       } else {
         status.refreshFailed = true
@@ -480,16 +519,43 @@
   }
 
   function normalizeMatchText(value) {
-    return String(value || "").toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim()
+    return String(value || "")
+      .toLowerCase()
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
   }
 
   function resolveFamily(modelId, label) {
-    var id = String(modelId || "").trim().toLowerCase()
+    var id = String(modelId || "")
+      .trim()
+      .toLowerCase()
     var text = normalizeMatchText(label || modelId)
-    if (AUTO_GROUP_GEMINI_IMAGE_ID_SET[id] || AUTO_GROUP_GEMINI_IMAGE_ID_PATTERN.test(id) || AUTO_GROUP_GEMINI_IMAGE_LABEL_PATTERN.test(text)) return "gemini_image"
-    if (AUTO_GROUP_GEMINI_PRO_ID_SET[id] || AUTO_GROUP_GEMINI_PRO_ID_PATTERN.test(id) || AUTO_GROUP_GEMINI_PRO_LABEL_PATTERN.test(text)) return "gemini_pro"
-    if (AUTO_GROUP_GEMINI_FLASH_ID_SET[id] || AUTO_GROUP_GEMINI_FLASH_ID_PATTERN.test(id) || AUTO_GROUP_GEMINI_FLASH_LABEL_PATTERN.test(text)) return "gemini_flash"
-    if (AUTO_GROUP_CLAUDE_ID_SET[id] || id.indexOf("claude-") === 0 || id.indexOf("model_claude") === 0 || text.indexOf("claude ") === 0) return "claude"
+    if (
+      AUTO_GROUP_GEMINI_IMAGE_ID_SET[id] ||
+      AUTO_GROUP_GEMINI_IMAGE_ID_PATTERN.test(id) ||
+      AUTO_GROUP_GEMINI_IMAGE_LABEL_PATTERN.test(text)
+    )
+      return "gemini_image"
+    if (
+      AUTO_GROUP_GEMINI_PRO_ID_SET[id] ||
+      AUTO_GROUP_GEMINI_PRO_ID_PATTERN.test(id) ||
+      AUTO_GROUP_GEMINI_PRO_LABEL_PATTERN.test(text)
+    )
+      return "gemini_pro"
+    if (
+      AUTO_GROUP_GEMINI_FLASH_ID_SET[id] ||
+      AUTO_GROUP_GEMINI_FLASH_ID_PATTERN.test(id) ||
+      AUTO_GROUP_GEMINI_FLASH_LABEL_PATTERN.test(text)
+    )
+      return "gemini_flash"
+    if (
+      AUTO_GROUP_CLAUDE_ID_SET[id] ||
+      id.indexOf("claude-") === 0 ||
+      id.indexOf("model_claude") === 0 ||
+      text.indexOf("claude ") === 0
+    )
+      return "claude"
     if (text.indexOf("gemini") !== -1 && text.indexOf("image") !== -1) return "gemini_image"
     if (text.indexOf("gemini") !== -1 && text.indexOf("pro") !== -1) return "gemini_pro"
     if (text.indexOf("gemini") !== -1 && text.indexOf("flash") !== -1) return "gemini_flash"
@@ -499,7 +565,8 @@
       text.indexOf("opus") !== -1 ||
       text.indexOf("haiku") !== -1 ||
       text.indexOf("gpt-oss") !== -1
-    ) return "claude"
+    )
+      return "claude"
     return "other"
   }
 
@@ -525,7 +592,12 @@
     var records = []
     for (var i = 0; i < items.length; i++) {
       var item = items[i]
-      var label = typeof item.label === "string" ? item.label.trim() : typeof item.displayName === "string" ? item.displayName.trim() : ""
+      var label =
+        typeof item.label === "string"
+          ? item.label.trim()
+          : typeof item.displayName === "string"
+            ? item.displayName.trim()
+            : ""
       if (!label) continue
       var modelId = modelIdKey(item, i)
       if (BLACKLISTED_MODEL_IDS[modelId]) continue
@@ -560,13 +632,18 @@
         }
       }
       byFingerprint[fingerprint].count += 1
-      if (model.order < byFingerprint[fingerprint].firstOrder) byFingerprint[fingerprint].firstOrder = model.order
+      if (model.order < byFingerprint[fingerprint].firstOrder)
+        byFingerprint[fingerprint].firstOrder = model.order
     }
     var best = null
     var keys = Object.keys(byFingerprint)
     for (var j = 0; j < keys.length; j++) {
       var candidate = byFingerprint[keys[j]]
-      if (!best || candidate.count > best.count || (candidate.count === best.count && candidate.firstOrder < best.firstOrder)) {
+      if (
+        !best ||
+        candidate.count > best.count ||
+        (candidate.count === best.count && candidate.firstOrder < best.firstOrder)
+      ) {
         best = candidate
       }
     }
@@ -593,7 +670,8 @@
         remainingFraction: quota.remainingFraction,
         resetTime: quota.resetTime,
         order: quota.firstOrder,
-        priority: FAMILY_PRIORITY[family] !== undefined ? FAMILY_PRIORITY[family] : FAMILY_PRIORITY.other,
+        priority:
+          FAMILY_PRIORITY[family] !== undefined ? FAMILY_PRIORITY[family] : FAMILY_PRIORITY.other,
       })
     }
 
@@ -608,7 +686,8 @@
       var exhaustedClaude = null
       for (var m = 0; m < models.length; m++) {
         var model = models[m]
-        if (model.family !== "claude" || model.remainingFraction !== undefined || !model.resetTime) continue
+        if (model.family !== "claude" || model.remainingFraction !== undefined || !model.resetTime)
+          continue
         if (!exhaustedClaude || model.order < exhaustedClaude.order) {
           exhaustedClaude = model
         }
@@ -632,14 +711,16 @@
 
     var lines = []
     for (var k = 0; k < groups.length; k++) {
-      lines.push(ctx.line.progress({
-        label: groups[k].label,
-        used: Math.round((1 - groups[k].remainingFraction) * 100),
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: groups[k].resetTime,
-        periodDurationMs: QUOTA_PERIOD_MS,
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: groups[k].label,
+          used: Math.round((1 - groups[k].remainingFraction) * 100),
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: groups[k].resetTime,
+          periodDurationMs: QUOTA_PERIOD_MS,
+        })
+      )
     }
     return lines
   }
@@ -653,6 +734,100 @@
 
   function unavailableLines(ctx) {
     return [ctx.line.badge({ label: "Status", text: "Quota unavailable", color: "#a3a3a3" })]
+  }
+
+  function readSummaryFraction(bucket) {
+    if (!bucket || typeof bucket !== "object") return undefined
+    var direct = bucket.remainingFraction
+    if (direct === undefined) direct = bucket.remaining_fraction
+    if (direct === undefined && bucket.remaining && typeof bucket.remaining === "object") {
+      direct = bucket.remaining.remainingFraction
+      if (direct === undefined) direct = bucket.remaining.remaining_fraction
+      if (direct === undefined && bucket.remaining.case === "remainingFraction")
+        direct = bucket.remaining.value
+    }
+    return parseFraction(direct)
+  }
+
+  function readSummaryReset(bucket) {
+    if (!bucket || typeof bucket !== "object") return undefined
+    return parseResetTime(
+      bucket.resetTime || bucket.reset_time || bucket.resetAt || bucket.reset_at
+    )
+  }
+
+  function parseQuotaSummary(data) {
+    var container = data && (data.response || data.summary || data)
+    var groups = container && container.groups
+    if (!groups || !groups.length) return []
+    var found = {}
+    for (var i = 0; i < groups.length; i++) {
+      var group = groups[i] || {}
+      var groupText = normalizeMatchText(
+        group.displayName || group.display_name || group.name || group.groupId || group.group_id
+      )
+      var family =
+        groupText.indexOf("gemini") !== -1
+          ? "gemini"
+          : groupText.indexOf("claude") !== -1 || groupText.indexOf("gpt") !== -1
+            ? "third_party"
+            : null
+      if (!family) continue
+      var buckets = group.buckets || []
+      for (var j = 0; j < buckets.length; j++) {
+        var bucket = buckets[j] || {}
+        var bucketText = normalizeMatchText(
+          bucket.displayName ||
+            bucket.display_name ||
+            bucket.name ||
+            bucket.window ||
+            bucket.bucketId ||
+            bucket.bucket_id
+        )
+        var period =
+          bucketText.indexOf("week") !== -1
+            ? "weekly"
+            : bucketText.indexOf("session") !== -1 ||
+                bucketText.indexOf("five") !== -1 ||
+                bucketText.indexOf("5 hour") !== -1
+              ? "session"
+              : null
+        var fraction = readSummaryFraction(bucket)
+        if (!period || fraction === undefined) continue
+        found[family + "_" + period] = {
+          remainingFraction: fraction,
+          resetTime: readSummaryReset(bucket),
+        }
+      }
+    }
+    var keys = ["gemini_session", "gemini_weekly", "third_party_session", "third_party_weekly"]
+    for (var k = 0; k < keys.length; k++) {
+      if (!found[keys[k]]) return []
+    }
+    return [
+      { label: "Gemini session", quota: found.gemini_session },
+      { label: "Gemini weekly", quota: found.gemini_weekly },
+      { label: "Claude/GPT session", quota: found.third_party_session },
+      { label: "Claude/GPT weekly", quota: found.third_party_weekly },
+    ]
+  }
+
+  function buildQuotaSummaryLines(ctx, summary) {
+    var lines = []
+    for (var i = 0; i < summary.length; i++) {
+      lines.push(
+        ctx.line.progress({
+          label: summary[i].label,
+          used: Math.round((1 - summary[i].quota.remainingFraction) * 100),
+          limit: 100,
+          format: { kind: "percent" },
+          resetsAt: summary[i].quota.resetTime,
+          periodDurationMs:
+            summary[i].label.indexOf("weekly") !== -1 ? 7 * 24 * 60 * 60 * 1000 : QUOTA_PERIOD_MS,
+        })
+      )
+    }
+    return lines
   }
 
   function sourceLine(ctx, value) {
@@ -670,18 +845,24 @@
     var hasUserStatus = !!(data && data.userStatus)
     var container = hasUserStatus ? data.userStatus : data
     if (!container) return { plan: null, models: [] }
-    var cascade = hasUserStatus ? (container.cascadeModelConfigData || {}) : container
+    var cascade = hasUserStatus ? container.cascadeModelConfigData || {} : container
     var configs = cascade.clientModelConfigs || []
     var orderMap = parseLabelOrderFromSorts(cascade.clientModelSorts || [], "modelLabels")
-    var planInfo = hasUserStatus ? ((container.planStatus || {}).planInfo || {}) : {}
-    var userTier = hasUserStatus ? (container.userTier || {}) : {}
+    var planInfo = hasUserStatus ? (container.planStatus || {}).planInfo || {} : {}
+    var userTier = hasUserStatus ? container.userTier || {} : {}
     return {
       plan: userTier.name || planInfo.planName || null,
       models: parseModelRecords(
         configs,
         orderMap,
-        function (item) { return item.label },
-        function (item) { return item.modelOrAlias && item.modelOrAlias.model ? item.modelOrAlias.model : String(item.label || "") }
+        function (item) {
+          return item.label
+        },
+        function (item) {
+          return item.modelOrAlias && item.modelOrAlias.model
+            ? item.modelOrAlias.model
+            : String(item.label || "")
+        }
       ),
     }
   }
@@ -745,8 +926,12 @@
     return parseModelRecords(
       orderedItems,
       {},
-      function (item) { return item.key },
-      function (item) { return item.model }
+      function (item) {
+        return item.key
+      },
+      function (item) {
+        return item.model
+      }
     )
   }
 
@@ -755,14 +940,21 @@
     if (!discovery) return null
     status.lsDiscovered = true
 
-    var metadata = { ideName: "antigravity", extensionName: "antigravity", ideVersion: "unknown", locale: "en" }
+    var metadata = {
+      ideName: "antigravity",
+      extensionName: "antigravity",
+      ideVersion: "unknown",
+      locale: "en",
+    }
 
     var candidates = lsCandidates(discovery)
     for (var i = 0; i < candidates.length; i++) {
       var candidate = candidates[i]
       var data = null
       try {
-        data = callLs(ctx, candidate.port, candidate.scheme, discovery.csrf, "GetUserStatus", { metadata: metadata })
+        data = callLs(ctx, candidate.port, candidate.scheme, discovery.csrf, "GetUserStatus", {
+          metadata: metadata,
+        })
       } catch (e) {
         status.lsPortUnreachable = true
         ctx.host.log.warn(
@@ -778,7 +970,14 @@
       }
       if (!(data && data.userStatus)) {
         try {
-          data = callLs(ctx, candidate.port, candidate.scheme, discovery.csrf, "GetCommandModelConfigs", { metadata: metadata })
+          data = callLs(
+            ctx,
+            candidate.port,
+            candidate.scheme,
+            discovery.csrf,
+            "GetCommandModelConfigs",
+            { metadata: metadata }
+          )
         } catch (e) {
           status.lsPortUnreachable = true
           ctx.host.log.warn(
@@ -802,21 +1001,59 @@
     return null
   }
 
-  function requestCloudCode(ctx, token) {
+  function requestCloudCodePath(ctx, token, path, body) {
     for (var i = 0; i < CLOUD_CODE_URLS.length; i++) {
       try {
         var resp = ctx.host.http.request({
           method: "POST",
-          url: CLOUD_CODE_URLS[i] + FETCH_MODELS_PATH,
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token, "User-Agent": "antigravity" },
-          bodyText: "{}",
+          url: CLOUD_CODE_URLS[i] + path,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+            "User-Agent": "antigravity",
+          },
+          bodyText: JSON.stringify(body),
           timeoutMs: 15000,
         })
-        if (ctx.util.isAuthStatus(resp.status)) return { authFailed: true }
-        if (resp.status >= 200 && resp.status < 300) return ctx.util.tryParseJson(resp.bodyText)
+        if (resp.status === 403) return { forbidden: true }
+        if (resp.status === 401) return { authFailed: true }
+        if (resp.status >= 200 && resp.status < 300) {
+          var parsed = ctx.util.tryParseJson(resp.bodyText)
+          if (parsed) return { data: parsed }
+        }
       } catch (e) {
-        ctx.host.log.warn("Cloud Code request failed (" + CLOUD_CODE_URLS[i] + "): " + String(e))
+        ctx.host.log.warn(
+          "Cloud Code request failed (" + CLOUD_CODE_URLS[i] + path + "): " + String(e)
+        )
       }
+    }
+    return null
+  }
+
+  function resolvePlan(loadData) {
+    var tier = loadData && (loadData.paidTier || loadData.currentTier)
+    return tier && (tier.name || tier.id) ? tier.name || tier.id : null
+  }
+
+  function requestCloudCode(ctx, token) {
+    var load = requestCloudCodePath(ctx, token, LOAD_CODE_ASSIST_PATH, {
+      metadata: { ideType: "ANTIGRAVITY" },
+    })
+    if (load && (load.authFailed || load.forbidden)) return load
+    var project = load && load.data && load.data.cloudaicompanionProject
+    if (typeof project !== "string" || !project.trim()) return null
+    var plan = resolvePlan(load.data)
+    var summaryResponse = requestCloudCodePath(ctx, token, QUOTA_SUMMARY_PATH, { project: project })
+    if (summaryResponse && (summaryResponse.authFailed || summaryResponse.forbidden))
+      return summaryResponse
+    var summary = parseQuotaSummary(summaryResponse && summaryResponse.data)
+    if (summary.length) return { plan: plan, quotaSummary: summary }
+    var modelsResponse = requestCloudCodePath(ctx, token, FETCH_MODELS_PATH, { project: project })
+    if (modelsResponse && (modelsResponse.authFailed || modelsResponse.forbidden))
+      return modelsResponse
+    if (modelsResponse && modelsResponse.data) {
+      modelsResponse.data.plan = plan
+      return modelsResponse.data
     }
     return null
   }
@@ -826,6 +1063,9 @@
       (cached && cached.accessToken) ||
       (dbTokens && (dbTokens.accessToken || dbTokens.refreshToken))
     )
+    if (status.sawForbidden) {
+      return "Antigravity quota is unavailable for this account, region, or plan."
+    }
     if (status.sawAuthFailure) {
       return "Antigravity sign-in expired or was revoked. Open Antigravity, sign in again, then refresh UsageBar."
     }
@@ -839,7 +1079,8 @@
       return "Antigravity local port was discovered but could not be reached. Restart Antigravity and try again."
     }
     if (!hasAnyToken) {
-      if (status.lsDiscovered) return "Antigravity is signed out. Sign in to Antigravity, then refresh UsageBar."
+      if (status.lsDiscovered)
+        return "Antigravity is signed out. Sign in to Antigravity, then refresh UsageBar."
       return "Antigravity is not running and no stored sign-in was found. Open Antigravity, sign in, then refresh UsageBar."
     }
     return "Antigravity quota is unavailable. Try refreshing again later."
@@ -852,12 +1093,37 @@
       lsPortUnreachable: false,
       triedCloudCode: false,
       sawCloudCodeTransientFailure: false,
+      sawForbidden: false,
       sawAuthFailure: false,
       sawExpiredToken: false,
       attemptedRefresh: false,
       refreshFailed: false,
     }
     var dbTokens = loadOAuthTokens(ctx)
+    var cached = loadCachedToken(ctx)
+    var hasStoredCredentials = !!(
+      (cached && cached.accessToken) ||
+      (dbTokens && (dbTokens.accessToken || dbTokens.refreshToken))
+    )
+    var ccData = hasStoredCredentials ? resolveCloudCodeData(ctx, cached, dbTokens, status) : null
+    if (ccData && !ccData.authFailed) {
+      if (ccData.quotaSummary && ccData.quotaSummary.length) {
+        return withSource(
+          ctx,
+          { plan: ccData.plan, lines: buildQuotaSummaryLines(ctx, ccData.quotaSummary) },
+          "Cloud Code quota summary"
+        )
+      }
+      var primaryCcModels = parseCloudCodeModels(ccData)
+      if (hasUsableQuota(primaryCcModels)) {
+        return withSource(
+          ctx,
+          { plan: ccData.plan, lines: buildGroupedLines(ctx, primaryCcModels) },
+          "Cloud Code fallback"
+        )
+      }
+    }
+
     var ls = probeLs(ctx, status)
     if (ls && hasUsableQuota(ls.models)) {
       var liveOutput = { plan: ls.plan, lines: buildGroupedLines(ctx, ls.models) }
@@ -868,23 +1134,27 @@
     if (!ls) {
       var cachedLive = loadCachedLiveUsage(ctx)
       if (cachedLive) {
-        ctx.host.log.warn("using cached live Antigravity usage because the language server is not running")
+        ctx.host.log.warn(
+          "using cached live Antigravity usage because the language server is not running"
+        )
         return withSource(ctx, cachedLive, "Cached live Antigravity language server")
       }
     }
 
-    var cached = loadCachedToken(ctx)
-    var ccData = resolveCloudCodeData(ctx, cached, dbTokens, status)
     if (ccData && !ccData.authFailed) {
-      var ccModels = parseCloudCodeModels(ccData)
-      if (hasUsableQuota(ccModels)) {
-        return withSource(ctx, { plan: ls ? ls.plan : null, lines: buildGroupedLines(ctx, ccModels) }, "Cloud Code fallback")
-      }
-      return withSource(ctx, { plan: ls ? ls.plan : null, lines: unavailableLines(ctx) }, "Cloud Code fallback")
+      return withSource(
+        ctx,
+        { plan: ccData.plan || (ls ? ls.plan : null), lines: unavailableLines(ctx) },
+        "Cloud Code fallback"
+      )
     }
 
     if (ls && (ls.models.length > 0 || ls.plan)) {
-      return withSource(ctx, { plan: ls.plan, lines: unavailableLines(ctx) }, "Antigravity language server without usable quota")
+      return withSource(
+        ctx,
+        { plan: ls.plan, lines: unavailableLines(ctx) },
+        "Antigravity language server without usable quota"
+      )
     }
     throw finalErrorMessage(status, cached, dbTokens)
   }

@@ -1,5 +1,6 @@
-(function () {
+;(function () {
   const USAGE_BASE_URL = "https://admin.mistral.ai/api/billing/v2/usage"
+  const ADMIN_USAGE_BASE_URL = "https://console.mistral.ai/api/admin/usage"
 
   function readString(value) {
     if (typeof value !== "string") return null
@@ -17,28 +18,41 @@
     }
   }
 
-  function readStoredCookieHeader(ctx) {
-    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+  function readStoredSecret(ctx, key, label) {
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function")
+      return null
     try {
-      return readString(ctx.host.providerSecrets.read("cookieHeader"))
+      return readString(ctx.host.providerSecrets.read(key))
     } catch (e) {
       const message = String(e)
       if (/not found/i.test(message)) return null
-      ctx.host.log.warn("stored Mistral cookie header read failed: " + message)
+      ctx.host.log.warn("stored Mistral " + label + " read failed: " + message)
       return null
     }
   }
 
-  function loadCookieHeader(ctx) {
-    const stored = readStoredCookieHeader(ctx)
-    if (stored) return { value: stored, source: "Stored Cookie header" }
+  function loadAuth(ctx) {
+    const storedAdminKey = readStoredSecret(ctx, "adminApiKey", "Admin API key")
+    if (storedAdminKey) {
+      return { kind: "adminApiKey", value: storedAdminKey, source: "Stored Admin API key" }
+    }
+
+    const envAdminKey = readEnv(ctx, "MISTRAL_ADMIN_API_KEY")
+    if (envAdminKey) {
+      return { kind: "adminApiKey", value: envAdminKey, source: "MISTRAL_ADMIN_API_KEY" }
+    }
+
+    const storedCookie = readStoredSecret(ctx, "cookieHeader", "cookie header")
+    if (storedCookie) return { kind: "cookie", value: storedCookie, source: "Stored Cookie header" }
 
     const directHeader = readEnv(ctx, "MISTRAL_COOKIE_HEADER")
-    if (directHeader) return { value: directHeader, source: "MISTRAL_COOKIE_HEADER" }
+    if (directHeader)
+      return { kind: "cookie", value: directHeader, source: "MISTRAL_COOKIE_HEADER" }
 
     const session = readEnv(ctx, "MISTRAL_SESSION")
     if (session) {
       return {
+        kind: "cookie",
         value: "ory_session_mistral=" + session,
         source: "MISTRAL_SESSION",
       }
@@ -72,7 +86,13 @@
     const date = now instanceof Date ? now : new Date()
     const month = date.getUTCMonth() + 1
     const year = date.getUTCFullYear()
-    return USAGE_BASE_URL + "?month=" + encodeURIComponent(String(month)) + "&year=" + encodeURIComponent(String(year))
+    return (
+      USAGE_BASE_URL +
+      "?month=" +
+      encodeURIComponent(String(month)) +
+      "&year=" +
+      encodeURIComponent(String(year))
+    )
   }
 
   function buildPriceIndex(prices) {
@@ -131,12 +151,23 @@
     const prices = buildPriceIndex(payload.prices)
     const totals = { input: 0, output: 0, cached: 0, cost: 0, modelCount: 0 }
 
+    aggregateModelMap(payload.chat && payload.chat.models, prices, totals, true)
     aggregateModelMap(payload.completion && payload.completion.models, prices, totals, true)
     aggregateModelMap(payload.ocr && payload.ocr.models, prices, totals, false)
     aggregateModelMap(payload.connectors && payload.connectors.models, prices, totals, false)
     aggregateModelMap(payload.audio && payload.audio.models, prices, totals, false)
-    aggregateModelMap(payload.libraries_api && payload.libraries_api.pages && payload.libraries_api.pages.models, prices, totals, false)
-    aggregateModelMap(payload.libraries_api && payload.libraries_api.tokens && payload.libraries_api.tokens.models, prices, totals, false)
+    aggregateModelMap(
+      payload.libraries_api && payload.libraries_api.pages && payload.libraries_api.pages.models,
+      prices,
+      totals,
+      false
+    )
+    aggregateModelMap(
+      payload.libraries_api && payload.libraries_api.tokens && payload.libraries_api.tokens.models,
+      prices,
+      totals,
+      false
+    )
     aggregateModelMap(payload.fine_tuning && payload.fine_tuning.training, prices, totals, false)
     aggregateModelMap(payload.fine_tuning && payload.fine_tuning.storage, prices, totals, false)
 
@@ -192,32 +223,86 @@
     return { payload, endpoint: url }
   }
 
-  function probe(ctx) {
-    const cookieHeader = loadCookieHeader(ctx)
-    if (!cookieHeader) {
-      throw "Not logged in. Save a Mistral Cookie header or set MISTRAL_COOKIE_HEADER."
+  function fetchAdminUsage(ctx, apiKey) {
+    const url = monthUsageUrlForBase(ADMIN_USAGE_BASE_URL, new Date())
+    let resp
+    try {
+      resp = ctx.util.request({
+        method: "GET",
+        url,
+        headers: {
+          Accept: "application/json",
+          "x-api-key": apiKey,
+          "User-Agent": "UsageBar",
+        },
+        timeoutMs: 15000,
+      })
+    } catch (e) {
+      ctx.host.log.error("Mistral Admin API usage request failed: " + String(e))
+      throw "Usage request failed. Check your connection."
     }
 
-    const usage = fetchUsage(ctx, cookieHeader.value)
+    if (ctx.util.isAuthStatus(resp.status)) {
+      throw "Mistral Admin API key invalid or unauthorized. Update the key and try again."
+    }
+    if (resp.status < 200 || resp.status >= 300) {
+      throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
+    }
+    const payload = ctx.util.tryParseJson(resp.bodyText)
+    if (!payload || typeof payload !== "object") {
+      throw "Usage response invalid. Try again later."
+    }
+    return { payload, endpoint: url }
+  }
+
+  function monthUsageUrlForBase(baseUrl, now) {
+    const date = now instanceof Date ? now : new Date()
+    const month = date.getUTCMonth() + 1
+    const year = date.getUTCFullYear()
+    return (
+      baseUrl +
+      "?month=" +
+      encodeURIComponent(String(month)) +
+      "&year=" +
+      encodeURIComponent(String(year))
+    )
+  }
+
+  function probe(ctx) {
+    const auth = loadAuth(ctx)
+    if (!auth) {
+      throw "Not logged in. Save a Mistral Admin API key or configure a cookie fallback."
+    }
+
+    const usage =
+      auth.kind === "adminApiKey" ? fetchAdminUsage(ctx, auth.value) : fetchUsage(ctx, auth.value)
     const snapshot = parseUsagePayload(usage.payload)
     if (!snapshot) {
       throw "Usage response invalid. Try again later."
     }
 
-    const spend = snapshot.totalCost > 0
-      ? snapshot.currencySymbol + snapshot.totalCost.toFixed(4) + " this month"
-      : "No usage this month"
+    const spend =
+      snapshot.totalCost > 0
+        ? snapshot.currencySymbol + snapshot.totalCost.toFixed(4) + " this month"
+        : "No usage this month"
     const lines = [
       ctx.line.text({ label: "Spend", value: spend }),
       ctx.line.text({ label: "Input tokens", value: fmtCount(snapshot.totalInputTokens) }),
       ctx.line.text({ label: "Output tokens", value: fmtCount(snapshot.totalOutputTokens) }),
     ]
     if (snapshot.totalCachedTokens > 0) {
-      lines.push(ctx.line.text({ label: "Cached tokens", value: fmtCount(snapshot.totalCachedTokens) }))
+      lines.push(
+        ctx.line.text({ label: "Cached tokens", value: fmtCount(snapshot.totalCachedTokens) })
+      )
     }
     lines.push(ctx.line.text({ label: "Models", value: fmtCount(snapshot.modelCount) }))
-    lines.push(ctx.line.text({ label: "Source", value: "Mistral admin billing session" }))
-    lines.push(ctx.line.text({ label: "Auth source", value: cookieHeader.source }))
+    lines.push(
+      ctx.line.text({
+        label: "Source",
+        value: auth.kind === "adminApiKey" ? "Mistral Admin API" : "Mistral admin billing session",
+      })
+    )
+    lines.push(ctx.line.text({ label: "Auth source", value: auth.source }))
     lines.push(ctx.line.text({ label: "Endpoint", value: usage.endpoint }))
 
     return { plan: snapshot.currency, lines }
