@@ -38,7 +38,7 @@ use windows_sys::Win32::Security::Credentials::{
     CRED_TYPE_GENERIC, CREDENTIALW, CredFree, CredReadW,
 };
 
-const WHITELISTED_ENV_VARS: [&str; 38] = [
+const WHITELISTED_ENV_VARS: [&str; 39] = [
     "CODEX_HOME",
     "CODEBUFF_API_KEY",
     "GH_CONFIG_DIR",
@@ -66,6 +66,7 @@ const WHITELISTED_ENV_VARS: [&str; 38] = [
     "MINIMAX_CN_API_KEY",
     "MISTRAL_COOKIE_HEADER",
     "MISTRAL_SESSION",
+    "MISTRAL_ADMIN_API_KEY",
     "OPENROUTER_API_KEY",
     "OPENROUTER_API_URL",
     "OLLAMA_API_KEY",
@@ -553,6 +554,7 @@ fn redact_body(body: &str) -> String {
         "userId",
         "account_id",
         "accountId",
+        "cloudaicompanionProject",
         "email",
         "login",
         "analytics_tracking_id",
@@ -3794,6 +3796,15 @@ mod tests {
             "accountId should show first4...last4, got: {}",
             redacted
         );
+    }
+
+    #[test]
+    fn redact_body_redacts_cloud_ai_companion_project() {
+        let body = r#"{"cloudaicompanionProject":"cloud-ai-companion-1234567890"}"#;
+        let redacted = redact_body(body);
+
+        assert!(!redacted.contains("cloud-ai-companion-1234567890"));
+        assert!(redacted.contains("clou...7890"));
     }
 
     #[test]

@@ -11,7 +11,7 @@ This provider is no longer surfaced separately in Settings. It remains only as a
 
 ## Data source
 
-- Authenticated OpenCode website session via a manually stored `Cookie` request header
+- Authenticated OpenCode website session via guided login or a manually stored `Cookie` request header
 - `https://opencode.ai/_server` workspace lookup and billing usage calls
 - No public quota or balance API is used in this Windows-first slice
 
@@ -38,15 +38,15 @@ UsageBar currently expects the authenticated workspace billing session for OpenC
 
 If OpenCode redirects you back to home or sign-in, the session is not ready yet.
 
-UsageBar reads the Cookie header saved in Settings first. `OPENCODE_COOKIE_HEADER` remains supported only as a fallback for existing environment-based setups.
+UsageBar reads the Cookie header saved through **Connect OpenCode Zen** or manual Settings entry first. `OPENCODE_COOKIE_HEADER` remains supported only as a fallback for existing environment-based setups.
 
 Successful output includes:
 
-| Line | Value |
-| --- | --- |
-| `Source` | `OpenCode Zen signed-in website billing session` |
+| Line          | Value                                                                                |
+| ------------- | ------------------------------------------------------------------------------------ |
+| `Source`      | `OpenCode Zen signed-in website billing session`                                     |
 | `Auth source` | `Stored Cookie header`, `OPENCODE_COOKIE_HEADER`, or `Legacy keychain Cookie header` |
-| `Endpoint` | `https://opencode.ai/_server` |
+| `Endpoint`    | `https://opencode.ai/_server`                                                        |
 
 ## Setup
 

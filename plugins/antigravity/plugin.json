@@ -17,6 +17,7 @@
       "127.0.0.1",
       "localhost",
       "daily-cloudcode-pa.googleapis.com",
+      "daily-cloudcode-pa.sandbox.googleapis.com",
       "cloudcode-pa.googleapis.com",
       "oauth2.googleapis.com"
     ],
@@ -26,10 +27,14 @@
     "fs": true
   },
   "lines": [
-    { "type": "progress", "label": "Gemini Pro", "scope": "overview", "primaryOrder": 1 },
-    { "type": "progress", "label": "Gemini Flash", "scope": "overview", "primaryOrder": 2 },
-    { "type": "progress", "label": "Gemini Image", "scope": "overview", "primaryOrder": 3 },
-    { "type": "progress", "label": "Claude", "scope": "overview", "primaryOrder": 4 },
+    { "type": "progress", "label": "Gemini session", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Gemini weekly", "scope": "overview", "primaryOrder": 2 },
+    { "type": "progress", "label": "Claude/GPT session", "scope": "overview", "primaryOrder": 3 },
+    { "type": "progress", "label": "Claude/GPT weekly", "scope": "overview", "primaryOrder": 4 },
+    { "type": "progress", "label": "Gemini Pro", "scope": "detail" },
+    { "type": "progress", "label": "Gemini Flash", "scope": "detail" },
+    { "type": "progress", "label": "Gemini Image", "scope": "detail" },
+    { "type": "progress", "label": "Claude", "scope": "detail" },
     { "type": "text", "label": "Source", "scope": "detail" }
   ]
 }

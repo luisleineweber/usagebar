@@ -1258,6 +1258,55 @@ describe("claude plugin", () => {
       expect(todayLine.type).toBe("text")
       expect(todayLine.value).toContain("150 tokens")
       expect(todayLine.value).toContain("$0.75")
+      expect(result.history).toMatchObject({
+        version: 1,
+        source: "ccusage",
+        timeZone: "system-local",
+      })
+      expect(result.history.entries[0]).toMatchObject({
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        costUsd: 0.75,
+      })
+    })
+
+    it("keeps ccusage model breakdowns as leaf history rows", async () => {
+      const todayKey = localDayKey(new Date())
+      const ctx = makeProbeCtx({
+        ccusageResult: okUsage([
+          {
+            date: todayKey,
+            totalTokens: 300,
+            totalCost: 1.5,
+            modelBreakdowns: [
+              {
+                modelName: "claude-sonnet",
+                inputTokens: 120,
+                outputTokens: 30,
+                totalTokens: 150,
+                cost: 0.5,
+              },
+              {
+                modelName: "claude-opus",
+                inputTokens: 100,
+                outputTokens: 50,
+                totalTokens: 150,
+                cost: 1,
+              },
+            ],
+          },
+        ]),
+      })
+      const plugin = await loadPlugin()
+      const result = plugin.probe(ctx)
+
+      expect(result.history.entries).toHaveLength(2)
+      expect(result.history.entries.map((entry) => entry.model)).toEqual([
+        "claude-sonnet",
+        "claude-opus",
+      ])
+      expect(result.history.entries.reduce((sum, entry) => sum + entry.costUsd, 0)).toBe(1.5)
     })
 
     it("adds Yesterday line when ccusage returns yesterday's data", async () => {

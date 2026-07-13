@@ -106,6 +106,15 @@ When configured, UsageBar calls:
 
 This mirrors CodexBar's web/API probing in a Windows-friendly manual-cookie form. Local OAuth credentials are still preferred; the web fallback is only used when OAuth credentials are unavailable.
 
+### Optional Microsoft Edge import
+
+On Windows, Settings can import Claude's approved `sessionKey` cookie from an explicitly selected Microsoft Edge profile. The control is disabled by default and appears only after browser import is enabled for Claude.
+
+- The compiled policy reads only `sessionKey` for `claude.ai`.
+- The result returns redacted counts and diagnostic codes, never cookie values.
+- The imported cookie header is written directly to UsageBar's DPAPI-protected provider secret store.
+- Unsupported Edge encryption, a locked database, or no matching session leaves guided login and manual cookie entry available.
+
 ### Token Refresh
 
 Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively on 401/403.

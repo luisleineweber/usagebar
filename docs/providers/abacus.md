@@ -11,8 +11,8 @@ Decision: do not expose Abacus API-key setup until a real account or official do
 ## Setup
 
 1. Open https://apps.abacus.ai/chatllm/admin/compute-points-usage while signed in.
-2. In browser DevTools, copy the full `Cookie` request header from an Abacus API request.
-3. Paste that cookie header into Abacus AI provider settings. `ABACUS_COOKIE_HEADER` and `ABACUS_COOKIE` remain fallback options.
+2. In UsageBar Settings -> Providers -> Abacus AI, choose **Connect Abacus AI** and finish signing in.
+3. Manual fallback: copy the full `Cookie` request header from an Abacus API request and paste it into provider settings. `ABACUS_COOKIE_HEADER` and `ABACUS_COOKIE` remain fallback options.
 
 UsageBar calls `_getOrganizationComputePoints` for the credit balance and `_getBillingInfo` for optional plan and reset metadata.
 
@@ -20,10 +20,10 @@ When Abacus reports a non-zero `totalComputePoints`, UsageBar renders `Credits` 
 
 Successful output also includes detail-only provenance lines:
 
-| Line | Value |
-| --- | --- |
-| `Source` | `Abacus dashboard compute-points session` |
+| Line          | Value                                                              |
+| ------------- | ------------------------------------------------------------------ |
+| `Source`      | `Abacus dashboard compute-points session`                          |
 | `Auth source` | `Stored Cookie header`, `ABACUS_COOKIE_HEADER`, or `ABACUS_COOKIE` |
-| `Endpoint` | `https://apps.abacus.ai/api/_getOrganizationComputePoints` |
+| `Endpoint`    | `https://apps.abacus.ai/api/_getOrganizationComputePoints`         |
 
 The optional billing-info request can fail without hiding the compute-points result. In that case UsageBar keeps the credit output and logs the billing metadata failure.

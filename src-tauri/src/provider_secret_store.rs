@@ -38,14 +38,11 @@ fn save_provider_secret_file(app_data_dir: &Path, file: &ProviderSecretFile) -> 
     })?;
 
     let path = provider_secret_file_path(app_data_dir);
-    let temp_path = path.with_extension("json.tmp");
     let json = serde_json::to_vec_pretty(file)
         .map_err(|error| format!("Could not encode provider secret store: {}", error))?;
 
-    std::fs::write(&temp_path, json)
+    crate::atomic_file::write(&path, &json)
         .map_err(|error| format!("Could not write provider secret store: {}", error))?;
-    std::fs::rename(&temp_path, &path)
-        .map_err(|error| format!("Could not finalize provider secret store: {}", error))?;
     Ok(())
 }
 
@@ -248,7 +245,10 @@ pub fn delete_provider_secret(
 
 #[cfg(test)]
 mod tests {
-    use super::provider_secret_storage_key;
+    use super::{
+        ProviderSecretFile, load_provider_secret_file, provider_secret_storage_key,
+        save_provider_secret_file,
+    };
 
     #[test]
     fn provider_secret_storage_key_is_stable() {
@@ -256,5 +256,27 @@ mod tests {
             provider_secret_storage_key("ollama", "cookieHeader"),
             "ollama::cookieHeader"
         );
+    }
+
+    #[test]
+    fn provider_secret_file_replaces_existing_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "usagebar-provider-secret-replace-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let mut first = ProviderSecretFile::default();
+        first.entries.insert("provider::first".into(), "one".into());
+        save_provider_secret_file(&dir, &first).unwrap();
+
+        let mut second = ProviderSecretFile::default();
+        second
+            .entries
+            .insert("provider::second".into(), "two".into());
+        save_provider_secret_file(&dir, &second).unwrap();
+
+        let loaded = load_provider_secret_file(&dir).unwrap();
+        assert_eq!(loaded.entries, second.entries);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

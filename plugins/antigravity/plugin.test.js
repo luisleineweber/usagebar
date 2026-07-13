@@ -101,10 +101,68 @@ function makeAuthStatusJson(overrides) {
 
 function setupSqliteMock(ctx, authJson, protoBase64) {
   ctx.host.sqlite.query.mockImplementation((db, sql) => {
-    if (sql.includes(OAUTH_TOKEN_KEY) && protoBase64) return JSON.stringify([{ value: protoBase64 }])
-    if (sql.includes("antigravityAuthStatus") && authJson) return JSON.stringify([{ value: authJson }])
+    if (sql.includes(OAUTH_TOKEN_KEY) && protoBase64)
+      return JSON.stringify([{ value: protoBase64 }])
+    if (sql.includes("antigravityAuthStatus") && authJson)
+      return JSON.stringify([{ value: authJson }])
     return "[]"
   })
+}
+
+function makeQuotaSummaryResponse(overrides) {
+  return Object.assign(
+    {
+      groups: [
+        {
+          displayName: "Gemini",
+          buckets: [
+            {
+              displayName: "Session",
+              window: "FIVE_HOURS",
+              remainingFraction: 0.75,
+              resetTime: "2026-07-12T20:00:00Z",
+            },
+            {
+              displayName: "Weekly",
+              window: "WEEKLY",
+              remainingFraction: 0.4,
+              resetTime: "2026-07-18T20:00:00Z",
+            },
+          ],
+        },
+        {
+          displayName: "Claude and GPT",
+          buckets: [
+            {
+              displayName: "Session",
+              window: "FIVE_HOURS",
+              remainingFraction: 0.6,
+              resetTime: "2026-07-12T20:00:00Z",
+            },
+            {
+              displayName: "Weekly",
+              window: "WEEKLY",
+              remainingFraction: 0.2,
+              resetTime: "2026-07-18T20:00:00Z",
+            },
+          ],
+        },
+      ],
+    },
+    overrides
+  )
+}
+
+function makeLoadCodeAssistResponse(overrides) {
+  return {
+    status: 200,
+    bodyText: JSON.stringify(
+      Object.assign(
+        { cloudaicompanionProject: "cloud-ai-companion-123", paidTier: { name: "Pro" } },
+        overrides
+      )
+    ),
+  }
 }
 
 function makeProtobufBase64(ctx, accessToken, refreshToken, expirySeconds) {
@@ -125,7 +183,8 @@ function makeProtobufBase64(ctx, accessToken, refreshToken, expirySeconds) {
   let inner = ""
   if (accessToken) inner += encodeField(1, 2, accessToken)
   if (refreshToken) inner += encodeField(3, 2, refreshToken)
-  if (expirySeconds !== undefined && expirySeconds !== null) inner += encodeField(4, 2, encodeField(1, 0, expirySeconds))
+  if (expirySeconds !== undefined && expirySeconds !== null)
+    inner += encodeField(4, 2, encodeField(1, 0, expirySeconds))
   const payload = encodeField(1, 2, ctx.base64.encode(inner))
   const wrapper = encodeField(1, 2, OAUTH_TOKEN_SENTINEL) + encodeField(2, 2, payload)
   return ctx.base64.encode(encodeField(1, 2, wrapper))
@@ -150,7 +209,9 @@ describe("antigravity plugin", () => {
     ctx.host.ls.discover.mockReturnValue(null)
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Antigravity is not running and no stored sign-in was found.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Antigravity is not running and no stored sign-in was found."
+    )
   })
 
   it("declares explicit read-only host capabilities", () => {
@@ -167,9 +228,23 @@ describe("antigravity plugin", () => {
       "127.0.0.1",
       "localhost",
       "daily-cloudcode-pa.googleapis.com",
+      "daily-cloudcode-pa.sandbox.googleapis.com",
       "cloudcode-pa.googleapis.com",
       "oauth2.googleapis.com",
     ])
+    expect(manifest.lines.filter((line) => line.primaryOrder).map((line) => line.label)).toEqual([
+      "Gemini session",
+      "Gemini weekly",
+      "Claude/GPT session",
+      "Claude/GPT weekly",
+    ])
+    expect(
+      manifest.lines
+        .filter((line) =>
+          ["Gemini Pro", "Gemini Flash", "Gemini Image", "Claude"].includes(line.label)
+        )
+        .every((line) => line.scope === "detail" && line.primaryOrder === undefined)
+    ).toBe(true)
   })
 
   it("renders grouped-only LS quota lines", async () => {
@@ -201,13 +276,15 @@ describe("antigravity plugin", () => {
     ctx.host.http.request.mockImplementation(() => {
       return {
         status: 200,
-        bodyText: JSON.stringify(makeUserStatusResponse({
-          userStatus: {
-            userTier: { name: "Google AI Ultra" },
-            planStatus: { planInfo: { planName: "Legacy Pro" } },
-            cascadeModelConfigData: makeUserStatusResponse().userStatus.cascadeModelConfigData,
-          },
-        })),
+        bodyText: JSON.stringify(
+          makeUserStatusResponse({
+            userStatus: {
+              userTier: { name: "Google AI Ultra" },
+              planStatus: { planInfo: { planName: "Legacy Pro" } },
+              cascadeModelConfigData: makeUserStatusResponse().userStatus.cascadeModelConfigData,
+            },
+          })
+        ),
       }
     })
 
@@ -220,7 +297,11 @@ describe("antigravity plugin", () => {
   it("falls back to Cloud Code when LS has no usable fractions", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson(),
+      makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(makeDiscovery())
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
@@ -228,19 +309,30 @@ describe("antigravity plugin", () => {
       if (url.includes("GetUserStatus")) {
         return {
           status: 200,
-          bodyText: JSON.stringify(makeUserStatusResponse({
-            userStatus: {
-              planStatus: { planInfo: { planName: "Pro" } },
-              cascadeModelConfigData: {
-                clientModelConfigs: [
-                  { label: "Gemini 3.1 Pro (High)", modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" }, quotaInfo: { resetTime: "2026-02-08T09:10:56Z" } },
-                  { label: "Claude Sonnet 4.6 (Thinking)", modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" }, quotaInfo: { resetTime: "2026-02-26T15:23:41Z" } },
-                ],
+          bodyText: JSON.stringify(
+            makeUserStatusResponse({
+              userStatus: {
+                planStatus: { planInfo: { planName: "Pro" } },
+                cascadeModelConfigData: {
+                  clientModelConfigs: [
+                    {
+                      label: "Gemini 3.1 Pro (High)",
+                      modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                      quotaInfo: { resetTime: "2026-02-08T09:10:56Z" },
+                    },
+                    {
+                      label: "Claude Sonnet 4.6 (Thinking)",
+                      modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" },
+                      quotaInfo: { resetTime: "2026-02-26T15:23:41Z" },
+                    },
+                  ],
+                },
               },
-            },
-          })),
+            })
+          ),
         }
       }
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (url.includes("fetchAvailableModels")) {
         return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
       }
@@ -294,27 +386,32 @@ describe("antigravity plugin", () => {
     ctx.host.ls.discover.mockReturnValue(makeDiscovery())
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
-      return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse({
-        userStatus: {
-          planStatus: {
-            planInfo: { planName: "Pro" },
-          },
-          cascadeModelConfigData: {
-            clientModelConfigs: [
-              {
-                label: "Gemini 3.1 Pro (High)",
-                modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
-                quotaInfo: { remainingFraction: 0.8, resetTime: "2026-02-02T01:00:00Z" },
+      return {
+        status: 200,
+        bodyText: JSON.stringify(
+          makeUserStatusResponse({
+            userStatus: {
+              planStatus: {
+                planInfo: { planName: "Pro" },
               },
-              {
-                label: "Claude Sonnet 4.6 (Thinking)",
-                modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" },
-                quotaInfo: { remainingFraction: 0.6, resetTime: "2026-02-02T02:00:00Z" },
+              cascadeModelConfigData: {
+                clientModelConfigs: [
+                  {
+                    label: "Gemini 3.1 Pro (High)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                    quotaInfo: { remainingFraction: 0.8, resetTime: "2026-02-02T01:00:00Z" },
+                  },
+                  {
+                    label: "Claude Sonnet 4.6 (Thinking)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" },
+                    quotaInfo: { remainingFraction: 0.6, resetTime: "2026-02-02T02:00:00Z" },
+                  },
+                ],
               },
-            ],
-          },
-        },
-      })) }
+            },
+          })
+        ),
+      }
     })
 
     const plugin = await loadPlugin()
@@ -326,8 +423,12 @@ describe("antigravity plugin", () => {
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.http.request.mockClear()
 
-    expect(() => plugin.probe(ctx)).toThrow("Antigravity is not running and no stored sign-in was found.")
-    expect(ctx.host.fs.remove).toHaveBeenCalledWith("/tmp/openusage-test/plugin/last-live-usage.json")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Antigravity is not running and no stored sign-in was found."
+    )
+    expect(ctx.host.fs.remove).toHaveBeenCalledWith(
+      "/tmp/openusage-test/plugin/last-live-usage.json"
+    )
     expect(ctx.host.log.warn).toHaveBeenCalledWith(
       "deleted cached live Antigravity usage: cached reset window elapsed"
     )
@@ -340,18 +441,32 @@ describe("antigravity plugin", () => {
       if (String(opts.url).includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
       return {
         status: 200,
-        bodyText: JSON.stringify(makeUserStatusResponse({
-          userStatus: {
-            planStatus: { planInfo: { planName: "Pro" } },
-            cascadeModelConfigData: {
-              clientModelConfigs: [
-                { label: "Gemini 3.1 Pro (High)", modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" }, quotaInfo: { remainingFraction: 0.75, resetTime: "2026-02-08T09:10:56Z" } },
-                { label: "Gemini 3.1 Pro (Low)", modelOrAlias: { model: "MODEL_PLACEHOLDER_M36" }, quotaInfo: { resetTime: "2026-02-08T09:10:56Z" } },
-                { label: "Claude Sonnet 4.6 (Thinking)", modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" }, quotaInfo: { remainingFraction: 0.6, resetTime: "2026-02-26T15:23:41Z" } },
-              ],
+        bodyText: JSON.stringify(
+          makeUserStatusResponse({
+            userStatus: {
+              planStatus: { planInfo: { planName: "Pro" } },
+              cascadeModelConfigData: {
+                clientModelConfigs: [
+                  {
+                    label: "Gemini 3.1 Pro (High)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                    quotaInfo: { remainingFraction: 0.75, resetTime: "2026-02-08T09:10:56Z" },
+                  },
+                  {
+                    label: "Gemini 3.1 Pro (Low)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M36" },
+                    quotaInfo: { resetTime: "2026-02-08T09:10:56Z" },
+                  },
+                  {
+                    label: "Claude Sonnet 4.6 (Thinking)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" },
+                    quotaInfo: { remainingFraction: 0.6, resetTime: "2026-02-26T15:23:41Z" },
+                  },
+                ],
+              },
             },
-          },
-        })),
+          })
+        ),
       }
     })
 
@@ -366,7 +481,11 @@ describe("antigravity plugin", () => {
   it("returns quota unavailable when neither LS nor Cloud Code yield usable fractions", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson(),
+      makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(makeDiscovery())
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
@@ -379,13 +498,18 @@ describe("antigravity plugin", () => {
               planStatus: { planInfo: { planName: "Pro" } },
               cascadeModelConfigData: {
                 clientModelConfigs: [
-                  { label: "Gemini 3.1 Pro (High)", modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" }, quotaInfo: { resetTime: "2026-02-08T09:10:56Z" } },
+                  {
+                    label: "Gemini 3.1 Pro (High)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                    quotaInfo: { resetTime: "2026-02-08T09:10:56Z" },
+                  },
                 ],
               },
             },
           }),
         }
       }
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (url.includes("fetchAvailableModels")) {
         return {
           status: 200,
@@ -425,8 +549,16 @@ describe("antigravity plugin", () => {
             planStatus: { planInfo: { planName: "Pro" } },
             cascadeModelConfigData: {
               clientModelConfigs: [
-                { label: "Gemini 3 Pro Image", modelOrAlias: { model: "MODEL_PLACEHOLDER_M9" }, quotaInfo: { remainingFraction: 0.65, resetTime: "2026-02-08T09:10:56Z" } },
-                { label: "Claude Opus 4.5 (Thinking)", modelOrAlias: { model: "MODEL_PLACEHOLDER_M12" }, quotaInfo: { remainingFraction: 0.55, resetTime: "2026-02-08T09:10:56Z" } },
+                {
+                  label: "Gemini 3 Pro Image",
+                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M9" },
+                  quotaInfo: { remainingFraction: 0.65, resetTime: "2026-02-08T09:10:56Z" },
+                },
+                {
+                  label: "Claude Opus 4.5 (Thinking)",
+                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M12" },
+                  quotaInfo: { remainingFraction: 0.55, resetTime: "2026-02-08T09:10:56Z" },
+                },
               ],
             },
           },
@@ -449,55 +581,57 @@ describe("antigravity plugin", () => {
       if (String(opts.url).includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
       return {
         status: 200,
-        bodyText: JSON.stringify(makeUserStatusResponse({
-          userStatus: {
-            planStatus: { planInfo: { planName: "Pro" } },
-            cascadeModelConfigData: {
-              clientModelConfigs: [
-                {
-                  label: "Gemini 3.1 Pro (High)",
-                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
-                  quotaInfo: { remainingFraction: 1, resetTime: "2026-02-08T09:10:56Z" },
-                },
-                {
-                  label: "Gemini 3 Flash",
-                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M18" },
-                  quotaInfo: { remainingFraction: 1, resetTime: "2026-02-08T09:10:56Z" },
-                },
-                {
-                  label: "Claude Sonnet 4.6 (Thinking)",
-                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" },
-                  quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
-                },
-                {
-                  label: "Claude Opus 4.6 (Thinking)",
-                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M26" },
-                  quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
-                },
-                {
-                  label: "GPT-OSS 120B (Medium)",
-                  modelOrAlias: { model: "MODEL_OPENAI_GPT_OSS_120B_MEDIUM" },
-                  quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
-                },
-              ],
-              clientModelSorts: [
-                {
-                  groups: [
-                    {
-                      modelLabels: [
-                        "Gemini 3.1 Pro (High)",
-                        "Gemini 3 Flash",
-                        "Claude Sonnet 4.6 (Thinking)",
-                        "Claude Opus 4.6 (Thinking)",
-                        "GPT-OSS 120B (Medium)",
-                      ],
-                    },
-                  ],
-                },
-              ],
+        bodyText: JSON.stringify(
+          makeUserStatusResponse({
+            userStatus: {
+              planStatus: { planInfo: { planName: "Pro" } },
+              cascadeModelConfigData: {
+                clientModelConfigs: [
+                  {
+                    label: "Gemini 3.1 Pro (High)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                    quotaInfo: { remainingFraction: 1, resetTime: "2026-02-08T09:10:56Z" },
+                  },
+                  {
+                    label: "Gemini 3 Flash",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M18" },
+                    quotaInfo: { remainingFraction: 1, resetTime: "2026-02-08T09:10:56Z" },
+                  },
+                  {
+                    label: "Claude Sonnet 4.6 (Thinking)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M35" },
+                    quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
+                  },
+                  {
+                    label: "Claude Opus 4.6 (Thinking)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M26" },
+                    quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
+                  },
+                  {
+                    label: "GPT-OSS 120B (Medium)",
+                    modelOrAlias: { model: "MODEL_OPENAI_GPT_OSS_120B_MEDIUM" },
+                    quotaInfo: { resetTime: "2026-02-02T16:13:00Z" },
+                  },
+                ],
+                clientModelSorts: [
+                  {
+                    groups: [
+                      {
+                        modelLabels: [
+                          "Gemini 3.1 Pro (High)",
+                          "Gemini 3 Flash",
+                          "Claude Sonnet 4.6 (Thinking)",
+                          "Claude Opus 4.6 (Thinking)",
+                          "GPT-OSS 120B (Medium)",
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
             },
-          },
-        })),
+          })
+        ),
       }
     })
 
@@ -518,28 +652,30 @@ describe("antigravity plugin", () => {
       if (String(opts.url).includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
       return {
         status: 200,
-        bodyText: JSON.stringify(makeUserStatusResponse({
-          userStatus: {
-            planStatus: { planInfo: { planName: "Pro" } },
-            cascadeModelConfigData: {
-              clientModelConfigs: [
-                {
-                  label: "Gemini 3.1 Pro (High)",
-                  modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
-                  quotaInfo: { remainingFraction: 0.8, resetTime: "2026-02-08T09:10:56Z" },
-                },
-                {
-                  label: "Sonnet 4.6 (Thinking)",
-                  modelOrAlias: { model: "MODEL_PLACEHOLDER_NEW_SONNET" },
-                  quotaInfo: { remainingFraction: 0.55, resetTime: "2026-02-08T09:10:56Z" },
-                },
-              ],
-              clientModelSorts: [
-                { groups: [{ modelLabels: ["Gemini 3.1 Pro (High)", "Sonnet 4.6 (Thinking)"] }] },
-              ],
+        bodyText: JSON.stringify(
+          makeUserStatusResponse({
+            userStatus: {
+              planStatus: { planInfo: { planName: "Pro" } },
+              cascadeModelConfigData: {
+                clientModelConfigs: [
+                  {
+                    label: "Gemini 3.1 Pro (High)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_M37" },
+                    quotaInfo: { remainingFraction: 0.8, resetTime: "2026-02-08T09:10:56Z" },
+                  },
+                  {
+                    label: "Sonnet 4.6 (Thinking)",
+                    modelOrAlias: { model: "MODEL_PLACEHOLDER_NEW_SONNET" },
+                    quotaInfo: { remainingFraction: 0.55, resetTime: "2026-02-08T09:10:56Z" },
+                  },
+                ],
+                clientModelSorts: [
+                  { groups: [{ modelLabels: ["Gemini 3.1 Pro (High)", "Sonnet 4.6 (Thinking)"] }] },
+                ],
+              },
             },
-          },
-        })),
+          })
+        ),
       }
     })
 
@@ -553,15 +689,20 @@ describe("antigravity plugin", () => {
   it("skips truly internal Cloud Code models", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson(),
+      makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (!String(opts.url).includes("fetchAvailableModels")) return { status: 500, bodyText: "" }
       return {
         status: 200,
         bodyText: JSON.stringify({
           models: {
-            "chat_20706": {
+            chat_20706: {
               displayName: "Internal Chat",
               model: "MODEL_CHAT_20706",
               isInternal: true,
@@ -586,9 +727,14 @@ describe("antigravity plugin", () => {
   it("uses agentModelSorts ordering for grouped Cloud Code output", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson(),
+      makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (!String(opts.url).includes("fetchAvailableModels")) return { status: 500, bodyText: "" }
       return {
         status: 200,
@@ -607,9 +753,7 @@ describe("antigravity plugin", () => {
           },
           agentModelSorts: [
             {
-              groups: [
-                { modelIds: ["claude-opus-4-6-thinking", "gemini-3-flash"] },
-              ],
+              groups: [{ modelIds: ["claude-opus-4-6-thinking", "gemini-3-flash"] }],
             },
           ],
         }),
@@ -625,14 +769,19 @@ describe("antigravity plugin", () => {
   it("keeps LS priority when LS has usable grouped quota", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson(),
+      makeProtobufBase64(ctx, "ya29.good", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(makeDiscovery())
     const calls = []
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
       calls.push(url)
       if (url.includes("GetUnleashData")) return { status: 200, bodyText: "{}" }
-      if (url.includes("GetUserStatus")) return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse()) }
+      if (url.includes("GetUserStatus"))
+        return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse()) }
       return { status: 500, bodyText: "" }
     })
 
@@ -668,10 +817,15 @@ describe("antigravity plugin", () => {
   it("decodes protobuf tokens and uses them for Cloud Code", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson(),
+      makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
     let authHeader = null
     ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (String(opts.url).includes("fetchAvailableModels")) {
         authHeader = opts.headers.Authorization
         return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
@@ -685,10 +839,148 @@ describe("antigravity plugin", () => {
     expect(authHeader).toBe("Bearer ya29.proto")
   })
 
+  it("resolves the account project and renders Antigravity 2.0 session and weekly quota", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, null, makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry))
+    ctx.host.ls.discover.mockReturnValue(null)
+    const requests = []
+    ctx.host.http.request.mockImplementation((opts) => {
+      requests.push({ url: String(opts.url), body: JSON.parse(opts.bodyText) })
+      if (String(opts.url).includes("loadCodeAssist")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            cloudaicompanionProject: "cloud-ai-companion-123",
+            paidTier: { name: "Google AI Pro" },
+          }),
+        }
+      }
+      if (String(opts.url).includes("retrieveUserQuotaSummary")) {
+        return { status: 200, bodyText: JSON.stringify(makeQuotaSummaryResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Google AI Pro")
+    expect(getProgressLabels(result)).toEqual([
+      "Gemini session",
+      "Gemini weekly",
+      "Claude/GPT session",
+      "Claude/GPT weekly",
+    ])
+    expect(getLine(result, "Gemini session")).toMatchObject({ used: 25, limit: 100 })
+    expect(requests).toEqual([
+      {
+        url: "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+        body: { metadata: { ideType: "ANTIGRAVITY" } },
+      },
+      {
+        url: "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+        body: { project: "cloud-ai-companion-123" },
+      },
+    ])
+  })
+
+  it("parses wrapped snake-case quota summary variants", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, null, makeProtobufBase64(ctx, "ya29.proto", null, futureExpiry))
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
+      if (url.includes("retrieveUserQuotaSummary")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            response: {
+              groups: [
+                {
+                  group_id: "gemini-models",
+                  buckets: [
+                    {
+                      bucket_id: "session-5-hour",
+                      remaining: { case: "remainingFraction", value: 0.5 },
+                      reset_at: "2026-07-12T20:00:00Z",
+                    },
+                    {
+                      bucket_id: "weekly",
+                      remaining_fraction: 0.25,
+                      reset_time: "2026-07-18T20:00:00Z",
+                    },
+                  ],
+                },
+                {
+                  group_id: "claude-gpt-models",
+                  buckets: [
+                    {
+                      bucket_id: "session-5-hour",
+                      remaining: { remaining_fraction: 0.8 },
+                      resetAt: "2026-07-12T20:00:00Z",
+                    },
+                    {
+                      bucket_id: "weekly",
+                      remaining: { remainingFraction: 0.1 },
+                      resetTime: "2026-07-18T20:00:00Z",
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(getLine(result, "Gemini session").used).toBe(50)
+    expect(getLine(result, "Gemini weekly").used).toBe(75)
+    expect(getLine(result, "Claude/GPT session").used).toBe(20)
+    expect(getLine(result, "Claude/GPT weekly").used).toBe(90)
+  })
+
+  it("rejects false-full model data when project discovery is missing", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, null, makeProtobufBase64(ctx, "ya29.proto", null, futureExpiry))
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("loadCodeAssist")) {
+        return { status: 200, bodyText: JSON.stringify({ paidTier: { name: "Pro" } }) }
+      }
+      if (String(opts.url).includes("fetchAvailableModels")) {
+        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+      }
+      return { status: 500, bodyText: "" }
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Antigravity quota is temporarily unavailable from Cloud Code."
+    )
+    expect(
+      ctx.host.http.request.mock.calls.some(([opts]) =>
+        String(opts.url).includes("fetchAvailableModels")
+      )
+    ).toBe(false)
+  })
+
   it("prefers a valid cached token before DB refresh", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson(),
+      makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.fs.writeText(
       ctx.app.pluginDataDir + "/auth.json",
@@ -699,6 +991,7 @@ describe("antigravity plugin", () => {
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
       if (url.includes("oauth2.googleapis.com")) return { status: 500, bodyText: "" }
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (url.includes("fetchAvailableModels")) {
         authHeaders.push(opts.headers.Authorization)
         if (opts.headers.Authorization === "Bearer ya29.cached") {
@@ -718,15 +1011,23 @@ describe("antigravity plugin", () => {
   it("refreshes when the DB access token is expired", async () => {
     const ctx = makeCtx()
     const pastExpiry = Math.floor(Date.now() / 1000) - 60
-    setupSqliteMock(ctx, makeAuthStatusJson({ apiKey: "ya29.apiKey" }), makeProtobufBase64(ctx, "ya29.expired", "1//refresh", pastExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson({ apiKey: "ya29.apiKey" }),
+      makeProtobufBase64(ctx, "ya29.expired", "1//refresh", pastExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
 
     const authHeaders = []
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
       if (url.includes("oauth2.googleapis.com")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }) }
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
+        }
       }
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (url.includes("fetchAvailableModels")) {
         authHeaders.push(opts.headers.Authorization)
         if (opts.headers.Authorization === "Bearer ya29.refreshed") {
@@ -742,7 +1043,9 @@ describe("antigravity plugin", () => {
 
     expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
     expect(authHeaders).toEqual(["Bearer ya29.refreshed"])
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token expired; skipping direct Cloud Code attempt")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "DB access token expired; skipping direct Cloud Code attempt"
+    )
     expect(ctx.host.log.warn).toHaveBeenCalledWith("attempting Antigravity refresh-token recovery")
   })
 
@@ -755,8 +1058,12 @@ describe("antigravity plugin", () => {
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
       if (url.includes("oauth2.googleapis.com")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }) }
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
+        }
       }
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (url.includes("fetchAvailableModels")) {
         authHeaders.push(opts.headers.Authorization)
         return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
@@ -775,7 +1082,11 @@ describe("antigravity plugin", () => {
   it("refreshes after cached and DB token auth failures", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson({ apiKey: "ya29.apiKey" }), makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson({ apiKey: "ya29.apiKey" }),
+      makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.fs.writeText(
       ctx.app.pluginDataDir + "/auth.json",
@@ -786,8 +1097,12 @@ describe("antigravity plugin", () => {
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
       if (url.includes("oauth2.googleapis.com")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }) }
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
+        }
       }
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (url.includes("fetchAvailableModels")) {
         authHeaders.push(opts.headers.Authorization)
         if (opts.headers.Authorization === "Bearer ya29.cached") {
@@ -808,22 +1123,36 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(authHeaders).toEqual(["Bearer ya29.cached", "Bearer ya29.proto", "Bearer ya29.refreshed"])
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("cached Antigravity token rejected by Cloud Code auth")
+    expect(authHeaders).toEqual([
+      "Bearer ya29.cached",
+      "Bearer ya29.proto",
+      "Bearer ya29.refreshed",
+    ])
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "cached Antigravity token rejected by Cloud Code auth"
+    )
     expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token rejected by Cloud Code auth")
   })
 
   it("refreshes and caches a token when initial Cloud Code auth fails", async () => {
     const ctx = makeCtx()
     const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(ctx, makeAuthStatusJson(), makeProtobufBase64(ctx, "ya29.bad", "1//refresh", futureExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson(),
+      makeProtobufBase64(ctx, "ya29.bad", "1//refresh", futureExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
 
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
       if (url.includes("oauth2.googleapis.com")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }) }
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
+        }
       }
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (url.includes("fetchAvailableModels")) {
         if (opts.headers.Authorization === "Bearer ya29.refreshed") {
           return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
@@ -846,7 +1175,11 @@ describe("antigravity plugin", () => {
   it("throws after logging the offline auth failures when refresh recovery is unavailable", async () => {
     const ctx = makeCtx()
     const pastExpiry = Math.floor(Date.now() / 1000) - 60
-    setupSqliteMock(ctx, makeAuthStatusJson({ apiKey: "ya29.apiKey" }), makeProtobufBase64(ctx, "ya29.expired", null, pastExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson({ apiKey: "ya29.apiKey" }),
+      makeProtobufBase64(ctx, "ya29.expired", null, pastExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("fetchAvailableModels")) {
@@ -858,8 +1191,12 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
 
     expect(() => plugin.probe(ctx)).toThrow("Antigravity token expired and could not be refreshed.")
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token expired; skipping direct Cloud Code attempt")
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("no Antigravity refresh token available for offline recovery")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "DB access token expired; skipping direct Cloud Code attempt"
+    )
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "no Antigravity refresh token available for offline recovery"
+    )
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
@@ -870,13 +1207,18 @@ describe("antigravity plugin", () => {
 
     const plugin = await loadPlugin()
 
-    expect(() => plugin.probe(ctx)).toThrow("Antigravity local port was discovered but could not be reached.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Antigravity local port was discovered but could not be reached."
+    )
   })
 
   it("reports signed out when the local server responds without usable account data", async () => {
     const ctx = makeCtx()
     ctx.host.ls.discover.mockReturnValue(makeDiscovery())
-    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ userStatus: {} }) })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({ userStatus: {} }),
+    })
 
     const plugin = await loadPlugin()
 
@@ -889,6 +1231,7 @@ describe("antigravity plugin", () => {
     setupSqliteMock(ctx, null, makeProtobufBase64(ctx, "ya29.rejected", null, futureExpiry))
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (String(opts.url).includes("fetchAvailableModels")) return { status: 401, bodyText: "{}" }
       return { status: 500, bodyText: "" }
     })
@@ -896,6 +1239,28 @@ describe("antigravity plugin", () => {
     const plugin = await loadPlugin()
 
     expect(() => plugin.probe(ctx)).toThrow("Antigravity sign-in expired or was revoked.")
+  })
+
+  it("reports account entitlement failures without refreshing OAuth", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(
+      ctx,
+      null,
+      makeProtobufBase64(ctx, "ya29.forbidden", "1//refresh", futureExpiry)
+    )
+    ctx.host.ls.discover.mockReturnValue(null)
+    ctx.host.http.request.mockReturnValue({ status: 403, bodyText: "{}" })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Antigravity quota is unavailable for this account, region, or plan."
+    )
+    expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+    expect(ctx.host.log.warn).not.toHaveBeenCalledWith(
+      "attempting Antigravity refresh-token recovery"
+    )
   })
 
   it("tries the backup Cloud Code host after a transient primary failure", async () => {
@@ -912,7 +1277,10 @@ describe("antigravity plugin", () => {
         throw new Error("connection reset")
       }
       if (url.startsWith("https://cloudcode-pa.googleapis.com")) {
-        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+        if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
+        if (url.includes("fetchAvailableModels")) {
+          return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
+        }
       }
       return { status: 500, bodyText: "" }
     })
@@ -921,16 +1289,21 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(urls).toEqual([
-      "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-      "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-    ])
+    expect(urls.at(0)).toBe("https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist")
+    expect(urls).toContain(
+      "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels"
+    )
+    expect(urls.at(-1)).toBe("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels")
   })
 
   it("tolerates cache write failures after a successful refresh", async () => {
     const ctx = makeCtx()
     const pastExpiry = Math.floor(Date.now() / 1000) - 60
-    setupSqliteMock(ctx, makeAuthStatusJson({ apiKey: "ya29.apiKey" }), makeProtobufBase64(ctx, "ya29.expired", "1//refresh", pastExpiry))
+    setupSqliteMock(
+      ctx,
+      makeAuthStatusJson({ apiKey: "ya29.apiKey" }),
+      makeProtobufBase64(ctx, "ya29.expired", "1//refresh", pastExpiry)
+    )
     ctx.host.ls.discover.mockReturnValue(null)
     ctx.host.fs.writeText.mockImplementation(() => {
       throw new Error("disk full")
@@ -939,8 +1312,12 @@ describe("antigravity plugin", () => {
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
       if (url.includes("oauth2.googleapis.com")) {
-        return { status: 200, bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }) }
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
+        }
       }
+      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
       if (url.includes("fetchAvailableModels")) {
         if (opts.headers.Authorization === "Bearer ya29.refreshed") {
           return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
@@ -954,7 +1331,9 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("failed to cache refreshed token: Error: disk full")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "failed to cache refreshed token: Error: disk full"
+    )
   })
 
   it("tries the extension port when discovered ports fail probing", async () => {
@@ -963,7 +1342,10 @@ describe("antigravity plugin", () => {
     let usedPort = null
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
-      if ((url.includes("GetUserStatus") || url.includes("GetCommandModelConfigs")) && url.includes("99999")) {
+      if (
+        (url.includes("GetUserStatus") || url.includes("GetCommandModelConfigs")) &&
+        url.includes("99999")
+      ) {
         return { status: 404, bodyText: "" }
       }
       if (url.includes("GetUserStatus")) {
@@ -981,7 +1363,9 @@ describe("antigravity plugin", () => {
 
   it("skips unusable LS ports until one returns quota data", async () => {
     const ctx = makeCtx()
-    ctx.host.ls.discover.mockReturnValue(makeDiscovery({ ports: [42001, 42002], extensionPort: 42010 }))
+    ctx.host.ls.discover.mockReturnValue(
+      makeDiscovery({ ports: [42001, 42002], extensionPort: 42010 })
+    )
     let usedPort = null
     ctx.host.http.request.mockImplementation((opts) => {
       const url = String(opts.url)
@@ -993,7 +1377,12 @@ describe("antigravity plugin", () => {
       }
       if (url.includes("GetCommandModelConfigs")) {
         if (port === 42001) return { status: 404, bodyText: "" }
-        return { status: 200, bodyText: JSON.stringify(makeUserStatusResponse({ userStatus: null, clientModelConfigs: [] })) }
+        return {
+          status: 200,
+          bodyText: JSON.stringify(
+            makeUserStatusResponse({ userStatus: null, clientModelConfigs: [] })
+          ),
+        }
       }
       return { status: 500, bodyText: "" }
     })

@@ -440,7 +440,13 @@ describe("codex plugin", () => {
       status: "ok",
       data: {
         daily: [
-          { date: todayKey, totalTokens: 150, costUSD: 0.75 },
+          {
+            date: todayKey,
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 150,
+            costUSD: 0.75,
+          },
           { date: "Feb 01, 2026", totalTokens: 300, costUSD: 1.0 },
         ],
       },
@@ -454,6 +460,17 @@ describe("codex plugin", () => {
       expect(today).toBeTruthy()
       expect(today.value).toContain("150 tokens")
       expect(today.value).toContain("$0.75")
+      expect(result.history).toMatchObject({
+        version: 1,
+        source: "ccusage",
+        timeZone: "system-local",
+      })
+      expect(result.history.entries[0]).toMatchObject({
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        costUsd: 0.75,
+      })
 
       const last30 = result.lines.find((l) => l.label === "Last 30 Days")
       expect(last30).toBeTruthy()

@@ -721,6 +721,68 @@
     }
   }
 
+  function localDayPeriod(dayKey) {
+    const match = String(dayKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (!match) return null
+    const start = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    const end = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1)
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return null
+    return { periodStart: start.toISOString(), periodEnd: end.toISOString() }
+  }
+
+  function numberOrNull(value) {
+    const number = Number(value)
+    return Number.isFinite(number) && number >= 0 ? number : null
+  }
+
+  function historyMetrics(row) {
+    const metrics = {}
+    const inputTokens = numberOrNull(row && row.inputTokens)
+    const outputTokens = numberOrNull(row && row.outputTokens)
+    const cacheReadTokens = numberOrNull(row && row.cacheReadTokens)
+    const cacheCreationTokens = numberOrNull(row && row.cacheCreationTokens)
+    const totalTokens = numberOrNull(row && row.totalTokens)
+    const costUsd = usageCostUsd(row) ?? numberOrNull(row && row.cost)
+    if (inputTokens !== null) metrics.inputTokens = inputTokens
+    if (outputTokens !== null) metrics.outputTokens = outputTokens
+    if (cacheReadTokens !== null) metrics.cacheReadTokens = cacheReadTokens
+    if (cacheCreationTokens !== null) metrics.cacheCreationTokens = cacheCreationTokens
+    if (totalTokens !== null) metrics.totalTokens = totalTokens
+    if (costUsd !== null) metrics.costUsd = costUsd
+    return metrics
+  }
+
+  function buildTokenUsageHistory(usage) {
+    const entries = []
+    const daily = usage && Array.isArray(usage.daily) ? usage.daily : []
+    for (let i = 0; i < daily.length; i++) {
+      const day = daily[i]
+      const period = localDayPeriod(dayKeyFromUsageDate(day && day.date))
+      if (!period) continue
+      const breakdowns = Array.isArray(day.modelBreakdowns)
+        ? day.modelBreakdowns
+        : Array.isArray(day.model_breakdowns)
+          ? day.model_breakdowns
+          : []
+      if (breakdowns.length > 0) {
+        for (let j = 0; j < breakdowns.length; j++) {
+          const breakdown = breakdowns[j]
+          const model = String(
+            (breakdown && (breakdown.modelName || breakdown.model || breakdown.name)) || ""
+          ).trim()
+          const metrics = historyMetrics(breakdown)
+          if (Object.keys(metrics).length === 0) continue
+          entries.push({ ...period, ...(model ? { model } : {}), ...metrics })
+        }
+      } else {
+        const metrics = historyMetrics(day)
+        if (Object.keys(metrics).length === 0) continue
+        entries.push({ ...period, ...(day.project ? { project: String(day.project) } : {}), ...metrics })
+      }
+    }
+    return { version: 1, source: "ccusage", timeZone: "system-local", entries }
+  }
+
   function buildLocalUsageOnlyResult(ctx) {
     const usageResult = queryTokenUsage(ctx)
     if (usageResult.status !== "ok") {
@@ -731,7 +793,7 @@
     if (lines.length === 0) {
       lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     }
-    return { plan: null, lines: lines }
+    return { plan: null, lines: lines, history: buildTokenUsageHistory(usageResult.data) }
   }
 
   function buildAccountOnlyResult(ctx, account) {
@@ -868,7 +930,12 @@
       lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     }
     const plan = readNonEmptyString(org.name)
-    return { plan: plan, lines: lines }
+    return {
+      plan: plan,
+      lines: lines,
+      history:
+        usageResult.status === "ok" ? buildTokenUsageHistory(usageResult.data) : undefined,
+    }
   }
 
   function probe(ctx) {
@@ -1049,7 +1116,12 @@
       lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     }
 
-    return { plan: plan, lines: lines }
+    return {
+      plan: plan,
+      lines: lines,
+      history:
+        usageResult.status === "ok" ? buildTokenUsageHistory(usageResult.data) : undefined,
+    }
   }
 
   globalThis.__openusage_plugin = { id: "claude", probe }
