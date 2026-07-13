@@ -86,6 +86,22 @@ describe("getProviderSettingsDefinition", () => {
       successMessage: "Dashboard cookie captured. No email or password was stored.",
     })
   })
+
+  it.each([
+    ["abacus", "/chatllm/admin/compute-points-usage"],
+    ["perplexity", "/account/details"],
+    ["opencode", "/workspace/"],
+  ])("defines strict guided cookie login metadata for %s", (providerId, successMarker) => {
+    const login = getProviderSettingsDefinition(providerId).guidedCookieLogin
+    expect(login?.secretKey).toBe("cookieHeader")
+    expect(login?.successUrlContains).toBe(successMarker)
+    expect(login?.loginUrl).toMatch(/^https:\/\//)
+    expect(login?.cookieUrls.every((url) => url.startsWith("https://"))).toBe(true)
+  })
+
+  it("uses an Admin API key field for Mistral", () => {
+    expect(getProviderSettingsDefinition("mistral").secretField?.key).toBe("adminApiKey")
+  })
 })
 
 describe("normalizeProviderConfigs", () => {
@@ -348,6 +364,14 @@ describe("getProviderSourceLabel", () => {
 
   it("returns Manual cookie for abacus", () => {
     expect(getProviderSourceLabel("abacus")).toBe("Manual cookie")
+  })
+
+  it("returns stored Admin API key for Mistral", () => {
+    expect(
+      getProviderSourceLabel("mistral", {
+        secrets: { adminApiKey: { updatedAt: 1000 } },
+      })
+    ).toBe("Stored Mistral Admin API key")
   })
 
   it("returns Auggie auth label for augment with cookie", () => {

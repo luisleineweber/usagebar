@@ -15,6 +15,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { CodexAccountsSection } from "@/components/settings/codex-accounts-section"
 import type { PluginState } from "@/hooks/app/types"
 import { captureProviderCookieHeader } from "@/lib/guided-cookie-login"
+import {
+  browserImportMessage,
+  importBrowserCookies,
+  listBrowserImportSources,
+  type BrowserImportSource,
+} from "@/lib/browser-cookie-import"
 import type { PluginMeta } from "@/lib/plugin-types"
 import type { ProviderConfig } from "@/lib/provider-settings"
 import { getErrorMessage } from "@/lib/error-utils"
@@ -123,6 +129,10 @@ export function ProviderSettingsDetail({
   const [isSavingConfig, setIsSavingConfig] = useState(false)
   const [isSavingSecret, setIsSavingSecret] = useState(false)
   const [isGuidedLoginOpen, setIsGuidedLoginOpen] = useState(false)
+  const [browserSources, setBrowserSources] = useState<BrowserImportSource[]>([])
+  const [browserSourceId, setBrowserSourceId] = useState("edge")
+  const [browserProfileId, setBrowserProfileId] = useState("")
+  const [isImportingBrowser, setIsImportingBrowser] = useState(false)
 
   useEffect(() => {
     setWorkspaceDraft(config?.workspaceId ?? "")
@@ -133,6 +143,29 @@ export function ProviderSettingsDetail({
     setSaveError(null)
     setSaveMessage(null)
   }, [plugin.id])
+
+  useEffect(() => {
+    if (!definition.browserCookieImport || !config?.browserCookieImportEnabled) {
+      setBrowserSources([])
+      setBrowserProfileId("")
+      return
+    }
+    let cancelled = false
+    void listBrowserImportSources(plugin.id)
+      .then((sources) => {
+        if (cancelled) return
+        setBrowserSources(sources)
+        const source = sources[0]
+        setBrowserSourceId(source?.sourceId ?? "edge")
+        setBrowserProfileId(source?.profiles[0] ?? "")
+      })
+      .catch((error) => {
+        if (!cancelled) setSaveError(getErrorMessage(error, "Failed to inspect Edge profiles."))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [config?.browserCookieImportEnabled, definition.browserCookieImport, plugin.id])
 
   const sourceValue = (config?.source ?? "manual") as ProviderSourceMode
   const statusBadgeVariant = probeStatus.tone === "success" ? "default" : "outline"
@@ -182,6 +215,49 @@ export function ProviderSettingsDetail({
       setSaveError(getErrorMessage(error, "Failed to save workspace."))
     } finally {
       setIsSavingConfig(false)
+    }
+  }
+
+  const handleBrowserImportEnabledChange = async (enabled: boolean) => {
+    if (!onConfigChange) return
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsSavingConfig(true)
+    try {
+      await onConfigChange(plugin.id, { browserCookieImportEnabled: enabled })
+      setSaveMessage(enabled ? "Browser import enabled for this provider." : "Browser import disabled.")
+    } catch (error) {
+      setSaveError(getErrorMessage(error, "Failed to update browser import permission."))
+    } finally {
+      setIsSavingConfig(false)
+    }
+  }
+
+  const handleBrowserImport = async () => {
+    if (!browserProfileId || !onConfigChange) return
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsImportingBrowser(true)
+    try {
+      const result = await importBrowserCookies(plugin.id, browserSourceId, browserProfileId)
+      const message = browserImportMessage(result)
+      if (result.code !== "ok") {
+        setSaveError(message)
+        return
+      }
+      const key = definition.secretField?.key ?? "cookieHeader"
+      await onConfigChange(plugin.id, {
+        secrets: {
+          ...(config?.secrets ?? {}),
+          [key]: { updatedAt: Date.now() },
+        },
+      })
+      setSaveMessage(message)
+      onRetry?.()
+    } catch (error) {
+      setSaveError(getErrorMessage(error, "Browser import failed."))
+    } finally {
+      setIsImportingBrowser(false)
     }
   }
 
@@ -399,6 +475,63 @@ export function ProviderSettingsDetail({
 
             {showManualFields && definition.secretField && (
               <div className="space-y-3">
+                {definition.browserCookieImport && (
+                  <div className="rounded-md border border-border/55 bg-muted/25 px-3 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          Microsoft Edge import
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          {definition.browserCookieImport.description}
+                        </p>
+                      </div>
+                      <Checkbox
+                        aria-label={`Enable ${plugin.name} browser import`}
+                        checked={config?.browserCookieImportEnabled === true}
+                        onCheckedChange={(checked) =>
+                          void handleBrowserImportEnabledChange(checked === true)
+                        }
+                        disabled={isSavingConfig}
+                      />
+                    </div>
+                    {config?.browserCookieImportEnabled ? (
+                      browserSources.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <select
+                            aria-label={`${plugin.name} Edge profile`}
+                            value={browserProfileId}
+                            onChange={(event) => setBrowserProfileId(event.target.value)}
+                            className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                          >
+                            {browserSources
+                              .flatMap((source) =>
+                                source.profiles.map((profile) => ({ sourceId: source.sourceId, profile }))
+                              )
+                              .map((option) => (
+                                <option key={`${option.sourceId}-${option.profile}`} value={option.profile}>
+                                  {option.profile}
+                                </option>
+                              ))}
+                          </select>
+                          <Button
+                            type="button"
+                            size="xs"
+                            onClick={() => void handleBrowserImport()}
+                            disabled={isImportingBrowser || !browserProfileId}
+                          >
+                            <ShieldCheck className="size-3" />
+                            {isImportingBrowser ? "Importing..." : "Import session"}
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          No Edge profile with a cookie database was found. Manual entry remains available below.
+                        </p>
+                      )
+                    ) : null}
+                  </div>
+                )}
                 {definition.guidedCookieLogin && (
                   <div className="rounded-md border border-border/55 bg-muted/25 px-3 py-3">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">

@@ -10,6 +10,7 @@ export type ProviderConfig = {
   source?: ProviderSourceMode
   workspaceId?: string
   selectedAccountProfileId?: string
+  browserCookieImportEnabled?: boolean
   secrets?: Record<string, ProviderSecretMetadata>
   updatedAt?: number
 }
@@ -30,6 +31,9 @@ export type ProviderSettingsDefinition = {
   summary: string
   statusHint: string
   connectHint?: string
+  browserCookieImport?: {
+    description: string
+  }
   guidedCookieLogin?: {
     buttonLabel: string
     windowTitle: string
@@ -99,6 +103,15 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     connectHint:
       "Use this for OpenCode Zen pay-as-you-go usage. Sign in at https://opencode.ai, open the target workspace billing page, then copy the full Cookie request header from DevTools > Network for the billing page or an opencode.ai/_server request. Paste that here, then add a workspace override only if auto-discovery picks the wrong team.",
     sourceOptions: OPENCODE_SOURCE_OPTIONS,
+    guidedCookieLogin: {
+      buttonLabel: "Connect OpenCode Zen",
+      windowTitle: "Connect OpenCode Zen",
+      loginUrl: "https://opencode.ai/",
+      successUrlContains: "/workspace/",
+      cookieUrls: ["https://opencode.ai/"],
+      secretKey: "cookieHeader",
+      successMessage: "OpenCode Zen session captured. No email or password was stored.",
+    },
     secretField: {
       key: "cookieHeader",
       label: "Cookie header",
@@ -118,7 +131,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     mode: "editable",
     title: "OpenCode Setup",
     summary:
-      "Tracks OpenCode Go subscription limit usage from local OpenCode auth and SQLite history.",
+      "Tracks OpenCode usage from local auth and SQLite history. Paid status requires current subscription evidence.",
     statusHint:
       "Local Go usage is auto-detected. No browser cookie is needed for the main OpenCode provider.",
     connectHint:
@@ -150,6 +163,10 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       "Run Claude Code locally and sign in with OAuth. The claude.ai Cookie header is an optional fallback only.",
     connectHint:
       "Run `claude` CLI and sign in on this machine, then retry. UsageBar prefers local Claude OAuth credentials and local usage history.",
+    browserCookieImport: {
+      description:
+        "Opt in to a one-time import of the approved claude.ai session cookie from a selected Microsoft Edge profile. UsageBar does not scan in the background and never returns cookie values to the interface.",
+    },
     secretField: {
       key: "cookieHeader",
       label: "Claude web Cookie header",
@@ -325,6 +342,15 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     statusHint: "Manual cookie or env mode is the supported Windows path in this build.",
     connectHint:
       "Open a signed-in Abacus AI compute-points usage request in DevTools, copy the full Cookie request header, paste it here, then retry. Do not paste Set-Cookie.",
+    guidedCookieLogin: {
+      buttonLabel: "Connect Abacus AI",
+      windowTitle: "Connect Abacus AI",
+      loginUrl: "https://apps.abacus.ai/chatllm/admin/compute-points-usage",
+      successUrlContains: "/chatllm/admin/compute-points-usage",
+      cookieUrls: ["https://apps.abacus.ai/chatllm/admin/compute-points-usage"],
+      secretKey: "cookieHeader",
+      successMessage: "Abacus AI session captured. No email or password was stored.",
+    },
     secretField: {
       key: "cookieHeader",
       label: "Cookie header",
@@ -341,6 +367,15 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     statusHint: "Manual cookie or env mode is the supported Windows path in this build.",
     connectHint:
       "Open a signed-in perplexity.ai billing request in DevTools, copy the full Cookie request header, paste it here, then retry. Do not paste Set-Cookie.",
+    guidedCookieLogin: {
+      buttonLabel: "Connect Perplexity",
+      windowTitle: "Connect Perplexity",
+      loginUrl: "https://www.perplexity.ai/account/details",
+      successUrlContains: "/account/details",
+      cookieUrls: ["https://www.perplexity.ai/rest/billing/credits"],
+      secretKey: "cookieHeader",
+      successMessage: "Perplexity session captured. No email or password was stored.",
+    },
     secretField: {
       key: "cookieHeader",
       label: "Cookie header",
@@ -353,16 +388,16 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     mode: "editable",
     title: "Mistral Setup",
     summary:
-      "Fetches current-month Mistral billing usage from the signed-in admin session using a manual Cookie header or MISTRAL_COOKIE_HEADER.",
-    statusHint: "Manual cookie or env mode is the supported Windows path in this build.",
+      "Fetches current-month Mistral billing usage through the official Admin API. Existing Cookie header credentials remain a compatibility fallback.",
+    statusHint: "A dedicated Mistral Admin API key is the preferred authentication path.",
     connectHint:
-      "Open https://admin.mistral.ai/organization/usage while signed in, copy the full Cookie request header from the billing usage request, paste it here, then retry. Do not paste Set-Cookie.",
+      "Create an Admin API key in Mistral Backoffice, save it here, then retry. Existing MISTRAL_COOKIE_HEADER and MISTRAL_SESSION values remain supported as fallbacks.",
     secretField: {
-      key: "cookieHeader",
-      label: "Cookie header",
+      key: "adminApiKey",
+      label: "Admin API key",
       description:
-        "Paste the full Cookie request header from a signed-in admin.mistral.ai usage request. Do not paste Set-Cookie.",
-      placeholder: "ory_session_...=...; csrftoken=...;",
+        "Paste a dedicated Mistral Admin API key. UsageBar stores it in the app credential vault and sends it only to the official Admin usage endpoint.",
+      placeholder: "Admin API key",
     },
   },
   grok: {
@@ -684,6 +719,10 @@ export function getProviderSourceLabel(
     return config?.secrets?.cookieHeader ? "Cloud auth + settings cookie" : "Cloud auth/cookie"
   if (providerId === "perplexity") return "Manual cookie"
   if (providerId === "abacus") return "Manual cookie"
+  if (providerId === "mistral")
+    return config?.secrets?.adminApiKey
+      ? "Stored Mistral Admin API key"
+      : "Mistral Admin API key/env"
   if (providerId === "augment")
     return config?.secrets?.cookieHeader ? "Auggie auth + dashboard cookie" : "Auggie auth/cookie"
   if (providerId === "deepseek")

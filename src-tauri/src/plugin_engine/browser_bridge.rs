@@ -37,6 +37,7 @@ pub struct GuidedCookieCaptureParams {
     pub login_url: String,
     pub success_url_contains: String,
     pub cookie_urls: Vec<String>,
+    pub cookie_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -154,6 +155,15 @@ pub fn capture_cookies_interactively(
     if cookie_urls.is_empty() {
         return Err("at least one cookie URL is required".to_string());
     }
+    let cookie_names = req
+        .cookie_names
+        .iter()
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .collect::<Vec<_>>();
+    if cookie_names.is_empty() {
+        return Err("at least one approved cookie name is required".to_string());
+    }
 
     let title = req.window_title.trim();
     let title = if title.is_empty() {
@@ -170,6 +180,7 @@ pub fn capture_cookies_interactively(
     let login_url_for_build = login_url.clone();
     let success_marker_for_build = success_url_contains.to_string();
     let cookie_urls_for_build = cookie_urls.clone();
+    let cookie_names_for_build = cookie_names.clone();
     let title_for_build = title.to_string();
     let sender_for_build = Arc::clone(&sender);
 
@@ -182,6 +193,7 @@ pub fn capture_cookies_interactively(
                 &login_url_for_build,
                 &success_marker_for_build,
                 &cookie_urls_for_build,
+                &cookie_names_for_build,
                 sender_for_build,
             ) {
                 send_cookie_capture_message(
@@ -207,12 +219,14 @@ fn build_cookie_capture_window(
     login_url: &str,
     success_url_contains: &str,
     cookie_urls: &[String],
+    cookie_names: &[String],
     sender: Arc<Mutex<Option<mpsc::Sender<CookieCaptureMessage>>>>,
 ) -> Result<(), String> {
     let app_for_nav = app_handle.clone();
     let label_for_nav = label.to_string();
     let success_marker = success_url_contains.to_string();
     let cookie_urls_for_nav = cookie_urls.to_vec();
+    let cookie_names_for_nav = cookie_names.to_vec();
     let sender_for_nav = Arc::clone(&sender);
 
     let window = WebviewWindowBuilder::new(
@@ -241,13 +255,14 @@ fn build_cookie_capture_window(
             return false;
         };
 
-        let result = cookie_header_for_urls(&window, &cookie_urls_for_nav).map(
-            |(cookie_header, cookie_count)| GuidedCookieCaptureResponse {
-                cookie_header,
-                final_url: current.clone(),
-                cookie_count,
-            },
-        );
+        let result = cookie_header_for_urls(&window, &cookie_urls_for_nav, &cookie_names_for_nav)
+            .map(
+                |(cookie_header, cookie_count)| GuidedCookieCaptureResponse {
+                    cookie_header,
+                    final_url: current.clone(),
+                    cookie_count,
+                },
+            );
 
         match result {
             Ok(response) => send_cookie_capture_message(
@@ -284,9 +299,10 @@ fn build_cookie_capture_window(
 fn cookie_header_for_urls(
     window: &tauri::WebviewWindow,
     cookie_urls: &[String],
+    cookie_names: &[String],
 ) -> Result<(String, usize), String> {
     let mut pairs = Vec::<String>::new();
-    let mut seen = Vec::<String>::new();
+    let mut seen = std::collections::HashMap::<String, String>::new();
 
     for value in cookie_urls {
         let url = value
@@ -297,15 +313,10 @@ fn cookie_header_for_urls(
             .map_err(|error| format!("failed to read guided login cookies: {}", error))?;
         for cookie in cookies {
             let name = cookie.name().trim();
-            if name.is_empty() {
+            if name.is_empty() || !cookie_names.iter().any(|allowed| allowed == name) {
                 continue;
             }
-            let key = format!("{}={}", name, cookie.value());
-            if seen.iter().any(|existing| existing == &key) {
-                continue;
-            }
-            seen.push(key);
-            pairs.push(format!("{}={}", name, cookie.value()));
+            super::push_approved_cookie(&mut seen, &mut pairs, name, cookie.value())?;
         }
     }
 

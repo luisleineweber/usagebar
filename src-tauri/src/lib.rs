@@ -2,6 +2,9 @@
 
 #[cfg(target_os = "macos")]
 mod app_nap;
+mod atomic_file;
+mod browser_cookie_import;
+pub mod cli;
 mod codex_account_store;
 mod local_http_api;
 #[cfg(not(test))]
@@ -292,6 +295,46 @@ fn read_provider_config_string(
         .map(str::to_string))
 }
 
+struct GuidedCookiePolicy {
+    login_url: &'static str,
+    success_url_contains: &'static str,
+    cookie_urls: &'static [&'static str],
+    cookie_names: &'static [&'static str],
+}
+
+fn guided_cookie_policy(provider_id: &str) -> Option<GuidedCookiePolicy> {
+    match provider_id.trim() {
+        "zed" => Some(GuidedCookiePolicy {
+            login_url: "https://dashboard.zed.dev/account",
+            success_url_contains: "/billing/usage",
+            cookie_urls: &[
+                "https://dashboard.zed.dev/account",
+                "https://cloud.zed.dev/frontend/billing/usage",
+            ],
+            cookie_names: &["zed.session", "c15t"],
+        }),
+        "abacus" => Some(GuidedCookiePolicy {
+            login_url: "https://apps.abacus.ai/chatllm/admin/compute-points-usage",
+            success_url_contains: "/chatllm/admin/compute-points-usage",
+            cookie_urls: &["https://apps.abacus.ai/chatllm/admin/compute-points-usage"],
+            cookie_names: &["sessionid", "session_token"],
+        }),
+        "perplexity" => Some(GuidedCookiePolicy {
+            login_url: "https://www.perplexity.ai/account/details",
+            success_url_contains: "/account/details",
+            cookie_urls: &["https://www.perplexity.ai/rest/billing/credits"],
+            cookie_names: &["__Secure-next-auth.session-token", "pplx_session"],
+        }),
+        "opencode" => Some(GuidedCookiePolicy {
+            login_url: "https://opencode.ai/",
+            success_url_contains: "/workspace/",
+            cookie_urls: &["https://opencode.ai/"],
+            cookie_names: &["auth", "__Host-auth"],
+        }),
+        _ => None,
+    }
+}
+
 fn validate_guided_cookie_capture_request(
     provider_id: &str,
     login_url: &str,
@@ -302,33 +345,33 @@ fn validate_guided_cookie_capture_request(
     let login_url = login_url.trim();
     let success_url_contains = success_url_contains.trim();
 
-    match provider_id {
-        "zed" => {
-            let allowed_cookie_urls = [
-                "https://dashboard.zed.dev/account",
-                "https://cloud.zed.dev/frontend/billing/usage",
-            ];
-            if login_url != "https://dashboard.zed.dev/account" {
-                return Err("Zed guided login URL is not allowed".to_string());
-            }
-            if success_url_contains != "/billing/usage" {
-                return Err("Zed guided login success marker is not allowed".to_string());
-            }
-            if cookie_urls.is_empty() {
-                return Err("Zed guided login requires cookie URLs".to_string());
-            }
-            for url in cookie_urls {
-                if !allowed_cookie_urls.contains(&url.trim()) {
-                    return Err("Zed guided login cookie URL is not allowed".to_string());
-                }
-            }
-            Ok(())
-        }
-        _ => Err(format!(
+    let Some(policy) = guided_cookie_policy(provider_id) else {
+        return Err(format!(
             "guided cookie login is not enabled for provider '{}'",
             provider_id
-        )),
+        ));
+    };
+    if login_url != policy.login_url {
+        return Err(format!("{} guided login URL is not allowed", provider_id));
     }
+    if success_url_contains != policy.success_url_contains {
+        return Err(format!(
+            "{} guided login success marker is not allowed",
+            provider_id
+        ));
+    }
+    if cookie_urls.len() != policy.cookie_urls.len()
+        || cookie_urls
+            .iter()
+            .zip(policy.cookie_urls)
+            .any(|(actual, allowed)| actual.trim() != *allowed)
+    {
+        return Err(format!(
+            "{} guided login cookie URLs are not allowed",
+            provider_id
+        ));
+    }
+    Ok(())
 }
 
 fn try_parse_json_or_hex_json(text: &str) -> Option<JsonValue> {
@@ -790,6 +833,12 @@ fn capture_provider_cookie_header(
         &success_url_contains,
         &cookie_urls,
     )?;
+    let cookie_names = guided_cookie_policy(&provider_id)
+        .expect("validated guided cookie provider must have a policy")
+        .cookie_names
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect();
     log::info!(
         "starting guided cookie login for provider='{}'",
         provider_id.trim()
@@ -802,6 +851,7 @@ fn capture_provider_cookie_header(
             login_url,
             success_url_contains,
             cookie_urls,
+            cookie_names,
         },
     )
 }
@@ -1062,6 +1112,52 @@ fn set_provider_secret(
 
     #[allow(unreachable_code)]
     Ok(())
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn list_browser_import_sources(
+    app_handle: tauri::AppHandle,
+    provider_id: String,
+) -> Result<Vec<browser_cookie_import::BrowserImportSource>, String> {
+    let provider_id = provider_id.trim().to_ascii_lowercase();
+    if provider_id.is_empty() {
+        return Err("provider id is required".to_string());
+    }
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not access the app data directory: {error}"))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        browser_cookie_import::list_sources(&app_data_dir, &provider_id)
+    })
+    .await
+    .map_err(|error| format!("Could not inspect browser import sources: {error}"))
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+async fn import_browser_cookies(
+    app_handle: tauri::AppHandle,
+    provider_id: String,
+    source_id: String,
+    profile_id: String,
+) -> Result<browser_cookie_import::BrowserCookieImportResult, String> {
+    let provider_id = provider_id.trim().to_ascii_lowercase();
+    let source_id = source_id.trim().to_ascii_lowercase();
+    let profile_id = profile_id.trim().to_string();
+    if provider_id.is_empty() || source_id.is_empty() || profile_id.is_empty() {
+        return Err("provider id, browser source, and profile are required".to_string());
+    }
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|error| format!("Could not access the app data directory: {error}"))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        browser_cookie_import::import_cookies(&app_data_dir, &provider_id, &source_id, &profile_id)
+    })
+    .await
+    .map_err(|error| format!("Could not import browser cookies: {error}"))
 }
 
 #[cfg(not(test))]
@@ -1446,6 +1542,8 @@ pub fn run() {
             list_plugins,
             get_log_path,
             set_provider_secret,
+            list_browser_import_sources,
+            import_browser_cookies,
             delete_provider_secret,
             list_codex_account_profiles,
             import_current_codex_account_profile,
@@ -1534,11 +1632,11 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        app_started_day_key, is_missing_credential_error, plugin_is_probe_supported,
-        plugin_support_for_current_platform, provider_secret_entry_spec, provider_secret_label,
-        provider_secret_service, should_track_app_started, store_pending_panel_view,
-        take_pending_panel_view_inner, validate_guided_cookie_capture_request,
-        verify_provider_secret_write_with_fresh_lookup,
+        app_started_day_key, guided_cookie_policy, is_missing_credential_error,
+        plugin_is_probe_supported, plugin_support_for_current_platform, provider_secret_entry_spec,
+        provider_secret_label, provider_secret_service, should_track_app_started,
+        store_pending_panel_view, take_pending_panel_view_inner,
+        validate_guided_cookie_capture_request, verify_provider_secret_write_with_fresh_lookup,
     };
     use crate::plugin_engine::manifest::{
         HostCapabilities, PlatformSupport, PluginManifest, WindowsSupportConfig,
@@ -1644,8 +1742,45 @@ mod tests {
                 "/billing/usage",
                 &cookie_urls,
             ),
-            Err("Zed guided login URL is not allowed".to_string())
+            Err("zed guided login URL is not allowed".to_string())
         );
+
+        for (provider_id, login_url, marker, cookie_url) in [
+            (
+                "abacus",
+                "https://apps.abacus.ai/chatllm/admin/compute-points-usage",
+                "/chatllm/admin/compute-points-usage",
+                "https://apps.abacus.ai/chatllm/admin/compute-points-usage",
+            ),
+            (
+                "perplexity",
+                "https://www.perplexity.ai/account/details",
+                "/account/details",
+                "https://www.perplexity.ai/rest/billing/credits",
+            ),
+            (
+                "opencode",
+                "https://opencode.ai/",
+                "/workspace/",
+                "https://opencode.ai/",
+            ),
+        ] {
+            assert_eq!(
+                validate_guided_cookie_capture_request(
+                    provider_id,
+                    login_url,
+                    marker,
+                    &[cookie_url.to_string()],
+                ),
+                Ok(())
+            );
+            assert!(
+                !guided_cookie_policy(provider_id)
+                    .expect("provider policy")
+                    .cookie_names
+                    .is_empty()
+            );
+        }
 
         assert_eq!(
             validate_guided_cookie_capture_request(
