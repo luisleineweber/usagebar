@@ -559,7 +559,7 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText("OpenCode")).toBeInTheDocument()
     expect(
       screen.getByText(
-        /Tracks OpenCode Go subscription limit usage from local OpenCode auth and SQLite history\./
+        /Tracks OpenCode usage from local auth and SQLite history\. Paid status requires current subscription evidence\./
       )
     ).toBeInTheDocument()
     expect(
