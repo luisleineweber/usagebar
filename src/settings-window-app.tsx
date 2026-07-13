@@ -115,7 +115,7 @@ export function SettingsWindowApp() {
     autoUpdateInterval,
   })
 
-  const { scheduleTrayIconUpdate } = useTrayIcon({
+  const { scheduleTrayIconUpdate, traySettingsPreview } = useTrayIcon({
     pluginsMeta,
     pluginSettings,
     pluginStates,
@@ -394,6 +394,7 @@ export function SettingsWindowApp() {
           onMenubarIconStyleChange={handleMenubarIconStyleChange}
           surfacePins={surfacePins}
           onSurfacePinsChange={handleSurfacePinsChange}
+          traySettingsPreview={traySettingsPreview}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={handleGlobalShortcutChange}
           startOnLogin={startOnLogin}

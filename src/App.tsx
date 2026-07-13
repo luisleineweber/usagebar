@@ -15,6 +15,7 @@ import {
   loadDisplayMode,
   loadMenubarIconStyle,
   loadResetTimerDisplayMode,
+  loadSurfacePins,
   loadThemeMode,
   REFRESH_COOLDOWN_MS,
   savePluginSettings,
@@ -358,12 +359,20 @@ function App() {
       loadDisplayMode(),
       loadResetTimerDisplayMode(),
       loadMenubarIconStyle(),
+      loadSurfacePins(pluginsMeta),
     ])
-      .then(([nextThemeMode, nextDisplayMode, nextResetTimerDisplayMode, nextMenubarIconStyle]) => {
+      .then(([
+        nextThemeMode,
+        nextDisplayMode,
+        nextResetTimerDisplayMode,
+        nextMenubarIconStyle,
+        nextSurfacePins,
+      ]) => {
         setThemeMode(nextThemeMode)
         setDisplayMode(nextDisplayMode)
         setResetTimerDisplayMode(nextResetTimerDisplayMode)
         setMenubarIconStyle(nextMenubarIconStyle)
+        setSurfacePins(nextSurfacePins)
         scheduleTrayIconUpdate("settings", 0)
       })
       .catch((error) => {
