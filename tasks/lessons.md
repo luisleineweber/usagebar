@@ -8,6 +8,10 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 
 ## Current Prevention Rules
 
+- Credential source boundaries: native keychain absence may be returned as an exception. Classify stable missing-entry variants before treating a read exception as vault unavailability; preserve usable tokens and surface companion-token failures only when that credential is required.
+- Complete module mocks: when production code imports a new constant or function, update every full-module test mock in the same slice; focused tests that partially mock the module will not expose the missing export.
+- Filtered metric previews: join saved configuration to live values by stable provider/metric identity, never by array index; disabled or unavailable providers can remove intermediate results.
+
 - Tauri production-only modules: when `cfg(test)` replaces a module with a stub, move pure security logic into a shared compiled module before claiming unit coverage; tests inside the production-only file never run.
 
 - Provider auth screenshots: identify the selected provider explicitly before patching provider-specific logic. Prefer `/v1/usage/<provider>` evidence over visually similar setup fields.
