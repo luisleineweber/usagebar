@@ -34,6 +34,30 @@ export type PluginOutput = {
   plan?: string
   lines: MetricLine[]
   iconUrl: string
+  history?: UsageHistory
+}
+
+export type UsageHistoryEntry = {
+  periodStart: string
+  periodEnd: string
+  model?: string
+  project?: string
+  account?: string
+  costUsd?: number
+  requests?: number
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadTokens?: number
+  cacheCreationTokens?: number
+  reasoningTokens?: number
+  totalTokens?: number
+}
+
+export type UsageHistory = {
+  version: 1
+  source: string
+  timeZone: string
+  entries: UsageHistoryEntry[]
 }
 
 export type UsageHistoryPoint = {

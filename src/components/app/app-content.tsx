@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { OverviewPage } from "@/pages/overview"
 import { ProviderDetailPage } from "@/pages/provider-detail"
+import { HistoryPage } from "@/pages/history"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
@@ -112,6 +113,8 @@ export function AppContent({
         timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
+    ) : activeView === "history" ? (
+      <HistoryPage plugins={displayPlugins} />
     ) : (
       <ProviderDetailPage
         plugin={resolvedSelectedPlugin}

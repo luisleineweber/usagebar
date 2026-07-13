@@ -53,6 +53,46 @@ pub struct PluginOutput {
     pub plan: Option<String>,
     pub lines: Vec<MetricLine>,
     pub icon_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history: Option<UsageHistory>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistory {
+    pub version: u32,
+    pub source: String,
+    pub time_zone: String,
+    pub entries: Vec<UsageHistoryEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistoryEntry {
+    pub period_start: String,
+    pub period_end: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_usd: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requests: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_tokens: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_read_tokens: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_creation_tokens: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_tokens: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<f64>,
 }
 
 pub fn run_probe(
@@ -162,6 +202,7 @@ pub fn run_probe(
             Ok(_) => vec![error_line("no lines returned".to_string())],
             Err(msg) => vec![error_line(msg)],
         };
+        let history = parse_history(&result);
 
         PluginOutput {
             provider_id: plugin_id,
@@ -169,8 +210,211 @@ pub fn run_probe(
             plan,
             lines,
             icon_url,
+            history,
         }
     })
+}
+
+/// Parses optional provider activity history without making the probe fail.
+///
+/// The envelope is all-or-nothing: malformed version/source/timeZone/entries
+/// omits the complete history value. Entries are isolated from one another:
+/// malformed entries are logged and omitted while valid siblings are retained.
+fn parse_history(result: &Object<'_>) -> Option<UsageHistory> {
+    let history_value: Value = match result.get("history") {
+        Ok(value) => value,
+        Err(_) => return None,
+    };
+    if history_value.is_null() || history_value.is_undefined() {
+        return None;
+    }
+
+    let Some(history) = history_value.into_object() else {
+        log::warn!("plugin history must be an object; omitting history");
+        return None;
+    };
+
+    let version = match required_number(&history, "version") {
+        Ok(version) if version == 1.0 => 1,
+        Ok(version) => {
+            log::warn!(
+                "plugin history version must be 1 (got {}); omitting history",
+                version
+            );
+            return None;
+        }
+        Err(message) => {
+            log::warn!("{}; omitting history", message);
+            return None;
+        }
+    };
+    let source = match required_non_empty_string(&history, "source") {
+        Ok(source) => source,
+        Err(message) => {
+            log::warn!("{}; omitting history", message);
+            return None;
+        }
+    };
+    let time_zone = match required_non_empty_string(&history, "timeZone") {
+        Ok(time_zone) => time_zone,
+        Err(message) => {
+            log::warn!("{}; omitting history", message);
+            return None;
+        }
+    };
+    let entries: Array = match history.get("entries") {
+        Ok(entries) => entries,
+        Err(_) => {
+            log::warn!("plugin history entries must be an array; omitting history");
+            return None;
+        }
+    };
+
+    let mut parsed_entries = Vec::new();
+    for index in 0..entries.len() {
+        let entry: Object = match entries.get(index) {
+            Ok(entry) => entry,
+            Err(_) => {
+                log::warn!(
+                    "plugin history entry {} must be an object; omitting entry",
+                    index
+                );
+                continue;
+            }
+        };
+        match parse_history_entry(&entry) {
+            Ok(entry) => parsed_entries.push(entry),
+            Err(message) => log::warn!(
+                "invalid plugin history entry {}: {}; omitting entry",
+                index,
+                message
+            ),
+        }
+    }
+
+    Some(UsageHistory {
+        version,
+        source,
+        time_zone,
+        entries: parsed_entries,
+    })
+}
+
+fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> {
+    let period_start = required_non_empty_string(entry, "periodStart")?;
+    let period_end = required_non_empty_string(entry, "periodEnd")?;
+    let parsed_start = parse_rfc3339(&period_start, "periodStart")?;
+    let parsed_end = parse_rfc3339(&period_end, "periodEnd")?;
+    if parsed_start >= parsed_end {
+        return Err("periodStart must be before periodEnd".to_string());
+    }
+
+    let model = optional_non_empty_string(entry, "model")?;
+    let project = optional_non_empty_string(entry, "project")?;
+    let account = optional_non_empty_string(entry, "account")?;
+    let cost_usd = optional_non_negative_number(entry, "costUsd")?;
+    let requests = optional_non_negative_number(entry, "requests")?;
+    let input_tokens = optional_non_negative_number(entry, "inputTokens")?;
+    let output_tokens = optional_non_negative_number(entry, "outputTokens")?;
+    let cache_read_tokens = optional_non_negative_number(entry, "cacheReadTokens")?;
+    let cache_creation_tokens = optional_non_negative_number(entry, "cacheCreationTokens")?;
+    let reasoning_tokens = optional_non_negative_number(entry, "reasoningTokens")?;
+    let total_tokens = optional_non_negative_number(entry, "totalTokens")?;
+
+    if cost_usd.is_none()
+        && requests.is_none()
+        && input_tokens.is_none()
+        && output_tokens.is_none()
+        && cache_read_tokens.is_none()
+        && cache_creation_tokens.is_none()
+        && reasoning_tokens.is_none()
+        && total_tokens.is_none()
+    {
+        return Err("at least one usage metric is required".to_string());
+    }
+
+    Ok(UsageHistoryEntry {
+        period_start,
+        period_end,
+        model,
+        project,
+        account,
+        cost_usd,
+        requests,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens,
+        cache_creation_tokens,
+        reasoning_tokens,
+        total_tokens,
+    })
+}
+
+fn required_non_empty_string(object: &Object<'_>, field: &str) -> Result<String, String> {
+    let value: Value = object
+        .get(field)
+        .map_err(|_| format!("history {} must be a non-empty string", field))?;
+    let Some(value) = value.as_string() else {
+        return Err(format!("history {} must be a non-empty string", field));
+    };
+    let value = value.to_string().unwrap_or_default().trim().to_string();
+    if value.is_empty() {
+        return Err(format!("history {} must be a non-empty string", field));
+    }
+    Ok(value)
+}
+
+fn optional_non_empty_string(object: &Object<'_>, field: &str) -> Result<Option<String>, String> {
+    let value: Value = match object.get(field) {
+        Ok(value) => value,
+        Err(_) => return Ok(None),
+    };
+    if value.is_null() || value.is_undefined() {
+        return Ok(None);
+    }
+    let Some(value) = value.as_string() else {
+        return Err(format!("{} must be a non-empty string when present", field));
+    };
+    let value = value.to_string().unwrap_or_default().trim().to_string();
+    if value.is_empty() {
+        return Err(format!("{} must be a non-empty string when present", field));
+    }
+    Ok(Some(value))
+}
+
+fn required_number(object: &Object<'_>, field: &str) -> Result<f64, String> {
+    let value: Value = object
+        .get(field)
+        .map_err(|_| format!("history {} must be a finite number", field))?;
+    let Some(value) = value.as_number() else {
+        return Err(format!("history {} must be a finite number", field));
+    };
+    if !value.is_finite() {
+        return Err(format!("history {} must be a finite number", field));
+    }
+    Ok(value)
+}
+
+fn optional_non_negative_number(object: &Object<'_>, field: &str) -> Result<Option<f64>, String> {
+    let value: Value = match object.get(field) {
+        Ok(value) => value,
+        Err(_) => return Ok(None),
+    };
+    if value.is_null() || value.is_undefined() {
+        return Ok(None);
+    }
+    let Some(value) = value.as_number() else {
+        return Err(format!("{} must be a finite non-negative number", field));
+    };
+    if !value.is_finite() || value < 0.0 {
+        return Err(format!("{} must be a finite non-negative number", field));
+    }
+    Ok(Some(value))
+}
+
+fn parse_rfc3339(value: &str, field: &str) -> Result<time::OffsetDateTime, String> {
+    time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
+        .map_err(|_| format!("{} must be an RFC3339 timestamp", field))
 }
 
 fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
@@ -466,6 +710,7 @@ fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutput {
         plan: None,
         lines: vec![error_line(message)],
         icon_url: plugin.icon_data_url.clone(),
+        history: None,
     }
 }
 
@@ -589,5 +834,191 @@ mod tests {
             obj.get("resets_at").is_none(),
             "did not expect resets_at key"
         );
+    }
+
+    #[test]
+    fn run_probe_parses_and_serializes_normalized_usage_history() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return {
+                        lines: [{ type: "text", label: "Today", value: "$1.25" }],
+                        history: {
+                            version: 1,
+                            source: " ccusage ",
+                            timeZone: " Europe/Berlin ",
+                            entries: [{
+                                periodStart: "2026-07-09T22:00:00Z",
+                                periodEnd: "2026-07-10T22:00:00Z",
+                                model: " claude-sonnet-4 ",
+                                project: " usagebar ",
+                                account: " work ",
+                                costUsd: 1.25,
+                                requests: 3,
+                                inputTokens: 100,
+                                outputTokens: 20,
+                                cacheReadTokens: 30,
+                                cacheCreationTokens: 10,
+                                reasoningTokens: 5,
+                                totalTokens: 160
+                            }]
+                        }
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("valid-history"), "0.0.0", None);
+        let history = output.history.as_ref().expect("history");
+        assert_eq!(history.version, 1);
+        assert_eq!(history.source, "ccusage");
+        assert_eq!(history.time_zone, "Europe/Berlin");
+        assert_eq!(history.entries.len(), 1);
+        assert_eq!(history.entries[0].model.as_deref(), Some("claude-sonnet-4"));
+        assert_eq!(history.entries[0].total_tokens, Some(160.0));
+
+        let json: JsonValue = serde_json::to_value(output).expect("serialize");
+        assert_eq!(json["history"]["timeZone"], "Europe/Berlin");
+        assert_eq!(
+            json["history"]["entries"][0]["periodStart"],
+            "2026-07-09T22:00:00Z"
+        );
+        assert_eq!(json["history"]["entries"][0]["costUsd"], 1.25);
+        assert!(json["history"]["entries"][0].get("cost_usd").is_none());
+    }
+
+    #[test]
+    fn run_probe_omits_invalid_history_envelopes_without_failing_lines() {
+        let invalid_histories = [
+            r#""not-an-object""#,
+            r#"({ source: "ccusage", timeZone: "UTC", entries: [] })"#,
+            r#"({ version: 2, source: "ccusage", timeZone: "UTC", entries: [] })"#,
+            r#"({ version: 1, source: "", timeZone: "UTC", entries: [] })"#,
+            r#"({ version: 1, source: "ccusage", timeZone: "", entries: [] })"#,
+            r#"({ version: 1, source: "ccusage", timeZone: "UTC", entries: {} })"#,
+        ];
+
+        for (index, history) in invalid_histories.iter().enumerate() {
+            let plugin = test_plugin(&format!(
+                r#"
+                globalThis.__openusage_plugin = {{
+                    probe() {{
+                        return {{
+                            lines: [{{ type: "text", label: "Today", value: "$1.25" }}],
+                            history: {history}
+                        }};
+                    }}
+                }};
+                "#
+            ));
+
+            let output = run_probe(
+                &plugin,
+                &temp_app_dir(&format!("invalid-envelope-{index}")),
+                "0.0.0",
+                None,
+            );
+            assert!(output.history.is_none(), "case {index} should omit history");
+            assert!(matches!(
+                output.lines.first(),
+                Some(MetricLine::Text { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn run_probe_omits_only_invalid_history_entries() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return {
+                        lines: [{ type: "text", label: "Today", value: "$1.25" }],
+                        history: {
+                            version: 1,
+                            source: "ccusage",
+                            timeZone: "UTC",
+                            entries: [
+                                {
+                                    periodStart: "2026-07-10T00:00:00Z",
+                                    periodEnd: "2026-07-11T00:00:00Z",
+                                    totalTokens: 42
+                                },
+                                "not-an-object",
+                                {
+                                    periodStart: "not-a-date",
+                                    periodEnd: "2026-07-11T00:00:00Z",
+                                    totalTokens: 1
+                                },
+                                {
+                                    periodStart: "2026-07-11T00:00:00Z",
+                                    periodEnd: "2026-07-10T00:00:00Z",
+                                    totalTokens: 1
+                                },
+                                {
+                                    periodStart: "2026-07-10T00:00:00Z",
+                                    periodEnd: "2026-07-11T00:00:00Z",
+                                    costUsd: -1
+                                },
+                                {
+                                    periodStart: "2026-07-10T00:00:00Z",
+                                    periodEnd: "2026-07-11T00:00:00Z",
+                                    requests: Infinity
+                                },
+                                {
+                                    periodStart: "2026-07-10T00:00:00Z",
+                                    periodEnd: "2026-07-11T00:00:00Z",
+                                    model: ""
+                                },
+                                {
+                                    periodStart: "2026-07-10T00:00:00Z",
+                                    periodEnd: "2026-07-11T00:00:00Z"
+                                }
+                            ]
+                        }
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("invalid-entries"), "0.0.0", None);
+        let history = output.history.expect("valid envelope should remain");
+        assert_eq!(history.entries.len(), 1);
+        assert_eq!(history.entries[0].total_tokens, Some(42.0));
+    }
+
+    #[test]
+    fn run_probe_omits_absent_history_from_serialized_output() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return { lines: [{ type: "text", label: "Today", value: "$1.25" }] };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("absent-history"), "0.0.0", None);
+        assert!(output.history.is_none());
+        let json: JsonValue = serde_json::to_value(output).expect("serialize");
+        assert!(json.get("history").is_none());
+    }
+
+    #[test]
+    fn error_outputs_never_include_history() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() { throw "boom"; }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("error-history"), "0.0.0", None);
+        assert!(output.history.is_none());
     }
 }
