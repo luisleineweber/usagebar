@@ -1,10 +1,372 @@
 ﻿# Active Todo
 
+# Surface pin completion, 2026-07-13
+
+## Executive Summary
+
+- Finish the saved metric-pin editor and show an immediate tray/widget preview.
+- Apply saved pins consistently in the tray panel and standalone settings window.
+- Verify persistence, cross-window updates, rendering, and accessibility-oriented controls.
+
+## Acceptance Criteria
+
+- [ ] Users can select, replace, remove, and choose bar/text presentation for up to two unique provider metrics.
+- [ ] The settings preview reflects the selected tray style, live metric values, and saved pin order.
+- [ ] Stored pins load on startup and settings-window changes propagate to the tray process.
+- [ ] Focused tests, typecheck, build, formatting, and diff review pass.
+
+## Plan
+
+- [ ] Complete the pin editor and compact preview component.
+- [ ] Connect tray preview state through both settings entry points.
+- [ ] Add regression tests for editing, ordering, presentation, and rendering.
+- [ ] Run verification; update task notes, choices, and breadcrumbs.
+
+# Cookie-only provider audit, 2026-07-12
+
+## Executive Summary
+
+- Identify providers whose only remote authentication path is a browser session cookie.
+- Find shared reliability, security, and setup improvements.
+- Rank evidence-backed changes without modifying provider behavior during the audit.
+
+## Acceptance Criteria
+
+- [x] Cookie-only providers and credential sources are enumerated from code.
+- [x] Shared and provider-specific risks cite concrete implementation evidence.
+- [x] Recommended changes are ranked by impact, scope, and verification path.
+
+## Plan
+
+- [x] Trace plugin manifests, credential selection, requests, and auth errors.
+- [x] Audit vault precedence, browser import, redaction, and tests.
+- [x] Run focused static/test checks; record findings and breadcrumb.
+
+## Verification Notes
+
+- Cookie-only: Abacus, Perplexity, Mistral billing, and OpenCode Zen. Stored vault secrets correctly precede environment and legacy keychain fallbacks.
+- Mistral now has an official Admin API usage endpoint using a dedicated Admin API key; prefer it over the private cookie endpoint when available.
+- Shared guided login is allow-listed only for Zed; Edge cookie import is policy-limited only to Claude.
+- Guided capture currently stores every cookie exposed for each approved URL; future provider expansion should add per-provider cookie-name allowlists and deduplicate by cookie name/domain.
+- Focused plugin/settings run: 5 files passed, 108 tests; `src/lib/browser-cookie-import.test.ts` failed before collection because its `vi.mock` references a non-hoisted `invokeMock`.
+- `cargo test --manifest-path src-tauri/Cargo.toml guided_cookie_capture --lib` passed (1 test). The `browser_cookie_import` filter matched 0 tests because those tests use different names.
+
+# Cookie provider hardening implementation, 2026-07-12
+
+## Executive Summary
+
+- Prefer Mistral's official Admin API key over private browser cookies.
+- Add guided login for cookie-only providers while restricting captured cookies.
+- Preserve manual cookie and environment fallbacks.
+
+## Acceptance Criteria
+
+- [x] Mistral Admin API key is vault-first and uses the official usage endpoint; cookie fallback remains supported.
+- [x] Abacus, Perplexity, and OpenCode Zen guided login requests are backend allow-listed.
+- [x] Guided capture stores only approved cookie names and rejects duplicate-name ambiguity.
+- [x] Plugin manifests, redaction allowlists, bundled resources, docs, and focused tests pass.
+
+## Plan
+
+- [x] Add failing plugin/frontend/Rust regression tests.
+- [x] Implement Mistral official API auth and strict guided-login policies.
+- [x] Update settings, docs, manifests, bundles, and redaction tests.
+- [x] Run focused JS/Rust checks, formatting, and diff review.
+
+## Verification Notes
+
+- `bun run test -- plugins/abacus/plugin.test.js plugins/perplexity/plugin.test.js plugins/mistral/plugin.test.js plugins/opencode/plugin.test.js src/lib/provider-settings.test.ts src/lib/browser-cookie-import.test.ts src/components/settings/provider-settings-detail.test.tsx --run` -> 7 files, 150 tests passed.
+- Guided policy and approved-cookie conflict Rust tests passed; `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- Host environment allowlist test passed with `MISTRAL_ADMIN_API_KEY`; Mistral source/bundled plugin SHA-256 matched; Node syntax, Rust formatting, Prettier, and ESLint passed.
+- Repo-wide `bun run check` reaches TypeScript and fails on pre-existing surface-pin work: missing `setSurfacePins` arguments in `src/App.tsx` and `src/settings-window-app.tsx`. These files are outside this slice and were already modified.
+- `git diff --check` passed; only expected CRLF conversion warnings were reported.
+
+# Modern Antigravity tracking research, 2026-07-12
+
+## Executive Summary
+
+- Identify why current Antigravity usage frequently stays at 100% or becomes unavailable.
+- Compare current Google-owned contracts and maintained implementations.
+- Recommend a Windows-compatible tracking strategy with explicit reliability tradeoffs.
+
+## Acceptance Criteria
+
+- [x] Current UsageBar Antigravity paths and failure modes are mapped from code and tests.
+- [x] Current tracking alternatives are verified against primary sources or source code.
+- [x] Findings include an implementation-ready recommendation and validation plan.
+
+## Plan
+
+- [x] Establish a focused test baseline and inspect current parsing/discovery assumptions.
+- [x] Research current Antigravity auth, quota, local-service, and remote API contracts.
+- [x] Compare evidence, rank failure hypotheses, and document the recommended architecture.
+- [x] Verify research links, diff scope, and task notes.
+
+## Verification Notes
+
+- `bun run test -- plugins\antigravity\plugin.test.js --run` -> passed, 30 tests.
+- Current code inspection confirmed `fetchAvailableModels` sends `{}` and uses legacy per-model grouping.
+- Official Antigravity plans/changelog/blog confirm five-hour plus weekly limits, shared Gemini quota, and a redesigned usage screen.
+- Multiple current implementations agree on `loadCodeAssist` project discovery, project-scoped quota calls, and the emerging grouped summary endpoint.
+- Research report: `docs/providers/antigravity-tracking-research-2026-07.md`.
+
+# Modern Antigravity tracking implementation, 2026-07-12
+
+## Executive Summary
+
+- Stop false `100% left` results by resolving the account project before remote quota calls.
+- Show Antigravity 2.0 session and weekly quota pools when Google returns them.
+- Keep project-scoped model and local language-server fallbacks for compatibility.
+
+## Acceptance Criteria
+
+- [ ] Remote tracking resolves and sends `cloudaicompanionProject`; projectless quota is never accepted.
+- [ ] Grouped quota summary renders Gemini and Claude/GPT session and weekly progress when valid.
+- [ ] Schema variants and missing fields degrade to project-scoped model quota or explicit unknown state.
+- [ ] Three Cloud Code hosts are bounded fallbacks; auth, throttling, and transient failures remain distinct.
+- [ ] Manifest, docs, bundled plugin, redaction audit, focused tests, full tests, typecheck, and formatting pass.
+
+## Plan
+
+- [ ] Add red public-probe regression tests for project discovery and grouped summary.
+- [ ] Implement project-scoped HTTP acquisition and conservative summary parsing.
+- [ ] Add model fallback, host/error coverage, and update manifest/docs.
+- [ ] Sync bundles; run focused/full verification and code review.
+
+# OpenCode canceled-subscription detection, 2026-07-12
+
+## Executive Summary
+
+- Stop historical paid OpenCode usage from implying a current Go subscription.
+- Require current structured entitlement evidence for paid status.
+- Preserve Free usage reporting and lock cancellation behavior with a regression test.
+
+## Acceptance Criteria
+
+- [x] Authenticated accounts with stale paid history but no active entitlement display `Free`.
+- [x] Structured active/trialing Go entitlement still displays `GoSubscription`.
+- [x] OpenCode plugin tests, formatting, and diff review pass.
+
+## Plan
+
+- [x] Add and run a red regression test for canceled subscription plus stale paid history.
+- [x] Remove historical usage as subscription evidence at the provider decision seam.
+- [x] Record the lesson and breadcrumb; verify targeted tests and diff.
+
+## Verification Notes
+
+- Red test: expected `Free`, received `GoSubscription` for `status: canceled` plus stale paid history.
+- `bun vitest run plugins/opencode-go/plugin.test.js src/components/settings/provider-settings-detail.test.tsx` -> passed, 54 tests.
+- `bun prettier --check <touched source/test/docs files>` -> passed.
+- `bun run bundle:plugins` -> bundled 33 plugins; OpenCode Go bundled resources synchronized.
+- `git diff --check` -> passed; only expected CRLF conversion warnings.
+- Host API redaction audit -> no plugin request/response fields changed; no redaction update required.
+
 Full historical todo log is archived locally at:
 
 - `tasks/archive/todo-history-2026-05-18.md`
 
 Keep this file short. Add only the current slice, acceptance criteria, and verification. Move completed slices to an ignored archive when they stop being useful for active context.
+
+# Competitor gap showcase refresh, 2026-07-11
+
+## Executive Summary
+
+- Turn the static competitor audit into a current gap-to-delivery showcase.
+- Verify UTF-8 rendering and distinguish implemented foundations from queued work.
+- Align the artifact with UsageBar's compact instrument-panel design and verify wide and narrow layouts.
+
+## Acceptance Criteria
+
+- [x] Competitor evidence remains visible and source-backed.
+- [x] Current history, CLI, browser-import, and surface-pin work is labeled in progress, not missing or shipped.
+- [x] UTF-8 punctuation renders correctly with no mojibake.
+- [x] Filters, copy action, keyboard focus, and responsive layouts work without external dependencies.
+- [x] Browser verification covers wide and 320px layouts with no overflow or console errors.
+
+## Plan
+
+- [x] Inspect the existing artifact, current implementation state, design context, and task history.
+- [x] Refresh information architecture, status language, visuals, and interactions.
+- [x] Record the report update in choices and breadcrumbs.
+- [x] Validate HTML structure, interactions, wide layout, narrow layout, and diff scope.
+
+## Verification Notes
+
+- `bun prettier --check docs\reports\usagebar-competitor-gap-showcase.html` -> passed.
+- Structural assertions -> passed: doctype, UTF-8 charset, eight matrix rows, eight valid delivery states, filter feedback, no mojibake, one inline script, and no external script.
+- Playwright wide check at 1440×1000 -> first viewport and matrix visually reviewed; `In progress` filter showed 4 themes; copy action executed.
+- Playwright narrow check at 320×900 -> no horizontal overflow (`scrollWidth === clientWidth`); hero, KPI grid, controls, and stacked matrix rows remained readable.
+- Browser console after reload -> 0 errors, 0 warnings.
+- T3 collaborative preview and in-app browser were unavailable; verified through the permitted local Playwright fallback.
+
+# Competitor gap implementation, 2026-07-10
+
+## Executive Summary
+
+- Add durable provider-agnostic history and reporting, then expose it consistently in the tray, local API, and terminal.
+- Restore and extend tray customization with pinned metrics, a provider switcher, incident state, and a compact widget surface.
+- Add explicit, provider-scoped browser import, notification preferences/events, and a provider-neutral account-health foundation.
+- Expand provider coverage only where a stable Windows source and verifiable entitlement data exist; document evidence-based deferrals for the remainder.
+
+## Acceptance Criteria
+
+- [x] Repeated cache/secret writes replace files safely on Windows without losing the prior file on failure.
+- [x] Successful plugins may return validated daily history with source/timezone, cost, request, token, model, project, and account dimensions.
+- [x] History persists across restarts, migrates the v1 cache, and is queryable by provider/date/model/project/grouping through the local API.
+- [x] Provider detail and a shared history view show Today, Yesterday, 7d, and 30d summaries, an accessible compact trend, model mix, honest empty states, and report filters.
+- [ ] A standalone console CLI reads cached state only and supports stable text, JSON, status-line, provider, and history output.
+- [ ] Browser import is opt-in, Edge-first, compiled-policy-controlled, imports only approved provider cookies, writes directly to DPAPI storage, and returns redacted diagnostics with manual/guided fallback.
+- [ ] Menu-bar style selection works again; users can pin up to two provider metrics and see a matching preview/widget surface.
+- [ ] Incident, quota-threshold, and reset events are deduplicated; notification preferences, quiet hours, and recent events persist; OS permission failure has an in-app fallback.
+- [ ] Account registry contracts are provider-neutral, preserve existing Codex profiles, expose active/health/stale state, and support check/re-auth/remove actions through adapter capabilities.
+- [ ] Long-tail provider work includes provenance enforcement, one verified direct-source provider slice where evidence permits, and explicit research/defer decisions for unsupported candidates.
+- [ ] README, local API, plugin API, Windows/browser privacy, CLI, and provider docs match shipped behavior.
+- [ ] Focused tests, full frontend tests, typecheck, formatting, Rust tests, Clippy, build, and manual browser/Tauri checks pass.
+
+## Plan
+
+- [x] Add shared Windows-safe atomic replacement and regression coverage.
+- [x] Add normalized history contract, cache v2 migration, query API, and aggregation tests.
+- [x] Emit authoritative history from Claude, Codex, OpenAI API, and OpenCode where source data supports it.
+- [x] Build history/reporting UI with filters, summaries, chart, model mix, and empty states.
+- [ ] Build standalone cache-only CLI and release packaging/docs.
+- [ ] Restore tray style wiring, add persisted pins, preview, and compact widget surface.
+- [ ] Add notification preferences, transition engine, OS adapter, routing, and recent-events UI.
+- [ ] Add compiled cookie policy and Edge import for eligible providers with redacted diagnostics.
+- [ ] Generalize account registry contracts and UI, migrate Codex, add health/ping/stale flows.
+- [ ] Complete provider provenance/triage and verified provider expansion slice.
+- [ ] Run full verification, visual QA, accessibility/responsive checks, and code review.
+
+## Verification Notes, 2026-07-12
+
+- `cargo test --manifest-path src-tauri/Cargo.toml atomic_file --lib` -> 3 passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml history --lib` -> 16 passed.
+- Provider/history/report set -> 6 files passed, 164 tests.
+- Added standalone `usagebar-cli` dispatch and binary; CLI Rust set -> 10 passed; `cargo check --bins` passed.
+- Registered Edge browser-import commands with blocking I/O off the UI thread; browser policy Rust set -> 3 passed.
+- Browser-import/history/settings frontend set -> 4 files passed, 69 tests; `bun run typecheck` passed.
+- CLI installer bundling/PATH integration and live Edge import remain open; neither acceptance criterion is marked complete.
+
+# Competitor idea implementation map
+
+## Executive Summary
+
+- Turn competitor findings into a ranked UsageBar implementation plan.
+- Prioritize direct OpenUsage reliability ports before larger provider/account features.
+- Produce a browser-readable HTML artifact for review.
+
+## Acceptance Criteria
+
+- [x] Current UsageBar surfaces are checked against the referenced OpenUsage reliability commits.
+- [x] Competitor ideas are classified as implement now, adapt later, defer, or reject.
+- [x] HTML artifact explains what to implement and how at a non-code and technical level.
+- [x] Breadcrumbs and choices record the report path and prioritization default.
+
+## Plan
+
+- [x] Review repo context, current hooks/backend surfaces, and referenced upstream commit diffs.
+- [x] Create a single-file HTML implementation map.
+- [x] Record choices and breadcrumbs.
+- [x] Verify the artifact exists and is self-contained.
+
+## Verification Notes
+
+- Checked current `src-tauri/src/lib.rs`, `src-tauri/src/plugin_engine/runtime.rs`, `src-tauri/src/local_http_api/server.rs`, `src-tauri/src/local_http_api/cache.rs`, `src/hooks/app/*`, `src/hooks/use-now-ticker.ts`, and DeepSeek/Codex/Claude plugin surfaces.
+- Referenced local upstream commits: `abc68e8`, `9a9f01d`, `a291696`, `d44008f`, `ce7f682`, `810b122`.
+- Output artifact: `docs/reports/usagebar-competitor-implementation-map.html`.
+
+# Copilot AI-credit billing migration
+
+## Executive Summary
+
+- Stop treating paid Copilot usage as legacy Premium Requests for every account.
+- Add explicit billing-mode lines so users can distinguish AI-credit migration state from legacy annual request plans.
+- Preserve the existing legacy request path for accounts GitHub still bills that way.
+
+## Acceptance Criteria
+
+- [x] Paid usage-based Copilot plans show AI-credit terminology, not `Premium` as the primary line.
+- [x] Legacy request snapshots remain visible as legacy request usage.
+- [x] Free/limited Copilot quotas keep existing Chat and Completions behavior.
+- [x] `billingScope` works as the new config key and `workspaceId` remains an alias.
+- [x] Copilot docs and manifest describe the dual-mode behavior.
+- [x] Focused Copilot plugin tests pass.
+
+## Plan
+
+- [x] Inspect current Copilot plugin, manifest, docs, and tests.
+- [x] Add billing-mode normalization and usage-based AI-credit lines.
+- [x] Rename legacy request lines and preserve old billing endpoint fallback.
+- [x] Update docs, manifest, tests, bundled resources, choices, and breadcrumbs.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+
+- Skill search: `npx skills find github copilot billing` found Copilot SDK/usage skills, but no install was needed for this repo-specific migration slice.
+- `bun run test -- plugins\copilot\plugin.test.js --run` -> passed, 45 tests.
+- `node --check plugins\copilot\plugin.js` -> passed.
+- `bun prettier --check plugins\copilot\plugin.js plugins\copilot\plugin.json plugins\copilot\plugin.test.js src-tauri\resources\bundled_plugins\copilot\plugin.js src-tauri\resources\bundled_plugins\copilot\plugin.json src-tauri\resources\bundled_plugins\copilot\plugin.test.js docs\providers\copilot.md README.md docs\choices.md docs\breadcrumbs.md tasks\todo.md` -> passed.
+- `bun run bundle:plugins` -> bundled 32 plugins; Copilot source and bundled SHA-256 hashes match for `plugin.js`, `plugin.json`, and `plugin.test.js`.
+- Diff review completed for Copilot plugin, manifest, tests, bundled resources, docs, README, choices, breadcrumbs, and todo.
+
+# Persist provider bar order
+
+## Executive Summary
+
+- Keep the user-selected provider order in the bar after restart and app update.
+- Preserve existing saved order instead of re-sorting it during startup normalization.
+- Append newly added providers at the end so updates do not reshuffle current providers.
+
+## Acceptance Criteria
+
+- [x] Saved provider order is preserved during settings normalization.
+- [x] New providers are appended after the saved order during updates.
+- [x] First-run/default order still keeps Codex, Claude, and Cursor first.
+- [x] Focused settings tests pass.
+
+## Plan
+
+- [x] Locate provider order persistence and startup normalization.
+- [x] Change normalization to preserve stored order for existing providers.
+- [x] Add/update regression tests for restart/update order persistence.
+- [x] Run focused verification and review diff.
+
+## Verification Notes
+
+- `bun run test -- src\lib\settings.test.ts src\lib\tray-primary-progress.test.ts src\hooks\app\use-settings-plugin-actions.test.ts --run` -> passed, 3 files, 70 tests.
+- `bun prettier --check src\lib\settings.ts src\lib\settings.test.ts` -> passed.
+- `bun prettier --check tasks\todo.md` still fails on pre-existing malformed escape sequences in the older OpenCode todo section; this slice did not rework that historical content.
+- Diff review completed for `src/lib/settings.ts`, `src/lib/settings.test.ts`, `tasks/todo.md`, and `docs/breadcrumbs.md`.
+
+# Version footer update entry point
+
+## Executive Summary
+
+- Keep the footer version label available when update checks fail.
+- Remove the hard-to-open `Updates soon` state from the user-facing footer.
+- Preserve real update actions for available, downloading, ready, and installing states.
+
+## Acceptance Criteria
+
+- [x] Failed update checks render the normal version label button.
+- [x] Clicking the version label opens the about/version dialog in the failed-update-check state.
+- [x] Right-clicking the version label manually checks for updates.
+- [x] Available update state still opens the update/release action.
+- [x] Focused frontend verification passes.
+
+## Plan
+
+- [x] Locate the footer update/version rendering path.
+- [x] Replace the `Updates soon` failed-check label with the version entry point.
+- [x] Add or update focused regression coverage.
+- [x] Run focused tests and review the diff.
+
+## Verification Notes
+
+- `bun run test -- src\components\panel-footer.test.tsx --run` -> passed, 13 tests.
+- `bun prettier --check src\components\panel-footer.tsx src\components\panel-footer.test.tsx tasks\todo.md docs\breadcrumbs.md` -> passed.
+- Diff review completed for `PanelFooter`, focused tests, todo, and breadcrumbs.
 
 # Publish Alpha 4 release
 
@@ -338,3 +700,45 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun prettier --check package.json vite.config.ts scripts/coverage-summary.mjs scripts/run-coverage-report.mjs tasks/todo.md docs/test-results-improvement-report.md` passed.
 - Re-check on 2026-05-25 after added tests: `bun run test:coverage:report` passed with 84 files / 1317 tests. Strict `bun run test:coverage` still failed: statements 86.69%, branches 80.20%, lines 89.99%, functions 93.40%. `bun run check` passed. Corrected `docs/test-results-improvement-report.md` to stop claiming lines coverage passed.
 - Alpha 3 local build smoke on 2026-05-25: `bun run build:release` compiled the release binary but failed at MSI bundling because WiX rejects prerelease version `0.1.0-alpha.3`. Retried as `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1 bun run build:release -- --bundles nsis`; NSIS build passed and produced `src-tauri/target/release/bundle/nsis/UsageBar_0.1.0-alpha.3_x64-setup.exe`. Updater signing and Authenticode signing were skipped locally because signing material was not present.
+
+# Competitor implementation plan completion
+
+## Executive Summary
+
+- Finish the remaining implementable tracks from `docs/reports/competitor-implementation-plan.html`.
+- Add direct OpenAI API spend visibility, local JSON endpoint contracts, OpenCode local cost windows, and provider expansion triage notes.
+- Treat speculative providers as documented research until stable quota or billing sources are found.
+
+## Acceptance Criteria
+
+- [x] OpenUsage reliability ports and Grok provider work remain documented as already completed.
+- [x] OpenCode Zen shows optional local cost windows: `Yesterday`, `Last 2 days`, and `Last 30 days`.
+- [x] OpenAI API provider exposes Today, 7-day, 30-day spend, tokens, requests, and top model from organization APIs.
+- [x] Local HTTP API exposes stable health, provider list, and latest snapshot endpoints.
+- [x] Qwen, Doubao, and Manus expansion decisions have a research note before plugin work.
+- [x] Bundled plugin resources are synced.
+- [x] Focused frontend/plugin/Rust verification passes.
+- [x] Formatting/lint verification passes or exact blockers are documented.
+
+## Plan
+
+- [x] Re-read competitor implementation plan and current task history.
+- [x] Implement OpenCode local SQLite cost windows with regression tests.
+- [x] Implement `openai-api` provider plugin, manifest, docs, README row, and tests.
+- [x] Add `/v1/health`, `/v1/providers`, and `/v1/latest` local HTTP API routes with Rust tests.
+- [x] Add provider-expansion triage spec for Qwen, Doubao, and Manus.
+- [x] Run focused verification, lint/format checks, and diff review.
+
+## Verification Notes
+
+- OpenCode cost windows query local `opencode.db` with the same provider/role/cost filters as `opencode-go` and skip lines when SQLite is unreadable.
+- OpenAI API provider uses stored `apiKey`, then `OPENAI_ADMIN_API_KEY`, then `OPENAI_API_KEY`; it calls organization Costs and Completions Usage endpoints.
+- Local HTTP endpoints expose cached usage data only; no credentials, cookies, API keys, or raw provider payloads are returned.
+- `bun run test -- plugins\openai-api\plugin.test.js plugins\opencode\plugin.test.js --run` -> passed, 2 files, 19 tests.
+- `cargo test --manifest-path src-tauri\Cargo.toml local_http_api --lib` -> passed, 17 tests.
+- `bun run lint` -> passed.
+- `bun run typecheck` -> passed.
+- `bun run check` -> passed after applying Prettier to pre-existing dirty `package.json`; semantic package diff remains the existing Alpha 5 version change.
+- `bun prettier --check <touched files>` -> passed.
+- `cargo fmt --manifest-path src-tauri\Cargo.toml -- --check` -> passed.
+- `git --no-pager diff --check` -> passed; only expected CRLF conversion warnings were reported.

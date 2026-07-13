@@ -8,6 +8,8 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 
 ## Current Prevention Rules
 
+- Tauri production-only modules: when `cfg(test)` replaces a module with a stub, move pure security logic into a shared compiled module before claiming unit coverage; tests inside the production-only file never run.
+
 - Provider auth screenshots: identify the selected provider explicitly before patching provider-specific logic. Prefer `/v1/usage/<provider>` evidence over visually similar setup fields.
 - CLI quota providers: do not treat local session transcripts as account quota ledgers. Prefer authenticated quota endpoints or cached quota snapshots when a CLI exposes authoritative usage.
 - Release notes: before publishing or editing a release body, fetch the previous release with `gh release view <previous-tag> --json body`; mirror section order and use a GitHub compare URL for `Full Changelog`.
@@ -20,9 +22,12 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - Progress bars: require a real positive provider-owned max. Do not manufacture limits from used values, balances, unlimited states, or zero totals.
 - Provider max values: preserve real provider limits even when `used > limit`; the UI clamps visual fill only.
 - Windows parsing: do not depend on English-only OS command tokens. Prefer locale-stable columns, flags, structured output, or path/process evidence.
+- HTML encoding checks on Windows: read files explicitly as UTF-8 and verify character code points before diagnosing mojibake; default shell display output can corrupt valid punctuation.
 - Copilot paid Chat: do not label `quota_snapshots.chat` as messages. GitHub's current paid Copilot usage limits are session/weekly usage-token limits, so display provider-reported counts as quota units unless GitHub returns an explicit prompt/message counter.
 - OpenCode Go: local SQLite spend history is not enough to prove an active paid Go subscription. Default to `Free` and suppress paid Go quota bars unless local auth/account data or signed-in billing data positively proves `GoSubscription`. In Free mode, count only free-model rows (`*-free`, `big-pickle`, etc.), not every `opencode-go`/`opencode` row.
 - OpenCode Go subscription detection: never infer subscription from unstructured billing text or marketing copy. Require structured `goSubscription`/Go plan evidence with active/trialing/subscribed state; otherwise default to `Free`.
-- OpenCode Go local auth: current local auth may contain only an API key with no `goSubscription` metadata. Do not force those installs to permanent `Free` when authenticated local history has paid/non-free rows; use that as local Go usage evidence while keeping free-only rows on `Free`.
+- OpenCode Go entitlement: an API key and paid/non-free local history prove past access, not a current subscription. Show `GoSubscription` only from structured active/trialing/subscribed auth or signed-in billing evidence; otherwise show `Free`.
 - Settings store selectors: select only values actually read by the component. For cross-window preference propagation, action setters can be selected without also selecting display values already read by child/store-connected components.
+- Vitest module mocks: values referenced by a `vi.mock` factory must be created with `vi.hoisted`; top-level `const` mocks are still uninitialized when the factory runs.
 - Alpha Windows prerelease builds: do not use Tauri `--bundles all` with semver prerelease versions. MSI/WiX rejects non-numeric prerelease identifiers like `alpha.3`; build prerelease installers with `--bundles nsis` unless the MSI versioning scheme is changed.
+- Provider order persistence: startup normalization must preserve any valid saved provider order. Apply default prefix/alphabetical ordering only when no saved order exists; append newly discovered providers after the saved order.
