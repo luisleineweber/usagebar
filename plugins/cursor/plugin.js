@@ -7,10 +7,30 @@
   const REFRESH_URL = BASE_URL + "/oauth/token"
   const CREDITS_URL = BASE_URL + "/aiserver.v1.DashboardService/GetCreditGrantsBalance"
   const REST_USAGE_URL = "https://cursor.com/api/usage"
+  const USAGE_SUMMARY_URL = "https://cursor.com/api/usage-summary"
   const STRIPE_URL = "https://cursor.com/api/auth/stripe"
   const CLIENT_ID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
   const LOGIN_HINT = "Sign in via Cursor app or run `agent login`."
+
+  function probeError(category, message) {
+    var error = new Error(message)
+    error.category = category
+    return error
+  }
+
+  function isProbeError(error) {
+    return Boolean(error && typeof error === "object" && error.category)
+  }
+
+  function isMissingCredentialError(error) {
+    var message = String(error).toLowerCase()
+    return message.includes("no entry") ||
+      message.includes("no matching entry found") ||
+      message.includes("element not found") ||
+      message.includes("credential not found") ||
+      message.includes("os error 1168")
+  }
 
   function stateDbPath(ctx) {
     if (ctx.app.platform === "windows") {
@@ -32,12 +52,13 @@
         throw new Error("sqlite returned invalid json")
       }
       if (rows.length > 0 && rows[0].value) {
-        return rows[0].value
+        return { value: rows[0].value, error: null }
       }
     } catch (e) {
       ctx.host.log.warn("sqlite read failed for " + key + ": " + String(e))
+      return { value: null, error: String(e) }
     }
-    return null
+    return { value: null, error: null }
   }
 
   function writeStateValue(ctx, key, value) {
@@ -60,16 +81,17 @@
 
   function readKeychainValue(ctx, service) {
     if (!ctx.host.keychain || typeof ctx.host.keychain.readGenericPassword !== "function") {
-      return null
+      return { value: null, error: null }
     }
     try {
       const value = ctx.host.keychain.readGenericPassword(service)
-      if (typeof value !== "string") return null
+      if (typeof value !== "string") return { value: null, error: null }
       const trimmed = value.trim()
-      return trimmed || null
+      return { value: trimmed || null, error: null }
     } catch (e) {
       ctx.host.log.info("keychain read failed for " + service + ": " + String(e))
-      return null
+      if (isMissingCredentialError(e)) return { value: null, error: null }
+      return { value: null, error: String(e) }
     }
   }
 
@@ -88,30 +110,47 @@
   }
 
   function loadAuthState(ctx) {
-    const sqliteAccessToken = readStateValue(ctx, "cursorAuth/accessToken")
-    const sqliteRefreshToken = readStateValue(ctx, "cursorAuth/refreshToken")
-    if (sqliteAccessToken || sqliteRefreshToken) {
+    const sqliteAccess = readStateValue(ctx, "cursorAuth/accessToken")
+    const sqliteRefresh = readStateValue(ctx, "cursorAuth/refreshToken")
+    if (sqliteAccess.value || sqliteRefresh.value) {
       return {
-        accessToken: sqliteAccessToken,
-        refreshToken: sqliteRefreshToken,
+        accessToken: sqliteAccess.value,
+        refreshToken: sqliteRefresh.value,
         source: "sqlite",
+        readErrors: [sqliteAccess.error, sqliteRefresh.error].filter(Boolean),
       }
     }
 
-    const keychainAccessToken = readKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE)
-    const keychainRefreshToken = readKeychainValue(ctx, KEYCHAIN_REFRESH_TOKEN_SERVICE)
-    if (keychainAccessToken || keychainRefreshToken) {
+    const keychainAccess = readKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE)
+    const keychainRefresh = readKeychainValue(ctx, KEYCHAIN_REFRESH_TOKEN_SERVICE)
+    if (keychainAccess.value || keychainRefresh.value) {
       return {
-        accessToken: keychainAccessToken,
-        refreshToken: keychainRefreshToken,
+        accessToken: keychainAccess.value,
+        refreshToken: keychainRefresh.value,
         source: "keychain",
+        readErrors: [keychainAccess.error, keychainRefresh.error].filter(Boolean),
       }
+    }
+
+    const sourceErrors = [
+      sqliteAccess.error,
+      sqliteRefresh.error,
+      keychainAccess.error,
+      keychainRefresh.error,
+    ].filter(Boolean)
+    if (sourceErrors.length > 0) {
+      ctx.host.log.error("all Cursor credential sources failed: " + sourceErrors.join("; "))
+      throw probeError(
+        "credentialUnavailable",
+        "Cursor auth state could not be read. Check system credential and Cursor database access."
+      )
     }
 
     return {
       accessToken: null,
       refreshToken: null,
       source: null,
+      readErrors: [],
     }
   }
 
@@ -164,9 +203,9 @@
         const shouldLogout = errorInfo && errorInfo.shouldLogout === true
         ctx.host.log.error("refresh failed: status=" + resp.status + " shouldLogout=" + shouldLogout)
         if (shouldLogout) {
-          throw "Session expired. " + LOGIN_HINT
+          throw probeError("credentialExpired", "Session expired. " + LOGIN_HINT)
         }
-        throw "Token expired. " + LOGIN_HINT
+        throw probeError("credentialExpired", "Token expired. " + LOGIN_HINT)
       }
 
       if (resp.status < 200 || resp.status >= 300) {
@@ -183,7 +222,7 @@
       // Check if server wants us to logout
       if (body.shouldLogout === true) {
         ctx.host.log.error("refresh response indicates shouldLogout=true")
-        throw "Session expired. " + LOGIN_HINT
+        throw probeError("credentialExpired", "Session expired. " + LOGIN_HINT)
       }
 
       const newAccessToken = body.access_token
@@ -200,7 +239,7 @@
       // access and refresh token in some flows
       return newAccessToken
     } catch (e) {
-      if (typeof e === "string") throw e
+      if (typeof e === "string" || isProbeError(e)) throw e
       ctx.host.log.error("refresh exception: " + String(e))
       return null
     }
@@ -253,6 +292,87 @@
       ctx.host.log.warn("request-based usage fetch failed: " + String(e))
       return null
     }
+  }
+
+  function fetchUsageSummary(ctx, accessToken) {
+    var session = buildSessionToken(ctx, accessToken)
+    if (!session) {
+      ctx.host.log.warn("usage-summary: cannot build session token")
+      return null
+    }
+    try {
+      var resp = ctx.util.request({
+        method: "GET",
+        url: USAGE_SUMMARY_URL,
+        headers: {
+          Cookie: "WorkosCursorSessionToken=" + session.sessionToken,
+        },
+        timeoutMs: 10000,
+      })
+      if (resp.status < 200 || resp.status >= 300) {
+        ctx.host.log.warn("usage-summary returned status=" + resp.status)
+        return null
+      }
+      return ctx.util.tryParseJson(resp.bodyText)
+    } catch (e) {
+      ctx.host.log.warn("usage-summary fetch failed: " + String(e))
+      return null
+    }
+  }
+
+  function usageSummaryMeter(value) {
+    if (!value || value.enabled === false) return null
+    var limit = Number(value.limit)
+    if (!Number.isFinite(limit) || limit <= 0) return null
+    var used = Number(value.used)
+    if (!Number.isFinite(used)) {
+      var remaining = Number(value.remaining)
+      if (!Number.isFinite(remaining)) return null
+      used = limit - remaining
+    }
+    return { used: Math.max(0, used), limit: limit }
+  }
+
+  function buildUsageSummaryResult(ctx, accessToken, planName) {
+    var summary = fetchUsageSummary(ctx, accessToken)
+    if (!summary) return null
+
+    var teamUsage = summary.teamUsage || {}
+    var individualUsage = summary.individualUsage || {}
+    var pooled = usageSummaryMeter(teamUsage.pooled)
+    var individual = usageSummaryMeter(individualUsage.overall)
+    var total = String(summary.limitType || "").toLowerCase() === "team"
+      ? pooled
+      : individual || pooled
+    var onDemand = usageSummaryMeter(teamUsage.onDemand)
+    var lines = []
+    var startMs = ctx.util.parseDateMs(summary.billingCycleStart)
+    var endMs = ctx.util.parseDateMs(summary.billingCycleEnd)
+    var durationMs = startMs && endMs && endMs > startMs ? endMs - startMs : null
+
+    if (total) {
+      lines.push(ctx.line.progress({
+        label: "Total usage",
+        used: ctx.fmt.dollars(total.used),
+        limit: ctx.fmt.dollars(total.limit),
+        format: { kind: "dollars" },
+        resetsAt: ctx.util.toIso(endMs),
+        periodDurationMs: durationMs,
+      }))
+    }
+    if (onDemand) {
+      lines.push(ctx.line.progress({
+        label: "On-demand",
+        used: ctx.fmt.dollars(onDemand.used),
+        limit: ctx.fmt.dollars(onDemand.limit),
+        format: { kind: "dollars" },
+      }))
+    }
+    if (lines.length === 0) return null
+
+    var rawPlan = planName || summary.membershipType
+    var plan = rawPlan ? ctx.fmt.planLabel(rawPlan) : null
+    return { plan: plan || null, lines: lines }
   }
 
   function fetchStripeBalance(ctx, accessToken) {
@@ -363,10 +483,11 @@
     let accessToken = authState.accessToken
     const refreshTokenValue = authState.refreshToken
     const authSource = authState.source
+    const credentialReadErrors = authState.readErrors || []
 
     if (!accessToken && !refreshTokenValue) {
       ctx.host.log.error("probe failed: no access or refresh token in sqlite/keychain")
-      throw "Not logged in. " + LOGIN_HINT
+      throw probeError("credentialMissing", "Not logged in. " + LOGIN_HINT)
     }
 
     ctx.host.log.info("tokens loaded from " + authSource + ": accessToken=" + (accessToken ? "yes" : "no") + " refreshToken=" + (refreshTokenValue ? "yes" : "no"))
@@ -376,6 +497,12 @@
     // Proactively refresh if token is expired or about to expire
     if (needsRefresh(ctx, accessToken, nowMs)) {
       ctx.host.log.info("token needs refresh (expired or expiring soon)")
+      if (!refreshTokenValue && credentialReadErrors.length > 0) {
+        throw probeError(
+          "credentialUnavailable",
+          "Cursor refresh credentials could not be read. Check system credential and Cursor database access."
+        )
+      }
       let refreshed = null
       try {
         refreshed = refreshToken(ctx, refreshTokenValue, authSource)
@@ -388,7 +515,7 @@
         accessToken = refreshed
       } else if (!accessToken) {
         ctx.host.log.error("refresh failed and no access token available")
-        throw "Not logged in. " + LOGIN_HINT
+        throw probeError("credentialMissing", "Not logged in. " + LOGIN_HINT)
       }
     }
 
@@ -416,14 +543,14 @@
         },
       })
     } catch (e) {
-      if (typeof e === "string") throw e
+      if (typeof e === "string" || isProbeError(e)) throw e
       ctx.host.log.error("usage request failed: " + String(e))
       throw "Usage request failed. Check your connection."
     }
 
     if (ctx.util.isAuthStatus(usageResp.status)) {
       ctx.host.log.error("usage returned auth error after all retries: status=" + usageResp.status)
-      throw "Token expired. " + LOGIN_HINT
+      throw probeError("credentialExpired", "Token expired. " + LOGIN_HINT)
     }
 
     if (usageResp.status < 200 || usageResp.status >= 300) {
@@ -467,11 +594,16 @@
 
     // Enterprise and some Team request-based accounts return no planUsage from
     // the Connect API. Detect them and use the REST usage API instead.
-    const needsRequestBasedFallback = usage.enabled !== false && !usage.planUsage && (
+    const needsRequestBasedFallback = !usage.planUsage && (
       normalizedPlanName === "enterprise" ||
       normalizedPlanName === "team"
     )
     if (needsRequestBasedFallback) {
+      const summaryResult = buildUsageSummaryResult(ctx, accessToken, planName)
+      if (summaryResult) {
+        ctx.host.log.info("detected " + normalizedPlanName + " account, using usage-summary API")
+        return summaryResult
+      }
       if (normalizedPlanName === "enterprise") {
         ctx.host.log.info("detected enterprise account, using REST usage API")
         return buildEnterpriseResult(ctx, accessToken, planName)

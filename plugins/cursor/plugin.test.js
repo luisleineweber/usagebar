@@ -36,6 +36,47 @@ describe("cursor plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("surfaces credential source failures instead of reporting signed out", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockImplementation(() => {
+      throw new Error("database is locked")
+    })
+    ctx.host.keychain.readGenericPassword.mockImplementation(() => {
+      throw new Error("credential vault denied access")
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Cursor auth state could not be read")
+  })
+
+  it("treats a missing keychain entry as signed out, not vault failure", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockReturnValue(JSON.stringify([]))
+    ctx.host.keychain.readGenericPassword.mockImplementation(() => {
+      throw new Error("No matching entry found in secure storage")
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Not logged in")
+  })
+
+  it("surfaces an unreadable refresh token when the access token needs refresh", async () => {
+    const ctx = makeCtx()
+    const expiredToken = makeJwt({ sub: "google-oauth2|user_abc123", exp: 1 })
+    ctx.host.sqlite.query.mockImplementation((db, sql) => {
+      if (String(sql).includes("cursorAuth/accessToken")) {
+        return JSON.stringify([{ value: expiredToken }])
+      }
+      throw new Error("refresh token row unreadable")
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Cursor refresh credentials could not be read")
+  })
+
   it("loads tokens from keychain when sqlite has none", async () => {
     const ctx = makeCtx()
     ctx.host.sqlite.query.mockReturnValue(JSON.stringify([]))
@@ -215,13 +256,13 @@ describe("cursor plugin", () => {
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
 
-  it("throws on sqlite errors when reading token", async () => {
+  it("surfaces sqlite credential read errors when no fallback credential exists", async () => {
     const ctx = makeCtx()
     ctx.host.sqlite.query.mockImplementation(() => {
       throw new Error("boom")
     })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Not logged in")
+    expect(() => plugin.probe(ctx)).toThrow("Cursor auth state could not be read")
     expect(ctx.host.log.warn).toHaveBeenCalled()
   })
 
@@ -678,6 +719,59 @@ describe("cursor plugin", () => {
     expect(reqLine.used).toBe(422)
     expect(reqLine.limit).toBe(500)
     expect(reqLine.format).toEqual({ kind: "count", suffix: "requests" })
+  })
+
+  it("prefers usage-summary dollars for enterprise accounts", async () => {
+    const ctx = makeCtx()
+    const accessToken = makeJwt({ sub: "google-oauth2|user_abc123", exp: 9999999999 })
+    const requestedUrls = []
+
+    ctx.host.sqlite.query.mockReturnValue(JSON.stringify([{ value: accessToken }]))
+    ctx.host.http.request.mockImplementation((opts) => {
+      const url = String(opts.url)
+      requestedUrls.push(url)
+      if (url.includes("GetCurrentPeriodUsage")) {
+        return { status: 200, bodyText: JSON.stringify({ enabled: true }) }
+      }
+      if (url.includes("GetPlanInfo")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({ planInfo: { planName: "Enterprise" } }),
+        }
+      }
+      if (url.includes("/api/usage-summary")) {
+        return {
+          status: 200,
+          bodyText: JSON.stringify({
+            limitType: "team",
+            membershipType: "enterprise",
+            billingCycleStart: "2026-07-01T00:00:00.000Z",
+            billingCycleEnd: "2026-08-01T00:00:00.000Z",
+            teamUsage: {
+              pooled: { enabled: true, used: 4200, limit: 10000 },
+              onDemand: { enabled: true, used: 900, limit: 2500 },
+            },
+          }),
+        }
+      }
+      if (url.includes("/api/usage")) {
+        throw new Error("request-count fallback should not run")
+      }
+      return { status: 200, bodyText: "{}" }
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Enterprise")
+    expect(result.lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Total usage", used: 42, limit: 100 }),
+        expect.objectContaining({ label: "On-demand", used: 9, limit: 25 }),
+      ])
+    )
+    expect(requestedUrls.some((url) => url.includes("/api/usage-summary"))).toBe(true)
+    expect(requestedUrls.some((url) => url.endsWith("/api/usage"))).toBe(false)
   })
 
   it("handles team account with request-based usage", async () => {
