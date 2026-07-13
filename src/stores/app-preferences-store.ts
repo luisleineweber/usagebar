@@ -6,6 +6,7 @@ import {
   DEFAULT_MENUBAR_ICON_STYLE,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
+  DEFAULT_SURFACE_PINS,
   DEFAULT_THEME_MODE,
   DEFAULT_TIME_FORMAT_MODE,
   type AutoUpdateIntervalMinutes,
@@ -13,6 +14,7 @@ import {
   type GlobalShortcut,
   type MenubarIconStyle,
   type ResetTimerDisplayMode,
+  type SurfacePin,
   type ThemeMode,
   type TimeFormatMode,
 } from "@/lib/settings"
@@ -26,6 +28,7 @@ type AppPreferencesStore = {
   globalShortcut: GlobalShortcut
   startOnLogin: boolean
   menubarIconStyle: MenubarIconStyle
+  surfacePins: SurfacePin[]
   setAutoUpdateInterval: (value: AutoUpdateIntervalMinutes) => void
   setThemeMode: (value: ThemeMode) => void
   setDisplayMode: (value: DisplayMode) => void
@@ -34,6 +37,7 @@ type AppPreferencesStore = {
   setGlobalShortcut: (value: GlobalShortcut) => void
   setStartOnLogin: (value: boolean) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setSurfacePins: (value: SurfacePin[]) => void
   resetState: () => void
 }
 
@@ -46,6 +50,7 @@ const initialState = {
   globalShortcut: DEFAULT_GLOBAL_SHORTCUT,
   startOnLogin: DEFAULT_START_ON_LOGIN,
   menubarIconStyle: DEFAULT_MENUBAR_ICON_STYLE,
+  surfacePins: DEFAULT_SURFACE_PINS,
 }
 
 export const useAppPreferencesStore = create<AppPreferencesStore>((set) => ({
@@ -58,5 +63,6 @@ export const useAppPreferencesStore = create<AppPreferencesStore>((set) => ({
   setGlobalShortcut: (value) => set({ globalShortcut: value }),
   setStartOnLogin: (value) => set({ startOnLogin: value }),
   setMenubarIconStyle: (value) => set({ menubarIconStyle: value }),
+  setSurfacePins: (value) => set({ surfacePins: value }),
   resetState: () => set(initialState),
 }))

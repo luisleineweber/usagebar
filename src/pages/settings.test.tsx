@@ -107,6 +107,10 @@ const defaultProps = {
   onDisplayModeChange: vi.fn(),
   resetTimerDisplayMode: "relative" as const,
   onResetTimerDisplayModeChange: vi.fn(),
+  timeFormatMode: "auto" as const,
+  onTimeFormatModeChange: vi.fn(),
+  menubarIconStyle: "provider" as const,
+  onMenubarIconStyleChange: vi.fn(),
   globalShortcut: null,
   onGlobalShortcutChange: vi.fn(),
   startOnLogin: false,
@@ -171,6 +175,16 @@ describe("SettingsPage", () => {
 expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
     expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
+  })
+
+  it("changes the tray icon style from the general settings", async () => {
+    const user = userEvent.setup()
+    const onMenubarIconStyleChange = vi.fn()
+    render(<TestHarness onMenubarIconStyleChange={onMenubarIconStyleChange} />)
+
+    await user.click(screen.getByRole("radio", { name: "Bars" }))
+
+    expect(onMenubarIconStyleChange).toHaveBeenCalledWith("bars")
   })
 
   it("opens the issue tracker from the General tab", async () => {

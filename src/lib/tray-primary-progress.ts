@@ -1,5 +1,5 @@
 import type { PluginMeta, PluginOutput } from "@/lib/plugin-types"
-import type { PluginSettings } from "@/lib/settings"
+import type { PluginSettings, SurfacePin } from "@/lib/settings"
 import { DEFAULT_DISPLAY_MODE, type DisplayMode } from "@/lib/settings"
 import { clamp01 } from "@/lib/utils"
 
@@ -85,5 +85,37 @@ export function getTrayPrimaryBars(args: {
   }
 
   return out
+}
+
+export function getTrayPinnedBars(args: {
+  pins: readonly SurfacePin[]
+  pluginSettings: PluginSettings | null
+  pluginStates: Record<string, PluginState | undefined>
+  displayMode?: DisplayMode
+}): TrayPrimaryBar[] {
+  const {
+    pins,
+    pluginSettings,
+    pluginStates,
+    displayMode = DEFAULT_DISPLAY_MODE,
+  } = args
+  if (!pluginSettings) return []
+  const disabled = new Set(pluginSettings.disabled)
+
+  return pins
+    .filter((pin) => !disabled.has(pin.providerId))
+    .map((pin) => {
+      const line = pluginStates[pin.providerId]?.data?.lines.find(
+        (candidate): candidate is ProgressLine =>
+          isProgressLine(candidate) && candidate.label === pin.metricLabel
+      )
+      const fraction =
+        line && line.limit > 0
+          ? clamp01(
+              (displayMode === "used" ? line.used : line.limit - line.used) / line.limit
+            )
+          : undefined
+      return { id: `${pin.providerId}:${pin.metricLabel}`, fraction }
+    })
 }
 

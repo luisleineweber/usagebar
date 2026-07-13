@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { getTrayPrimaryBars } from "@/lib/tray-primary-progress"
+import { getTrayPinnedBars, getTrayPrimaryBars } from "@/lib/tray-primary-progress"
 
 describe("getTrayPrimaryBars", () => {
   it("returns empty when settings missing", () => {
@@ -301,6 +301,39 @@ describe("getTrayPrimaryBars", () => {
       pluginStates: {},
     })
     expect(bars).toEqual([])
+  })
+})
+
+describe("getTrayPinnedBars", () => {
+  it("selects exact pinned metrics in saved order", () => {
+    const bars = getTrayPinnedBars({
+      pins: [
+        { providerId: "a", metricLabel: "Weekly", presentation: "bar" },
+        { providerId: "a", metricLabel: "Session", presentation: "text" },
+      ],
+      pluginSettings: { order: ["a"], disabled: [] },
+      pluginStates: {
+        a: {
+          loading: false,
+          error: null,
+          data: {
+            providerId: "a",
+            displayName: "Alpha",
+            iconUrl: "",
+            lines: [
+              { type: "progress", label: "Session", used: 20, limit: 100, format: { kind: "percent" } },
+              { type: "progress", label: "Weekly", used: 75, limit: 100, format: { kind: "percent" } },
+            ],
+          },
+        },
+      },
+      displayMode: "used",
+    })
+
+    expect(bars).toEqual([
+      { id: "a:Weekly", fraction: 0.75 },
+      { id: "a:Session", fraction: 0.2 },
+    ])
   })
 })
 
