@@ -3,6 +3,7 @@ import { GeneralSettingsPane } from "@/components/settings/general-settings-pane
 import { ProvidersSettingsPane } from "@/components/settings/providers-settings-pane"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
+import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import type { ProviderConfig } from "@/lib/provider-settings"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import type {
@@ -38,6 +39,7 @@ interface SettingsPageProps {
   onMenubarIconStyleChange: (value: MenubarIconStyle) => void
   surfacePins: SurfacePin[]
   onSurfacePinsChange: (value: SurfacePin[]) => void
+  traySettingsPreview: TraySettingsPreview
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
@@ -70,6 +72,7 @@ export function SettingsPage({
   onMenubarIconStyleChange,
   surfacePins,
   onSurfacePinsChange,
+  traySettingsPreview,
   globalShortcut,
   onGlobalShortcutChange,
   startOnLogin,
@@ -135,6 +138,7 @@ export function SettingsPage({
           onMenubarIconStyleChange={onMenubarIconStyleChange}
           surfacePins={surfacePins}
           onSurfacePinsChange={onSurfacePinsChange}
+          traySettingsPreview={traySettingsPreview}
           plugins={providers.map((provider) => provider.meta)}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={onGlobalShortcutChange}

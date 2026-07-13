@@ -3,13 +3,14 @@ import { openUrl } from "@tauri-apps/plugin-opener"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GlobalShortcutSection } from "@/components/global-shortcut-section"
+import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
+import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 import type { PluginMeta } from "@/lib/plugin-types"
 import {
   AUTO_UPDATE_OPTIONS,
   DISPLAY_MODE_OPTIONS,
   MENUBAR_ICON_STYLE_OPTIONS,
-  MAX_SURFACE_PINS,
   RESET_TIMER_DISPLAY_OPTIONS,
   THEME_OPTIONS,
   TIME_FORMAT_OPTIONS,
@@ -45,6 +46,7 @@ type GeneralSettingsPaneProps = {
   onMenubarIconStyleChange: (value: MenubarIconStyle) => void
   surfacePins: SurfacePin[]
   onSurfacePinsChange: (value: SurfacePin[]) => void
+  traySettingsPreview: TraySettingsPreview
   plugins: PluginMeta[]
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
@@ -67,42 +69,13 @@ export function GeneralSettingsPane({
   onMenubarIconStyleChange,
   surfacePins,
   onSurfacePinsChange,
+  traySettingsPreview,
   plugins,
   globalShortcut,
   onGlobalShortcutChange,
   startOnLogin,
   onStartOnLoginChange,
 }: GeneralSettingsPaneProps) {
-  const pinCandidates = plugins.flatMap((plugin) =>
-    plugin.lines
-      .filter((line) => line.type === "progress")
-      .map((line) => ({ providerId: plugin.id, providerName: plugin.name, metricLabel: line.label }))
-  )
-
-  const updatePin = (index: number, candidateIndex: number) => {
-    if (candidateIndex < 0) {
-      onSurfacePinsChange(surfacePins.filter((_, pinIndex) => pinIndex !== index))
-      return
-    }
-    const candidate = pinCandidates[candidateIndex]
-    if (!candidate) return
-    const next = [...surfacePins]
-    next[index] = {
-      providerId: candidate.providerId,
-      metricLabel: candidate.metricLabel,
-      presentation: next[index]?.presentation ?? "bar",
-    }
-    onSurfacePinsChange(next.slice(0, MAX_SURFACE_PINS))
-  }
-
-  const updatePinPresentation = (index: number, presentation: SurfacePin["presentation"]) => {
-    const pin = surfacePins[index]
-    if (!pin) return
-    const next = [...surfacePins]
-    next[index] = { ...pin, presentation }
-    onSurfacePinsChange(next)
-  }
-
   return (
     <div className="grid gap-x-10 gap-y-6 py-1 xl:grid-cols-2 xl:items-start">
       <section className={SETTINGS_SECTION_CLASS}>
@@ -246,6 +219,13 @@ export function GeneralSettingsPane({
             )
           })}
         </div>
+        <SurfacePinSettings
+          plugins={plugins}
+          pins={surfacePins}
+          onPinsChange={onSurfacePinsChange}
+          menubarIconStyle={menubarIconStyle}
+          preview={traySettingsPreview}
+        />
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>

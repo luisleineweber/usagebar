@@ -30,6 +30,8 @@ const state = vi.hoisted(() => ({
   saveResetTimerDisplayModeMock: vi.fn(),
   loadMenubarIconStyleMock: vi.fn(),
   saveMenubarIconStyleMock: vi.fn(),
+  loadSurfacePinsMock: vi.fn(),
+  saveSurfacePinsMock: vi.fn(),
   migrateLegacyTraySettingsMock: vi.fn(),
   loadGlobalShortcutMock: vi.fn(),
   saveGlobalShortcutMock: vi.fn(),
@@ -288,6 +290,8 @@ vi.mock("@/lib/settings", async () => {
     saveResetTimerDisplayMode: state.saveResetTimerDisplayModeMock,
     loadMenubarIconStyle: state.loadMenubarIconStyleMock,
     saveMenubarIconStyle: state.saveMenubarIconStyleMock,
+    loadSurfacePins: state.loadSurfacePinsMock,
+    saveSurfacePins: state.saveSurfacePinsMock,
     migrateLegacyTraySettings: state.migrateLegacyTraySettingsMock,
     loadGlobalShortcut: state.loadGlobalShortcutMock,
     saveGlobalShortcut: state.saveGlobalShortcutMock,
@@ -344,6 +348,8 @@ describe("App", () => {
     state.saveResetTimerDisplayModeMock.mockReset();
     state.loadMenubarIconStyleMock.mockReset();
     state.saveMenubarIconStyleMock.mockReset();
+    state.loadSurfacePinsMock.mockReset();
+    state.saveSurfacePinsMock.mockReset();
     state.migrateLegacyTraySettingsMock.mockReset();
     state.loadGlobalShortcutMock.mockReset();
     state.saveGlobalShortcutMock.mockReset();
@@ -394,6 +400,8 @@ describe("App", () => {
     state.saveResetTimerDisplayModeMock.mockResolvedValue(undefined);
     state.loadMenubarIconStyleMock.mockResolvedValue("provider");
     state.saveMenubarIconStyleMock.mockResolvedValue(undefined);
+    state.loadSurfacePinsMock.mockResolvedValue([]);
+    state.saveSurfacePinsMock.mockResolvedValue(undefined);
     state.migrateLegacyTraySettingsMock.mockResolvedValue(undefined);
     state.loadGlobalShortcutMock.mockResolvedValue(null);
     state.saveGlobalShortcutMock.mockResolvedValue(undefined);
@@ -1922,6 +1930,12 @@ describe("App", () => {
       eventState.handlers.get("display-preferences:updated")?.({
         payload: { key: "menubarIconStyle", value: "donut" },
       });
+      eventState.handlers.get("display-preferences:updated")?.({
+        payload: {
+          key: "surfacePins",
+          value: [{ providerId: "a", metricLabel: "Session", presentation: "bar" }],
+        },
+      });
     });
 
     await waitFor(() =>
@@ -1934,6 +1948,9 @@ describe("App", () => {
       "absolute",
     );
     expect(useAppPreferencesStore.getState().menubarIconStyle).toBe("donut");
+    expect(useAppPreferencesStore.getState().surfacePins).toEqual([
+      { providerId: "a", metricLabel: "Session", presentation: "bar" },
+    ]);
     await waitFor(() =>
       expect(state.renderTrayBarsIconMock).toHaveBeenLastCalledWith(
         expect.objectContaining({ style: "donut" }),

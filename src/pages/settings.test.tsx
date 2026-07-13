@@ -111,6 +111,13 @@ const defaultProps = {
   onTimeFormatModeChange: vi.fn(),
   menubarIconStyle: "provider" as const,
   onMenubarIconStyleChange: vi.fn(),
+  surfacePins: [],
+  onSurfacePinsChange: vi.fn(),
+  traySettingsPreview: {
+    bars: [],
+    providerBars: [],
+    providerPercentText: "--%",
+  },
   globalShortcut: null,
   onGlobalShortcutChange: vi.fn(),
   startOnLogin: false,
