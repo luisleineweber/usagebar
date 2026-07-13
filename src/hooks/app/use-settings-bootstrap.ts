@@ -14,6 +14,7 @@ import {
   DEFAULT_MENUBAR_ICON_STYLE,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_START_ON_LOGIN,
+  DEFAULT_SURFACE_PINS,
   DEFAULT_THEME_MODE,
   DEFAULT_TIME_FORMAT_MODE,
   getProbeEligiblePluginIds,
@@ -25,6 +26,7 @@ import {
   loadPluginSettings,
   loadResetTimerDisplayMode,
   loadStartOnLogin,
+  loadSurfacePins,
   loadThemeMode,
   loadTimeFormatMode,
   normalizePluginSettings,
@@ -37,6 +39,7 @@ import {
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
+  type SurfacePin,
 } from "@/lib/settings"
 
 type UseSettingsBootstrapArgs = {
@@ -50,6 +53,7 @@ type UseSettingsBootstrapArgs = {
   setGlobalShortcut: (value: GlobalShortcut) => void
   setStartOnLogin: (value: boolean) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setSurfacePins: (value: SurfacePin[]) => void
   setLoadingForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
   startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
@@ -66,6 +70,7 @@ export function useSettingsBootstrap({
   setGlobalShortcut,
   setStartOnLogin,
   setMenubarIconStyle,
+  setSurfacePins,
   setLoadingForPlugins,
   setErrorForPlugins,
   startBatch,
@@ -171,6 +176,13 @@ export function useSettingsBootstrap({
           console.error("Failed to load menubar icon style:", error)
         }
 
+        let storedSurfacePins = DEFAULT_SURFACE_PINS
+        try {
+          storedSurfacePins = await loadSurfacePins(surfacedPlugins)
+        } catch (error) {
+          console.error("Failed to load surface pins:", error)
+        }
+
         if (isMounted) {
           setAutoUpdateInterval(storedInterval)
           setThemeMode(storedThemeMode)
@@ -180,6 +192,7 @@ export function useSettingsBootstrap({
           setGlobalShortcut(storedGlobalShortcut)
           setStartOnLogin(storedStartOnLogin)
           setMenubarIconStyle(storedMenubarIconStyle)
+          setSurfacePins(storedSurfacePins)
 
           try {
             await startBatch(enabledIds)
@@ -208,6 +221,7 @@ export function useSettingsBootstrap({
     setGlobalShortcut,
     setLoadingForPlugins,
     setMenubarIconStyle,
+    setSurfacePins,
     migrateLegacyTraySettings,
     setPluginSettings,
     setPluginsMeta,

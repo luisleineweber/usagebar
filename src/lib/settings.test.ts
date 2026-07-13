@@ -18,10 +18,12 @@ import {
   loadPluginSettings,
   loadResetTimerDisplayMode,
   loadStartOnLogin,
+  loadSurfacePins,
   migrateLegacyTraySettings,
   loadThemeMode,
   loadTimeFormatMode,
   normalizePluginSettings,
+  normalizeSurfacePins,
   saveAutoUpdateInterval,
   saveDisplayMode,
   saveGlobalShortcut,
@@ -29,6 +31,7 @@ import {
   savePluginSettings,
   saveResetTimerDisplayMode,
   saveStartOnLogin,
+  saveSurfacePins,
   saveThemeMode,
   saveTimeFormatMode,
 } from "@/lib/settings"
@@ -80,6 +83,73 @@ describe("settings", () => {
     const settings = { order: ["a"], disabled: ["b"] }
     await savePluginSettings(settings)
     await expect(loadPluginSettings()).resolves.toEqual(settings)
+  })
+
+  it("normalizes surface pins against provider progress metrics and caps them at two", () => {
+    const plugins: PluginMeta[] = [
+      {
+        id: "codex",
+        name: "Codex",
+        iconUrl: "codex.svg",
+        lines: [
+          { type: "progress", label: "Session", scope: "overview" },
+          { type: "text", label: "Plan", scope: "detail" },
+        ],
+        primaryCandidates: ["Session"],
+      },
+      {
+        id: "claude",
+        name: "Claude",
+        iconUrl: "claude.svg",
+        lines: [{ type: "progress", label: "Weekly", scope: "overview" }],
+        primaryCandidates: ["Weekly"],
+      },
+    ]
+
+    expect(
+      normalizeSurfacePins(
+        [
+          { providerId: "codex", metricLabel: "Session", presentation: "text" },
+          { providerId: "codex", metricLabel: "Session", presentation: "bar" },
+          { providerId: "codex", metricLabel: "Plan", presentation: "bar" },
+          { providerId: "claude", metricLabel: "Weekly", presentation: "bar" },
+          { providerId: "missing", metricLabel: "Usage", presentation: "bar" },
+        ],
+        plugins
+      )
+    ).toEqual([
+      { providerId: "codex", metricLabel: "Session", presentation: "text" },
+      { providerId: "claude", metricLabel: "Weekly", presentation: "bar" },
+    ])
+  })
+
+  it("loads and saves normalized surface pins", async () => {
+    const plugins: PluginMeta[] = [
+      {
+        id: "codex",
+        name: "Codex",
+        iconUrl: "codex.svg",
+        lines: [{ type: "progress", label: "Session", scope: "overview" }],
+        primaryCandidates: ["Session"],
+      },
+    ]
+    storeState.set("surfacePins", [
+      { providerId: "codex", metricLabel: "Session", presentation: "text" },
+      { providerId: "codex", metricLabel: "Unknown", presentation: "bar" },
+    ])
+
+    await expect(loadSurfacePins(plugins)).resolves.toEqual([
+      { providerId: "codex", metricLabel: "Session", presentation: "text" },
+    ])
+    await saveSurfacePins([
+      { providerId: "codex", metricLabel: "Session", presentation: "bar" },
+      { providerId: "claude", metricLabel: "Weekly", presentation: "bar" },
+      { providerId: "cursor", metricLabel: "Requests", presentation: "bar" },
+    ])
+    expect(storeState.get("surfacePins")).toEqual([
+      { providerId: "codex", metricLabel: "Session", presentation: "bar" },
+      { providerId: "claude", metricLabel: "Weekly", presentation: "bar" },
+    ])
   })
 
   it("normalizes order + disabled against known plugins", () => {

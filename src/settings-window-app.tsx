@@ -70,6 +70,8 @@ export function SettingsWindowApp() {
     setDisplayMode,
     menubarIconStyle,
     setMenubarIconStyle,
+    surfacePins,
+    setSurfacePins,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
     timeFormatMode,
@@ -88,6 +90,8 @@ export function SettingsWindowApp() {
       setDisplayMode: state.setDisplayMode,
       menubarIconStyle: state.menubarIconStyle,
       setMenubarIconStyle: state.setMenubarIconStyle,
+      surfacePins: state.surfacePins,
+      setSurfacePins: state.setSurfacePins,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       setResetTimerDisplayMode: state.setResetTimerDisplayMode,
       timeFormatMode: state.timeFormatMode,
@@ -117,6 +121,7 @@ export function SettingsWindowApp() {
     pluginStates,
     displayMode,
     menubarIconStyle,
+    surfacePins,
     activeView: "home",
   })
 
@@ -127,6 +132,7 @@ export function SettingsWindowApp() {
     setThemeMode,
     setDisplayMode,
     setMenubarIconStyle,
+    setSurfacePins,
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setGlobalShortcut,
@@ -143,6 +149,8 @@ export function SettingsWindowApp() {
     handleDisplayModeChange,
     handleResetTimerDisplayModeChange,
     handleTimeFormatModeChange,
+    handleMenubarIconStyleChange,
+    handleSurfacePinsChange,
   } = useSettingsDisplayActions({
     setThemeMode,
     setDisplayMode,
@@ -150,6 +158,7 @@ export function SettingsWindowApp() {
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setMenubarIconStyle,
+    setSurfacePins,
     scheduleTrayIconUpdate,
   })
 
@@ -381,6 +390,10 @@ export function SettingsWindowApp() {
           onResetTimerDisplayModeChange={handleResetTimerDisplayModeChange}
           timeFormatMode={timeFormatMode}
           onTimeFormatModeChange={handleTimeFormatModeChange}
+          menubarIconStyle={menubarIconStyle}
+          onMenubarIconStyleChange={handleMenubarIconStyleChange}
+          surfacePins={surfacePins}
+          onSurfacePinsChange={handleSurfacePinsChange}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={handleGlobalShortcutChange}
           startOnLogin={startOnLogin}

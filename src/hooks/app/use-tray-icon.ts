@@ -2,9 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { resolveResource } from "@tauri-apps/api/path"
 import { TrayIcon } from "@tauri-apps/api/tray"
 import type { PluginMeta } from "@/lib/plugin-types"
-import type { DisplayMode, MenubarIconStyle, PluginSettings } from "@/lib/settings"
+import type { DisplayMode, MenubarIconStyle, PluginSettings, SurfacePin } from "@/lib/settings"
 import { getProbeEligiblePluginIds } from "@/lib/settings"
-import { getTrayPrimaryBars, type TrayPrimaryBar } from "@/lib/tray-primary-progress"
+import {
+  getTrayPinnedBars,
+  getTrayPrimaryBars,
+  type TrayPrimaryBar,
+} from "@/lib/tray-primary-progress"
+import {
+  getTrayIconSizePx,
+  renderTrayBarsIcon,
+  TRAY_BRAND_FOREGROUND,
+  TRAY_TEMPLATE_FOREGROUND,
+} from "@/lib/tray-bars-icon"
 import { formatTrayPercentText, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { PluginState } from "@/hooks/app/types"
 import type { ProviderStatus } from "@/lib/provider-status"
@@ -17,6 +27,7 @@ type UseTrayIconArgs = {
   pluginStates: Record<string, PluginState>
   displayMode: DisplayMode
   menubarIconStyle: MenubarIconStyle
+  surfacePins?: SurfacePin[]
   activeView: string
   providerStatuses?: Record<string, ProviderStatus>
 }
@@ -61,9 +72,10 @@ export function useTrayIcon({
   pluginSettings,
   pluginStates,
   displayMode,
-  menubarIconStyle: _menubarIconStyle,
+  menubarIconStyle,
+  surfacePins = [],
   activeView,
-  providerStatuses: _providerStatuses = {},
+  providerStatuses = {},
 }: UseTrayIconArgs) {
   const trayRef = useRef<TrayIcon | null>(null)
   const trayGaugeIconPathRef = useRef<string | null>(null)
@@ -79,6 +91,9 @@ export function useTrayIcon({
   const pluginSettingsRef = useRef(pluginSettings)
   const pluginStatesRef = useRef(pluginStates)
   const displayModeRef = useRef(displayMode)
+  const menubarIconStyleRef = useRef(menubarIconStyle)
+  const providerStatusesRef = useRef(providerStatuses)
+  const surfacePinsRef = useRef(surfacePins)
   const activeViewRef = useRef(activeView)
   const lastTrayProviderIdRef = useRef<string | null>(null)
   const useTemplateIconRef = useRef(shouldUseTemplateTrayIcon())
@@ -98,6 +113,18 @@ export function useTrayIcon({
   useEffect(() => {
     displayModeRef.current = displayMode
   }, [displayMode])
+
+  useEffect(() => {
+    menubarIconStyleRef.current = menubarIconStyle
+  }, [menubarIconStyle])
+
+  useEffect(() => {
+    providerStatusesRef.current = providerStatuses
+  }, [providerStatuses])
+
+  useEffect(() => {
+    surfacePinsRef.current = surfacePins
+  }, [surfacePins])
 
   useEffect(() => {
     activeViewRef.current = activeView
@@ -202,13 +229,22 @@ export function useTrayIcon({
         trayProviderId = enabledPluginIds[0] ?? null
       }
 
-      const barsForPreview = getTrayPrimaryBars({
-        pluginsMeta: pluginsMetaRef.current,
+      const pinnedBars = getTrayPinnedBars({
+        pins: surfacePinsRef.current,
         pluginSettings: currentSettings,
         pluginStates: pluginStatesRef.current,
-        maxBars: 4,
         displayMode: displayModeRef.current,
       })
+      const barsForPreview =
+        pinnedBars.length > 0
+          ? pinnedBars
+          : getTrayPrimaryBars({
+              pluginsMeta: pluginsMetaRef.current,
+              pluginSettings: currentSettings,
+              pluginStates: pluginStatesRef.current,
+              maxBars: 4,
+              displayMode: displayModeRef.current,
+            })
 
       const providerBars = trayProviderId
         ? getTrayPrimaryBars({
@@ -243,7 +279,40 @@ export function useTrayIcon({
       }
       lastTrayProviderIdRef.current = trayProviderId
 
-      setStableTrayIcon(tooltipText, supportsNativeTrayTitle ? providerPercentText : "")
+      const style = menubarIconStyleRef.current
+      const renderBars = style === "provider" || style === "donut" ? providerBars : barsForPreview
+      const statusIndicator = providerStatusesRef.current[trayProviderId]?.indicator
+      void renderTrayBarsIcon({
+        bars: renderBars,
+        sizePx: getTrayIconSizePx(window.devicePixelRatio),
+        style,
+        percentText: style === "provider" ? providerPercentText : undefined,
+        providerIconUrl,
+        statusIndicator,
+        foregroundColor: useTemplateIconRef.current
+          ? TRAY_TEMPLATE_FOREGROUND
+          : TRAY_BRAND_FOREGROUND,
+      })
+        .then((image) =>
+          Promise.all([
+            tray.setIcon(image),
+            tray.setIconAsTemplate(useTemplateIconRef.current),
+            setTrayTitle(supportsNativeTrayTitle ? providerPercentText : ""),
+            setTrayTooltip(tooltipText),
+          ])
+        )
+        .catch((error) => {
+          console.error("Failed to render tray icon:", error)
+          const fallbackPath = trayGaugeIconPathRef.current
+          if (!fallbackPath) return undefined
+          return Promise.all([
+            tray.setIcon(fallbackPath),
+            tray.setIconAsTemplate(useTemplateIconRef.current),
+            setTrayTitle(supportsNativeTrayTitle ? providerPercentText : ""),
+            setTrayTooltip(tooltipText),
+          ])
+        })
+        .finally(finalizeUpdate)
     }, delayMs)
   }, [])
 
@@ -289,7 +358,7 @@ export function useTrayIcon({
   useEffect(() => {
     if (!trayReady) return
     scheduleTrayIconUpdate("settings", 0)
-  }, [activeView, _providerStatuses, scheduleTrayIconUpdate, trayReady])
+  }, [activeView, menubarIconStyle, providerStatuses, scheduleTrayIconUpdate, surfacePins, trayReady])
 
   useEffect(() => {
     return () => {

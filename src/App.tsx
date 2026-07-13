@@ -77,6 +77,8 @@ function App() {
     setDisplayMode,
     menubarIconStyle,
     setMenubarIconStyle,
+    surfacePins,
+    setSurfacePins,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
     setTimeFormatMode,
@@ -92,6 +94,8 @@ function App() {
       setDisplayMode: state.setDisplayMode,
       menubarIconStyle: state.menubarIconStyle,
       setMenubarIconStyle: state.setMenubarIconStyle,
+      surfacePins: state.surfacePins,
+      setSurfacePins: state.setSurfacePins,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       setResetTimerDisplayMode: state.setResetTimerDisplayMode,
       setTimeFormatMode: state.setTimeFormatMode,
@@ -131,6 +135,7 @@ function App() {
     pluginStates,
     displayMode,
     menubarIconStyle,
+    surfacePins,
     activeView,
     providerStatuses,
   })
@@ -186,6 +191,11 @@ function App() {
         setTimeFormatMode(update.value)
         return
       }
+      if (update.key === "surfacePins") {
+        setSurfacePins(update.value)
+        scheduleTrayIconUpdate("settings", 0)
+        return
+      }
       setMenubarIconStyle(update.value)
       scheduleTrayIconUpdate("settings", 0)
     }).then((dispose) => {
@@ -202,7 +212,7 @@ function App() {
       disposed = true
       unlisten?.()
     }
-  }, [scheduleTrayIconUpdate, setDisplayMode, setMenubarIconStyle, setResetTimerDisplayMode, setTimeFormatMode, setThemeMode])
+  }, [scheduleTrayIconUpdate, setDisplayMode, setMenubarIconStyle, setResetTimerDisplayMode, setSurfacePins, setTimeFormatMode, setThemeMode])
 
   const { applyStartOnLogin } = useSettingsBootstrap({
     setPluginSettings,
@@ -211,6 +221,7 @@ function App() {
     setThemeMode,
     setDisplayMode,
     setMenubarIconStyle,
+    setSurfacePins,
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setGlobalShortcut,
@@ -235,6 +246,7 @@ function App() {
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setMenubarIconStyle,
+    setSurfacePins,
     scheduleTrayIconUpdate,
   })
 
@@ -385,6 +397,7 @@ function App() {
     scheduleTrayIconUpdate,
     setDisplayMode,
     setMenubarIconStyle,
+    setSurfacePins,
     setResetTimerDisplayMode,
     setThemeMode,
   ])

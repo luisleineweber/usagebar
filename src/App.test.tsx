@@ -737,7 +737,7 @@ describe("App", () => {
     await screen.findByText("Now");
   });
 
-  it("keeps stable tray icon on probe results while updating tooltip/title", async () => {
+  it("renders provider tray icon on probe results while updating tooltip/title", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
@@ -775,14 +775,22 @@ describe("App", () => {
       ],
     });
 
-    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalled());
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.renderTrayBarsIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          bars: [{ id: "a", fraction: 0.5 }],
+          percentText: "50%",
+          providerIconUrl: "icon-a",
+          style: "provider",
+        }),
+      ),
+    );
     await waitFor(() =>
       expect(state.traySetTitleMock).toHaveBeenCalledWith("50%"),
     );
   });
 
-  it("keeps stable tray icon on launch before probe data", async () => {
+  it("renders an empty provider tray icon on launch before probe data", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
@@ -812,13 +820,21 @@ describe("App", () => {
     render(<App />);
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.renderTrayBarsIconMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bars: [{ id: "a", fraction: undefined }],
+          percentText: "--%",
+          style: "provider",
+        }),
+      ),
+    );
     await waitFor(() =>
       expect(state.traySetTitleMock).toHaveBeenCalledWith("--%"),
     );
   });
 
-  it("ignores persisted menubar icon style for native tray icon art", async () => {
+  it("applies persisted menubar icon style to native tray icon art", async () => {
     state.loadMenubarIconStyleMock.mockResolvedValue("bars");
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
@@ -848,10 +864,9 @@ describe("App", () => {
 
     render(<App />);
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(state.traySetIconMock).toHaveBeenCalledWith(
-        "/resource/icons/icon.png",
+      expect(state.renderTrayBarsIconMock).toHaveBeenCalledWith(
+        expect.objectContaining({ style: "bars" }),
       ),
     );
   });
@@ -866,11 +881,11 @@ describe("App", () => {
     render(<App />);
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled());
 
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled());
     expect(state.traySetTitleMock).not.toHaveBeenCalled();
   });
 
-  it("keeps stable tray icon when selected provider changes", async () => {
+  it("renders the selected provider in the tray icon", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
@@ -931,13 +946,17 @@ describe("App", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Beta" }));
 
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.renderTrayBarsIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ providerIconUrl: "icon-b", percentText: "70%" }),
+      ),
+    );
     await waitFor(() =>
       expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"),
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Home" }));
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    expect(state.renderTrayBarsIconMock).toHaveBeenCalled();
     await waitFor(() =>
       expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"),
     );
@@ -946,7 +965,7 @@ describe("App", () => {
       name: "Settings",
     });
     await userEvent.click(settingsButtons[0]);
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    expect(state.renderTrayBarsIconMock).toHaveBeenCalled();
     await waitFor(() =>
       expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"),
     );
@@ -977,15 +996,11 @@ describe("App", () => {
     expect(state.saveDisplayModeMock).toHaveBeenCalledWith("used");
   });
 
-  it("does not render menubar icon style controls in settings", async () => {
+  it("renders menubar icon style controls in settings", async () => {
     renderSettingsWindow();
-    expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("radio", { name: "Bars" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("radio", { name: "Donut" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Tray Icon")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Bars" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument();
   });
 
   it("logs when saving display mode fails", async () => {
@@ -1919,7 +1934,11 @@ describe("App", () => {
       "absolute",
     );
     expect(useAppPreferencesStore.getState().menubarIconStyle).toBe("donut");
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(state.renderTrayBarsIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ style: "donut" }),
+      ),
+    );
   });
 
   it("applies provider settings updates from the settings window to the tray", async () => {
@@ -2635,13 +2654,9 @@ describe("App", () => {
 
     resolveResourcePath?.("/resource/icons/icon.png");
 
-    await waitFor(() =>
-      expect(state.traySetIconMock).toHaveBeenCalledWith(
-        "/resource/icons/icon.png",
-      ),
-    );
+    await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalledWith({}));
     expect(state.traySetIconAsTemplateMock).toHaveBeenCalledWith(false);
-    expect(state.renderTrayBarsIconMock).not.toHaveBeenCalled();
+    expect(state.renderTrayBarsIconMock).toHaveBeenCalled();
     expect(state.traySetTitleMock).toHaveBeenCalledWith("--%");
   });
 

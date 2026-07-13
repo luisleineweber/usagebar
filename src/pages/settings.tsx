@@ -9,9 +9,11 @@ import type {
   AutoUpdateIntervalMinutes,
   DisplayMode,
   GlobalShortcut,
+  MenubarIconStyle,
   ResetTimerDisplayMode,
   ThemeMode,
   TimeFormatMode,
+  SurfacePin,
 } from "@/lib/settings"
 
 interface SettingsPageProps {
@@ -32,6 +34,10 @@ interface SettingsPageProps {
   onResetTimerDisplayModeChange: (value: ResetTimerDisplayMode) => void
   timeFormatMode: TimeFormatMode
   onTimeFormatModeChange: (value: TimeFormatMode) => void
+  menubarIconStyle: MenubarIconStyle
+  onMenubarIconStyleChange: (value: MenubarIconStyle) => void
+  surfacePins: SurfacePin[]
+  onSurfacePinsChange: (value: SurfacePin[]) => void
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
@@ -60,6 +66,10 @@ export function SettingsPage({
   onResetTimerDisplayModeChange,
   timeFormatMode,
   onTimeFormatModeChange,
+  menubarIconStyle,
+  onMenubarIconStyleChange,
+  surfacePins,
+  onSurfacePinsChange,
   globalShortcut,
   onGlobalShortcutChange,
   startOnLogin,
@@ -121,6 +131,11 @@ export function SettingsPage({
           onResetTimerDisplayModeChange={onResetTimerDisplayModeChange}
           timeFormatMode={timeFormatMode}
           onTimeFormatModeChange={onTimeFormatModeChange}
+          menubarIconStyle={menubarIconStyle}
+          onMenubarIconStyleChange={onMenubarIconStyleChange}
+          surfacePins={surfacePins}
+          onSurfacePinsChange={onSurfacePinsChange}
+          plugins={providers.map((provider) => provider.meta)}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={onGlobalShortcutChange}
           startOnLogin={startOnLogin}

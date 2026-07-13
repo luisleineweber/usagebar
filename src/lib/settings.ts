@@ -22,6 +22,12 @@ export type TimeFormatMode = "auto" | "12h" | "24h"
 
 export type MenubarIconStyle = "provider" | "merged" | "bars" | "donut"
 
+export type SurfacePin = {
+  providerId: string
+  metricLabel: string
+  presentation: "text" | "bar"
+}
+
 export type GlobalShortcut = string | null
 
 const SETTINGS_STORE_PATH = "settings.json"
@@ -32,6 +38,7 @@ const DISPLAY_MODE_KEY = "displayMode"
 const RESET_TIMER_DISPLAY_MODE_KEY = "resetTimerDisplayMode"
 const TIME_FORMAT_MODE_KEY = "timeFormatMode"
 const MENUBAR_ICON_STYLE_KEY = "menubarIconStyle"
+const SURFACE_PINS_KEY = "surfacePins"
 const LEGACY_TRAY_ICON_STYLE_KEY = "trayIconStyle"
 const LEGACY_TRAY_SHOW_PERCENTAGE_KEY = "trayShowPercentage"
 const GLOBAL_SHORTCUT_KEY = "globalShortcut"
@@ -43,6 +50,8 @@ export const DEFAULT_DISPLAY_MODE: DisplayMode = "left"
 export const DEFAULT_RESET_TIMER_DISPLAY_MODE: ResetTimerDisplayMode = "relative"
 export const DEFAULT_TIME_FORMAT_MODE: TimeFormatMode = "auto"
 export const DEFAULT_MENUBAR_ICON_STYLE: MenubarIconStyle = "provider"
+export const DEFAULT_SURFACE_PINS: SurfacePin[] = []
+export const MAX_SURFACE_PINS = 2
 export const DEFAULT_GLOBAL_SHORTCUT: GlobalShortcut = null
 export const DEFAULT_START_ON_LOGIN = false
 
@@ -271,6 +280,49 @@ export async function loadMenubarIconStyle(): Promise<MenubarIconStyle> {
 
 export async function saveMenubarIconStyle(style: MenubarIconStyle): Promise<void> {
   await store.set(MENUBAR_ICON_STYLE_KEY, style)
+  await store.save()
+}
+
+export function normalizeSurfacePins(value: unknown, plugins: PluginMeta[]): SurfacePin[] {
+  if (!Array.isArray(value)) return []
+  const progressLabelsByProvider = new Map(
+    plugins.map((plugin) => [
+      plugin.id,
+      new Set(
+        plugin.lines
+          .filter((line) => line.type === "progress")
+          .map((line) => line.label)
+      ),
+    ])
+  )
+  const pins: SurfacePin[] = []
+  const seen = new Set<string>()
+
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== "object") continue
+    const raw = candidate as Record<string, unknown>
+    const providerId = typeof raw.providerId === "string" ? raw.providerId.trim() : ""
+    const metricLabel = typeof raw.metricLabel === "string" ? raw.metricLabel.trim() : ""
+    const presentation = raw.presentation === "text" ? "text" : raw.presentation === "bar" ? "bar" : null
+    const metricLabels = progressLabelsByProvider.get(providerId)
+    const key = `${providerId}\u0000${metricLabel}`
+    if (!providerId || !metricLabel || !presentation || !metricLabels?.has(metricLabel) || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    pins.push({ providerId, metricLabel, presentation })
+    if (pins.length >= MAX_SURFACE_PINS) break
+  }
+
+  return pins
+}
+
+export async function loadSurfacePins(plugins: PluginMeta[]): Promise<SurfacePin[]> {
+  return normalizeSurfacePins(await store.get<unknown>(SURFACE_PINS_KEY), plugins)
+}
+
+export async function saveSurfacePins(pins: readonly SurfacePin[]): Promise<void> {
+  await store.set(SURFACE_PINS_KEY, pins.slice(0, MAX_SURFACE_PINS))
   await store.save()
 }
 

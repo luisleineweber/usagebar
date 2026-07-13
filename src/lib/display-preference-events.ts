@@ -7,6 +7,7 @@ import type {
   ResetTimerDisplayMode,
   ThemeMode,
   TimeFormatMode,
+  SurfacePin,
 } from "@/lib/settings"
 
 const DISPLAY_PREFERENCES_UPDATED_EVENT = "display-preferences:updated"
@@ -17,6 +18,7 @@ export type DisplayPreferenceUpdate =
   | { key: "resetTimerDisplayMode"; value: ResetTimerDisplayMode }
   | { key: "timeFormatMode"; value: TimeFormatMode }
   | { key: "menubarIconStyle"; value: MenubarIconStyle }
+  | { key: "surfacePins"; value: SurfacePin[] }
 
 export async function notifyDisplayPreferenceUpdated(update: DisplayPreferenceUpdate): Promise<void> {
   if (!isTauri()) return

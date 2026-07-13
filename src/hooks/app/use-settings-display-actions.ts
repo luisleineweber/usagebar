@@ -5,11 +5,13 @@ import {
   saveResetTimerDisplayMode,
   saveThemeMode,
   saveTimeFormatMode,
+  saveSurfacePins,
   type DisplayMode,
   type MenubarIconStyle,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
+  type SurfacePin,
 } from "@/lib/settings"
 import { notifyDisplayPreferenceUpdated } from "@/lib/display-preference-events"
 
@@ -22,6 +24,7 @@ type UseSettingsDisplayActionsArgs = {
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
   setTimeFormatMode: (value: TimeFormatMode) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setSurfacePins: (value: SurfacePin[]) => void
   scheduleTrayIconUpdate: ScheduleTrayIconUpdate
 }
 
@@ -32,6 +35,7 @@ export function useSettingsDisplayActions({
   setResetTimerDisplayMode,
   setTimeFormatMode,
   setMenubarIconStyle,
+  setSurfacePins,
   scheduleTrayIconUpdate,
 }: UseSettingsDisplayActionsArgs) {
   const handleThemeModeChange = useCallback((mode: ThemeMode) => {
@@ -91,6 +95,17 @@ export function useSettingsDisplayActions({
     })
   }, [scheduleTrayIconUpdate, setMenubarIconStyle])
 
+  const handleSurfacePinsChange = useCallback((pins: SurfacePin[]) => {
+    setSurfacePins(pins)
+    scheduleTrayIconUpdate("settings", 0)
+    void notifyDisplayPreferenceUpdated({ key: "surfacePins", value: pins }).catch((error) => {
+      console.error("Failed to publish surface pin update:", error)
+    })
+    void saveSurfacePins(pins).catch((error) => {
+      console.error("Failed to save surface pins:", error)
+    })
+  }, [scheduleTrayIconUpdate, setSurfacePins])
+
   return {
     handleThemeModeChange,
     handleDisplayModeChange,
@@ -98,5 +113,6 @@ export function useSettingsDisplayActions({
     handleResetTimerDisplayModeToggle,
     handleTimeFormatModeChange,
     handleMenubarIconStyleChange,
+    handleSurfacePinsChange,
   }
 }

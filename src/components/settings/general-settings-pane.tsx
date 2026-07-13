@@ -4,15 +4,20 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GlobalShortcutSection } from "@/components/global-shortcut-section"
 import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
+import type { PluginMeta } from "@/lib/plugin-types"
 import {
   AUTO_UPDATE_OPTIONS,
   DISPLAY_MODE_OPTIONS,
+  MENUBAR_ICON_STYLE_OPTIONS,
+  MAX_SURFACE_PINS,
   RESET_TIMER_DISPLAY_OPTIONS,
   THEME_OPTIONS,
   TIME_FORMAT_OPTIONS,
   type AutoUpdateIntervalMinutes,
   type DisplayMode,
   type GlobalShortcut,
+  type MenubarIconStyle,
+  type SurfacePin,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
@@ -36,6 +41,11 @@ type GeneralSettingsPaneProps = {
   onResetTimerDisplayModeChange: (value: ResetTimerDisplayMode) => void
   timeFormatMode: TimeFormatMode
   onTimeFormatModeChange: (value: TimeFormatMode) => void
+  menubarIconStyle: MenubarIconStyle
+  onMenubarIconStyleChange: (value: MenubarIconStyle) => void
+  surfacePins: SurfacePin[]
+  onSurfacePinsChange: (value: SurfacePin[]) => void
+  plugins: PluginMeta[]
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
@@ -53,11 +63,46 @@ export function GeneralSettingsPane({
   onResetTimerDisplayModeChange,
   timeFormatMode,
   onTimeFormatModeChange,
+  menubarIconStyle,
+  onMenubarIconStyleChange,
+  surfacePins,
+  onSurfacePinsChange,
+  plugins,
   globalShortcut,
   onGlobalShortcutChange,
   startOnLogin,
   onStartOnLoginChange,
 }: GeneralSettingsPaneProps) {
+  const pinCandidates = plugins.flatMap((plugin) =>
+    plugin.lines
+      .filter((line) => line.type === "progress")
+      .map((line) => ({ providerId: plugin.id, providerName: plugin.name, metricLabel: line.label }))
+  )
+
+  const updatePin = (index: number, candidateIndex: number) => {
+    if (candidateIndex < 0) {
+      onSurfacePinsChange(surfacePins.filter((_, pinIndex) => pinIndex !== index))
+      return
+    }
+    const candidate = pinCandidates[candidateIndex]
+    if (!candidate) return
+    const next = [...surfacePins]
+    next[index] = {
+      providerId: candidate.providerId,
+      metricLabel: candidate.metricLabel,
+      presentation: next[index]?.presentation ?? "bar",
+    }
+    onSurfacePinsChange(next.slice(0, MAX_SURFACE_PINS))
+  }
+
+  const updatePinPresentation = (index: number, presentation: SurfacePin["presentation"]) => {
+    const pin = surfacePins[index]
+    if (!pin) return
+    const next = [...surfacePins]
+    next[index] = { ...pin, presentation }
+    onSurfacePinsChange(next)
+  }
+
   return (
     <div className="grid gap-x-10 gap-y-6 py-1 xl:grid-cols-2 xl:items-start">
       <section className={SETTINGS_SECTION_CLASS}>
@@ -167,6 +212,36 @@ export function GeneralSettingsPane({
                 >
                   {example}
                 </span>
+              </Button>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className={SETTINGS_SECTION_CLASS}>
+        <h3 className="mb-0 text-base font-semibold">Tray Icon</h3>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Choose how current provider usage appears in the system tray.
+        </p>
+        <div
+          className={DENSE_SEGMENTED_GROUP_CLASS}
+          role="radiogroup"
+          aria-label="Tray icon style"
+        >
+          {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
+            const isActive = option.value === menubarIconStyle
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                variant={isActive ? "default" : "outline"}
+                size="sm"
+                className="min-h-9 w-full"
+                onClick={() => onMenubarIconStyleChange(option.value)}
+              >
+                {option.label}
               </Button>
             )
           })}
