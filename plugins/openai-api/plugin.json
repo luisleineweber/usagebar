@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "openai-api",
+  "name": "OpenAI API",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#10A37F",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Windows experimental. Requires an OpenAI Admin API key with organization usage/cost permissions."
+    }
+  },
+  "links": [
+    {
+      "label": "Usage dashboard",
+      "url": "https://platform.openai.com/usage"
+    }
+  ],
+  "settings": [
+    {
+      "key": "apiKey",
+      "label": "Admin API key",
+      "type": "secret",
+      "placeholder": "sk-admin-..."
+    }
+  ],
+  "lines": [
+    {
+      "type": "text",
+      "label": "Today",
+      "scope": "overview",
+      "primaryOrder": 1
+    },
+    {
+      "type": "text",
+      "label": "7 days",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "30 days",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Tokens",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Requests",
+      "scope": "detail"
+    },
+    {
+      "type": "text",
+      "label": "Top model",
+      "scope": "detail"
+    }
+  ],
+  "capabilities": {
+    "http": true,
+    "httpDomains": ["api.openai.com"],
+    "env": ["OPENAI_ADMIN_API_KEY", "OPENAI_API_KEY"]
+  }
+}
