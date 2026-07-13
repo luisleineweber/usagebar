@@ -1,6 +1,7 @@
-use crate::plugin_engine::runtime::{MetricLine, PluginOutput};
+use crate::plugin_engine::runtime::{MetricLine, PluginOutput, UsageHistory};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
@@ -15,6 +16,8 @@ pub struct CachedPluginSnapshot {
     pub display_name: String,
     pub plan: Option<String>,
     pub lines: Vec<MetricLine>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history: Option<UsageHistory>,
     pub fetched_at: String,
 }
 
@@ -23,6 +26,31 @@ pub struct CachedPluginSnapshot {
 struct UsageApiCacheFile {
     version: u32,
     snapshots: HashMap<String, CachedPluginSnapshot>,
+}
+
+#[derive(Debug)]
+pub(crate) enum SnapshotReadError {
+    CacheMissing,
+    CacheUnreadable,
+    CacheInvalid,
+    UnsupportedCacheVersion(u32),
+    SettingsUnreadable,
+    SettingsInvalid,
+}
+
+impl fmt::Display for SnapshotReadError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CacheMissing => formatter.write_str("usage cache does not exist yet"),
+            Self::CacheUnreadable => formatter.write_str("usage cache could not be read"),
+            Self::CacheInvalid => formatter.write_str("usage cache is invalid"),
+            Self::UnsupportedCacheVersion(version) => {
+                write!(formatter, "usage cache version {version} is not supported")
+            }
+            Self::SettingsUnreadable => formatter.write_str("provider settings could not be read"),
+            Self::SettingsInvalid => formatter.write_str("provider settings are invalid"),
+        }
+    }
 }
 
 pub(super) struct CacheState {
@@ -43,43 +71,45 @@ pub(super) fn cache_state() -> &'static Mutex<CacheState> {
 }
 
 pub fn load_cache(app_data_dir: &Path) -> HashMap<String, CachedPluginSnapshot> {
-    let path = app_data_dir.join(CACHE_FILE_NAME);
-    let data = match std::fs::read_to_string(&path) {
-        Ok(data) => data,
-        Err(_) => return HashMap::new(),
-    };
-
-    match serde_json::from_str::<UsageApiCacheFile>(&data) {
-        Ok(file) if file.version == 1 => file.snapshots,
-        Ok(_) => {
-            log::warn!("usage-api-cache.json has unsupported version, starting empty");
-            HashMap::new()
-        }
+    match read_cache(app_data_dir) {
+        Ok(snapshots) => snapshots,
         Err(error) => {
-            log::warn!(
-                "failed to parse usage-api-cache.json: {}, starting empty",
-                error
-            );
+            if !matches!(error, SnapshotReadError::CacheMissing) {
+                log::warn!("failed to load usage-api-cache.json: {error}, starting empty");
+            }
             HashMap::new()
         }
     }
 }
 
+pub(crate) fn read_cache(
+    app_data_dir: &Path,
+) -> Result<HashMap<String, CachedPluginSnapshot>, SnapshotReadError> {
+    let path = app_data_dir.join(CACHE_FILE_NAME);
+    let data = std::fs::read_to_string(&path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            SnapshotReadError::CacheMissing
+        } else {
+            SnapshotReadError::CacheUnreadable
+        }
+    })?;
+    let file: UsageApiCacheFile =
+        serde_json::from_str(&data).map_err(|_| SnapshotReadError::CacheInvalid)?;
+    if file.version != 1 && file.version != 2 {
+        return Err(SnapshotReadError::UnsupportedCacheVersion(file.version));
+    }
+    Ok(file.snapshots)
+}
+
 fn save_cache(app_data_dir: &Path, snapshots: &HashMap<String, CachedPluginSnapshot>) {
     let file = UsageApiCacheFile {
-        version: 1,
+        version: 2,
         snapshots: snapshots.clone(),
     };
     let path = app_data_dir.join(CACHE_FILE_NAME);
-    let tmp_path = app_data_dir.join(".usage-api-cache.json.tmp");
-
     match serde_json::to_string(&file) {
         Ok(json) => {
-            if let Err(error) = std::fs::write(&tmp_path, &json) {
-                log::warn!("failed to write temp usage API cache file: {}", error);
-                return;
-            }
-            if let Err(error) = std::fs::rename(&tmp_path, &path) {
+            if let Err(error) = crate::atomic_file::write(&path, json.as_bytes()) {
                 log::warn!("failed to replace usage API cache file: {}", error);
             }
         }
@@ -105,6 +135,7 @@ pub fn cache_successful_output(output: &PluginOutput) {
         display_name: output.display_name.clone(),
         plan: output.plan.clone(),
         lines: output.lines.clone(),
+        history: output.history.clone(),
         fetched_at,
     };
 
@@ -131,32 +162,18 @@ fn settings_file_paths(app_data_dir: &Path) -> [PathBuf; 2] {
     ]
 }
 
-fn read_plugin_settings(app_data_dir: &Path) -> (Vec<String>, HashSet<String>, bool) {
+fn read_plugin_settings_strict(
+    app_data_dir: &Path,
+) -> Result<(Vec<String>, HashSet<String>, bool), SnapshotReadError> {
     for path in settings_file_paths(app_data_dir) {
         let data = match std::fs::read_to_string(&path) {
             Ok(data) => data,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(error) => {
-                log::warn!(
-                    "failed to read plugin settings from {}: {}",
-                    path.display(),
-                    error
-                );
-                continue;
-            }
+            Err(_) => return Err(SnapshotReadError::SettingsUnreadable),
         };
 
-        let settings = match serde_json::from_str::<SettingsFile>(&data) {
-            Ok(settings) => settings,
-            Err(error) => {
-                log::warn!(
-                    "failed to parse plugin settings from {}: {}",
-                    path.display(),
-                    error
-                );
-                continue;
-            }
-        };
+        let settings: SettingsFile =
+            serde_json::from_str(&data).map_err(|_| SnapshotReadError::SettingsInvalid)?;
         let plugin_settings = settings.plugins.unwrap_or(PluginSettingsJson {
             order: None,
             disabled: None,
@@ -168,10 +185,47 @@ fn read_plugin_settings(app_data_dir: &Path) -> (Vec<String>, HashSet<String>, b
             .unwrap_or_default()
             .into_iter()
             .collect();
-        return (order, disabled, has_settings);
+        return Ok((order, disabled, has_settings));
     }
 
-    (Vec::new(), HashSet::new(), false)
+    Ok((Vec::new(), HashSet::new(), false))
+}
+
+fn read_plugin_settings(app_data_dir: &Path) -> (Vec<String>, HashSet<String>, bool) {
+    match read_plugin_settings_strict(app_data_dir) {
+        Ok(settings) => settings,
+        Err(error) => {
+            log::warn!("failed to load provider settings: {error}, using defaults");
+            (Vec::new(), HashSet::new(), false)
+        }
+    }
+}
+
+pub(crate) fn read_enabled_snapshots(
+    app_data_dir: &Path,
+) -> Result<Vec<CachedPluginSnapshot>, SnapshotReadError> {
+    let snapshots = read_cache(app_data_dir)?;
+    let (settings_order, disabled, has_settings) = read_plugin_settings_strict(app_data_dir)?;
+    let default_enabled: HashSet<&str> = DEFAULT_ENABLED_PLUGINS.iter().copied().collect();
+    let mut remaining: Vec<_> = snapshots.keys().cloned().collect();
+    remaining.sort();
+
+    let mut ordered = Vec::new();
+    let mut seen = HashSet::new();
+    for id in settings_order.into_iter().chain(remaining) {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        let enabled = if has_settings {
+            !disabled.contains(&id)
+        } else {
+            default_enabled.contains(id.as_str())
+        };
+        if enabled && let Some(snapshot) = snapshots.get(&id) {
+            ordered.push(snapshot.clone());
+        }
+    }
+    Ok(ordered)
 }
 
 pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginSnapshot> {
@@ -228,6 +282,7 @@ mod tests {
             display_name: name.to_string(),
             plan: Some("Pro".to_string()),
             lines: vec![],
+            history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
         }
     }
@@ -254,6 +309,27 @@ mod tests {
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded["claude"].provider_id, "claude");
         assert_eq!(loaded["claude"].fetched_at, "2026-03-26T08:15:30Z");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_cache_replaces_existing_file() {
+        let dir = temp_dir("cache-replace");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let mut first = HashMap::new();
+        first.insert("claude".to_string(), make_snapshot("claude", "Claude"));
+        save_cache(&dir, &first);
+
+        let mut second = HashMap::new();
+        second.insert("codex".to_string(), make_snapshot("codex", "Codex"));
+        save_cache(&dir, &second);
+
+        let loaded = load_cache(&dir);
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded.contains_key("codex"));
+        assert!(!loaded.contains_key("claude"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -292,6 +368,7 @@ mod tests {
                 period_duration_ms: Some(14_400_000),
                 color: None,
             }],
+            history: None,
             fetched_at: "2026-03-26T08:00:00Z".to_string(),
         };
 
@@ -299,6 +376,24 @@ mod tests {
         let deserialized: CachedPluginSnapshot = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.provider_id, "claude");
         assert_eq!(deserialized.lines.len(), 1);
+    }
+
+    #[test]
+    fn load_cache_migrates_v1_snapshot_without_history() {
+        let dir = temp_dir("cache-v1-migration");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(CACHE_FILE_NAME),
+            r#"{"version":1,"snapshots":{"claude":{"providerId":"claude","displayName":"Claude","plan":"Pro","lines":[],"fetchedAt":"2026-03-26T08:15:30Z"}}}"#,
+        )
+        .unwrap();
+
+        let loaded = load_cache(&dir);
+
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded["claude"].history.is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

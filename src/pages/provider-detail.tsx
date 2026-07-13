@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { ProviderCard } from "@/components/provider-card"
+import { UsageReport } from "@/components/usage-report"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
@@ -51,6 +52,7 @@ export function ProviderDetailPage({
   }
 
   const hasRuntimeData = Boolean(plugin.data || plugin.lastSettledData)
+  const reportOutput = plugin.data ?? plugin.lastSettledData ?? null
 
   return (
     <div className="space-y-3 py-3">
@@ -91,6 +93,7 @@ export function ProviderDetailPage({
         timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
+      <UsageReport outputs={reportOutput ? [reportOutput] : []} />
     </div>
   )
 }

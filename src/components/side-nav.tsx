@@ -1,5 +1,5 @@
 import { useCallback } from "react"
-import { Check, GripVertical, Settings } from "lucide-react"
+import { BarChart3, Check, GripVertical, Settings } from "lucide-react"
 import {
   DndContext,
   PointerSensor,
@@ -223,6 +223,14 @@ export function SideNav({
         aria-label="Home"
       >
         <GaugeIcon className="size-6 dark:text-page-accent" />
+      </NavButton>
+
+      <NavButton
+        isActive={activeView === "history"}
+        onClick={() => onViewChange("history")}
+        aria-label="History"
+      >
+        <BarChart3 className="size-5" />
       </NavButton>
 
       <DndContext
