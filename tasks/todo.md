@@ -1,5 +1,54 @@
 ﻿# Active Todo
 
+# Refresh, credential, and Cursor reliability, 2026-07-13
+
+## Executive Summary
+
+- Prevent duplicate provider probes and preserve results for every refresh caller.
+- Surface actionable credential failure categories instead of generic login errors.
+- Prefer Cursor's usage-summary data for enterprise/team accounts before request-count fallback.
+
+## Acceptance Criteria
+
+- [x] Concurrent batches probing the same provider execute it once and each batch receives result/completion events.
+- [x] Probe outputs carry stable credential error categories and the UI identifies credential failures.
+- [x] Cursor distinguishes unavailable credential sources from absent credentials.
+- [x] Cursor enterprise/team missing-plan usage prefers `/api/usage-summary`, then degrades to `/api/usage`.
+- [x] Focused JS/Rust tests, typecheck, formatting, and diff review pass.
+
+## Plan
+
+- [x] Add failing coordinator and credential-classification tests.
+- [x] Implement backend probe coalescing and structured probe errors.
+- [x] Add failing Cursor credential and usage-summary tests, then implement fallback ordering.
+- [x] Run verification and code review; record lessons and breadcrumbs.
+
+## Verification Notes
+
+- Full frontend/plugin suite: 90 files, 1,381 tests passed.
+- Full Rust library suite: 134 tests passed.
+- ESLint, TypeScript, Rust formatting, plugin bundling (33 plugins), Node syntax, and `git diff --check` passed.
+- Cursor response fields add quota, membership, and billing-cycle data only; existing host redaction covers authentication/session/user/account/name fields.
+
+# Remote branch idea audit, 2026-07-13
+
+## Executive Summary
+
+- Review every upstream remote branch for novel product or reliability ideas.
+- Rank findings by usefulness to this Windows fork and avoid touching implementation.
+
+## Acceptance Criteria
+
+- [x] All `upstream/*` branches are enumerated and inspected.
+- [x] Unique ideas are grouped, deduplicated, and ranked with branch/commit evidence.
+- [x] A concise report is delivered with recommended next slices.
+
+## Plan
+
+- [x] Refresh and inventory remote refs.
+- [x] Analyze unique commits and changed files by branch.
+- [x] Produce and verify the ranked findings.
+
 # Surface pin completion, 2026-07-13
 
 ## Executive Summary
@@ -10,17 +59,25 @@
 
 ## Acceptance Criteria
 
-- [ ] Users can select, replace, remove, and choose bar/text presentation for up to two unique provider metrics.
-- [ ] The settings preview reflects the selected tray style, live metric values, and saved pin order.
-- [ ] Stored pins load on startup and settings-window changes propagate to the tray process.
-- [ ] Focused tests, typecheck, build, formatting, and diff review pass.
+- [x] Users can select, replace, remove, and choose bar/text presentation for up to two unique provider metrics.
+- [x] The settings preview reflects the selected tray style, live metric values, and saved pin order.
+- [x] Stored pins load on startup and settings-window changes propagate to the tray process.
+- [x] Focused tests, typecheck, build, formatting, and diff review pass.
 
 ## Plan
 
-- [ ] Complete the pin editor and compact preview component.
-- [ ] Connect tray preview state through both settings entry points.
-- [ ] Add regression tests for editing, ordering, presentation, and rendering.
-- [ ] Run verification; update task notes, choices, and breadcrumbs.
+- [x] Complete the pin editor and compact preview component.
+- [x] Connect tray preview state to standalone settings and tray rendering.
+- [x] Add regression tests for editing, ordering, presentation, and rendering.
+- [x] Run verification; update task notes, choices, and breadcrumbs.
+
+## Verification Notes
+
+- Focused settings/surface suite after review fixes: 9 files, 180 tests passed; production build passed.
+- Formatting, ESLint, TypeScript, and `git diff --check` passed.
+- Full frontend suite: 88 files and 1,373 tests passed; two unrelated concurrent Cursor plugin tests failed.
+- T3 browser confirmed wide settings rendering without horizontal overflow. Resize/snapshot automation timed out; packaged Windows and narrow visual verification remain open.
+- Final review added the tray-panel widget, identity-based preview matching, 3px focus treatment, and loud tray-render failure handling.
 
 # Cookie-only provider audit, 2026-07-12
 
@@ -217,7 +274,7 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - [x] Provider detail and a shared history view show Today, Yesterday, 7d, and 30d summaries, an accessible compact trend, model mix, honest empty states, and report filters.
 - [ ] A standalone console CLI reads cached state only and supports stable text, JSON, status-line, provider, and history output.
 - [ ] Browser import is opt-in, Edge-first, compiled-policy-controlled, imports only approved provider cookies, writes directly to DPAPI storage, and returns redacted diagnostics with manual/guided fallback.
-- [ ] Menu-bar style selection works again; users can pin up to two provider metrics and see a matching preview/widget surface.
+- [x] Menu-bar style selection works again; users can pin up to two provider metrics and see a matching preview/widget surface.
 - [ ] Incident, quota-threshold, and reset events are deduplicated; notification preferences, quiet hours, and recent events persist; OS permission failure has an in-app fallback.
 - [ ] Account registry contracts are provider-neutral, preserve existing Codex profiles, expose active/health/stale state, and support check/re-auth/remove actions through adapter capabilities.
 - [ ] Long-tail provider work includes provenance enforcement, one verified direct-source provider slice where evidence permits, and explicit research/defer decisions for unsupported candidates.
@@ -231,7 +288,7 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - [x] Emit authoritative history from Claude, Codex, OpenAI API, and OpenCode where source data supports it.
 - [x] Build history/reporting UI with filters, summaries, chart, model mix, and empty states.
 - [ ] Build standalone cache-only CLI and release packaging/docs.
-- [ ] Restore tray style wiring, add persisted pins, preview, and compact widget surface.
+- [x] Restore tray style wiring, add persisted pins, preview, and compact widget surface.
 - [ ] Add notification preferences, transition engine, OS adapter, routing, and recent-events UI.
 - [ ] Add compiled cookie policy and Edge import for eligible providers with redacted diagnostics.
 - [ ] Generalize account registry contracts and UI, migrate Codex, add health/ping/stale flows.
