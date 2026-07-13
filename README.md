@@ -59,6 +59,7 @@ UsageBar lives in your Windows tray and shows you how much of your AI coding sub
 - **Lightweight.** Opens instantly, stays out of your way.
 - **Plugin-based.** New providers get added without updating the whole app.
 - **Local HTTP API.** Read cached usage from `127.0.0.1:6736` for local widgets, scripts, and dashboards.
+- **Cache-only CLI.** Read usage, history, JSON, and status-line output without launching or probing the desktop app.
 - **Proxy support.** Route requests through SOCKS5/HTTP proxies for restricted networks.
 - **Custom OAuth.** Bring your own OAuth credentials for enterprise compliance.
 
@@ -93,9 +94,10 @@ Status meanings:
 | [**Kimi Code (Moonshot)**](docs/providers/kimi.md)                     | Experimental   | Kimi CLI, kimi.com membership, session and weekly quota from local `kimi login` OAuth; optional official Moonshot API balance via `https://api.moonshot.ai/v1/users/me/balance` |
 | [**Kiro**](docs/providers/kiro.md)                                     | Experimental   | Credits, bonus credits, overages tracking                                                                                                                                       |
 | [**MiniMax**](docs/providers/minimax.md)                               | Experimental   | Coding Plan session usage, explicit reported plan when available                                                                                                                |
-| [**Mistral**](docs/providers/mistral.md)                               | Experimental   | La Plateforme usage and billing details via signed-in session                                                                                                                   |
+| [**Mistral**](docs/providers/mistral.md)                               | Experimental   | La Plateforme usage and billing details via official Admin API key, with session-cookie fallback                                                                                |
 | [**Ollama**](docs/providers/ollama.md)                                 | Supported      | Plan, session, weekly                                                                                                                                                           |
 | [**OpenCode**](docs/providers/opencode-go.md)                          | Supported      | OpenCode Go subscription 5h, weekly, and monthly local CLI history; optional OpenCode Zen pay-as-you-go balance from a signed-in workspace session                              |
+| [**OpenAI API**](docs/providers/openai-api.md)                         | Experimental   | Organization API spend windows, completions tokens, requests, and top model from the OpenAI Admin API                                                                           |
 | [**OpenRouter**](docs/providers/openrouter.md)                         | Experimental   | Credits, balance, request-rate detail                                                                                                                                           |
 | [**Perplexity**](docs/providers/perplexity.md)                         | Experimental   | Recurring, purchased, and bonus credit pools via manual cookie/env auth                                                                                                         |
 | [**Synthetic**](docs/providers/synthetic.md)                           | Experimental   | Direct API-key quota endpoint                                                                                                                                                   |
@@ -148,6 +150,7 @@ Upstream lineage stays visible through the original [OpenUsage](https://github.c
 
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
 - **Read usage locally.** See the [Local HTTP API](docs/local-http-api.md).
+- **Use terminal output.** See the [UsageBar CLI](docs/cli.md).
 - **Fix a bug.** Keep the change small, focused, and verified.
 - **Request a feature or report a bug.** [Open an issue.](https://github.com/luisleineweber/usagebar/issues/new) Include the provider, auth source, Windows-specific constraints, app version, and sanitized logs. See [bug report notes](docs/bug-reports.md).
 - **Share diagnostics safely.** Include exact error text and timestamps, but do not attach API keys, cookies, raw credential files, or `provider-secrets.json`.

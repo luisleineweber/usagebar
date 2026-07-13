@@ -12,6 +12,7 @@
 - Restored paid OpenCode Go usage detection for local authenticated installs that only expose API-key auth metadata.
 - Added OpenCode Free usage to the dashboard overview while keeping paid OpenCode Go overview behavior unchanged.
 - Bumped app metadata to `0.1.0-alpha.4`.
+- Fixed auto-update GitHub fallback repo reference so prerelease updater checks reach the correct release repository.
 
 ### Notes
 
