@@ -441,10 +441,21 @@
   }
 
   function hasLegacyPremiumSnapshot(data) {
-    return Boolean(data && data.quota_snapshots && data.quota_snapshots.premium_interactions)
+    const snapshot = data && data.quota_snapshots && data.quota_snapshots.premium_interactions
+    return Boolean(snapshot && snapshot.has_quota !== false)
+  }
+
+  function hasCurrentQuotaSnapshots(data) {
+    if (!data || !data.token_based_billing || !data.quota_snapshots) return false
+    const snapshots = data.quota_snapshots
+    return Boolean(
+      (snapshots.chat && snapshots.chat.has_quota !== false) ||
+      (snapshots.completions && snapshots.completions.has_quota !== false)
+    )
   }
 
   function resolveBillingMode(data) {
+    if (hasCurrentQuotaSnapshots(data)) return "current_quota"
     if (isFreeOrStudentPlan(data)) return "free_limited"
     if (hasLegacyPremiumSnapshot(data)) return "legacy_request_based"
     return "usage_based"
@@ -453,6 +464,7 @@
   function billingModeLabel(mode) {
     if (mode === "legacy_request_based") return "Legacy request-based"
     if (mode === "free_limited") return "Free or student limited"
+    if (mode === "current_quota") return "Current quota"
     return "AI-credit usage-based"
   }
 
@@ -776,6 +788,27 @@
         COUNT_FORMAT_QUOTA_UNITS
       )
       if (chatLine) lines.push(chatLine)
+    }
+
+    if (billingMode === "current_quota" && snapshots) {
+      lines.push(makeBillingModeLine(ctx, billingMode))
+      const chatLine = makeSnapshotCountProgressLine(
+        ctx,
+        "Chat",
+        snapshots.chat,
+        data.quota_reset_date,
+        COUNT_FORMAT_QUOTA_UNITS
+      )
+      if (chatLine) lines.push(chatLine)
+
+      const completionsLine = makeSnapshotCountProgressLine(
+        ctx,
+        "Completions",
+        snapshots.completions,
+        data.quota_reset_date,
+        COUNT_FORMAT_COMPLETIONS
+      )
+      if (completionsLine) lines.push(completionsLine)
     }
 
     // Free tier: limited_user_quotas

@@ -45,6 +45,8 @@ GitHub moved Copilot billing to usage-based AI Credits on 2026-06-01. UsageBar n
 
 UsageBar does not invent remaining AI-credit values. If GitHub returns plan data without stable credit usage fields, the plugin shows the known included-credit allowance for the plan when available and a clear unavailable state for exact usage.
 
+Current token-based accounts may return `quota_snapshots.chat` and `quota_snapshots.completions` instead of AI-credit fields. When GitHub marks either snapshot as available, UsageBar renders its provider-reported Chat and Completions counters with the shared reset date. A disabled `premium_interactions` snapshot is not treated as legacy premium usage.
+
 `billingScope` is the preferred config key for legacy billing-scope lookups. The older `workspaceId` key still works as an alias.
 
 ## API
