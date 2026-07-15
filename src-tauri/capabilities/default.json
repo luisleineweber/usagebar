@@ -18,6 +18,7 @@
     "process:allow-restart",
     "global-shortcut:default",
     "autostart:default",
+    "notification:default",
     "core:menu:default"
   ]
 }

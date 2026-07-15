@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { GlobalShortcutSection } from "@/components/global-shortcut-section"
 import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
+import { NotificationSettingsSection } from "@/components/settings/notification-settings-section"
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 import type { PluginMeta } from "@/lib/plugin-types"
@@ -273,6 +274,8 @@ export function GeneralSettingsPane({
         globalShortcut={globalShortcut}
         onGlobalShortcutChange={onGlobalShortcutChange}
       />
+
+      <NotificationSettingsSection className={SETTINGS_SECTION_CLASS} />
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">Start on Login</h3>

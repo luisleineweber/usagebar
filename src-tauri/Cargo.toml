@@ -47,6 +47,7 @@ regex-lite = "0.1.9"
 keyring = "3.6.3"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
 raw-window-handle = "0.6"
+tauri-plugin-notification = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

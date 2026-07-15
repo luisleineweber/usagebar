@@ -10,6 +10,7 @@ import { useSettingsPluginActions } from "@/hooks/app/use-settings-plugin-action
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
+import { useNotificationEvents } from "@/hooks/app/use-notification-events"
 import {
   getProbeEligiblePluginIds,
   loadDisplayMode,
@@ -129,6 +130,8 @@ function App() {
     pluginsMeta,
     pluginSettings,
   })
+
+  useNotificationEvents({ pluginStates, providerStatuses, pluginsMeta })
 
   const { scheduleTrayIconUpdate } = useTrayIcon({
     pluginsMeta,
