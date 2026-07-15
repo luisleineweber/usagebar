@@ -1123,7 +1123,7 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 
 ## Verification Notes
 
-- Source inventory: 34 plugin directories including `mock`; 33 real providers are bundled. Windows manifests: 7 `supported`, 25 `experimental`; `kimi-k2` and `opencode` are intentionally `surfaced: false`.
+- Source inventory: 34 plugin directories including `mock`; 33 real providers are bundled. Windows manifests: 7 `supported`, 26 `experimental`; `mock` is blocked, and `kimi-k2` plus `opencode` are intentionally `surfaced: false`.
 - Bundle audit: all 33 providers have matching SHA-256 `plugin.js`, `plugin.json`, and `plugin.test.js` source/bundle files.
 - Provider plugins: 34 files / 716 tests passed with isolated Vitest execution.
 - Provider UI/settings: 13 focused files / 229 tests passed.
