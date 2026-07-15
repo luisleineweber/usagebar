@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-10T00:00:00Z",
+  "title": "Design System: UsageBar",
+  "extensions": {
+    "colorMeta": {
+      "light-background": {
+        "role": "neutral",
+        "displayName": "Work Surface",
+        "canonical": "oklch(1 0 0)"
+      },
+      "light-foreground": {
+        "role": "neutral",
+        "displayName": "Instrument Ink",
+        "canonical": "oklch(0.13 0.028 261.692)"
+      },
+      "dark-background": {
+        "role": "neutral",
+        "displayName": "Night Surface",
+        "canonical": "#1c1c1e"
+      },
+      "dark-accent": {
+        "role": "primary",
+        "displayName": "Signal Lime",
+        "canonical": "#bfff00"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Page Headline",
+        "purpose": "Settings and full-window page titles."
+      },
+      "body": {
+        "displayName": "Interface Body",
+        "purpose": "Setup, status, errors, and explanatory copy."
+      },
+      "label": {
+        "displayName": "Compact Label",
+        "purpose": "Metrics, badges, filters, and metadata."
+      }
+    },
+    "shadows": [
+      {
+        "name": "control-xs",
+        "value": "0 1px 2px rgb(0 0 0 / 0.05)",
+        "purpose": "Outline controls only when surface separation needs reinforcement."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "150ms ease-out",
+        "purpose": "Hover, selection, and compact state feedback."
+      },
+      {
+        "name": "state-standard",
+        "value": "200ms ease-out",
+        "purpose": "Panel and disclosure state changes."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Compact high-contrast action used for the primary operation in a local group.",
+      "html": "<button class=\"ds-btn-primary\">Save changes</button>",
+      "css": ".ds-btn-primary { min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--primary); color: var(--primary-foreground); font: 500 14px/1 system-ui, sans-serif; transition: background 150ms ease-out; } .ds-btn-primary:hover { background: color-mix(in oklab, var(--primary) 80%, transparent); } .ds-btn-primary:focus-visible { outline: 3px solid color-mix(in oklab, var(--ring) 50%, transparent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Familiar secondary action with a quiet border and tonal hover.",
+      "html": "<button class=\"ds-btn-outline\">Manage provider</button>",
+      "css": ".ds-btn-outline { min-height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground); font: 500 14px/1 system-ui, sans-serif; transition: background 150ms ease-out; } .ds-btn-outline:hover { background: var(--muted); } .ds-btn-outline:focus-visible { outline: 3px solid color-mix(in oklab, var(--ring) 50%, transparent); outline-offset: 2px; }"
+    },
+    {
+      "name": "Metric Group",
+      "kind": "custom",
+      "description": "Provider heading followed by compact usage rows, with semantic incident state.",
+      "html": "<section class=\"ds-metric\"><div class=\"ds-metric-head\"><strong>Codex</strong><span>Pro</span></div><div class=\"ds-metric-row\"><span>Session</span><strong>42% used</strong></div><progress value=\"42\" max=\"100\">42%</progress></section>",
+      "css": ".ds-metric { width: 280px; padding: 12px 0; color: var(--foreground); font: 14px/1.4 system-ui, sans-serif; } .ds-metric-head, .ds-metric-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; } .ds-metric-head { margin-bottom: 12px; font-size: 18px; } .ds-metric-head span { padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; font-weight: 500; } .ds-metric-row { margin-bottom: 6px; font-size: 12px; } .ds-metric progress { width: 100%; height: 6px; accent-color: var(--primary); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Instrument Panel",
+    "overview": "A compact working instrument beside the user's editor and terminal. Legible values, familiar controls, calm state changes, and explicit provenance take priority over decorative dashboard styling.",
+    "keyCharacteristics": [
+      "Compact desktop density",
+      "Flat tonal layers",
+      "System typography",
+      "Visible keyboard focus",
+      "Semantic provider and state color"
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rule",
+        "body": "Accent and semantic colors indicate selection, provider identity, progress, or system state. They are not decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The State-Only Elevation Rule",
+        "body": "Stronger elevation belongs to dialogs, popovers, and active drag state, never static dashboard decoration.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Keep current usage and incident state visible before setup detail.",
+      "Respect reduced motion and use 150ms to 250ms state transitions.",
+      "Use text or icons in addition to semantic color."
+    ],
+    "donts": [
+      "Do not use decorative SaaS dashboard treatments, oversized marketing metrics, glassmorphism, or gratuitous animation.",
+      "Do not create provider-specific interface forks when shared metric, account, or history patterns work.",
+      "Do not hide credential access, import scope, errors, or data provenance behind ambiguous labels."
+    ]
+  }
+}
