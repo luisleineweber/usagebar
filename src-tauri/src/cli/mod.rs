@@ -1,7 +1,9 @@
 mod args;
 mod format;
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use args::{Command, CommonArgs, ParsedArgs};
 use time::OffsetDateTime;
@@ -41,7 +43,7 @@ fn app_data_dir() -> Result<PathBuf, CliError> {
 }
 
 fn help() -> &'static str {
-    "UsageBar cache-only CLI\n\nUSAGE:\n  usagebar-cli <COMMAND> [OPTIONS]\n\nCOMMANDS:\n  usage       Show the latest enabled provider snapshots\n  history     Show cached provider history\n  statusline  Print a single-line editor/status-bar summary\n\nOPTIONS:\n  --provider <id>  Limit output to one provider\n  --json           Emit stable JSON\n  --days <1-3650>  History window (history only, default: 30)\n  -h, --help       Show help\n  -V, --version    Show version\n\nThe CLI reads local cached state only. It never starts UsageBar or probes providers."
+    "UsageBar cache-only CLI\n\nUSAGE:\n  usagebar-cli <COMMAND> [OPTIONS]\n\nCOMMANDS:\n  usage       Show the latest enabled provider snapshots\n  history     Show cached provider history\n  statusline  Print a single-line editor/status-bar summary\n\nOPTIONS:\n  --provider <id>  Limit output to one provider\n  --json           Emit stable JSON\n  --days <1-3650>  History window (history only, default: 30)\n  --watch <1-3600> Re-read cached data every N seconds\n  -h, --help       Show help\n  -V, --version    Show version\n\nThe CLI reads local cached state only. It never starts UsageBar or probes providers."
 }
 
 fn common_args(command: &Command) -> &CommonArgs {
@@ -91,6 +93,16 @@ fn execute(
 }
 
 pub fn run(args: impl IntoIterator<Item = String>) -> i32 {
+    let args: Vec<String> = args.into_iter().collect();
+    let watch_seconds = match args::parse(args.clone()) {
+        Ok(ParsedArgs::Command(command)) => common_args(&command).watch_seconds,
+        Ok(ParsedArgs::Help | ParsedArgs::Version) => None,
+        Err(error) => {
+            eprintln!("usagebar-cli: {error}");
+            eprintln!("Run 'usagebar-cli --help' for usage.");
+            return 2;
+        }
+    };
     let app_data_dir = match app_data_dir() {
         Ok(path) => path,
         Err(error) => {
@@ -98,23 +110,26 @@ pub fn run(args: impl IntoIterator<Item = String>) -> i32 {
             return error.exit_code();
         }
     };
-    match execute(
-        args,
-        &app_data_dir,
-        env!("CARGO_PKG_VERSION"),
-        OffsetDateTime::now_utc(),
-    ) {
-        Ok(output) => {
-            println!("{output}");
-            0
-        }
-        Err(error) => {
-            eprintln!("usagebar-cli: {}", error.message());
-            if matches!(error, CliError::Usage(_)) {
-                eprintln!("Run 'usagebar-cli --help' for usage.");
+    loop {
+        match execute(
+            args.clone(),
+            &app_data_dir,
+            env!("CARGO_PKG_VERSION"),
+            OffsetDateTime::now_utc(),
+        ) {
+            Ok(output) => {
+                println!("{output}");
+                let _ = std::io::stdout().flush();
             }
-            error.exit_code()
+            Err(error) => {
+                eprintln!("usagebar-cli: {}", error.message());
+                return error.exit_code();
+            }
         }
+        let Some(seconds) = watch_seconds else {
+            return 0;
+        };
+        std::thread::sleep(Duration::from_secs(u64::from(seconds)));
     }
 }
 

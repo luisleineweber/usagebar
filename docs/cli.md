@@ -2,7 +2,11 @@
 
 `usagebar-cli` is a read-only console companion for UsageBar. It reads the same persisted cache as the tray app and never starts the desktop runtime or probes providers.
 
-## Build and run
+## Install and run
+
+The Windows installer includes `usagebar-cli.exe` and adds the UsageBar install directory to the current user's `PATH`. Open a new terminal after installing or uninstalling so it receives the updated environment.
+
+## Build and run from source
 
 From the repository:
 
@@ -10,8 +14,6 @@ From the repository:
 cargo build --release --manifest-path src-tauri/Cargo.toml --bin usagebar-cli
 src-tauri\target\release\usagebar-cli.exe --help
 ```
-
-The current implementation produces the standalone binary. Installer bundling and automatic `PATH` registration remain release-packaging work.
 
 ## Commands
 
@@ -25,6 +27,7 @@ usagebar-cli history --provider codex --json
 
 usagebar-cli statusline
 usagebar-cli statusline --provider opencode
+usagebar-cli statusline --watch 5
 ```
 
 - `usage` prints the latest cached metric lines for enabled providers.
@@ -32,6 +35,7 @@ usagebar-cli statusline --provider opencode
 - `statusline` emits exactly one sanitized line for editor and terminal status bars.
 - `--json` emits a versioned JSON object.
 - `--provider <id>` limits output to one enabled cached provider.
+- `--watch <1-3600>` re-reads the cache at the selected interval. JSON mode emits one object per line.
 
 ## Cache and exit behavior
 

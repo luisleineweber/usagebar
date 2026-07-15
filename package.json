@@ -11,6 +11,7 @@
     "release:check": "node ./scripts/release-preflight.mjs",
     "ccusage:bump": "node ./scripts/bump-ccusage-version.mjs",
     "bundle:plugins": "node ./copy-bundled.cjs",
+    "prepare:cli-sidecar": "node ./scripts/prepare-cli-sidecar.mjs",
     "check": "bun run format:check && bun run lint && bun run typecheck",
     "format": "bun prettier --write \"**/*.{js,jsx,ts,tsx,json,md,yml,yaml,css,html}\" && cargo fmt --manifest-path src-tauri/Cargo.toml",
     "format:check": "node ./scripts/check-format.mjs",
