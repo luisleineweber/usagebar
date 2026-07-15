@@ -24,6 +24,7 @@ const state = vi.hoisted(() => ({
   saveAutoUpdateIntervalMock: vi.fn(),
   loadThemeModeMock: vi.fn(),
   saveThemeModeMock: vi.fn(),
+  loadTimeFormatModeMock: vi.fn(),
   loadDisplayModeMock: vi.fn(),
   saveDisplayModeMock: vi.fn(),
   loadResetTimerDisplayModeMock: vi.fn(),
@@ -284,6 +285,7 @@ vi.mock("@/lib/settings", async () => {
     saveAutoUpdateInterval: state.saveAutoUpdateIntervalMock,
     loadThemeMode: state.loadThemeModeMock,
     saveThemeMode: state.saveThemeModeMock,
+    loadTimeFormatMode: state.loadTimeFormatModeMock,
     loadDisplayMode: state.loadDisplayModeMock,
     saveDisplayMode: state.saveDisplayModeMock,
     loadResetTimerDisplayMode: state.loadResetTimerDisplayModeMock,
@@ -308,6 +310,32 @@ vi.mock("@/lib/provider-settings", async () => {
     ...actual,
     loadProviderConfigs: state.loadProviderConfigsMock,
     saveProviderConfigs: state.saveProviderConfigsMock,
+  };
+});
+
+vi.mock("@/lib/notification-settings", () => ({
+  loadNotificationPreferences: vi.fn(async () => ({
+    enabled: false,
+    quotaThresholds: [75, 90],
+    incidents: true,
+    resets: true,
+    quietHours: { enabled: false, start: "22:00", end: "08:00" },
+  })),
+  loadRecentUsageEvents: vi.fn(async () => []),
+  appendRecentUsageEvents: vi.fn(async () => []),
+  clearRecentUsageEvents: vi.fn(async () => undefined),
+  listenNotificationStateUpdated: vi.fn(async () => () => {}),
+  saveNotificationPreferences: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/lib/report-pricing", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/report-pricing")>(
+    "@/lib/report-pricing",
+  );
+  return {
+    ...actual,
+    loadModelPriceOverrides: vi.fn(async () => ({})),
+    saveModelPriceOverrides: vi.fn(async () => undefined),
   };
 });
 
@@ -342,6 +370,7 @@ describe("App", () => {
     state.saveAutoUpdateIntervalMock.mockReset();
     state.loadThemeModeMock.mockReset();
     state.saveThemeModeMock.mockReset();
+    state.loadTimeFormatModeMock.mockReset();
     state.loadDisplayModeMock.mockReset();
     state.saveDisplayModeMock.mockReset();
     state.loadResetTimerDisplayModeMock.mockReset();
@@ -394,6 +423,7 @@ describe("App", () => {
     state.saveAutoUpdateIntervalMock.mockResolvedValue(undefined);
     state.loadThemeModeMock.mockResolvedValue("system");
     state.saveThemeModeMock.mockResolvedValue(undefined);
+    state.loadTimeFormatModeMock.mockResolvedValue("auto");
     state.loadDisplayModeMock.mockResolvedValue("left");
     state.saveDisplayModeMock.mockResolvedValue(undefined);
     state.loadResetTimerDisplayModeMock.mockResolvedValue("relative");
