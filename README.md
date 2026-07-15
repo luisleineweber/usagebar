@@ -12,7 +12,7 @@ Windows alpha/beta builds are published as GitHub prereleases.
 
 Release plan:
 
-- Next public milestone: Alpha 2, as an unsigned Windows technical preview
+- Next public milestone: Alpha 5, as an unsigned Windows technical preview
 - Windows: GitHub prerelease with a NSIS setup `.exe`
 - macOS: still secondary while the Windows fork stabilizes
 
@@ -24,7 +24,7 @@ Release process and preflight checks live in [docs/releasing.md](docs/releasing.
 
 Alpha and beta Windows builds are distributed from GitHub Releases as a NSIS setup `.exe`.
 
-Alpha 2 signing note: the Windows installer is intentionally unsigned while Authenticode signing is deferred. Windows may show `Unknown publisher` or SmartScreen warnings. Treat Alpha 2 as a technical preview for users comfortable with prerelease desktop software.
+Alpha 5 signing note: the Windows installer is intentionally unsigned while Authenticode signing is deferred. Windows may show `Unknown publisher` or SmartScreen warnings. Treat Alpha 5 as a technical preview for users comfortable with prerelease desktop software.
 
 Install:
 
@@ -47,7 +47,7 @@ Local data:
 
 ## Alpha Readiness
 
-UsageBar is still pre-release. Alpha 4 means a Windows user can install from GitHub, enable supported providers, refresh usage, understand where each number came from, and report issues with enough context to debug. The Alpha 4 installer is unsigned; Authenticode signing is deferred.
+UsageBar is still pre-release. Alpha 5 means a Windows user can install from GitHub, enable supported providers, refresh usage, inspect local history/reporting, manage provider credentials, and configure local quota notifications. The Alpha 5 installer is unsigned; Authenticode signing is deferred.
 
 ## What It Does
 
@@ -60,6 +60,10 @@ UsageBar lives in your Windows tray and shows you how much of your AI coding sub
 - **Plugin-based.** New providers get added without updating the whole app.
 - **Local HTTP API.** Read cached usage from `127.0.0.1:6736` for local widgets, scripts, and dashboards.
 - **Cache-only CLI.** Read usage, history, JSON, and status-line output without launching or probing the desktop app.
+- **Local reporting.** Group history by day or project and configure custom history paths, pricing, and offline model data for Claude and Codex.
+- **Account controls.** Ping providers, re-authenticate, remove stored credentials, and manage imported Codex accounts.
+- **Quota notifications.** Track local threshold, reset, incident, recovery, quiet-hours, and recent-event state.
+- **Opt-in Edge import.** Import the approved Claude session cookie through a backend-owned, redacted Windows flow.
 - **Proxy support.** Route requests through SOCKS5/HTTP proxies for restricted networks.
 - **Custom OAuth.** Bring your own OAuth credentials for enterprise compliance.
 
@@ -115,7 +119,7 @@ Want a provider that's not listed? [Open an issue.](https://github.com/luisleine
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
 - Prerelease auto-updates are intentionally conservative because GitHub's `releases/latest` alias does not resolve prereleases. Prerelease builds may open the matching GitHub release page instead of installing in-app.
-- Authenticode-signed Windows artifacts and full crash-recovery expectations are full-release work, not an Alpha 4 promise.
+- Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations are full-release work, not an Alpha 5 promise.
 
 ## Architecture
 

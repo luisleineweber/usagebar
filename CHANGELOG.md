@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.0-alpha.5
+
+### Highlights
+
+- Added a cache-only `usagebar-cli` binary for usage, history, status-line, JSON, and watch output without launching the tray app.
+- Added local reporting controls for Claude and Codex history paths, project grouping, model pricing, and offline pricing data.
+- Added opt-in Edge cookie import for Claude with backend-owned policy, DPAPI handling, and redacted metadata-only diagnostics.
+- Added provider-neutral account health, ping, re-authentication, credential removal, and Codex managed-account controls.
+- Added local quota, reset, incident, recovery, quiet-hours, and recent-event notification settings.
+- Hardened provider refresh errors, credential-source handling, history provenance, and Windows-first setup flows.
+- Bumped app metadata to `0.1.0-alpha.5`.
+
+### Notes
+
+- Alpha 5 remains an unsigned Windows technical preview while Authenticode signing is deferred.
+- Browser cookie import is opt-in and currently limited to Claude's approved Edge `sessionKey` policy.
+- The full frontend/plugin suite passes 1,407 tests without unhandled errors. The repository-wide 90% coverage gate remains below threshold (86.08% statements, 79.30% branches, 91.41% functions, 89.31% lines) and is carried as the documented Alpha coverage waiver.
+
 ## 0.1.0-alpha.4
 
 ### Highlights
