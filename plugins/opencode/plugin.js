@@ -341,6 +341,76 @@
     }
   }
 
+  function loadUsageHistoryRows(ctx, dbPath, sinceMs, untilMs) {
+    if (!ctx.host.sqlite || typeof ctx.host.sqlite.query !== "function") {
+      return { ok: false, rows: [] }
+    }
+
+    var sql = `
+      SELECT
+        CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) AS createdMs,
+        json_extract(data, '$.modelID') AS modelId,
+        CAST(json_extract(data, '$.cost') AS REAL) AS cost,
+        CAST(json_extract(data, '$.tokens.input') AS REAL) AS inputTokens,
+        CAST(json_extract(data, '$.tokens.output') AS REAL) AS outputTokens,
+        CAST(json_extract(data, '$.tokens.cache.read') AS REAL) AS cacheReadTokens,
+        CAST(json_extract(data, '$.tokens.cache.write') AS REAL) AS cacheCreationTokens,
+        CAST(json_extract(data, '$.tokens.total') AS REAL) AS totalTokens
+      FROM message
+      WHERE json_valid(data)
+        AND json_extract(data, '$.role') = 'assistant'
+        AND CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) >= ${Math.floor(sinceMs)}
+        AND CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) < ${Math.floor(untilMs)}
+    `
+
+    try {
+      var raw = ctx.host.sqlite.query(dbPath, sql)
+      var parsed = Array.isArray(raw) ? raw : ctx.util.tryParseJson(raw)
+      if (!Array.isArray(parsed)) return { ok: false, rows: [] }
+
+      var rows = []
+      for (var i = 0; i < parsed.length; i += 1) {
+        var row = parsed[i]
+        if (!row || typeof row !== "object") continue
+        var createdMs = readNumber(row.createdMs)
+        if (createdMs === null || createdMs < sinceMs || createdMs >= untilMs) continue
+
+        var cost = readNumber(row.cost)
+        var inputTokens = readNumber(row.inputTokens)
+        var outputTokens = readNumber(row.outputTokens)
+        var cacheReadTokens = readNumber(row.cacheReadTokens)
+        var cacheCreationTokens = readNumber(row.cacheCreationTokens)
+        var totalTokens = readNumber(row.totalTokens)
+        if (
+          cost === null &&
+          inputTokens === null &&
+          outputTokens === null &&
+          cacheReadTokens === null &&
+          cacheCreationTokens === null &&
+          totalTokens === null
+        ) {
+          continue
+        }
+
+        rows.push({
+          createdMs: createdMs,
+          model: typeof row.modelId === "string" && row.modelId.trim() ? row.modelId : null,
+          cost: cost !== null && cost >= 0 ? cost : null,
+          inputTokens: inputTokens !== null && inputTokens >= 0 ? inputTokens : null,
+          outputTokens: outputTokens !== null && outputTokens >= 0 ? outputTokens : null,
+          cacheReadTokens:
+            cacheReadTokens !== null && cacheReadTokens >= 0 ? cacheReadTokens : null,
+          cacheCreationTokens:
+            cacheCreationTokens !== null && cacheCreationTokens >= 0 ? cacheCreationTokens : null,
+          totalTokens: totalTokens !== null && totalTokens >= 0 ? totalTokens : null,
+        })
+      }
+      return { ok: true, rows: rows }
+    } catch {
+      return { ok: false, rows: [] }
+    }
+  }
+
   function formatCostWindow(rows, startMs, endMs) {
     var total = 0
     for (var i = 0; i < rows.length; i += 1) {
@@ -362,23 +432,8 @@
     var result = loadCostHistoryRows(ctx, dbPath, last30StartMs, nowMs)
     if (!result.ok) return { lines: [], history: undefined }
 
-    var dailyCosts = new Map()
-    for (var i = 0; i < result.rows.length; i += 1) {
-      var row = result.rows[i]
-      var dayStartMs = startOfUtcDay(row.createdMs)
-      dailyCosts.set(dayStartMs, (dailyCosts.get(dayStartMs) || 0) + row.cost)
-    }
-    var entries = Array.from(dailyCosts.entries())
-      .sort(function (a, b) {
-        return a[0] - b[0]
-      })
-      .map(function (entry) {
-        return {
-          periodStart: new Date(entry[0]).toISOString(),
-          periodEnd: new Date(entry[0] + 24 * 60 * 60 * 1000).toISOString(),
-          costUsd: entry[1],
-        }
-      })
+    var historyResult = loadUsageHistoryRows(ctx, dbPath, last30StartMs, nowMs)
+    var entries = historyResult.ok ? buildUsageHistoryEntries(historyResult.rows) : []
 
     return {
       lines: [
@@ -405,6 +460,60 @@
         entries: entries,
       },
     }
+  }
+
+  function buildUsageHistoryEntries(rows) {
+    var groups = new Map()
+    var metricNames = [
+      "cost",
+      "inputTokens",
+      "outputTokens",
+      "cacheReadTokens",
+      "cacheCreationTokens",
+      "totalTokens",
+    ]
+
+    for (var i = 0; i < rows.length; i += 1) {
+      var row = rows[i]
+      var dayStartMs = startOfUtcDay(row.createdMs)
+      var key = dayStartMs + "\\u0000" + (row.model || "")
+      var group = groups.get(key)
+      if (!group) {
+        group = { dayStartMs: dayStartMs, model: row.model }
+        for (var j = 0; j < metricNames.length; j += 1) {
+          group[metricNames[j]] = 0
+          group["has" + metricNames[j]] = false
+        }
+        groups.set(key, group)
+      }
+      for (var k = 0; k < metricNames.length; k += 1) {
+        var metric = metricNames[k]
+        if (row[metric] === null) continue
+        group[metric] += row[metric]
+        group["has" + metric] = true
+      }
+    }
+
+    return Array.from(groups.values())
+      .sort(function (a, b) {
+        return (
+          a.dayStartMs - b.dayStartMs || String(a.model || "").localeCompare(String(b.model || ""))
+        )
+      })
+      .map(function (group) {
+        var entry = {
+          periodStart: new Date(group.dayStartMs).toISOString(),
+          periodEnd: new Date(group.dayStartMs + 24 * 60 * 60 * 1000).toISOString(),
+        }
+        if (group.model) entry.model = group.model
+        if (group.hascost) entry.costUsd = group.cost
+        if (group.hasinputTokens) entry.inputTokens = group.inputTokens
+        if (group.hasoutputTokens) entry.outputTokens = group.outputTokens
+        if (group.hascacheReadTokens) entry.cacheReadTokens = group.cacheReadTokens
+        if (group.hascacheCreationTokens) entry.cacheCreationTokens = group.cacheCreationTokens
+        if (group.hastotalTokens) entry.totalTokens = group.totalTokens
+        return entry
+      })
   }
 
   function readZenBalance(ctx, text) {

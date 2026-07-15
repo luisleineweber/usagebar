@@ -36,11 +36,15 @@ function setCostHistoryQuery(ctx, rows) {
   const list = Array.isArray(rows) ? rows : []
   ctx.host.sqlite.query.mockImplementation((dbPath, sql) => {
     expect(dbPath).toBe("~/.local/share/opencode/opencode.db")
-    expect(String(sql)).toContain(
-      "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')"
-    )
+    if (!String(sql).includes("AS modelId")) {
+      expect(String(sql)).toContain(
+        "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')"
+      )
+    }
     expect(String(sql)).toContain("json_extract(data, '$.role') = 'assistant'")
-    expect(String(sql)).toContain("json_type(data, '$.cost') IN ('integer', 'real')")
+    if (!String(sql).includes("AS modelId")) {
+      expect(String(sql)).toContain("json_type(data, '$.cost') IN ('integer', 'real')")
+    }
     expect(String(sql)).toContain("COALESCE(json_extract(data, '$.time.created'), time_created)")
     return JSON.stringify(list)
   })
@@ -232,6 +236,63 @@ describe("opencode plugin", () => {
         }),
       ])
     )
+  })
+
+  it("emits recorded OpenCode model and token history without inventing missing fields", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-03-06T12:00:00.000Z"
+    setManualCookie(ctx)
+    setWorkspace(ctx)
+    setOpenCodeDb(ctx)
+    ctx.host.sqlite.query.mockImplementation((_dbPath, sql) => {
+      if (String(sql).includes("AS modelId")) {
+        expect(String(sql)).not.toContain(
+          "json_extract(data, '$.providerID') IN ('opencode-go', 'opencode')"
+        )
+        return JSON.stringify([
+          {
+            createdMs: Date.parse("2026-03-05T09:00:00.000Z"),
+            providerId: "anthropic",
+            modelId: "claude-sonnet-4-5",
+            cost: 0.24,
+            inputTokens: 120,
+            outputTokens: 30,
+            cacheReadTokens: 40,
+            cacheCreationTokens: 5,
+            totalTokens: 195,
+          },
+          {
+            createdMs: Date.parse("2026-03-05T10:00:00.000Z"),
+            modelId: "claude-sonnet-4-5",
+            cost: null,
+            inputTokens: null,
+            outputTokens: null,
+            cacheReadTokens: null,
+            cacheCreationTokens: null,
+            totalTokens: null,
+          },
+        ])
+      }
+      return JSON.stringify([{ createdMs: Date.parse("2026-03-05T09:00:00.000Z"), cost: 0.24 }])
+    })
+    ctx.host.http.request.mockReturnValue(
+      response(JSON.stringify({ billing: { currentBalance: 8 } }))
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.history.entries).toContainEqual({
+      periodStart: "2026-03-05T00:00:00.000Z",
+      periodEnd: "2026-03-06T00:00:00.000Z",
+      model: "claude-sonnet-4-5",
+      costUsd: 0.24,
+      inputTokens: 120,
+      outputTokens: 30,
+      cacheReadTokens: 40,
+      cacheCreationTokens: 5,
+      totalTokens: 195,
+    })
   })
 
   it("declares local OpenCode cost detail lines in the manifest", () => {
