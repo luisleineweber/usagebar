@@ -892,6 +892,36 @@ describe("ProviderSettingsDetail", () => {
     ).toBeInTheDocument()
   })
 
+  it("runs guided login from the provider-neutral re-authenticate action", async () => {
+    guidedLoginMock.mockResolvedValueOnce({
+      cookieHeader: "zed.session=reauth",
+      finalUrl: "https://dashboard.zed.dev/org_123/billing/usage",
+      cookieCount: 1,
+    })
+    const onSecretSave = vi.fn(async () => undefined)
+
+    render(
+      <ProviderSettingsDetail
+        plugin={zedPlugin}
+        enabled
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
+        onEnabledChange={vi.fn()}
+        onSecretSave={onSecretSave}
+      />
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Re-authenticate" }))
+
+    await waitFor(() => expect(guidedLoginMock).toHaveBeenCalledTimes(1))
+    expect(onSecretSave).toHaveBeenCalledWith("zed", "cookieHeader", "zed.session=reauth")
+  })
+
   it("shows no editable inputs for auto-detected providers", () => {
     render(
       <ProviderSettingsDetail
