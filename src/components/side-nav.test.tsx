@@ -19,7 +19,13 @@ vi.mock("@/hooks/use-dark-mode", () => ({
 }))
 
 vi.mock("@dnd-kit/core", () => ({
-  DndContext: ({ children, onDragEnd }: { children: ReactNode; onDragEnd?: (event: any) => void }) => {
+  DndContext: ({
+    children,
+    onDragEnd,
+  }: {
+    children: ReactNode
+    onDragEnd?: (event: any) => void
+  }) => {
     dndState.latestOnDragEnd = onDragEnd ?? null
     return <div>{children}</div>
   },
@@ -82,9 +88,7 @@ describe("SideNav", () => {
       <SideNav
         activeView="home"
         onViewChange={onViewChange}
-        plugins={[
-          { id: "p1", name: "Plugin 1", iconUrl: "icon.svg", brandColor: "#ff0000" },
-        ]}
+        plugins={[{ id: "p1", name: "Plugin 1", iconUrl: "icon.svg", brandColor: "#ff0000" }]}
       />
     )
 
@@ -149,5 +153,22 @@ describe("SideNav", () => {
     expect(screen.queryByRole("button", { name: "Help" })).not.toBeInTheDocument()
     expect(invoke).not.toHaveBeenCalled()
   })
-})
 
+  it("keeps Settings pinned when the provider list exceeds the panel height", () => {
+    render(
+      <SideNav
+        activeView="home"
+        onViewChange={() => {}}
+        plugins={Array.from({ length: 20 }, (_, index) => ({
+          id: `provider-${index}`,
+          name: `Provider ${index}`,
+          iconUrl: "icon.svg",
+        }))}
+      />
+    )
+
+    expect(screen.getByRole("navigation")).toHaveClass("min-h-0")
+    expect(screen.getByRole("button", { name: "Settings" })).toHaveClass("shrink-0")
+    expect(screen.getByTestId("provider-list")).toHaveClass("overflow-y-auto")
+  })
+})
