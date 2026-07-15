@@ -757,6 +757,47 @@ describe("copilot plugin", () => {
     expect(completions.format).toEqual({ kind: "count", suffix: "completions" })
   })
 
+  it("renders current token-based quota snapshots from GitHub", async () => {
+    const ctx = makePluginTestContext()
+    setKeychainToken(ctx, "tok")
+    mockUsageOk(ctx, {
+      copilot_plan: "individual",
+      access_type_sku: "free_limited_copilot",
+      token_based_billing: true,
+      quota_reset_date: "2026-08-01",
+      quota_snapshots: {
+        chat: { percent_remaining: 100, remaining: 200, entitlement: 200, has_quota: true },
+        completions: {
+          percent_remaining: 100,
+          remaining: 2000,
+          entitlement: 2000,
+          has_quota: true,
+        },
+        premium_interactions: {
+          percent_remaining: 0,
+          remaining: 0,
+          entitlement: 0,
+          has_quota: false,
+        },
+      },
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((l) => l.label === "Billing Mode").value).toBe("Current quota")
+    expect(result.lines.find((l) => l.label === "Legacy Premium")).toBeUndefined()
+    expect(result.lines.find((l) => l.label === "Chat")).toMatchObject({
+      used: 0,
+      limit: 200,
+      format: { kind: "count", suffix: "quota units" },
+    })
+    expect(result.lines.find((l) => l.label === "Completions")).toMatchObject({
+      used: 0,
+      limit: 2000,
+    })
+  })
+
   it("includes periodDurationMs on free tier progress lines", async () => {
     const ctx = makePluginTestContext()
     setKeychainToken(ctx, "tok")
