@@ -1,5 +1,301 @@
 ﻿# Active Todo
 
+# Commit packaging, 2026-07-15
+
+## Executive Summary
+
+- Split the current Alpha 5 working tree into small, reviewable commits.
+- Preserve all existing code and documentation changes without rewriting behavior.
+- Verify the final history and clean working tree after committing.
+
+## Acceptance Criteria
+
+- [x] Every current tracked and untracked change belongs to an intentional commit.
+- [x] Commit messages use clear Conventional Commit subjects.
+- [x] Focused verification and final diff/status review pass.
+
+## Plan
+
+- [x] Group changes by feature boundary.
+- [x] Commit each group separately.
+- [x] Run verification and review the resulting history.
+
+# Alpha 5 showcase completion, 2026-07-15
+
+## Executive Summary
+
+- Complete the open Alpha 5 showcase slice across tests, Windows packaging, notifications, accounts, Edge import, and reporting.
+- Publish-ready documentation and release checks must describe the actual shipped behavior.
+- External account-dependent checks remain explicit if this environment cannot perform them.
+
+## Acceptance Criteria
+
+- [x] Frontend/plugin tests finish without unhandled errors; strict coverage result is understood and has an explicit release decision.
+- [x] `usagebar-cli` is bundled, installed on PATH, reversible on uninstall, and manually exercised from a packaged Windows build.
+- [x] Edge import is registered, policy-scoped, redacted, tested, and manually checked against a live profile.
+- [x] Notifications, provider-neutral account surfaces, and report configuration are wired, tested, and documented.
+- [x] Alpha 5 README/changelog/release preflight, bundles, production build, Rust checks, and diff review pass.
+
+## Plan
+
+- [x] Fix notification store error handling/mocks and add focused component coverage.
+- [x] Verify and harden CLI sidecar and NSIS PATH lifecycle.
+- [x] Close remaining Edge/account/notification/reporting behavior gaps.
+- [x] Update release docs and generated bundles.
+- [x] Run full automated/manual verification and record external blockers.
+
+## Verification Notes
+
+- 1,407 frontend/plugin tests pass across 97 files with no unhandled errors. `bun run check`, `bun run release:check`, Rust tests (136 passed, 1 ignored), production frontend build, NSIS bundle, live Edge metadata smoke, and `git diff --check` pass.
+- Strict coverage remains below the unchanged global gate: 86.08% statements, 79.30% branches, 91.41% functions, 89.31% lines. Alpha 5 carries this explicit waiver; the gate was not lowered.
+- Packaged Windows install smoke passed CLI version, full PATH registration with a long existing user PATH, and uninstall cleanup. Narrow-layout resize QA remains external because the collaborative preview was unavailable due to authentication; the prior wide settings DOM check passed.
+
+# History chart hover details, 2026-07-14
+
+## Executive Summary
+
+- Make chart points easier to inspect without adding permanent visual noise.
+- Show date, tokens, and cost only while a point is hovered or focused.
+- Keep the interaction keyboard-accessible and gentle under reduced-motion settings.
+
+## Acceptance Criteria
+
+- [x] Chart points enlarge subtly on hover/focus.
+- [x] Hover/focus details show the point date, tokens, and cost.
+- [x] Tooltip content is available to keyboard and screen-reader users.
+- [x] Focused frontend test, formatting, typecheck, and diff review pass.
+
+## Plan
+
+- [x] Extend daily chart points with token and cost totals.
+- [x] Add animated, accessible hover/focus point details.
+- [x] Add regression coverage and verify the touched slice.
+
+## Verification Notes
+
+- `bun vitest run src/components/usage-report.test.tsx --reporter=dot` -> passed, 6 tests.
+- `bun run typecheck`, targeted ESLint, and `bun run build:frontend` -> passed.
+- Targeted Prettier and `git diff --check` -> passed; existing line-ending warnings only.
+
+# OpenCode local usage history, 2026-07-13
+
+## Executive Summary
+
+- Show OpenCode activity already stored on this device in the History page.
+- Preserve current OpenCode Zen balance behavior while adding model, token, and cost history where the database provides them.
+- Keep unavailable data unavailable instead of guessing values.
+
+## Acceptance Criteria
+
+- [x] OpenCode history emits daily entries from all local OpenCode assistant messages, with model, available token fields, and cost.
+- [x] Existing OpenCode balance and cost-window output remains unchanged.
+- [x] A focused regression test covers OpenCode’s persisted message shape and missing optional usage fields.
+- [x] Plugin tests, bundle sync, format checks, and diff review pass.
+
+## Plan
+
+- [x] Compare ccusage’s OpenCode SQLite parser with the current plugin and history contract.
+- [x] Add a failing plugin regression test for rich local OpenCode message data.
+- [x] Extend the plugin’s history mapper without changing the billing probe path.
+- [x] Verify, sync bundled plugin resources, review the diff, and record breadcrumbs.
+
+## Verification Notes
+
+- `bun vitest run plugins/opencode/plugin.test.js --reporter=dot` -> passed, 14 tests.
+- `bun prettier --write plugins/opencode/plugin.js plugins/opencode/plugin.test.js tasks/todo.md docs/choices.md docs/breadcrumbs.md` -> passed.
+- `bun run bundle:plugins`, `bun eslint plugins/opencode/plugin.js plugins/opencode/plugin.test.js`, `bun run typecheck`, and `git diff --check` -> passed.
+
+# Hide unsupported usage history, 2026-07-13
+
+## Executive Summary
+
+- Do not show a history section when no provider has history data.
+
+## Acceptance Criteria
+
+- [x] Unsupported provider history does not render an empty-state section.
+- [x] Focused report test passes.
+
+## Plan
+
+- [x] Trace history visibility and current regression coverage.
+- [x] Return no report section when all histories are absent.
+- [x] Verify the focused test and record the decision.
+
+## Verification Notes
+
+- `bun vitest run src/components/usage-report.test.tsx` -> 5 tests passed.
+- `bun prettier --check src/components/usage-report.tsx src/components/usage-report.test.tsx tasks/lessons.md tasks/todo.md docs/choices.md docs/breadcrumbs.md` -> passed.
+- `bun run typecheck` -> passed.
+- `git diff --check` -> passed (only existing CRLF warnings).
+
+# History report accuracy, 2026-07-13
+
+## Executive Summary
+
+- Keep the history view focused on useful multi-day comparisons.
+- Show a compact daily activity view when a line chart would contain only one point.
+- Preserve provider-reported request counts and apply pricing per recorded model.
+
+## Acceptance Criteria
+
+- [x] History period controls omit Today and Yesterday.
+- [x] One active day renders as a daily activity view, not an isolated sparkline point.
+- [x] Request totals use available provider counts without presenting missing data as a confirmed zero.
+- [x] Cost calculations retain each record's model-specific price.
+- [x] Focused regression tests and formatting checks pass.
+
+## Plan
+
+- [x] Trace report controls, chart rendering, history contracts, and provider payload mapping.
+- [x] Add focused report/pricing regressions for periods, sparse daily data, requests, and model prices.
+- [x] Implement the smallest UI and data-contract corrections.
+- [x] Verify, review the diff, and record breadcrumbs.
+
+## Verification Notes
+
+- `bun run test -- src\\components\\usage-report.test.tsx src\\lib\\report-pricing.test.ts --run` -> 2 files passed, 8 tests passed.
+- `bun run typecheck` -> passed.
+- Targeted Prettier and `git diff --check` -> passed.
+
+# Copilot usage visibility, 2026-07-13
+
+## Executive Summary
+
+- Restore the Copilot card's current quota counters from GitHub's authenticated usage response.
+- Preserve legacy, free, and AI-credit response behavior.
+
+## Acceptance Criteria
+
+- [x] A deterministic plugin test reproduces GitHub's current token-based quota response.
+- [x] Copilot Chat and Completions usage appears from provider-reported snapshot limits.
+- [x] Focused tests, bundled-resource sync, and format checks pass.
+
+## Plan
+
+- [x] Confirm the installed Copilot CLI and trace the current provider implementation.
+- [x] Capture the live GitHub usage contract and add a failing regression test.
+- [x] Recognize current token-based snapshots without changing credential/API fallback behavior.
+- [x] Verify, sync bundled resources, review the diff, and record breadcrumbs.
+
+## Verification Notes
+
+- `gh api /copilot_internal/user` returned authenticated current token-based snapshots for Chat and Completions.
+- `bun vitest run plugins/copilot/plugin.test.js --reporter=dot` -> passed, 46 tests.
+- `bun eslint plugins/copilot/plugin.js plugins/copilot/plugin.test.js`, Prettier, plugin bundling, and `git diff --check` passed.
+
+# Copilot free-limited snapshot precedence, 2026-07-15
+
+## Executive Summary
+
+- Restore Copilot usage for accounts whose response includes both free-limited plan metadata and current token-based quota snapshots.
+- Keep the provider's Chat and Completions counters visible instead of falling back to no usage data.
+
+## Acceptance Criteria
+
+- [x] The exact live response shape reproduces the empty-card symptom before the fix.
+- [x] Current Chat and Completions snapshots take precedence over free-tier classification.
+- [x] Source plugin tests pass and bundled plugin resources match source after synchronization.
+
+## Verification Notes
+
+- `gh api /copilot_internal/user` returned `access_type_sku: free_limited_copilot`, token-based billing, Chat remaining 200, and Completions remaining 2000.
+- Added the combined response fixture; focused tests went red (1 failed, 45 passed), then green (46 passed) after the precedence fix.
+- Bundled 33 plugins successfully; Copilot source/bundle hashes match, and targeted format, lint, and diff checks pass.
+
+# Antigravity expired-token refresh, 2026-07-13
+
+## Executive Summary
+
+- Restore Antigravity access after a user re-authenticates.
+- Ensure UsageBar refreshes using the renewed local session rather than a stale token.
+
+## Acceptance Criteria
+
+- [ ] The Antigravity plugin has a deterministic regression test for expired-session refresh behavior.
+- [ ] A successful re-login is detected without retaining stale authentication state.
+- [ ] Focused plugin tests and syntax/format checks pass.
+
+## Plan
+
+- [x] Reproduce the plugin's expired-session path and inspect its credential source.
+- [x] Confirm existing refresh handling covers the reported expired-token state; no code change warranted.
+- [ ] Complete interactive Antigravity sign-in, then refresh and verify UsageBar.
+
+## Verification Notes
+
+- `bun run test -- plugins/antigravity/plugin.test.js --run` -> passed, 1 file / 34 tests; includes the exact expired-token error and refresh recovery paths.
+- The local Antigravity state database exists at the expected Windows path but its last-write time is 2026-05-20, confirming the local sign-in state has not been renewed.
+- UsageBar reads the credential database on every probe, so a completed Antigravity re-login is picked up by the next refresh; it does not need an app restart or a code patch.
+- Interactive login remains required because it needs the account holder's Google credentials/MFA; Windows UI automation is unavailable in this session.
+
+# Tauri dev binary selection, 2026-07-13
+
+## Executive Summary
+
+- Start the desktop app from `npm run tauri dev` while retaining the installed CLI command.
+
+## Acceptance Criteria
+
+- [x] Cargo defaults to the desktop `usagebar` binary when both binaries exist.
+- [x] Cargo metadata reports `usagebar` as the default run target.
+
+## Plan
+
+- [x] Set the package default run target to `usagebar`.
+- [x] Verify Cargo's selected binary through package metadata.
+
+# Persistent settings entry point, 2026-07-13
+
+## Executive Summary
+
+- Keep the settings control reachable whenever the tray panel is open.
+- Reproduce the missing-control state and protect it with a focused UI test.
+
+## Acceptance Criteria
+
+- [x] A focused UI test covers the state that previously omitted Settings.
+- [x] Settings remains reachable independent of provider/card state.
+- [x] Focused test, format check, and diff review pass.
+
+## Plan
+
+- [x] Establish and minimize a deterministic repro for the missing settings control.
+- [x] Identify the conditional render/layout cause and add the regression test.
+- [x] Apply the smallest fix, verify it, and record the outcome.
+
+# Showcase completion, 2026-07-13
+
+## Executive Summary
+
+- Ship the CLI as an installed Windows command and verify PATH behavior.
+- Complete the Edge import workflow and Windows-safe diagnostics.
+- Add local, deduplicated quota/incident/reset notifications with quiet hours and recent events.
+- Replace Codex-only account UI assumptions with provider capabilities.
+- Deepen local reporting with grouping, paths, pricing controls, offline behavior, and watch output.
+- Add no provider without strong Windows authentication and entitlement evidence.
+- Verify packaged Windows behavior, narrow layouts, and the complete automated suite.
+
+## Acceptance Criteria
+
+- [ ] Installed Windows builds include `usagebar-cli`; installer PATH changes are reversible and live command execution is verified.
+- [ ] Edge import is command-registered, policy-scoped, secret-redacted, regression-tested, and exercised against a live Windows Edge profile when available.
+- [ ] Users can configure quota thresholds, incident/reset notifications, quiet hours, and inspect recent deduplicated events; installed Windows delivery is verified.
+- [ ] Account management is provider-neutral and capability-driven while preserving existing Codex profiles and selection.
+- [ ] Reports support project grouping, custom paths, pricing overrides/offline prices, and watch-mode CLI output with shared normalized data.
+- [ ] Long-tail provider decisions cite current Windows auth and entitlement evidence; plugin/docs/redaction obligations pass for any addition.
+- [ ] Production build, focused/full frontend and Rust suites, packaged Windows checks, narrow-layout QA, formatting, and diff review pass.
+
+## Plan
+
+- [ ] Baseline current wiring, tests, packaging, and live Windows prerequisites.
+- [ ] Finish CLI/PATH packaging and Edge import verification.
+- [ ] Implement notification preferences, event derivation/deduplication, OS delivery, and recent-event UI.
+- [ ] Generalize account capabilities and management surfaces beyond Codex.
+- [ ] Add report configuration, project grouping, offline pricing, and CLI watch mode.
+- [ ] Research long-tail candidates; implement only evidence-backed providers.
+- [ ] Run packaged, responsive, full-suite, and final code-review gates; record decisions and breadcrumbs.
+
 # Refresh, credential, and Cursor reliability, 2026-07-13
 
 ## Executive Summary
@@ -799,3 +1095,37 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun prettier --check <touched files>` -> passed.
 - `cargo fmt --manifest-path src-tauri\Cargo.toml -- --check` -> passed.
 - `git --no-pager diff --check` -> passed; only expected CRLF conversion warnings were reported.
+
+# Provider usability audit, 2026-07-15
+
+## Executive Summary
+
+- Verify every registered provider appears with correct identity, status, metrics, settings, and supported Windows behavior.
+- Use existing plugin contracts/tests plus a manual frontend pass to find provider-specific gaps.
+- Fix only confirmed defects and record any external-auth blockers explicitly.
+
+## Acceptance Criteria
+
+- [x] Inventory covers every provider manifest and bundled resource.
+- [x] Provider/plugin tests and frontend provider surfaces pass.
+- [ ] Manual provider list/detail/settings interaction is usable in the dev UI; collaborative preview automation timed out after a workspace dev server restart.
+- [x] No functional provider defect was found that warrants a code change; the Kiro missing `brandColor` is non-blocking icon polish.
+- [x] Bundled resources, formatting, diff, and relevant build checks pass.
+- [x] Provider-by-provider result is recorded in the final handoff.
+
+## Plan
+
+- [x] Inventory manifests, UI mapping, platform support, and provider-specific settings.
+- [x] Run baseline provider/frontend/backend verification and inspect failures.
+- [x] Exercise provider surfaces through isolated component tests; live browser interaction remains external because preview automation timed out.
+- [x] Patch confirmed provider defects and add regression tests; no functional defect was confirmed.
+- [x] Re-run verification, sync bundles if needed, and review the diff.
+
+## Verification Notes
+
+- Source inventory: 34 plugin directories including `mock`; 33 real providers are bundled. Windows manifests: 7 `supported`, 25 `experimental`; `kimi-k2` and `opencode` are intentionally `surfaced: false`.
+- Bundle audit: all 33 providers have matching SHA-256 `plugin.js`, `plugin.json`, and `plugin.test.js` source/bundle files.
+- Provider plugins: 34 files / 716 tests passed with isolated Vitest execution.
+- Provider UI/settings: 13 focused files / 229 tests passed.
+- `bun run check`, `cargo test --manifest-path src-tauri/Cargo.toml --lib` (136 passed, 1 ignored), `bun run build:frontend`, `bun run release:check`, and `git diff --check` passed.
+- Live entitlement validation is not complete for every provider. The provider docs and Windows rollout matrix correctly distinguish fixture/contract coverage from real-account coverage; do not promote experimental providers based on tests alone.
