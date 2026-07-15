@@ -459,4 +459,40 @@ mod tests {
         assert!(!json.contains("sk-ant"));
         let _ = std::fs::remove_dir_all(dir);
     }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "requires a live Microsoft Edge profile on Windows"]
+    fn live_edge_import_smoke_returns_only_safe_metadata() {
+        let app_data = std::env::temp_dir().join(format!(
+            "usagebar-live-edge-import-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(app_data.join(".store")).unwrap();
+        std::fs::write(
+            app_data.join(".store").join("settings.json"),
+            r#"{"providerConfigs":{"claude":{"browserCookieImportEnabled":true}}}"#,
+        )
+        .unwrap();
+
+        let sources = list_sources(&app_data, "claude");
+        let edge = sources
+            .iter()
+            .find(|source| source.source_id == "edge")
+            .expect("Microsoft Edge profile was not detected");
+        let profile = edge
+            .profiles
+            .first()
+            .expect("Microsoft Edge has no cookie profile");
+        let result = import_cookies(&app_data, "claude", "edge", profile);
+        let json = serde_json::to_string(&result).unwrap();
+        println!("live Edge import metadata: {json}");
+        assert!(!json.contains("sessionKey"));
+        assert!(!json.contains("Cookie"));
+        assert!(matches!(
+            result.code.as_str(),
+            "ok" | "noMatch" | "unsupportedEncryption"
+        ));
+        let _ = std::fs::remove_dir_all(app_data);
+    }
 }
