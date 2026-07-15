@@ -9,6 +9,7 @@ pub(crate) enum Command {
 pub(crate) struct CommonArgs {
     pub json: bool,
     pub provider: Option<String>,
+    pub watch_seconds: Option<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,6 +61,21 @@ pub(crate) fn parse(args: impl IntoIterator<Item = String>) -> Result<ParsedArgs
                     return Err("--provider requires a provider id".to_string());
                 }
                 common.provider = Some(provider);
+            }
+            "--watch" => {
+                if common.watch_seconds.is_some() {
+                    return Err("--watch may only be specified once".to_string());
+                }
+                let value = remaining
+                    .next()
+                    .ok_or_else(|| "--watch requires a number from 1 to 3600".to_string())?;
+                common.watch_seconds = Some(
+                    value
+                        .parse::<u16>()
+                        .ok()
+                        .filter(|seconds| (1..=3600).contains(seconds))
+                        .ok_or_else(|| "--watch requires a number from 1 to 3600".to_string())?,
+                );
             }
             "--days" => {
                 if command != "history" {
@@ -115,6 +131,7 @@ mod tests {
                 common: CommonArgs {
                     json: true,
                     provider: Some("claude".to_string()),
+                    watch_seconds: None,
                 },
                 days: 7,
             })))
@@ -138,6 +155,19 @@ mod tests {
         assert_eq!(
             parse(args(&["usage", "--refresh"])),
             Err("unknown argument '--refresh'".to_string())
+        );
+    }
+
+    #[test]
+    fn parses_bounded_watch_interval() {
+        let parsed = parse(args(&["statusline", "--watch", "5"])).unwrap();
+        let ParsedArgs::Command(Command::Statusline(common)) = parsed else {
+            panic!("expected statusline command");
+        };
+        assert_eq!(common.watch_seconds, Some(5));
+        assert_eq!(
+            parse(args(&["usage", "--watch", "0"])),
+            Err("--watch requires a number from 1 to 3600".to_string())
         );
     }
 }

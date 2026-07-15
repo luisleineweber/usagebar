@@ -4,6 +4,7 @@ version = "0.1.0-alpha.5"
 description = "UsageBar is a Windows-first desktop tracker for AI coding subscription usage"
 authors = ["Robin Ebers"]
 edition = "2024"
+default-run = "usagebar"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

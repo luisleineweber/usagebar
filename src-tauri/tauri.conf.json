@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run bundle:plugins && bun run build",
+    "beforeBuildCommand": "bun run prepare:cli-sidecar && bun run bundle:plugins && bun run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -60,9 +60,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "externalBin": ["binaries/usagebar-cli"],
     "resources": ["resources/bundled_plugins/**/*", "icons/tray-icon.png", "icons/icon.png"],
     "windows": {
       "signCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/sign-windows.ps1 -TargetPath %1",
+      "nsis": {
+        "installerHooks": "./windows/installer-hooks.nsh"
+      },
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }

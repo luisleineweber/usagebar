@@ -10,6 +10,7 @@ lerna-debug.log*
 *.har
 
 node_modules
+src-tauri/binaries/
 dist
 dist-ssr
 *.local
