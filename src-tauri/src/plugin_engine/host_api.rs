@@ -1974,6 +1974,8 @@ struct CcusageQueryOpts {
     until: Option<String>,
     home_path: Option<String>,
     claude_path: Option<String>,
+    offline: Option<bool>,
+    mode: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -2353,6 +2355,21 @@ fn append_ccusage_common_args(
     {
         args.push("--until".to_string());
         args.push(until.to_string());
+    }
+
+    if flavor == CcusageCommandFlavor::Current {
+        if opts.offline == Some(true) {
+            args.push("--offline".to_string());
+        }
+        if let Some(mode) = opts
+            .mode
+            .as_deref()
+            .map(str::trim)
+            .filter(|mode| matches!(*mode, "auto" | "calculate" | "display"))
+        {
+            args.push("--mode".to_string());
+            args.push(mode.to_string());
+        }
     }
 }
 
@@ -3894,6 +3911,7 @@ mod tests {
             until: Some("20260131".to_string()),
             home_path: None,
             claude_path: None,
+            ..Default::default()
         };
         let expected_ccusage_package = ccusage_package_spec();
         assert_eq!(expected_ccusage_package, "ccusage@20.0.2");
@@ -4042,6 +4060,7 @@ mod tests {
             until: Some("20260131".to_string()),
             home_path: None,
             claude_path: None,
+            ..Default::default()
         };
         let expected_claude_package = ccusage_legacy_package_spec(CcusageProvider::Claude);
         let expected_npm_exec_package = format!("--package={expected_claude_package}");
@@ -4115,6 +4134,7 @@ mod tests {
             until: Some("20260131".to_string()),
             home_path: None,
             claude_path: None,
+            ..Default::default()
         };
         let expected_ccusage_package = ccusage_package_spec();
         let expected_npm_exec_package = format!("--package={expected_ccusage_package}");
@@ -4167,6 +4187,32 @@ mod tests {
                 "20260131"
             ]
         );
+    }
+
+    #[test]
+    fn ccusage_current_runner_supports_offline_pricing_mode() {
+        let opts = CcusageQueryOpts {
+            offline: Some(true),
+            mode: Some("calculate".to_string()),
+            ..Default::default()
+        };
+        let current = ccusage_runner_args(
+            CcusageRunnerKind::Npx,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Current,
+        );
+        assert!(current.windows(2).any(|args| args == ["--mode", "calculate"]));
+        assert!(current.iter().any(|arg| arg == "--offline"));
+
+        let legacy = ccusage_runner_args(
+            CcusageRunnerKind::Npx,
+            &opts,
+            CcusageProvider::Claude,
+            CcusageCommandFlavor::Legacy,
+        );
+        assert!(!legacy.iter().any(|arg| arg == "--offline"));
+        assert!(!legacy.iter().any(|arg| arg == "--mode"));
     }
 
     #[test]
@@ -4361,6 +4407,7 @@ mod tests {
             until: None,
             home_path: None,
             claude_path: None,
+            ..Default::default()
         };
         assert_eq!(
             resolve_ccusage_provider(&opts_explicit, "claude"),
@@ -4390,6 +4437,7 @@ mod tests {
             until: None,
             home_path: Some("/tmp/shared-home".to_string()),
             claude_path: Some("/tmp/claude-home".to_string()),
+            ..Default::default()
         };
         assert_eq!(
             ccusage_home_override(&with_home, CcusageProvider::Claude),
@@ -4406,6 +4454,7 @@ mod tests {
             until: None,
             home_path: None,
             claude_path: Some("/tmp/legacy-claude-path".to_string()),
+            ..Default::default()
         };
         assert_eq!(
             ccusage_home_override(&claude_compat, CcusageProvider::Claude),

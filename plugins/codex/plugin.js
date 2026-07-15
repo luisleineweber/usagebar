@@ -102,6 +102,17 @@
     }
   }
 
+  function reportOption(ctx, key) {
+    if (!ctx.host.providerConfig || typeof ctx.host.providerConfig.get !== "function") return null
+    try {
+      const value = ctx.host.providerConfig.get(key)
+      return typeof value === "string" && value.trim() ? value.trim() : null
+    } catch (e) {
+      ctx.host.log.warn(key + " read failed: " + String(e))
+      return null
+    }
+  }
+
   function loadManagedProfileAuth(ctx, profileId) {
     if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") {
       throw "Selected Codex account is unavailable. The secret store is not accessible."
@@ -403,10 +414,12 @@
     const d = since.getDate()
     const sinceStr = "" + y + (m < 10 ? "0" : "") + m + (d < 10 ? "0" : "") + d
     const queryOpts = { provider: "codex", since: sinceStr }
+    const historyPath = reportOption(ctx, "historyPath")
     const codexHome = readCodexHome(ctx)
-    if (codexHome) {
-      queryOpts.homePath = codexHome
-    }
+    if (historyPath || codexHome) queryOpts.homePath = historyPath || codexHome
+    const pricingMode = reportOption(ctx, "pricingMode")
+    if (pricingMode) queryOpts.mode = pricingMode
+    if (reportOption(ctx, "offlinePricing") === "enabled") queryOpts.offline = true
 
     const result = ctx.host.ccusage.query(queryOpts)
     if (!result || typeof result !== "object" || typeof result.status !== "string") {

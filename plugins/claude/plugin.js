@@ -10,6 +10,17 @@
     "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
 
+  function reportOption(ctx, key) {
+    if (!ctx.host.providerConfig || typeof ctx.host.providerConfig.get !== "function") return null
+    try {
+      const value = ctx.host.providerConfig.get(key)
+      return typeof value === "string" && value.trim() ? value.trim() : null
+    } catch (e) {
+      ctx.host.log.warn(key + " read failed: " + String(e))
+      return null
+    }
+  }
+
   function loadOAuthConfig(ctx) {
     const configFile = "~/.usagebar/config.json"
     if (!ctx.host.fs.exists(configFile)) {
@@ -508,7 +519,14 @@
     const d = since.getDate()
     const sinceStr = "" + y + (m < 10 ? "0" : "") + m + (d < 10 ? "0" : "") + d
 
-    const result = ctx.host.ccusage.query({ since: sinceStr })
+    const queryOpts = { since: sinceStr }
+    const historyPath = reportOption(ctx, "historyPath")
+    const pricingMode = reportOption(ctx, "pricingMode")
+    if (historyPath) queryOpts.homePath = historyPath
+    if (pricingMode) queryOpts.mode = pricingMode
+    if (reportOption(ctx, "offlinePricing") === "enabled") queryOpts.offline = true
+
+    const result = ctx.host.ccusage.query(queryOpts)
     if (!result || typeof result !== "object" || typeof result.status !== "string") {
       return { status: "runner_failed", data: null }
     }

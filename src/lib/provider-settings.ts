@@ -11,6 +11,9 @@ export type ProviderConfig = {
   workspaceId?: string
   selectedAccountProfileId?: string
   browserCookieImportEnabled?: boolean
+  historyPath?: string
+  pricingMode?: "auto" | "calculate" | "display"
+  offlinePricing?: "enabled"
   secrets?: Record<string, ProviderSecretMetadata>
   updatedAt?: number
 }
@@ -611,6 +614,13 @@ function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
     typeof raw.selectedAccountProfileId === "string"
       ? raw.selectedAccountProfileId.trim() || undefined
       : undefined
+  const historyPath =
+    typeof raw.historyPath === "string" ? raw.historyPath.trim() || undefined : undefined
+  const pricingMode =
+    raw.pricingMode === "calculate" || raw.pricingMode === "display" || raw.pricingMode === "auto"
+      ? raw.pricingMode
+      : undefined
+  const offlinePricing = raw.offlinePricing === "enabled" ? "enabled" : undefined
   const updatedAt =
     typeof raw.updatedAt === "number" && Number.isFinite(raw.updatedAt) ? raw.updatedAt : undefined
   const secrets = sanitizeSecretMetadata(raw.secrets)
@@ -619,6 +629,9 @@ function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
     source,
     workspaceId,
     selectedAccountProfileId,
+    historyPath,
+    pricingMode,
+    offlinePricing,
     updatedAt,
     secrets: Object.keys(secrets).length > 0 ? secrets : undefined,
   }
