@@ -12,7 +12,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { CodexAccountsSection } from "@/components/settings/codex-accounts-section"
+import { AccountManagementSection } from "@/components/settings/account-management-section"
+import { ReportingSourceSettings } from "@/components/settings/reporting-source-settings"
 import type { PluginState } from "@/hooks/app/types"
 import { captureProviderCookieHeader } from "@/lib/guided-cookie-login"
 import {
@@ -573,6 +574,7 @@ export function ProviderSettingsDetail({
                     {definition.secretField.label}
                   </label>
                   <textarea
+                    id={`provider-secret-${plugin.id}`}
                     aria-label={`${plugin.name} ${definition.secretField.label}`}
                     className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
                     placeholder={definition.secretField.placeholder}
@@ -646,8 +648,31 @@ export function ProviderSettingsDetail({
               </p>
             )}
 
-            {plugin.id === "codex" && (
-              <CodexAccountsSection config={config} onConfigChange={onConfigChange} />
+            <AccountManagementSection
+              providerId={plugin.id}
+              definition={definition}
+              connected={isConnected}
+              stale={Boolean(state?.lastSuccessAt && Date.now() - state.lastSuccessAt > 30 * 60_000)}
+              config={config}
+              credentialStored={secretPresent}
+              onConfigChange={onConfigChange}
+              onPing={() => onRetry?.()}
+              onReauthenticate={() => {
+                if (definition.guidedCookieLogin) {
+                  void handleGuidedCookieLogin()
+                  return
+                }
+                document.getElementById(`provider-secret-${plugin.id}`)?.focus()
+              }}
+              onRemoveCredential={() => void handleSecretDelete()}
+            />
+
+            {(plugin.id === "claude" || plugin.id === "codex") && (
+              <ReportingSourceSettings
+                providerId={plugin.id}
+                config={config}
+                onConfigChange={onConfigChange}
+              />
             )}
 
             {saveMessage && <p className="text-xs text-primary">{saveMessage}</p>}
