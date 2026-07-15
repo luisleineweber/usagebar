@@ -518,6 +518,35 @@ describe("codex plugin", () => {
     expect(firstCall.homePath).toBe("/tmp/codex-home")
   })
 
+  it("passes custom path and offline pricing controls to ccusage", async () => {
+    const ctx = makeCtx()
+    ctx.host.providerConfig = {
+      get: vi.fn((key) =>
+        ({
+          historyPath: "D:/usage/codex",
+          pricingMode: "calculate",
+          offlinePricing: "enabled",
+        })[key] ?? null
+      ),
+    }
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({ tokens: { access_token: "token" }, last_refresh: new Date().toISOString() })
+    )
+    ctx.host.http.request.mockReturnValue({ status: 200, headers: {}, bodyText: "{}" })
+    ctx.host.ccusage.query.mockReturnValue({ status: "ok", data: { daily: [] } })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    expect(ctx.host.ccusage.query.mock.calls[0][0]).toMatchObject({
+      provider: "codex",
+      homePath: "D:/usage/codex",
+      mode: "calculate",
+      offline: true,
+    })
+  })
+
   it("queries ccusage on each probe", async () => {
     const ctx = makeCtx()
     ctx.host.fs.writeText(

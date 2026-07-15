@@ -122,13 +122,13 @@
   --sidebar-ring: #555555;
 
   /* Accent highlight (lime) */
-  --page-accent: #BFFF00;
+  --page-accent: #bfff00;
 
   /* Tailwind green/yellow/red-500 derived from page-accent lime
      #BFFF00 ≈ oklch(0.93 0.27 128) — hue-rotate, keep chroma family */
   --green-500: oklch(0.93 0.27 128);
-  --yellow-500: oklch(0.90 0.21 85);
-  --red-500: oklch(0.70 0.24 29);
+  --yellow-500: oklch(0.9 0.21 85);
+  --red-500: oklch(0.7 0.24 29);
 }
 
 @layer base {
@@ -159,10 +159,50 @@ html[data-window="settings"] #root {
 
 /* Hide scrollbar track globally */
 .scrollbar-none {
-  scrollbar-width: none;          /* Firefox */
+  scrollbar-width: none; /* Firefox */
 }
 .scrollbar-none::-webkit-scrollbar {
-  display: none;                  /* Chrome / Safari / WebKit */
+  display: none; /* Chrome / Safari / WebKit */
+}
+
+/* History chart point feedback stays small, interruptible, and pointer-only. */
+.history-chart-point {
+  transform-box: fill-box;
+  transform-origin: center;
+  outline: none;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.history-chart-dot-halo {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.history-chart-point.is-active,
+.history-chart-point:focus-visible {
+  transform: scale(1.35);
+}
+.history-chart-point.is-active .history-chart-dot-halo,
+.history-chart-point:focus-visible .history-chart-dot-halo {
+  opacity: 0.18;
+}
+.history-chart-point:focus-visible .history-chart-dot {
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.history-chart-tooltip {
+  opacity: 1;
+  transition: opacity 150ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .history-chart-point:hover {
+    transform: scale(1.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .history-chart-point,
+  .history-chart-dot-halo,
+  .history-chart-tooltip {
+    transition-duration: 0ms;
+  }
 }
 
 /* Border beam for the update button */
@@ -182,7 +222,9 @@ html[data-window="settings"] #root {
     var(--destructive) 90%,
     transparent 100%
   );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   animation: beam-rotate 2.5s linear infinite;

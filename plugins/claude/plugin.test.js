@@ -1652,6 +1652,26 @@ describe("claude plugin", () => {
       }
     })
 
+    it("passes custom path and offline pricing controls to ccusage", async () => {
+      const ctx = makeProbeCtx({ ccusageResult: okUsage([]) })
+      ctx.host.providerConfig = {
+        get: vi.fn((key) =>
+          ({
+            historyPath: "D:/usage/claude",
+            pricingMode: "display",
+            offlinePricing: "enabled",
+          })[key] ?? null
+        ),
+      }
+      const plugin = await loadPlugin()
+      plugin.probe(ctx)
+      expect(ctx.host.ccusage.query.mock.calls[0][0]).toMatchObject({
+        homePath: "D:/usage/claude",
+        mode: "display",
+        offline: true,
+      })
+    })
+
     it("matches compact day keys and falls back from invalid totalCost to costUSD", async () => {
       const today = new Date()
       const todayKey = localCompactDayKey(today)

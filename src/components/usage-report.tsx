@@ -1,6 +1,6 @@
-import { useId, useMemo, useState } from "react"
-import { BarChart3 } from "lucide-react"
+import { useEffect, useId, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { ReportPricingEditor, loadModelPriceOverrides } from "@/components/report-pricing-editor"
 import type { PluginOutput } from "@/lib/plugin-types"
 import {
   filterUsageHistory,
@@ -9,8 +9,10 @@ import {
   type UsageHistoryRecord,
 } from "@/lib/usage-history"
 import { cn } from "@/lib/utils"
+import { reportEntryCost, type ModelPriceOverrides } from "@/lib/report-pricing"
 
 type ReportMetric = "cost" | "tokens" | "requests"
+type ReportGrouping = "day" | "project"
 
 type UsageReportProps = {
   outputs: PluginOutput[]
@@ -19,8 +21,6 @@ type UsageReportProps = {
 }
 
 const PERIOD_OPTIONS: { value: UsageHistoryPeriod; label: string }[] = [
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
   { value: "7d", label: "7d" },
   { value: "30d", label: "30d" },
 ]
@@ -42,8 +42,12 @@ function entryTokens(record: UsageHistoryRecord): number {
   )
 }
 
-function metricValue(record: UsageHistoryRecord, metric: ReportMetric): number {
-  if (metric === "cost") return record.costUsd ?? 0
+function metricValue(
+  record: UsageHistoryRecord,
+  metric: ReportMetric,
+  overrides: ModelPriceOverrides
+): number {
+  if (metric === "cost") return reportEntryCost(record, overrides)
   if (metric === "requests") return record.requests ?? 0
   return entryTokens(record)
 }
@@ -67,21 +71,66 @@ function formatMetric(value: number, metric: ReportMetric): string {
   return formatCompact(value)
 }
 
-function dailySeries(records: UsageHistoryRecord[], metric: ReportMetric) {
-  const totals = new Map<string, number>()
+function dailySeries(
+  records: UsageHistoryRecord[],
+  metric: ReportMetric,
+  overrides: ModelPriceOverrides
+) {
+  const totals = new Map<string, { value: number; tokens: number; cost: number }>()
   for (const record of records) {
     const day = record.periodStart.slice(0, 10)
-    totals.set(day, (totals.get(day) ?? 0) + metricValue(record, metric))
+    const current = totals.get(day) ?? { value: 0, tokens: 0, cost: 0 }
+    totals.set(day, {
+      value: current.value + metricValue(record, metric, overrides),
+      tokens: current.tokens + entryTokens(record),
+      cost: current.cost + reportEntryCost(record, overrides),
+    })
   }
   return [...totals.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([day, value]) => ({ day, value }))
+    .map(([day, totals]) => ({ day, ...totals }))
 }
 
-function TrendChart({ records, metric }: { records: UsageHistoryRecord[]; metric: ReportMetric }) {
+function formatChartDay(day: string): string {
+  const [year, month, date] = day.split("-").map(Number)
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, date)))
+}
+
+function TrendChart({
+  records,
+  metric,
+  overrides,
+}: {
+  records: UsageHistoryRecord[]
+  metric: ReportMetric
+  overrides: ModelPriceOverrides
+}) {
   const titleId = useId()
   const descriptionId = useId()
-  const points = dailySeries(records, metric)
+  const [activeDay, setActiveDay] = useState<string | null>(null)
+  const points = dailySeries(records, metric, overrides)
+  if (points.length === 1) {
+    return (
+      <div
+        className="flex min-h-[86px] items-center justify-between gap-3 px-2"
+        aria-label="Daily activity"
+      >
+        <div>
+          <p className="text-xs font-medium">Activity on {points[0].day}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            A trend appears after activity on more than one day.
+          </p>
+        </div>
+        <strong className="shrink-0 tabular-nums text-sm">
+          {formatMetric(points[0].value, metric)}
+        </strong>
+      </div>
+    )
+  }
   const max = Math.max(...points.map((point) => point.value), 0)
   const width = 320
   const height = 86
@@ -98,10 +147,12 @@ function TrendChart({ records, metric }: { records: UsageHistoryRecord[]; metric
     <svg
       viewBox={`0 0 ${width} ${height}`}
       className="h-[86px] w-full overflow-visible"
-      role="img"
+      role="group"
       aria-labelledby={`${titleId} ${descriptionId}`}
     >
-      <title id={titleId}>{METRIC_OPTIONS.find((option) => option.value === metric)?.label} trend</title>
+      <title id={titleId}>
+        {METRIC_OPTIONS.find((option) => option.value === metric)?.label} trend
+      </title>
       <desc id={descriptionId}>
         {points.length === 0
           ? "No activity in this period."
@@ -119,15 +170,100 @@ function TrendChart({ records, metric }: { records: UsageHistoryRecord[]; metric
         />
       ) : null}
       {coordinates.map((point) => (
-        <circle
-          key={point.day}
-          cx={point.x}
-          cy={point.y}
-          r="3"
-          className="fill-primary dark:fill-page-accent"
-        />
+        <g key={point.day} transform={`translate(${point.x} ${point.y})`}>
+          <g
+            data-history-point={point.day}
+            role="button"
+            tabIndex={0}
+            aria-label={`${point.day}: ${formatCompact(point.tokens)} tokens, ${formatMetric(point.cost, "cost")}`}
+            className={cn("history-chart-point", activeDay === point.day && "is-active")}
+            onMouseEnter={() => setActiveDay(point.day)}
+            onMouseLeave={() => setActiveDay(null)}
+            onFocus={() => setActiveDay(point.day)}
+            onBlur={() => setActiveDay(null)}
+          >
+            <circle r="7" className="history-chart-dot-halo fill-primary dark:fill-page-accent" />
+            <circle r="3" className="history-chart-dot fill-primary dark:fill-page-accent" />
+          </g>
+        </g>
       ))}
+      {activeDay
+        ? (() => {
+            const point = coordinates.find((candidate) => candidate.day === activeDay)
+            if (!point) return null
+            const tooltipWidth = 136
+            const tooltipHeight = 48
+            const tooltipX = Math.min(
+              Math.max(point.x - tooltipWidth / 2, 4),
+              width - tooltipWidth - 4
+            )
+            const tooltipY =
+              point.y > tooltipHeight + 12
+                ? point.y - tooltipHeight - 10
+                : Math.min(point.y + 10, height - tooltipHeight - 4)
+            return (
+              <g
+                data-history-tooltip
+                data-testid="history-tooltip"
+                className="history-chart-tooltip"
+                pointerEvents="none"
+                transform={`translate(${tooltipX} ${tooltipY})`}
+              >
+                <rect
+                  width={tooltipWidth}
+                  height={tooltipHeight}
+                  rx="6"
+                  className="fill-popover stroke-border"
+                />
+                <text x="10" y="16" className="fill-popover-foreground text-[10px] font-medium">
+                  {formatChartDay(point.day)}
+                </text>
+                <text x="10" y="32" className="fill-muted-foreground text-[10px]">
+                  {formatCompact(point.tokens)} tokens · {formatMetric(point.cost, "cost")}
+                </text>
+              </g>
+            )
+          })()
+        : null}
     </svg>
+  )
+}
+
+function ProjectBreakdown({
+  records,
+  metric,
+  overrides,
+}: {
+  records: UsageHistoryRecord[]
+  metric: ReportMetric
+  overrides: ModelPriceOverrides
+}) {
+  const totals = new Map<string, number>()
+  for (const record of records) {
+    const project = record.project?.trim() || "Unspecified project"
+    totals.set(project, (totals.get(project) ?? 0) + metricValue(record, metric, overrides))
+  }
+  const rows = [...totals.entries()].sort((left, right) => right[1] - left[1])
+  const max = Math.max(...rows.map(([, value]) => value), 0)
+  return (
+    <div className="space-y-2 py-1" aria-label="Usage grouped by project">
+      {rows.map(([project, value]) => (
+        <div key={project}>
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="truncate">{project}</span>
+            <span className="tabular-nums text-muted-foreground">
+              {formatMetric(value, metric)}
+            </span>
+          </div>
+          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-border/70">
+            <div
+              className="h-full rounded-full bg-primary dark:bg-page-accent"
+              style={{ width: `${max > 0 ? Math.max((value / max) * 100, 2) : 0}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -168,6 +304,12 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
   const [providerId, setProviderId] = useState("")
   const [model, setModel] = useState("")
   const [project, setProject] = useState("")
+  const [groupBy, setGroupBy] = useState<ReportGrouping>("day")
+  const [priceOverrides, setPriceOverrides] = useState<ModelPriceOverrides>({})
+
+  useEffect(() => {
+    void loadModelPriceOverrides().then(setPriceOverrides)
+  }, [])
 
   const available = useMemo(() => {
     const records = filterUsageHistory(outputs, {
@@ -176,8 +318,12 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
     })
     return {
       providerIds: [...new Set(records.map((record) => record.providerId))].sort(),
-      models: [...new Set(records.map((record) => record.model).filter(Boolean) as string[])].sort(),
-      projects: [...new Set(records.map((record) => record.project).filter(Boolean) as string[])].sort(),
+      models: [
+        ...new Set(records.map((record) => record.model).filter(Boolean) as string[]),
+      ].sort(),
+      projects: [
+        ...new Set(records.map((record) => record.project).filter(Boolean) as string[]),
+      ].sort(),
     }
   }, [nowMs, outputs])
 
@@ -190,40 +336,37 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
   }
   const records = filterUsageHistory(outputs, query)
   const summary = summarizeUsageHistory(outputs, query)
+  const hasRequestData = records.some((record) => typeof record.requests === "number")
+
+  useEffect(() => {
+    if (metric === "requests" && !hasRequestData) setMetric("cost")
+  }, [hasRequestData, metric])
   const selectedValue =
     metric === "cost"
-      ? summary.totals.costUsd
+      ? records.reduce((total, record) => total + reportEntryCost(record, priceOverrides), 0)
       : metric === "requests"
         ? summary.totals.requests
         : summary.totals.totalTokens
   const sources = [...new Set(records.map((record) => record.source))]
 
-  if (!outputs.some((output) => output.history?.entries.length)) {
-    return (
-      <section className="border-t border-border/70 pt-3" aria-label="Usage history">
-        <div className="flex items-start gap-2">
-          <BarChart3 className="mt-0.5 size-4 text-muted-foreground" />
-          <div>
-            <h3 className="text-sm font-semibold">Usage history</h3>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              This provider does not expose local activity history yet. Current quota and reset data remains available above.
-            </p>
-          </div>
-        </div>
-      </section>
-    )
-  }
+  if (!outputs.some((output) => output.history?.entries.length)) return null
 
   return (
     <section className="border-t border-border/70 pt-3" aria-label="Usage history">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">Usage history</h3>
-          <p className="text-xs text-muted-foreground">Cached local activity, grouped by calendar day.</p>
+          <p className="text-xs text-muted-foreground">
+            Cached local activity, grouped by calendar day.
+          </p>
         </div>
         <div className="text-right tabular-nums">
           <strong className="block text-base">{formatMetric(selectedValue, metric)}</strong>
-          <span className="text-[11px] text-muted-foreground">{period === "30d" ? "last 30 days" : PERIOD_OPTIONS.find((option) => option.value === period)?.label.toLowerCase()}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {period === "30d"
+              ? "last 30 days"
+              : PERIOD_OPTIONS.find((option) => option.value === period)?.label.toLowerCase()}
+          </span>
         </div>
       </div>
 
@@ -243,56 +386,116 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="History metric">
-        {METRIC_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={metric === option.value}
-            className={cn(
-              "rounded-md px-2 py-1 text-xs transition-colors",
-              metric === option.value
-                ? "bg-muted font-medium text-foreground"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-            )}
-            onClick={() => setMetric(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
+        {METRIC_OPTIONS.filter((option) => option.value !== "requests" || hasRequestData).map(
+          (option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={metric === option.value}
+              className={cn(
+                "rounded-md px-2 py-1 text-xs transition-colors",
+                metric === option.value
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              )}
+              onClick={() => setMetric(option.value)}
+            >
+              {option.label}
+            </button>
+          )
+        )}
       </div>
+
+      {available.projects.length > 0 ? (
+        <div className="mt-2 flex gap-1" role="group" aria-label="History grouping">
+          {(["day", "project"] as const).map((grouping) => (
+            <button
+              key={grouping}
+              type="button"
+              aria-pressed={groupBy === grouping}
+              className={cn(
+                "rounded-md px-2 py-1 text-xs capitalize transition-colors",
+                groupBy === grouping
+                  ? "bg-muted font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              )}
+              onClick={() => setGroupBy(grouping)}
+            >
+              {grouping === "day" ? "By day" : "By project"}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {showProviderFilter || available.models.length > 1 || available.projects.length > 1 ? (
         <div className="mt-2 flex gap-2">
           {showProviderFilter && available.providerIds.length > 1 ? (
-            <SelectFilter label="Providers" value={providerId} values={available.providerIds} onChange={setProviderId} />
+            <SelectFilter
+              label="Providers"
+              value={providerId}
+              values={available.providerIds}
+              onChange={setProviderId}
+            />
           ) : null}
           {available.models.length > 1 ? (
-            <SelectFilter label="Models" value={model} values={available.models} onChange={setModel} />
+            <SelectFilter
+              label="Models"
+              value={model}
+              values={available.models}
+              onChange={setModel}
+            />
           ) : null}
           {available.projects.length > 1 ? (
-            <SelectFilter label="Projects" value={project} values={available.projects} onChange={setProject} />
+            <SelectFilter
+              label="Projects"
+              value={project}
+              values={available.projects}
+              onChange={setProject}
+            />
           ) : null}
         </div>
       ) : null}
 
       <div className="mt-2 rounded-lg bg-muted/55 px-2 py-1.5">
-        <TrendChart records={records} metric={metric} />
+        {groupBy === "project" ? (
+          <ProjectBreakdown records={records} metric={metric} overrides={priceOverrides} />
+        ) : (
+          <TrendChart records={records} metric={metric} overrides={priceOverrides} />
+        )}
       </div>
+
+      <ReportPricingEditor
+        models={available.models}
+        overrides={priceOverrides}
+        onChange={setPriceOverrides}
+      />
 
       {records.length === 0 ? (
         <p className="mt-2 text-xs text-muted-foreground">No matching activity in this period.</p>
       ) : (
         <div className="mt-2 grid grid-cols-3 divide-x divide-border text-center text-xs">
           <div className="px-1">
-            <strong className="block tabular-nums">{formatMetric(summary.totals.costUsd, "cost")}</strong>
+            <strong className="block tabular-nums">
+              {formatMetric(
+                records.reduce(
+                  (total, record) => total + reportEntryCost(record, priceOverrides),
+                  0
+                ),
+                "cost"
+              )}
+            </strong>
             <span className="text-muted-foreground">Cost</span>
           </div>
           <div className="px-1">
-            <strong className="block tabular-nums">{formatCompact(summary.totals.totalTokens)}</strong>
+            <strong className="block tabular-nums">
+              {formatCompact(summary.totals.totalTokens)}
+            </strong>
             <span className="text-muted-foreground">Tokens</span>
           </div>
           <div className="px-1">
-            <strong className="block tabular-nums">{formatCompact(summary.totals.requests)}</strong>
+            <strong className="block tabular-nums">
+              {hasRequestData ? formatCompact(summary.totals.requests) : "—"}
+            </strong>
             <span className="text-muted-foreground">Requests</span>
           </div>
         </div>
@@ -301,11 +504,15 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
       {summary.topModel ? (
         <p className="mt-2 text-xs text-muted-foreground">
           Top model: <span className="font-medium text-foreground">{summary.topModel.model}</span>
-          {summary.topModel.totalTokens > 0 ? `, ${formatCompact(summary.topModel.totalTokens)} tokens` : ""}
+          {summary.topModel.totalTokens > 0
+            ? `, ${formatCompact(summary.topModel.totalTokens)} tokens`
+            : ""}
         </p>
       ) : null}
       {sources.length > 0 ? (
-        <p className="mt-1 text-[11px] text-muted-foreground">Source: {sources.join(", ")}. Cached on this device.</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Source: {sources.join(", ")}. Cached on this device.
+        </p>
       ) : null}
     </section>
   )
