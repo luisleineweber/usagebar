@@ -1129,3 +1129,53 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - Provider UI/settings: 13 focused files / 229 tests passed.
 - `bun run check`, `cargo test --manifest-path src-tauri/Cargo.toml --lib` (136 passed, 1 ignored), `bun run build:frontend`, `bun run release:check`, and `git diff --check` passed.
 - Live entitlement validation is not complete for every provider. The provider docs and Windows rollout matrix correctly distinguish fixture/contract coverage from real-account coverage; do not promote experimental providers based on tests alone.
+
+# 1.0 readiness HTML report, 2026-07-15
+
+## Executive Summary
+
+- Create a single-file HTML audit of everything still needed for a stable Windows-first 1.0.
+- Include current evidence, provider-by-provider disposition, release/security/QA gaps, acceptance criteria, and an ordered backlog.
+- Preserve the existing Alpha 5 worktree; this slice adds report and audit notes only.
+
+## Acceptance Criteria
+
+- [x] docs/reports/usagebar-1.0-readiness-audit.html is self-contained, browser-readable, responsive, and interactive.
+- [x] Report covers product scope, quality, release, providers, platform, security/privacy, recovery, UX/QA, docs, and support.
+- [x] All 34 plugin manifests appear in the provider matrix with current Windows state and a 1.0 recommendation.
+- [x] Fresh verification results and exact repo evidence are recorded, including current blockers.
+- [x] Choices and breadcrumbs document the Windows-first scope assumption and report findings.
+
+## Plan
+
+- [x] Read HTML artifact instructions and collect repository baseline.
+- [x] Run targeted inventory, link, manifest, bundle, test, coverage, release, and Rust checks.
+- [x] Build and validate the single-file readiness report.
+- [x] Record the audit in repo breadcrumbs and choices.
+
+# Tray panel clarity refinement, 2026-07-16
+
+## Executive Summary
+
+- Keep provider selection inside Settings instead of unexpectedly handing off to the tray.
+- Improve provider identity and active navigation visibility without widening the rail.
+- Surface data freshness, automatic-update timing, and pace status more clearly.
+- Add a light-theme page accent matching the dark-theme product identity.
+
+## Acceptance Criteria
+
+- [x] Provider-row selection stays in Settings and opens the provider detail panel.
+- [x] Tray provider cards show their provider icon beside the name.
+- [x] Active rail items have a restrained background and stronger icon state.
+- [x] Footer shows the oldest successful displayed-provider update as `Updated …`.
+- [x] Footer retains a compact, accessible signal for the next automatic update.
+- [x] Pace indicators include visible short labels in addition to color.
+- [x] Light and dark themes both define and use `--page-accent`.
+- [x] Focused tests, typecheck, formatting, and diff review pass.
+
+## Plan
+
+- [x] Patch Settings selection and update its regression test.
+- [x] Add provider card icons and strengthen active rail styling.
+- [x] Add freshness/auto-update footer signal, pace labels, and light accent tokens.
+- [x] Verify focused tests, typecheck, formatting, and diff.
