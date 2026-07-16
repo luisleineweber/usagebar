@@ -1,23 +1,18 @@
-import { ProviderCard } from "@/components/provider-card";
-import { SurfacePinWidget } from "@/components/surface-pin-widget";
-import { Button } from "@/components/ui/button";
-import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views";
-import type {
-  DisplayMode,
-  ResetTimerDisplayMode,
-  SurfacePin,
-  TimeFormatMode,
-} from "@/lib/settings";
-import { openSettingsWindow } from "@/lib/settings-window";
+import { ProviderCard } from "@/components/provider-card"
+import { SurfacePinWidget } from "@/components/surface-pin-widget"
+import { Button } from "@/components/ui/button"
+import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
+import type { DisplayMode, ResetTimerDisplayMode, SurfacePin, TimeFormatMode } from "@/lib/settings"
+import { openSettingsWindow } from "@/lib/settings-window"
 
 interface OverviewPageProps {
-  plugins: DisplayPluginState[];
-  onRetryPlugin?: (pluginId: string) => void;
-  displayMode: DisplayMode;
-  resetTimerDisplayMode: ResetTimerDisplayMode;
-  timeFormatMode?: TimeFormatMode;
-  onResetTimerDisplayModeToggle?: () => void;
-  surfacePins?: SurfacePin[];
+  plugins: DisplayPluginState[]
+  onRetryPlugin?: (pluginId: string) => void
+  displayMode: DisplayMode
+  resetTimerDisplayMode: ResetTimerDisplayMode
+  timeFormatMode?: TimeFormatMode
+  onResetTimerDisplayModeToggle?: () => void
+  surfacePins?: SurfacePin[]
 }
 
 export function OverviewPage({
@@ -32,20 +27,18 @@ export function OverviewPage({
   if (plugins.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-        <p className="text-sm text-muted-foreground">
-          No active providers yet.
-        </p>
+        <p className="text-sm text-muted-foreground">No active providers yet.</p>
         <Button
           variant="outline"
           size="sm"
           onClick={() => {
-            openSettingsWindow({ tab: "providers" }).catch(console.error);
+            openSettingsWindow({ tab: "providers" }).catch(console.error)
           }}
         >
           Set up a provider
         </Button>
       </div>
-    );
+    )
   }
 
   return (
@@ -55,6 +48,7 @@ export function OverviewPage({
         <ProviderCard
           key={plugin.meta.id}
           name={plugin.meta.name}
+          iconUrl={plugin.meta.iconUrl}
           plan={plugin.data?.plan ?? plugin.lastSettledData?.plan}
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}
@@ -65,9 +59,7 @@ export function OverviewPage({
           lastManualRefreshAt={plugin.lastManualRefreshAt}
           lastUpdatedAt={plugin.lastSuccessAt}
           status={plugin.status}
-          onRetry={
-            onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined
-          }
+          onRetry={onRetryPlugin ? () => onRetryPlugin(plugin.meta.id) : undefined}
           scopeFilter="overview"
           displayMode={displayMode}
           resetTimerDisplayMode={resetTimerDisplayMode}
@@ -76,5 +68,5 @@ export function OverviewPage({
         />
       ))}
     </div>
-  );
+  )
 }

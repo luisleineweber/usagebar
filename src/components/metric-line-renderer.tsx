@@ -34,6 +34,12 @@ const PACE_VISUALS: Record<PaceStatus, { dotClass: string }> = {
   behind: { dotClass: "bg-red-500" },
 }
 
+const PACE_LABELS: Record<PaceStatus, string> = {
+  ahead: "Ahead",
+  "on-track": "On track",
+  behind: "At risk",
+}
+
 // ---------------------------------------------------------------------------
 // PaceIndicator — colored dot with tooltip breakdown
 // ---------------------------------------------------------------------------
@@ -49,6 +55,7 @@ export function PaceIndicator({
 }) {
   const colorClass = PACE_VISUALS[status].dotClass
   const statusText = getPaceStatusText(status)
+  const visibleStatusText = isLimitReached ? "Limit reached" : PACE_LABELS[status]
 
   return (
     <Tooltip>
@@ -56,9 +63,12 @@ export function PaceIndicator({
         render={(props) => (
           <span
             {...props}
-            className={`inline-block w-2 h-2 rounded-full ${colorClass}`}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
             aria-label={isLimitReached ? "Limit reached" : statusText}
-          />
+          >
+            <span aria-hidden className={`inline-block size-2 rounded-full ${colorClass}`} />
+            <span>{visibleStatusText}</span>
+          </span>
         )}
       />
       <TooltipContent side="top" className="text-xs text-center">
@@ -110,7 +120,9 @@ export function MetricLineRenderer({
           </span>
         </div>
         {line.subtitle && (
-          <div className="text-[10px] text-muted-foreground text-right -mt-0.5">{line.subtitle}</div>
+          <div className="text-[10px] text-muted-foreground text-right -mt-0.5">
+            {line.subtitle}
+          </div>
         )}
       </div>
     )
@@ -124,11 +136,7 @@ export function MetricLineRenderer({
           <Badge
             variant="outline"
             className="truncate min-w-0 max-w-[60%]"
-            style={
-              line.color
-                ? { color: line.color, borderColor: line.color }
-                : undefined
-            }
+            style={line.color ? { color: line.color, borderColor: line.color } : undefined}
             title={line.text}
           >
             {line.text}
@@ -147,10 +155,7 @@ export function MetricLineRenderer({
     const hasPaceContext = Number.isFinite(resetsAtMs) && Number.isFinite(periodDurationMs)
     const hasTimeMarkerContext = hasPaceContext && periodDurationMs! > 0
 
-    const shownAmount =
-      displayMode === "used"
-        ? line.used
-        : Math.max(0, line.limit - line.used)
+    const shownAmount = displayMode === "used" ? line.used : Math.max(0, line.limit - line.used)
     const percent = Math.round(clamp01(shownAmount / line.limit) * 10000) / 100
     const leftSuffix = displayMode === "left" ? " left" : ""
 
@@ -214,7 +219,8 @@ export function MetricLineRenderer({
       hasPaceContext && !isLimitReached
         ? calculateDeficit(line.used, line.limit, resetsAtMs, periodDurationMs!, now)
         : null
-    const deficitText = deficit !== null ? formatDeficitText(deficit, line.format, displayMode) : null
+    const deficitText =
+      deficit !== null ? formatDeficitText(deficit, line.format, displayMode) : null
     const runsOutText =
       hasPaceContext && !isLimitReached
         ? formatRunsOutText({
@@ -288,7 +294,9 @@ export function MetricLineRenderer({
               <span className="text-xs text-muted-foreground tabular-nums">{deficitText}</span>
             )}
             {runsOutText && (
-              <span className="text-xs text-muted-foreground tabular-nums ml-auto">{runsOutText}</span>
+              <span className="text-xs text-muted-foreground tabular-nums ml-auto">
+                {runsOutText}
+              </span>
             )}
           </div>
         )}

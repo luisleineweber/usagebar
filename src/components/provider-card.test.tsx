@@ -47,14 +47,7 @@ describe("ProviderCard", () => {
 
   it("renders error state with retry", async () => {
     const onRetry = vi.fn()
-    render(
-      <ProviderCard
-        name="Test"
-        displayMode="used"
-        error="Nope"
-        onRetry={onRetry}
-      />
-    )
+    render(<ProviderCard name="Test" displayMode="used" error="Nope" onRetry={onRetry} />)
     expect(screen.getByText("Nope")).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: "Retry" }))
     expect(onRetry).toHaveBeenCalledTimes(1)
@@ -78,14 +71,17 @@ describe("ProviderCard", () => {
 
   it("shows loading spinner when retry is enabled", () => {
     const { container } = render(
-      <ProviderCard
-        name="Loading"
-        displayMode="used"
-        loading
-        onRetry={() => {}}
-      />
+      <ProviderCard name="Loading" displayMode="used" loading onRetry={() => {}} />
     )
     expect(container.querySelector("svg.animate-spin")).toBeTruthy()
+  })
+
+  it("renders the provider icon beside the header", () => {
+    render(<ProviderCard name="Claude" iconUrl="claude.svg" displayMode="used" />)
+
+    expect(screen.getByRole("img", { name: "Claude icon" })).toHaveStyle({
+      maskImage: "url(claude.svg)",
+    })
   })
 
   it("shows last-updated state on retry tooltip", () => {
@@ -135,9 +131,27 @@ describe("ProviderCard", () => {
         lines={[
           { type: "text", label: "Label", value: "Value" },
           { type: "badge", label: "Plan", text: "Pro" },
-          { type: "progress", label: "Percent", used: 32.4, limit: 100, format: { kind: "percent" } },
-          { type: "progress", label: "Dollars", used: 12.34, limit: 100, format: { kind: "dollars" } },
-          { type: "progress", label: "Credits", used: 342, limit: 1000, format: { kind: "count", suffix: "credits" } },
+          {
+            type: "progress",
+            label: "Percent",
+            used: 32.4,
+            limit: 100,
+            format: { kind: "percent" },
+          },
+          {
+            type: "progress",
+            label: "Dollars",
+            used: 12.34,
+            limit: 100,
+            format: { kind: "dollars" },
+          },
+          {
+            type: "progress",
+            label: "Credits",
+            used: 342,
+            limit: 1000,
+            format: { kind: "count", suffix: "credits" },
+          },
           { type: "unknown", label: "Ignored" } as any,
         ]}
       />
@@ -586,6 +600,9 @@ describe("ProviderCard", () => {
     expect(screen.getByLabelText("Plenty of room")).toBeInTheDocument()
     expect(screen.getByLabelText("Right on target")).toBeInTheDocument()
     expect(screen.getByLabelText("Will run out")).toBeInTheDocument()
+    expect(screen.getAllByText("Ahead")).toHaveLength(2)
+    expect(screen.getByText("On track")).toBeInTheDocument()
+    expect(screen.getByText("At risk")).toBeInTheDocument()
     expect(screen.getByText("60% used at reset")).toBeInTheDocument()
     expect(screen.getByText("90% used at reset")).toBeInTheDocument()
     expect(screen.getByText("Limit in 8h 0m")).toBeInTheDocument()
@@ -622,7 +639,7 @@ describe("ProviderCard", () => {
       />
     )
     expect(screen.getByLabelText("Limit reached")).toBeInTheDocument()
-    expect(screen.getByText("Limit reached")).toBeInTheDocument()
+    expect(screen.getAllByText("Limit reached")).toHaveLength(2)
     expect(screen.queryByText(/in deficit/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/runs out in/i)).not.toBeInTheDocument()
     vi.useRealTimers()
@@ -868,8 +885,20 @@ describe("groupLinesByType", () => {
 
   it("keeps non-text lines as separate 'other' entries", () => {
     const lines = [
-      { type: "progress" as const, label: "Session", used: 50, limit: 100, format: { kind: "percent" as const } },
-      { type: "progress" as const, label: "Weekly", used: 30, limit: 100, format: { kind: "percent" as const } },
+      {
+        type: "progress" as const,
+        label: "Session",
+        used: 50,
+        limit: 100,
+        format: { kind: "percent" as const },
+      },
+      {
+        type: "progress" as const,
+        label: "Weekly",
+        used: 30,
+        limit: 100,
+        format: { kind: "percent" as const },
+      },
     ]
     const groups = groupLinesByType(lines)
     expect(groups).toHaveLength(1)
@@ -879,7 +908,13 @@ describe("groupLinesByType", () => {
 
   it("creates separate groups for alternating text and non-text lines", () => {
     const lines = [
-      { type: "progress" as const, label: "Session", used: 50, limit: 100, format: { kind: "percent" as const } },
+      {
+        type: "progress" as const,
+        label: "Session",
+        used: 50,
+        limit: 100,
+        format: { kind: "percent" as const },
+      },
       { type: "text" as const, label: "Today", value: "$0.00" },
       { type: "text" as const, label: "Yesterday", value: "$1.00" },
       { type: "badge" as const, label: "Status", text: "OK" },
