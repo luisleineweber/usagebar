@@ -21,8 +21,7 @@
     {
       "type": "text",
       "label": "Included Credits",
-      "scope": "overview",
-      "primaryOrder": 1
+      "scope": "overview"
     },
     {
       "type": "text",
