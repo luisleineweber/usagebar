@@ -13,7 +13,7 @@
  * JSDOM-based tests never apply CSS, so both panels remain in the DOM; tests pass unchanged.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect } from "react"
 import {
   DndContext,
   KeyboardSensor,
@@ -22,34 +22,28 @@ import {
   type DragEndEvent,
   useSensor,
   useSensors,
-} from "@dnd-kit/core";
+} from "@dnd-kit/core"
 import {
   SortableContext,
   arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { ArrowLeft, ChevronRight, GripVertical } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail";
-import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list";
-import type { ProviderConfig } from "@/lib/provider-settings";
-import type { SelectedProviderChangeOptions } from "@/lib/settings-window";
-import { cn } from "@/lib/utils";
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { ArrowLeft, ChevronRight, GripVertical } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail"
+import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
+import type { ProviderConfig } from "@/lib/provider-settings"
+import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
+import { cn } from "@/lib/utils"
 
 // ---------------------------------------------------------------------------
 // Provider icon mask
 // ---------------------------------------------------------------------------
 
-function ProviderIconMask({
-  iconUrl,
-  brandColor,
-}: {
-  iconUrl: string;
-  brandColor?: string;
-}) {
+function ProviderIconMask({ iconUrl, brandColor }: { iconUrl: string; brandColor?: string }) {
   return (
     <span
       aria-hidden
@@ -66,7 +60,7 @@ function ProviderIconMask({
         maskPosition: "center",
       }}
     />
-  );
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -75,13 +69,13 @@ function ProviderIconMask({
 
 function getProviderSubtitle(plugin: SettingsPluginState): string {
   if (plugin.supportState === "comingSoonOnWindows") {
-    return plugin.supportMessage ?? "Coming soon on Windows.";
+    return plugin.supportMessage ?? "Coming soon on Windows."
   }
-  if (plugin.state.loading) return "Refreshing provider status...";
-  if (plugin.state.error) return plugin.state.error;
-  if (plugin.state.lastSuccessAt) return "Connected";
-  if (plugin.supportMessage) return plugin.supportMessage;
-  return plugin.enabled ? "Not connected yet" : "Disabled";
+  if (plugin.state.loading) return "Refreshing provider status..."
+  if (plugin.state.error) return plugin.state.error
+  if (plugin.state.lastSuccessAt) return "Connected"
+  if (plugin.supportMessage) return plugin.supportMessage
+  return plugin.enabled ? "Not connected yet" : "Disabled"
 }
 
 // ---------------------------------------------------------------------------
@@ -94,20 +88,15 @@ function SortableProviderRow({
   onSelect,
   onToggle,
 }: {
-  plugin: SettingsPluginState;
-  selected: boolean;
-  onSelect: () => void;
-  onToggle: (id: string) => void;
+  plugin: SettingsPluginState
+  selected: boolean
+  onSelect: () => void
+  onToggle: (id: string) => void
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: plugin.id });
-  const isConnected = Boolean(plugin.state.data || plugin.state.lastSuccessAt);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: plugin.id,
+  })
+  const isConnected = Boolean(plugin.state.data || plugin.state.lastSuccessAt)
 
   return (
     /*
@@ -133,13 +122,13 @@ function SortableProviderRow({
         selected
           ? "border-border bg-muted/70 text-foreground shadow-sm"
           : "border-transparent bg-transparent hover:border-border/55 hover:bg-muted/35",
-        isDragging && "opacity-50",
+        isDragging && "opacity-50"
       )}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
+          e.preventDefault()
+          onSelect()
         }
       }}
     >
@@ -155,18 +144,11 @@ function SortableProviderRow({
 
       {/* Icon + status dot */}
       <div className="relative">
-        <ProviderIconMask
-          iconUrl={plugin.iconUrl}
-          brandColor={plugin.brandColor}
-        />
+        <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} />
         <span
           className={cn(
             "absolute -right-1 -top-1 size-2.5 rounded-full border border-card",
-            isConnected
-              ? "bg-emerald-400"
-              : plugin.enabled
-                ? "bg-amber-400"
-                : "bg-muted",
+            isConnected ? "bg-emerald-400" : plugin.enabled ? "bg-amber-400" : "bg-muted"
           )}
         />
       </div>
@@ -174,10 +156,7 @@ function SortableProviderRow({
       {/* Name + subtitle */}
       <span className="min-w-0 flex-1">
         <span
-          className={cn(
-            "block text-sm font-medium",
-            !plugin.enabled && "text-muted-foreground",
-          )}
+          className={cn("block text-sm font-medium", !plugin.enabled && "text-muted-foreground")}
         >
           {plugin.name}
         </span>
@@ -200,17 +179,17 @@ function SortableProviderRow({
         className={cn(
           "self-start sm:self-auto",
           selected &&
-            "data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground",
+            "data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground"
         )}
         onCheckedChange={(checked) => {
-          const nextEnabled = checked === true;
-          if (nextEnabled === plugin.enabled) return;
-          onToggle(plugin.id);
+          const nextEnabled = checked === true
+          if (nextEnabled === plugin.enabled) return
+          onToggle(plugin.id)
         }}
         onClick={(event) => event.stopPropagation()}
       />
     </div>
-  );
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -218,29 +197,16 @@ function SortableProviderRow({
 // ---------------------------------------------------------------------------
 
 type ProvidersSettingsPaneProps = {
-  providers: SettingsPluginState[];
-  selectedProviderId: string | null;
-  onSelectedProviderChange: (
-    id: string,
-    options?: SelectedProviderChangeOptions,
-  ) => void;
-  onReorder: (orderedIds: string[]) => void;
-  onToggle: (id: string) => void;
-  onProviderConfigChange: (
-    providerId: string,
-    patch: Partial<ProviderConfig>,
-  ) => Promise<void>;
-  onProviderSecretSave: (
-    providerId: string,
-    secretKey: string,
-    value: string,
-  ) => Promise<void>;
-  onProviderSecretDelete: (
-    providerId: string,
-    secretKey: string,
-  ) => Promise<void>;
-  onRetryProvider: (id: string) => void;
-};
+  providers: SettingsPluginState[]
+  selectedProviderId: string | null
+  onSelectedProviderChange: (id: string, options?: SelectedProviderChangeOptions) => void
+  onReorder: (orderedIds: string[]) => void
+  onToggle: (id: string) => void
+  onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
+  onProviderSecretSave: (providerId: string, secretKey: string, value: string) => Promise<void>
+  onProviderSecretDelete: (providerId: string, secretKey: string) => Promise<void>
+  onRetryProvider: (id: string) => void
+}
 
 export function ProvidersSettingsPane({
   providers,
@@ -257,8 +223,8 @@ export function ProvidersSettingsPane({
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
+    })
+  )
 
   /*
    * Push navigation state for narrow screens.
@@ -267,50 +233,45 @@ export function ProvidersSettingsPane({
    * On xl (≥ 1280 px) both panels are always visible via CSS, so this state only
    * controls the narrow-screen experience.
    */
-  const [activePanel, setActivePanel] = useState<"list" | "detail">("list");
+  const [activePanel, setActivePanel] = useState<"list" | "detail">("list")
 
   // Auto-select the first provider when none is selected (or when the selected one disappears).
   useEffect(() => {
-    if (providers.length === 0) return;
-    if (
-      !selectedProviderId ||
-      !providers.some((provider) => provider.id === selectedProviderId)
-    ) {
-      onSelectedProviderChange(providers[0]!.id);
+    if (providers.length === 0) return
+    if (!selectedProviderId || !providers.some((provider) => provider.id === selectedProviderId)) {
+      onSelectedProviderChange(providers[0]!.id)
     }
-  }, [onSelectedProviderChange, providers, selectedProviderId]);
+  }, [onSelectedProviderChange, providers, selectedProviderId])
 
   const selectedProvider =
-    providers.find((provider) => provider.id === selectedProviderId) ??
-    providers[0] ??
-    null;
+    providers.find((provider) => provider.id === selectedProviderId) ?? providers[0] ?? null
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = providers.findIndex((item) => item.id === active.id);
-    const newIndex = providers.findIndex((item) => item.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const next = arrayMove(providers, oldIndex, newIndex);
-    onReorder(next.map((item) => item.id));
-  };
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = providers.findIndex((item) => item.id === active.id)
+    const newIndex = providers.findIndex((item) => item.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const next = arrayMove(providers, oldIndex, newIndex)
+    onReorder(next.map((item) => item.id))
+  }
 
   /** Called when the user explicitly taps / clicks a provider row. */
   const handleRowSelect = (id: string) => {
-    onSelectedProviderChange(id, { revealInTray: true });
-    setActivePanel("detail");
-  };
+    onSelectedProviderChange(id)
+    setActivePanel("detail")
+  }
 
   if (providers.length === 0) {
     return (
       <div className="border-t border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
         No providers available yet.
       </div>
-    );
+    )
   }
 
-  const listHidden = activePanel === "detail";
-  const detailHidden = activePanel === "list";
+  const listHidden = activePanel === "detail"
+  const detailHidden = activePanel === "list"
 
   return (
     <div className="grid gap-6 py-1 xl:grid-cols-[340px_minmax(0,1fr)] xl:gap-7">
@@ -318,9 +279,7 @@ export function ProvidersSettingsPane({
       <section
         className={cn(
           "xl:flex xl:flex-col xl:border-b-0 xl:border-r xl:pb-0 xl:pr-6",
-          listHidden
-            ? "hidden xl:flex"
-            : "flex flex-col",
+          listHidden ? "hidden xl:flex" : "flex flex-col"
         )}
       >
         <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -365,7 +324,7 @@ export function ProvidersSettingsPane({
           // On narrow: toggle visibility
           detailHidden
             ? "hidden xl:block" // hidden on narrow, always shown on xl
-            : "block min-w-0",
+            : "block min-w-0"
         )}
       >
         {/*
@@ -390,13 +349,9 @@ export function ProvidersSettingsPane({
             state={selectedProvider.state}
             onEnabledChange={() => onToggle(selectedProvider.id)}
             onRetry={
-              selectedProvider.supported
-                ? () => onRetryProvider(selectedProvider.id)
-                : undefined
+              selectedProvider.supported ? () => onRetryProvider(selectedProvider.id) : undefined
             }
-            onConfigChange={(providerId, patch) =>
-              onProviderConfigChange(providerId, patch ?? {})
-            }
+            onConfigChange={(providerId, patch) => onProviderConfigChange(providerId, patch ?? {})}
             onSecretSave={onProviderSecretSave}
             onSecretDelete={onProviderSecretDelete}
             onOpenInTray={
@@ -415,5 +370,5 @@ export function ProvidersSettingsPane({
         )}
       </div>
     </div>
-  );
+  )
 }
