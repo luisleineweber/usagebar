@@ -249,7 +249,7 @@ fn parse_history(result: &Object<'_>) -> Option<UsageHistory> {
     };
 
     let version = match required_number(&history, "version") {
-        Ok(version) if version == 1.0 => 1,
+        Ok(1.0) => 1,
         Ok(version) => {
             log::warn!(
                 "plugin history version must be 1 (got {}); omitting history",

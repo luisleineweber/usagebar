@@ -1179,3 +1179,36 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - [x] Add provider card icons and strengthen active rail styling.
 - [x] Add freshness/auto-update footer signal, pace labels, and light accent tokens.
 - [x] Verify focused tests, typecheck, formatting, and diff.
+
+# Prepare Alpha 5 release, 2026-07-16
+
+## Executive Summary
+
+- Re-run the complete release test and quality suite for Alpha 5.
+- Confirm release metadata, bundled providers, and updater preflight are internally consistent.
+- Prepare a draft GitHub prerelease using the established Alpha release format; publishing remains an explicit user action.
+
+## Acceptance Criteria
+
+- [x] `bun run test:all`, frontend checks, Rust tests, formatting, Clippy, and release preflight have recorded outcomes.
+- [x] Alpha 5 version metadata, changelog, README, bundled provider assets, and release workflow are consistent.
+- [x] The strict coverage-gate result is recorded accurately; any Alpha waiver remains explicit.
+- [ ] A GitHub draft prerelease `v0.1.0-alpha.5` uses the Alpha 4 body structure and correct compare URL.
+- [ ] Final release readiness and every remaining publishing action are clearly stated.
+
+## Plan
+
+- [x] Inspect Alpha 5 metadata and the Alpha 4 release format.
+- [x] Run the complete JavaScript, Rust, formatting, lint, preflight, bundle, and diff verification suite.
+- [x] Review release assets/workflow and prepare the Alpha 5 draft release body.
+- [x] Record verification evidence and release status.
+
+## Verification Notes
+
+- `bun run test:all` -> 97 files, 1,409 tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 136 passed, 1 ignored (live Edge-profile smoke).
+- `bun run check`, `bun run format:rust:check`, and `bun run lint:rust` -> passed.
+- `bun run bundle:plugins` -> 33 bundled providers; `bun run release:check -- --release-tag v0.1.0-alpha.5` -> passed.
+- `bun run build:frontend` -> passed; Vite reports a non-blocking 613 kB minified JavaScript chunk warning.
+- `bun run test:coverage` -> all 1,409 tests passed, strict gate failed at 86.06% statements, 79.32% branches, 91.42% functions, and 89.29% lines. The documented Alpha coverage waiver is required; the 90% threshold was not changed.
+- `git diff --check` -> passed. Current local release-fix changes are uncommitted, so no release tag or GitHub draft was created; publishing automation publishes directly on a pushed `v*` tag and requires `TAURI_SIGNING_PRIVATE_KEY`.

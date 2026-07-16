@@ -1858,7 +1858,7 @@ describe("App", () => {
     }
   });
 
-  it("reveals the tray target when selecting a provider in the settings window", async () => {
+  it("keeps the provider detail in Settings when selecting a provider", async () => {
     state.loadPluginSettingsMock.mockResolvedValue({
       order: ["a", "b"],
       disabled: [],
@@ -1871,12 +1871,11 @@ describe("App", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /beta/i }));
 
-    await waitFor(() =>
-      expect(state.invokeMock).toHaveBeenCalledWith("show_panel_for_view", {
-        view: "b",
-      }),
-    );
-    expect(state.hideWindowMock).toHaveBeenCalled();
+    await screen.findByRole("button", { name: "Open in tray" });
+    expect(state.invokeMock).not.toHaveBeenCalledWith("show_panel_for_view", {
+      view: "b",
+    });
+    expect(state.hideWindowMock).not.toHaveBeenCalled();
   });
 
   it("publishes provider settings changes from the settings window", async () => {
@@ -2311,7 +2310,7 @@ describe("App", () => {
 
     const initialCalls = state.startBatchMock.mock.calls.length;
     const refreshButton = await screen.findByRole("button", {
-      name: /Next update in/i,
+      name: /Next automatic update in/i,
     });
     await userEvent.click(refreshButton);
 
@@ -2352,7 +2351,7 @@ describe("App", () => {
     state.startBatchMock.mockImplementation(() => new Promise(() => {}));
 
     const refreshButton = await screen.findByRole("button", {
-      name: /Next update in/i,
+      name: /Next automatic update in/i,
     });
     await userEvent.click(refreshButton);
     await userEvent.click(refreshButton);
@@ -2389,7 +2388,7 @@ describe("App", () => {
         new Error("refresh all failed"),
       );
       const refreshButton = await screen.findByRole("button", {
-        name: /Next update in/i,
+        name: /Next automatic update in/i,
       });
       await userEvent.click(refreshButton);
 
