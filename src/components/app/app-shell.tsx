@@ -1,7 +1,14 @@
 import { useShallow } from "zustand/react/shallow"
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react"
 import { invoke } from "@tauri-apps/api/core"
-import { EyeOff, ListRestart, Power, RefreshCw, Settings as SettingsIcon, SlidersHorizontal } from "lucide-react"
+import {
+  EyeOff,
+  ListRestart,
+  Power,
+  RefreshCw,
+  Settings as SettingsIcon,
+  SlidersHorizontal,
+} from "lucide-react"
 import { AppContent, type AppContentActionProps } from "@/components/app/app-content"
 import { PanelFooter } from "@/components/panel-footer"
 import { SideNav, type NavPlugin, type PluginContextAction } from "@/components/side-nav"
@@ -46,12 +53,7 @@ export function AppShell({
   onNavReorder,
   appContentProps,
 }: AppShellProps) {
-  const {
-    activeView,
-    setActiveView,
-    showAbout,
-    setShowAbout,
-  } = useAppUiStore(
+  const { activeView, setActiveView, showAbout, setShowAbout } = useAppUiStore(
     useShallow((state) => ({
       activeView: state.activeView,
       setActiveView: state.setActiveView,
@@ -82,6 +84,10 @@ export function AppShell({
 
   const appVersion = useAppVersion()
   const { updateStatus, triggerInstall, checkForUpdates } = useAppUpdate()
+  const lastUpdatedAt = displayPlugins.reduce<number | null>((oldest, plugin) => {
+    if (plugin.lastSuccessAt == null) return oldest
+    return oldest == null ? plugin.lastSuccessAt : Math.min(oldest, plugin.lastSuccessAt)
+  }, null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [arrangeMode, setArrangeMode] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
@@ -101,12 +107,14 @@ export function AppShell({
   const contentMinHeightPx = panelPreferredMinHeightForView(activeView)
   const activeProviderId = navPlugins.some((plugin) => plugin.id === activeView)
     ? activeView
-    : selectedPlugin?.meta.id ?? resolvedSelectedPlugin?.meta.id ?? navPlugins[0]?.id ?? null
+    : (selectedPlugin?.meta.id ?? resolvedSelectedPlugin?.meta.id ?? navPlugins[0]?.id ?? null)
   const contextProviderId = contextMenu?.pluginId ?? activeProviderId
   const contextProvider = contextProviderId
-    ? navPlugins.find((plugin) => plugin.id === contextProviderId) ?? null
+    ? (navPlugins.find((plugin) => plugin.id === contextProviderId) ?? null)
     : null
-  const canRefreshContextProvider = contextProvider ? isPluginRefreshAvailable(contextProvider.id) : false
+  const canRefreshContextProvider = contextProvider
+    ? isPluginRefreshAvailable(contextProvider.id)
+    : false
 
   useEffect(() => {
     if (!contextMenu) return
@@ -127,20 +135,27 @@ export function AppShell({
     }
   }, [contextMenu])
 
-  const openContextMenu = useCallback((event: MouseEvent, pluginId?: string) => {
-    event.preventDefault()
-    const panelBounds = containerRef.current?.getBoundingClientRect()
-    const minX = (panelBounds?.left ?? 0) + CONTEXT_MENU_MARGIN_PX
-    const minY = (panelBounds?.top ?? 0) + CONTEXT_MENU_MARGIN_PX
-    const maxX = (panelBounds?.right ?? window.innerWidth) - CONTEXT_MENU_WIDTH_PX - CONTEXT_MENU_MARGIN_PX
-    const maxY = (panelBounds?.bottom ?? window.innerHeight) - CONTEXT_MENU_HEIGHT_PX - CONTEXT_MENU_MARGIN_PX
+  const openContextMenu = useCallback(
+    (event: MouseEvent, pluginId?: string) => {
+      event.preventDefault()
+      const panelBounds = containerRef.current?.getBoundingClientRect()
+      const minX = (panelBounds?.left ?? 0) + CONTEXT_MENU_MARGIN_PX
+      const minY = (panelBounds?.top ?? 0) + CONTEXT_MENU_MARGIN_PX
+      const maxX =
+        (panelBounds?.right ?? window.innerWidth) - CONTEXT_MENU_WIDTH_PX - CONTEXT_MENU_MARGIN_PX
+      const maxY =
+        (panelBounds?.bottom ?? window.innerHeight) -
+        CONTEXT_MENU_HEIGHT_PX -
+        CONTEXT_MENU_MARGIN_PX
 
-    setContextMenu({
-      pluginId: pluginId ?? null,
-      x: Math.max(minX, Math.min(event.clientX, maxX)),
-      y: Math.max(minY, Math.min(event.clientY, maxY)),
-    })
-  }, [containerRef])
+      setContextMenu({
+        pluginId: pluginId ?? null,
+        x: Math.max(minX, Math.min(event.clientX, maxX)),
+        y: Math.max(minY, Math.min(event.clientY, maxY)),
+      })
+    },
+    [containerRef]
+  )
 
   const closePanel = useCallback(() => {
     void invoke("hide_panel").catch((error) => {
@@ -148,26 +163,32 @@ export function AppShell({
     })
   }, [])
 
-  const runContextAction = useCallback((action: PluginContextAction | "refresh-all" | "settings" | "provider-settings" | "close") => {
-    const providerId = contextProvider?.id ?? null
+  const runContextAction = useCallback(
+    (action: PluginContextAction | "refresh-all" | "settings" | "provider-settings" | "close") => {
+      const providerId = contextProvider?.id ?? null
 
-    if (action === "arrange") {
-      setArrangeMode(true)
-      if (providerId) onPluginContextAction(providerId, "arrange")
-    } else if (action === "refresh-all") {
-      onRefreshAll()
-    } else if (action === "settings") {
-      void openSettingsWindow({ tab: "general" }).catch(console.error)
-    } else if (action === "provider-settings") {
-      void openSettingsWindow({ tab: providerId ? "providers" : "general", providerId: providerId ?? undefined }).catch(console.error)
-    } else if (action === "close") {
-      closePanel()
-    } else if (providerId) {
-      onPluginContextAction(providerId, action)
-    }
+      if (action === "arrange") {
+        setArrangeMode(true)
+        if (providerId) onPluginContextAction(providerId, "arrange")
+      } else if (action === "refresh-all") {
+        onRefreshAll()
+      } else if (action === "settings") {
+        void openSettingsWindow({ tab: "general" }).catch(console.error)
+      } else if (action === "provider-settings") {
+        void openSettingsWindow({
+          tab: providerId ? "providers" : "general",
+          providerId: providerId ?? undefined,
+        }).catch(console.error)
+      } else if (action === "close") {
+        closePanel()
+      } else if (providerId) {
+        onPluginContextAction(providerId, action)
+      }
 
-    setContextMenu(null)
-  }, [closePanel, contextProvider, onPluginContextAction, onRefreshAll])
+      setContextMenu(null)
+    },
+    [closePanel, contextProvider, onPluginContextAction, onRefreshAll]
+  )
 
   return (
     <div ref={containerRef} className="flex flex-col bg-card">
@@ -189,7 +210,10 @@ export function AppShell({
             onArrangeModeChange={setArrangeMode}
             onOpenContextMenu={openContextMenu}
           />
-          <div ref={contentColumnRef} className="flex-1 flex flex-col px-3 pt-2 pb-1.5 min-w-0 bg-card dark:bg-muted/50">
+          <div
+            ref={contentColumnRef}
+            className="flex-1 flex flex-col px-3 pt-2 pb-1.5 min-w-0 bg-card dark:bg-muted/50"
+          >
             <div className="relative flex-1 min-h-0">
               <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-none">
                 <div
@@ -217,6 +241,7 @@ export function AppShell({
             <div ref={footerRef}>
               <PanelFooter
                 version={appVersion}
+                lastUpdatedAt={lastUpdatedAt}
                 autoUpdateNextAt={autoUpdateNextAt}
                 updateStatus={updateStatus}
                 onUpdateInstall={triggerInstall}
