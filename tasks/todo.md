@@ -1212,3 +1212,63 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun run build:frontend` -> passed; Vite reports a non-blocking 613 kB minified JavaScript chunk warning.
 - `bun run test:coverage` -> all 1,409 tests passed, strict gate failed at 86.06% statements, 79.32% branches, 91.42% functions, and 89.29% lines. The documented Alpha coverage waiver is required; the 90% threshold was not changed.
 - `git diff --check` -> passed. Current local release-fix changes are uncommitted, so no release tag or GitHub draft was created; publishing automation publishes directly on a pushed `v*` tag and requires `TAURI_SIGNING_PRIVATE_KEY`.
+
+# Selective upstream sync and unused text cleanup, 2026-07-16
+
+## Executive Summary
+
+- Keep the UsageBar fork's current Windows-first/product direction intact.
+- Analyze upstream progress without importing unrelated architectural or product changes.
+- Port only changes that are still relevant and compatible with this fork.
+- Remove text resources only when repository-wide references prove they are unused.
+
+## Acceptance Criteria
+
+- [ ] Upstream divergence and the true common base are recorded.
+- [ ] No unrelated upstream product direction is merged or copied.
+- [ ] Relevant selective changes are implemented with focused tests where behavior changes.
+- [ ] Unused text resources are removed only with reference-search evidence.
+- [ ] Tests/build/checks and final diff review pass.
+- [ ] Choices and breadcrumbs document scope and assumptions.
+
+## Plan
+
+- [x] Fetch and compare upstream history, files, and current fork-specific changes.
+- [x] Classify upstream changes into adopt, defer, or reject: bulk adoption rejected; histories are unrelated and upstream is now Swift/macOS.
+- [x] Audit text resources: no safe deletion found; the only unlinked provider text documents a live Claude OAuth feature.
+- [ ] Create the local history marker without changing the working tree; push only with explicit authorization.
+- [ ] Run focused/full verification and review the final diff.
+
+## Findings
+
+- `main` has 595 commits; `upstream/main` has 493 commits; GitHub and Git both report no common ancestor.
+- Fork root: `2611e82` (`hello world :)`, 2026-02-01).
+- Upstream root: `53bc2f0` (`OpenUsage — native Swift edition`, 2026-06-15).
+- Upstream changes are therefore a separate product/architecture history, not a normal backlog to replay.
+- A future sync marker must use an `ours` merge tree so the fork files remain exactly unchanged.
+
+# Independent GitHub repository migration, 2026-07-16
+
+## Executive Summary
+
+- Establish UsageBar as an independent GitHub repository while retaining its complete existing Git history.
+- Preserve the former fork as an archived source repository for release assets and a clear public lineage.
+
+## Acceptance Criteria
+
+- [ ] New `luisleineweber/usagebar` repository is independent, public, and has the complete source history.
+- [ ] Every source branch and tag exists in the new repository with matching commit IDs.
+- [ ] The former fork is archived under an explicit source name; its releases remain available.
+- [ ] Local `origin` references the independent repository; `upstream` remains OpenUsage for historical reference.
+
+## Plan
+
+- [x] Record repository naming and preservation decision.
+- [x] Remove hardcoded Antigravity OAuth values and direct refresh-token use; update tests and documentation.
+- [ ] Rewrite the former fork history to redact the detected historical OAuth values, then mirror Git refs into the independent repository.
+- [ ] Verify identity, refs, timestamps, local remotes, and archived source state.
+
+## Migration Blocker
+
+- `git push --mirror` was rejected before any refs were created in the new repository. GitHub detected a Google OAuth client ID and client secret in historical Antigravity documentation/plugin commits, beginning at `4a58ca5d58878763ba19db6e4a9578de8150885b`.
+- Resolving this requires either an explicit GitHub secret-scanning allow decision for the historical values, or an intentional history rewrite that removes them and changes descendant commit IDs. No protection was bypassed and no history was rewritten.
