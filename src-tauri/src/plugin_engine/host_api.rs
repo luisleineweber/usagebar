@@ -4202,7 +4202,11 @@ mod tests {
             CcusageProvider::Claude,
             CcusageCommandFlavor::Current,
         );
-        assert!(current.windows(2).any(|args| args == ["--mode", "calculate"]));
+        assert!(
+            current
+                .windows(2)
+                .any(|args| args == ["--mode", "calculate"])
+        );
         assert!(current.iter().any(|arg| arg == "--offline"));
 
         let legacy = ccusage_runner_args(

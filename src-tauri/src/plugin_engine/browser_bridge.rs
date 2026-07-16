@@ -67,6 +67,15 @@ enum CookieCaptureMessage {
     Error(String),
 }
 
+struct CookieCaptureWindowConfig {
+    title: String,
+    login_url: String,
+    success_url_contains: String,
+    cookie_urls: Vec<String>,
+    cookie_names: Vec<String>,
+    sender: Arc<Mutex<Option<mpsc::Sender<CookieCaptureMessage>>>>,
+}
+
 pub fn request_with_cookies(
     app_handle: &AppHandle,
     req: &BrowserRequestWithCookiesParams,
@@ -177,25 +186,20 @@ pub fn capture_cookies_interactively(
 
     let app_for_build = app_handle.clone();
     let label_for_build = label.clone();
-    let login_url_for_build = login_url.clone();
-    let success_marker_for_build = success_url_contains.to_string();
-    let cookie_urls_for_build = cookie_urls.clone();
-    let cookie_names_for_build = cookie_names.clone();
-    let title_for_build = title.to_string();
-    let sender_for_build = Arc::clone(&sender);
+    let config = CookieCaptureWindowConfig {
+        title: title.to_string(),
+        login_url,
+        success_url_contains: success_url_contains.to_string(),
+        cookie_urls,
+        cookie_names,
+        sender: Arc::clone(&sender),
+    };
 
     app_handle
         .run_on_main_thread(move || {
-            if let Err(error) = build_cookie_capture_window(
-                &app_for_build,
-                &label_for_build,
-                &title_for_build,
-                &login_url_for_build,
-                &success_marker_for_build,
-                &cookie_urls_for_build,
-                &cookie_names_for_build,
-                sender_for_build,
-            ) {
+            if let Err(error) =
+                build_cookie_capture_window(&app_for_build, &label_for_build, config)
+            {
                 send_cookie_capture_message(
                     &sender,
                     CookieCaptureMessage::Error(format!("guided login setup failed: {}", error)),
@@ -215,18 +219,21 @@ pub fn capture_cookies_interactively(
 fn build_cookie_capture_window(
     app_handle: &AppHandle,
     label: &str,
-    title: &str,
-    login_url: &str,
-    success_url_contains: &str,
-    cookie_urls: &[String],
-    cookie_names: &[String],
-    sender: Arc<Mutex<Option<mpsc::Sender<CookieCaptureMessage>>>>,
+    config: CookieCaptureWindowConfig,
 ) -> Result<(), String> {
+    let CookieCaptureWindowConfig {
+        title,
+        login_url,
+        success_url_contains,
+        cookie_urls,
+        cookie_names,
+        sender,
+    } = config;
     let app_for_nav = app_handle.clone();
     let label_for_nav = label.to_string();
-    let success_marker = success_url_contains.to_string();
-    let cookie_urls_for_nav = cookie_urls.to_vec();
-    let cookie_names_for_nav = cookie_names.to_vec();
+    let success_marker = success_url_contains;
+    let cookie_urls_for_nav = cookie_urls;
+    let cookie_names_for_nav = cookie_names;
     let sender_for_nav = Arc::clone(&sender);
 
     let window = WebviewWindowBuilder::new(
