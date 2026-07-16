@@ -8,9 +8,6 @@
   var LOAD_CODE_ASSIST_PATH = "/v1internal:loadCodeAssist"
   var QUOTA_SUMMARY_PATH = "/v1internal:retrieveUserQuotaSummary"
   var FETCH_MODELS_PATH = "/v1internal:fetchAvailableModels"
-  var GOOGLE_OAUTH_URL = "https://oauth2.googleapis.com/token"
-  var GOOGLE_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-  var GOOGLE_CLIENT_SECRET = "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"
   var OAUTH_TOKEN_KEY = "antigravityUnifiedStateSync.oauthToken"
   var OAUTH_TOKEN_SENTINEL = "oauthTokenInfoSentinelKey"
   var QUOTA_PERIOD_MS = 5 * 60 * 60 * 1000
@@ -165,14 +162,13 @@
       if (!inner) return null
       var fields = readFields(inner)
       var accessToken = fields[1] && fields[1].type === 2 ? fields[1].data : null
-      var refreshToken = fields[3] && fields[3].type === 2 ? fields[3].data : null
       var expirySeconds = null
       if (fields[4] && fields[4].type === 2) {
         var ts = readFields(fields[4].data)
         if (ts[1] && ts[1].type === 0) expirySeconds = ts[1].value
       }
-      if (!accessToken && !refreshToken) return null
-      return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
+      if (!accessToken) return null
+      return { accessToken: accessToken, expirySeconds: expirySeconds }
     } catch (e) {
       ctx.host.log.warn("failed to read unified oauth token: " + String(e))
       return null
@@ -312,55 +308,6 @@
     }
   }
 
-  function cacheToken(ctx, accessToken, expiresInSeconds) {
-    try {
-      ctx.host.fs.writeText(
-        ctx.app.pluginDataDir + "/auth.json",
-        JSON.stringify({
-          accessToken: accessToken,
-          expiresAtMs: Date.now() + (expiresInSeconds || 3600) * 1000,
-        })
-      )
-    } catch (e) {
-      ctx.host.log.warn("failed to cache refreshed token: " + String(e))
-    }
-  }
-
-  function refreshAccessToken(ctx, refreshTokenValue) {
-    if (!refreshTokenValue) return null
-    try {
-      var resp = ctx.host.http.request({
-        method: "POST",
-        url: GOOGLE_OAUTH_URL,
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        bodyText:
-          "client_id=" +
-          encodeURIComponent(GOOGLE_CLIENT_ID) +
-          "&client_secret=" +
-          encodeURIComponent(GOOGLE_CLIENT_SECRET) +
-          "&refresh_token=" +
-          encodeURIComponent(refreshTokenValue) +
-          "&grant_type=refresh_token",
-        timeoutMs: 15000,
-      })
-      if (resp.status < 200 || resp.status >= 300) return null
-      var body = ctx.util.tryParseJson(resp.bodyText)
-      if (!body || !body.access_token) return null
-      cacheToken(
-        ctx,
-        body.access_token,
-        typeof body.expires_in === "number" ? body.expires_in : 3600
-      )
-      return {
-        accessToken: body.access_token,
-        expiresInSeconds: typeof body.expires_in === "number" ? body.expires_in : 3600,
-      }
-    } catch (e) {
-      ctx.host.log.warn("Google OAuth refresh failed: " + String(e))
-      return null
-    }
-  }
-
   function isCachedTokenUsable(cached) {
     return !!(cached && cached.accessToken && cached.expiresAtMs > Date.now())
   }
@@ -383,7 +330,6 @@
   }
 
   function resolveCloudCodeData(ctx, cached, dbTokens, status) {
-    var sawAuthFailure = false
     if (cached && cached.accessToken) {
       if (isCachedTokenUsable(cached)) {
         status.triedCloudCode = true
@@ -394,7 +340,6 @@
         }
         if (cachedRawData && !cachedRawData.authFailed) return cachedRawData
         if (cachedRawData && cachedRawData.authFailed) {
-          sawAuthFailure = true
           status.sawAuthFailure = true
           ctx.host.log.warn("cached Antigravity token rejected by Cloud Code auth")
         } else {
@@ -417,7 +362,6 @@
         }
         if (dbData && !dbData.authFailed) return dbData
         if (dbData && dbData.authFailed) {
-          sawAuthFailure = true
           status.sawAuthFailure = true
           ctx.host.log.warn("DB access token rejected by Cloud Code auth")
         } else {
@@ -428,39 +372,6 @@
         status.sawExpiredToken = true
         ctx.host.log.warn("DB access token expired; skipping direct Cloud Code attempt")
       }
-    }
-
-    var triedTokenCount = 0
-    if (cached && cached.accessToken && isCachedTokenUsable(cached)) triedTokenCount += 1
-    if (dbTokens && dbTokens.accessToken && isProtoAccessTokenUsable(dbTokens)) triedTokenCount += 1
-
-    if (dbTokens && dbTokens.refreshToken && (sawAuthFailure || triedTokenCount === 0)) {
-      status.attemptedRefresh = true
-      ctx.host.log.warn("attempting Antigravity refresh-token recovery")
-      var refreshed = refreshAccessToken(ctx, dbTokens.refreshToken)
-      if (refreshed && refreshed.accessToken) {
-        status.triedCloudCode = true
-        var refreshedData = requestCloudCode(ctx, refreshed.accessToken)
-        if (refreshedData && refreshedData.forbidden) {
-          status.sawForbidden = true
-          return null
-        }
-        if (refreshedData && !refreshedData.authFailed) return refreshedData
-        if (refreshedData && refreshedData.authFailed) {
-          status.sawAuthFailure = true
-          ctx.host.log.warn("refresh succeeded but Cloud Code still rejected the refreshed token")
-        } else {
-          status.sawCloudCodeTransientFailure = true
-          ctx.host.log.warn(
-            "refresh succeeded but refreshed token did not yield usable Cloud Code data"
-          )
-        }
-      } else {
-        status.refreshFailed = true
-        ctx.host.log.warn("Antigravity refresh-token recovery failed")
-      }
-    } else if (!(dbTokens && dbTokens.refreshToken)) {
-      ctx.host.log.warn("no Antigravity refresh token available for offline recovery")
     }
 
     return null
@@ -1059,17 +970,14 @@
   }
 
   function finalErrorMessage(status, cached, dbTokens) {
-    var hasAnyToken = !!(
-      (cached && cached.accessToken) ||
-      (dbTokens && (dbTokens.accessToken || dbTokens.refreshToken))
-    )
+    var hasAnyToken = !!((cached && cached.accessToken) || (dbTokens && dbTokens.accessToken))
     if (status.sawForbidden) {
       return "Antigravity quota is unavailable for this account, region, or plan."
     }
     if (status.sawAuthFailure) {
       return "Antigravity sign-in expired or was revoked. Open Antigravity, sign in again, then refresh UsageBar."
     }
-    if (status.refreshFailed || (status.sawExpiredToken && !status.attemptedRefresh)) {
+    if (status.sawExpiredToken) {
       return "Antigravity token expired and could not be refreshed. Open Antigravity, sign in again, then refresh UsageBar."
     }
     if (status.sawCloudCodeTransientFailure) {
@@ -1096,14 +1004,12 @@
       sawForbidden: false,
       sawAuthFailure: false,
       sawExpiredToken: false,
-      attemptedRefresh: false,
-      refreshFailed: false,
     }
     var dbTokens = loadOAuthTokens(ctx)
     var cached = loadCachedToken(ctx)
     var hasStoredCredentials = !!(
       (cached && cached.accessToken) ||
-      (dbTokens && (dbTokens.accessToken || dbTokens.refreshToken))
+      (dbTokens && dbTokens.accessToken)
     )
     var ccData = hasStoredCredentials ? resolveCloudCodeData(ctx, cached, dbTokens, status) : null
     if (ccData && !ccData.authFailed) {
