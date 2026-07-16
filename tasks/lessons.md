@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-07-16
+
+- Antigravity OAuth: never embed or submit a Google OAuth client secret or a stored refresh token. Read only the current access token; when it expires or is rejected, require the user to sign in again in Antigravity. Historical secret detections must be removed before a standalone GitHub migration.
+
 Full historical lesson log is archived locally at:
 
 - `tasks/archive/lessons-history-2026-05-18.md`

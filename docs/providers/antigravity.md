@@ -19,7 +19,7 @@ Provider detail output also includes `Source` so local diagnostics are visible:
 - **Vendor:** Google (internal codename "Jetski")
 - **Protocol:** Connect RPC v1 (JSON over HTTP) on local language server
 - **Service:** `exa.language_server_pb.LanguageServerService`
-- **Auth:** CSRF token from process args; Google OAuth access/refresh tokens from SQLite
+- **Auth:** CSRF token from process args; Google OAuth access token from SQLite
 - **Quota:** fraction (`0.0-1.0`, where `1.0` means 100% remaining)
 - **Quota windows:** five-hour session and weekly baseline pools
 - **Timestamps:** ISO 8601
@@ -184,7 +184,7 @@ Antigravity stores auth credentials in a VS Code-compatible state database.
 
 ### jetskiStateSync.agentManagerInitState (protobuf)
 
-Google OAuth tokens are also stored as a base64-encoded protobuf blob with access token, refresh token, and expiry timestamp.
+Google OAuth tokens are also stored as a base64-encoded protobuf blob with access token, refresh token, and expiry timestamp. UsageBar reads only the access token and its expiry; it never submits the refresh token itself.
 
 ```protobuf
 message AgentManagerInitState {
@@ -201,21 +201,7 @@ message Timestamp {
 }
 ```
 
-OpenUsage decodes this with a minimal protobuf wire parser and uses the refresh token when Cloud Code returns auth failures.
-
-### Token Refresh
-
-```text
-POST https://oauth2.googleapis.com/token
-Content-Type: application/x-www-form-urlencoded
-
-client_id=REDACTED_GOOGLE_OAUTH_CLIENT_ID
-&client_secret=REDACTED_GOOGLE_OAUTH_CLIENT_SECRET
-&refresh_token=<refresh_token>
-&grant_type=refresh_token
-```
-
-Response: `{ "access_token": "ya29...", "expires_in": 3599 }`
+UsageBar decodes this with a minimal protobuf wire parser and uses only a valid access token. When that token expires or is rejected, sign in again in Antigravity and refresh UsageBar.
 
 ## Cloud Code API (primary)
 
@@ -288,7 +274,7 @@ Base URLs tried in order:
 }
 ```
 
-HTTP 401 triggers one refresh-and-retry when a refresh token exists. HTTP 403 is treated as an account, region, or plan entitlement failure and does not trigger OAuth refresh. Throttling and transient host failures use bounded host fallback.
+HTTP 401 is treated as an expired or revoked Antigravity sign-in. HTTP 403 is treated as an account, region, or plan entitlement failure. Throttling and transient host failures use bounded host fallback.
 
 The response includes all provisioned models. OpenUsage filters out non-user-facing entries using:
 
@@ -301,7 +287,7 @@ User-facing placeholder-backed IDs such as `MODEL_PLACEHOLDER_M9` and `MODEL_PLA
 ## Plugin Strategy
 
 1. Read and decode `antigravityUnifiedStateSync.oauthToken` from SQLite.
-2. Use a valid cached access token, valid SQLite access token, or one OAuth refresh attempt.
+2. Use a valid cached access token or valid SQLite access token; expired tokens require a sign-in refresh in Antigravity.
 3. Call `loadCodeAssist` and require `cloudaicompanionProject`.
 4. Prefer `retrieveUserQuotaSummary`; render only when all four session/weekly buckets parse.
 5. Fall back to project-scoped `fetchAvailableModels` and preserve its model-family detail lines.

@@ -1008,7 +1008,7 @@ describe("antigravity plugin", () => {
     expect(authHeaders).toEqual(["Bearer ya29.cached"])
   })
 
-  it("refreshes when the DB access token is expired", async () => {
+  it("does not refresh an expired DB access token", async () => {
     const ctx = makeCtx()
     const pastExpiry = Math.floor(Date.now() / 1000) - 60
     setupSqliteMock(
@@ -1018,186 +1018,46 @@ describe("antigravity plugin", () => {
     )
     ctx.host.ls.discover.mockReturnValue(null)
 
-    const authHeaders = []
-    ctx.host.http.request.mockImplementation((opts) => {
-      const url = String(opts.url)
-      if (url.includes("oauth2.googleapis.com")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
-        }
-      }
-      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
-      if (url.includes("fetchAvailableModels")) {
-        authHeaders.push(opts.headers.Authorization)
-        if (opts.headers.Authorization === "Bearer ya29.refreshed") {
-          return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
-        }
-        return { status: 401, bodyText: '{"error":"unauthorized"}' }
-      }
-      return { status: 500, bodyText: "" }
-    })
-
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
 
-    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(authHeaders).toEqual(["Bearer ya29.refreshed"])
+    expect(() => plugin.probe(ctx)).toThrow("Antigravity token expired and could not be refreshed.")
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
     expect(ctx.host.log.warn).toHaveBeenCalledWith(
       "DB access token expired; skipping direct Cloud Code attempt"
     )
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("attempting Antigravity refresh-token recovery")
   })
 
-  it("recovers with only a refresh token when Cloud Code auth is offline-first", async () => {
+  it("ignores refresh-token-only stored credentials", async () => {
     const ctx = makeCtx()
     setupSqliteMock(ctx, null, makeProtobufBase64(ctx, null, "1//refresh", null))
     ctx.host.ls.discover.mockReturnValue(null)
 
-    const authHeaders = []
-    ctx.host.http.request.mockImplementation((opts) => {
-      const url = String(opts.url)
-      if (url.includes("oauth2.googleapis.com")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
-        }
-      }
-      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
-      if (url.includes("fetchAvailableModels")) {
-        authHeaders.push(opts.headers.Authorization)
-        return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
-      }
-      return { status: 500, bodyText: "" }
-    })
-
-    const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-
-    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(authHeaders).toEqual(["Bearer ya29.refreshed"])
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("attempting Antigravity refresh-token recovery")
-  })
-
-  it("refreshes after cached and DB token auth failures", async () => {
-    const ctx = makeCtx()
-    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(
-      ctx,
-      makeAuthStatusJson({ apiKey: "ya29.apiKey" }),
-      makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry)
-    )
-    ctx.host.ls.discover.mockReturnValue(null)
-    ctx.host.fs.writeText(
-      ctx.app.pluginDataDir + "/auth.json",
-      JSON.stringify({ accessToken: "ya29.cached", expiresAtMs: Date.now() + 3600 * 1000 })
-    )
-
-    const authHeaders = []
-    ctx.host.http.request.mockImplementation((opts) => {
-      const url = String(opts.url)
-      if (url.includes("oauth2.googleapis.com")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
-        }
-      }
-      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
-      if (url.includes("fetchAvailableModels")) {
-        authHeaders.push(opts.headers.Authorization)
-        if (opts.headers.Authorization === "Bearer ya29.cached") {
-          return { status: 401, bodyText: '{"error":"unauthorized"}' }
-        }
-        if (opts.headers.Authorization === "Bearer ya29.proto") {
-          return { status: 401, bodyText: '{"error":"unauthorized"}' }
-        }
-        if (opts.headers.Authorization === "Bearer ya29.refreshed") {
-          return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
-        }
-        return { status: 401, bodyText: '{"error":"unauthorized"}' }
-      }
-      return { status: 500, bodyText: "" }
-    })
-
-    const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-
-    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(authHeaders).toEqual([
-      "Bearer ya29.cached",
-      "Bearer ya29.proto",
-      "Bearer ya29.refreshed",
-    ])
-    expect(ctx.host.log.warn).toHaveBeenCalledWith(
-      "cached Antigravity token rejected by Cloud Code auth"
-    )
-    expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token rejected by Cloud Code auth")
-  })
-
-  it("refreshes and caches a token when initial Cloud Code auth fails", async () => {
-    const ctx = makeCtx()
-    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
-    setupSqliteMock(
-      ctx,
-      makeAuthStatusJson(),
-      makeProtobufBase64(ctx, "ya29.bad", "1//refresh", futureExpiry)
-    )
-    ctx.host.ls.discover.mockReturnValue(null)
-
-    ctx.host.http.request.mockImplementation((opts) => {
-      const url = String(opts.url)
-      if (url.includes("oauth2.googleapis.com")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
-        }
-      }
-      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
-      if (url.includes("fetchAvailableModels")) {
-        if (opts.headers.Authorization === "Bearer ya29.refreshed") {
-          return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
-        }
-        return { status: 401, bodyText: '{"error":"unauthorized"}' }
-      }
-      return { status: 500, bodyText: "" }
-    })
-
-    const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-
-    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(ctx.host.fs.writeText).toHaveBeenCalledWith(
-      ctx.app.pluginDataDir + "/auth.json",
-      expect.any(String)
-    )
-  })
-
-  it("throws after logging the offline auth failures when refresh recovery is unavailable", async () => {
-    const ctx = makeCtx()
-    const pastExpiry = Math.floor(Date.now() / 1000) - 60
-    setupSqliteMock(
-      ctx,
-      makeAuthStatusJson({ apiKey: "ya29.apiKey" }),
-      makeProtobufBase64(ctx, "ya29.expired", null, pastExpiry)
-    )
-    ctx.host.ls.discover.mockReturnValue(null)
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("fetchAvailableModels")) {
-        return { status: 401, bodyText: '{"error":"unauthorized"}' }
-      }
-      return { status: 500, bodyText: "" }
-    })
-
     const plugin = await loadPlugin()
 
-    expect(() => plugin.probe(ctx)).toThrow("Antigravity token expired and could not be refreshed.")
-    expect(ctx.host.log.warn).toHaveBeenCalledWith(
-      "DB access token expired; skipping direct Cloud Code attempt"
-    )
-    expect(ctx.host.log.warn).toHaveBeenCalledWith(
-      "no Antigravity refresh token available for offline recovery"
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Antigravity is not running and no stored sign-in was found."
     )
     expect(ctx.host.http.request).not.toHaveBeenCalled()
+  })
+
+  it("does not submit stored refresh tokens after Cloud Code auth failures", async () => {
+    const ctx = makeCtx()
+    const futureExpiry = Math.floor(Date.now() / 1000) + 3600
+    setupSqliteMock(ctx, null, makeProtobufBase64(ctx, "ya29.proto", "1//refresh", futureExpiry))
+    ctx.host.ls.discover.mockReturnValue(null)
+
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url).includes("oauth2.googleapis.com"))
+        throw new Error("unexpected OAuth call")
+      return { status: 401, bodyText: '{"error":"unauthorized"}' }
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Antigravity sign-in expired or was revoked. Open Antigravity, sign in again, then refresh UsageBar."
+    )
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("DB access token rejected by Cloud Code auth")
   })
 
   it("reports a discovered but unreachable local port", async () => {
@@ -1294,46 +1154,6 @@ describe("antigravity plugin", () => {
       "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels"
     )
     expect(urls.at(-1)).toBe("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels")
-  })
-
-  it("tolerates cache write failures after a successful refresh", async () => {
-    const ctx = makeCtx()
-    const pastExpiry = Math.floor(Date.now() / 1000) - 60
-    setupSqliteMock(
-      ctx,
-      makeAuthStatusJson({ apiKey: "ya29.apiKey" }),
-      makeProtobufBase64(ctx, "ya29.expired", "1//refresh", pastExpiry)
-    )
-    ctx.host.ls.discover.mockReturnValue(null)
-    ctx.host.fs.writeText.mockImplementation(() => {
-      throw new Error("disk full")
-    })
-
-    ctx.host.http.request.mockImplementation((opts) => {
-      const url = String(opts.url)
-      if (url.includes("oauth2.googleapis.com")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "ya29.refreshed", expires_in: 3599 }),
-        }
-      }
-      if (url.includes("loadCodeAssist")) return makeLoadCodeAssistResponse()
-      if (url.includes("fetchAvailableModels")) {
-        if (opts.headers.Authorization === "Bearer ya29.refreshed") {
-          return { status: 200, bodyText: JSON.stringify(makeCloudCodeResponse()) }
-        }
-        return { status: 401, bodyText: '{"error":"unauthorized"}' }
-      }
-      return { status: 500, bodyText: "" }
-    })
-
-    const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-
-    expect(getProgressLabels(result)).toEqual(["Gemini Pro", "Claude"])
-    expect(ctx.host.log.warn).toHaveBeenCalledWith(
-      "failed to cache refreshed token: Error: disk full"
-    )
   })
 
   it("tries the extension port when discovered ports fail probing", async () => {
