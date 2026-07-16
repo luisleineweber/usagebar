@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { Clock3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AboutDialog } from "@/components/about-dialog"
 import type { UpdateStatus } from "@/hooks/use-app-update"
@@ -7,6 +8,7 @@ import { APP_NAME } from "@/lib/project-metadata"
 
 interface PanelFooterProps {
   version: string
+  lastUpdatedAt?: number | null
   autoUpdateNextAt: number | null
   updateStatus: UpdateStatus
   onUpdateInstall: () => void
@@ -104,8 +106,19 @@ function VersionDisplay({
   }
 }
 
+function formatRelativeTime(diffMs: number): string {
+  const seconds = Math.floor(Math.max(0, diffMs) / 1000)
+  if (seconds < 60) return "just now"
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
+
 export function PanelFooter({
   version,
+  lastUpdatedAt = null,
   autoUpdateNextAt,
   updateStatus,
   onUpdateInstall,
@@ -116,8 +129,8 @@ export function PanelFooter({
   onCloseAbout,
 }: PanelFooterProps) {
   const now = useNowTicker({
-    enabled: Boolean(autoUpdateNextAt),
-    resetKey: autoUpdateNextAt,
+    enabled: Boolean(autoUpdateNextAt || lastUpdatedAt),
+    resetKey: `${autoUpdateNextAt ?? "paused"}:${lastUpdatedAt ?? "never"}`,
   })
 
   const countdownLabel = useMemo(() => {
@@ -126,14 +139,20 @@ export function PanelFooter({
     const totalSeconds = Math.ceil(remainingMs / 1000)
     if (totalSeconds >= 60) {
       const minutes = Math.ceil(totalSeconds / 60)
-      return `Next update in ${minutes}m`
+      return `${minutes}m`
     }
-    return `Next update in ${totalSeconds}s`
+    return `${totalSeconds}s`
   }, [autoUpdateNextAt, now])
+
+  const autoUpdateDescription = autoUpdateNextAt
+    ? `Next automatic update in ${countdownLabel}`
+    : "Automatic updates paused"
+  const updatedLabel =
+    lastUpdatedAt == null ? "Not updated yet" : `Updated ${formatRelativeTime(now - lastUpdatedAt)}`
 
   return (
     <>
-      <div className="flex justify-between items-center h-8 pt-1.5 border-t">
+      <div className="flex h-8 items-center justify-between gap-2 border-t pt-1.5">
         <VersionDisplay
           version={version}
           updateStatus={updateStatus}
@@ -141,21 +160,34 @@ export function PanelFooter({
           onUpdateCheck={onUpdateCheck}
           onVersionClick={onShowAbout}
         />
-        {autoUpdateNextAt !== null && onRefreshAll ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.currentTarget.blur()
-              onRefreshAll()
-            }}
-            className="text-xs text-muted-foreground tabular-nums hover:text-foreground transition-colors cursor-pointer"
-            title="Refresh now"
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          <span
+            className="truncate text-xs text-muted-foreground tabular-nums"
+            title={updatedLabel}
           >
-            {countdownLabel}
-          </button>
-        ) : (
-          <span className="text-xs text-muted-foreground tabular-nums">{countdownLabel}</span>
-        )}
+            {updatedLabel}
+          </span>
+          {autoUpdateNextAt !== null && onRefreshAll ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.currentTarget.blur()
+                onRefreshAll()
+              }}
+              className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums transition-colors hover:text-foreground"
+              aria-label={`${autoUpdateDescription}. Click to refresh now.`}
+              title={`${autoUpdateDescription}. Click to refresh now.`}
+            >
+              <Clock3 className="size-3" aria-hidden />
+              {countdownLabel}
+            </button>
+          ) : (
+            <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
+              <Clock3 className="size-3" aria-hidden />
+              {countdownLabel}
+            </span>
+          )}
+        </div>
       </div>
       {showAbout && <AboutDialog version={version} onClose={onCloseAbout} />}
     </>

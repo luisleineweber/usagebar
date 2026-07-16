@@ -26,7 +26,7 @@ describe("PanelFooter", () => {
         {...footerProps}
       />
     )
-    expect(screen.getByText("Next update in 5m")).toBeTruthy()
+    expect(screen.getByText("5m")).toBeTruthy()
   })
 
   it("shows countdown in seconds when < 60 seconds", () => {
@@ -40,7 +40,7 @@ describe("PanelFooter", () => {
         {...footerProps}
       />
     )
-    expect(screen.getByText("Next update in 30s")).toBeTruthy()
+    expect(screen.getByText("30s")).toBeTruthy()
   })
 
   it("triggers refresh when clicking countdown label", async () => {
@@ -56,7 +56,7 @@ describe("PanelFooter", () => {
         {...footerProps}
       />
     )
-    const button = screen.getByRole("button", { name: /Next update in/i })
+    const button = screen.getByRole("button", { name: /Next automatic update in/i })
     await userEvent.click(button)
     expect(onRefreshAll).toHaveBeenCalledTimes(1)
   })
@@ -72,6 +72,26 @@ describe("PanelFooter", () => {
       />
     )
     expect(screen.getByText("Paused")).toBeTruthy()
+  })
+
+  it("shows the displayed data update time", () => {
+    vi.useFakeTimers()
+    const now = new Date("2026-07-16T12:00:00.000Z")
+    vi.setSystemTime(now)
+
+    render(
+      <PanelFooter
+        version="0.0.0"
+        lastUpdatedAt={now.getTime() - 2 * 60 * 1000}
+        autoUpdateNextAt={null}
+        updateStatus={idle}
+        onUpdateInstall={noop}
+        {...footerProps}
+      />
+    )
+
+    expect(screen.getByText("Updated 2m ago")).toBeInTheDocument()
+    vi.useRealTimers()
   })
 
   it("shows a readable alpha label instead of raw semver in idle state", async () => {
