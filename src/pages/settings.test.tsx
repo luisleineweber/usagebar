@@ -237,7 +237,7 @@ describe("SettingsPage", () => {
     expect(screen.getAllByText("Not signed in").length).toBeGreaterThan(0)
   })
 
-  it("reveals provider-row clicks in the tray", async () => {
+  it("keeps provider-row clicks inside Settings", async () => {
     const onSelectedProviderChange = vi.fn()
     render(
       <SettingsPage
@@ -251,7 +251,7 @@ describe("SettingsPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /codex/i }))
 
-    expect(onSelectedProviderChange.mock.calls).toContainEqual(["codex", { revealInTray: true }])
+    expect(onSelectedProviderChange).toHaveBeenCalledWith("codex")
   })
 
   it("shows an explicit tray-open action for the selected provider", async () => {
