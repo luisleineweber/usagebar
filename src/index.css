@@ -81,6 +81,7 @@
   --sidebar-accent-foreground: oklch(0.21 0.034 264.665);
   --sidebar-border: oklch(0.928 0.006 264.531);
   --sidebar-ring: oklch(0.707 0.022 261.325);
+  --page-accent: #76a900;
 
   /* Tailwind green/yellow/red-500 (light: stock defaults) */
   --green-500: oklch(0.723 0.219 142.37);

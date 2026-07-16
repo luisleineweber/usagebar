@@ -83,11 +83,12 @@ function NavButton({
       onClick={onClick}
       onContextMenu={onContextMenu}
       aria-label={ariaLabel}
+      aria-current={isActive ? "page" : undefined}
       className={cn(
         "relative flex shrink-0 items-center justify-center w-full p-2.5 transition-colors",
-        "hover:bg-accent",
+        "hover:bg-accent/40",
         isActive
-          ? "text-foreground before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-primary dark:before:bg-page-accent before:rounded-full"
+          ? "bg-accent/70 text-foreground before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-page-accent before:rounded-full"
           : "text-muted-foreground"
       )}
     >
@@ -156,7 +157,8 @@ function SortableNavPlugin({
             (plugin.supportState !== "supported" ? (plugin.supportMessage ?? undefined) : undefined)
           }
           className={cn(
-            "size-6 inline-block",
+            "size-6 inline-block transition-opacity",
+            isActive ? "opacity-100" : "opacity-70",
             plugin.supportState === "comingSoonOnWindows" ? "opacity-45" : ""
           )}
           style={{
@@ -239,7 +241,7 @@ export function SideNav({
         onClick={() => onViewChange("home")}
         aria-label="Home"
       >
-        <GaugeIcon className="size-6 dark:text-page-accent" />
+        <GaugeIcon className="size-6 text-page-accent" />
       </NavButton>
 
       <NavButton

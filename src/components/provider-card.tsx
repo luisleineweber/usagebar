@@ -5,64 +5,56 @@
  * PaceIndicator dot live in metric-line-renderer.tsx to keep this file focused.
  */
 
-import { Fragment, useMemo } from "react";
-import { AlertCircle, ExternalLink, Hourglass, RefreshCw } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { SkeletonLines } from "@/components/skeleton-lines";
-import { PluginError } from "@/components/plugin-error";
-import { MetricLineRenderer } from "@/components/metric-line-renderer";
-import { useNowTicker } from "@/hooks/use-now-ticker";
+import { Fragment, useMemo } from "react"
+import { AlertCircle, ExternalLink, Hourglass, RefreshCw } from "lucide-react"
+import { openUrl } from "@tauri-apps/plugin-opener"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { SkeletonLines } from "@/components/skeleton-lines"
+import { PluginError } from "@/components/plugin-error"
+import { MetricLineRenderer } from "@/components/metric-line-renderer"
+import { useNowTicker } from "@/hooks/use-now-ticker"
 import {
   REFRESH_COOLDOWN_MS,
   type DisplayMode,
   type ResetTimerDisplayMode,
   type TimeFormatMode,
-} from "@/lib/settings";
-import type {
-  ManifestLine,
-  MetricLine,
-  PluginLink,
-  ProbeErrorCategory,
-} from "@/lib/plugin-types";
-import { groupLinesByType } from "@/lib/group-lines-by-type";
+} from "@/lib/settings"
+import type { ManifestLine, MetricLine, PluginLink, ProbeErrorCategory } from "@/lib/plugin-types"
+import { groupLinesByType } from "@/lib/group-lines-by-type"
 import {
   hasProviderStatusIssue,
   providerStatusLabel,
   type ProviderStatus,
-} from "@/lib/provider-status";
+} from "@/lib/provider-status"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 interface ProviderCardProps {
-  name: string;
-  plan?: string;
-  links?: PluginLink[];
-  showSeparator?: boolean;
-  loading?: boolean;
-  error?: string | null;
-  errorCategory?: ProbeErrorCategory | null;
-  lines?: MetricLine[];
-  skeletonLines?: ManifestLine[];
-  lastManualRefreshAt?: number | null;
+  name: string
+  iconUrl?: string
+  plan?: string
+  links?: PluginLink[]
+  showSeparator?: boolean
+  loading?: boolean
+  error?: string | null
+  errorCategory?: ProbeErrorCategory | null
+  lines?: MetricLine[]
+  skeletonLines?: ManifestLine[]
+  lastManualRefreshAt?: number | null
   /** Epoch ms of the last successful data fetch. Shown in error states and tooltips. */
-  lastUpdatedAt?: number | null;
-  onRetry?: () => void;
-  scopeFilter?: "overview" | "all";
-  displayMode: DisplayMode;
-  resetTimerDisplayMode?: ResetTimerDisplayMode;
-  timeFormatMode?: TimeFormatMode;
-  onResetTimerDisplayModeToggle?: () => void;
-  status?: ProviderStatus;
+  lastUpdatedAt?: number | null
+  onRetry?: () => void
+  scopeFilter?: "overview" | "all"
+  displayMode: DisplayMode
+  resetTimerDisplayMode?: ResetTimerDisplayMode
+  timeFormatMode?: TimeFormatMode
+  onResetTimerDisplayModeToggle?: () => void
+  status?: ProviderStatus
 }
 
 // ---------------------------------------------------------------------------
@@ -70,14 +62,14 @@ interface ProviderCardProps {
 // ---------------------------------------------------------------------------
 
 function formatRelativeTime(diffMs: number): string {
-  const seconds = Math.floor(Math.max(0, diffMs) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  const seconds = Math.floor(Math.max(0, diffMs) / 1000)
+  if (seconds < 60) return "just now"
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +78,7 @@ function formatRelativeTime(diffMs: number): string {
 
 export function ProviderCard({
   name,
+  iconUrl,
   plan,
   links = [],
   showSeparator = true,
@@ -104,46 +97,37 @@ export function ProviderCard({
   onResetTimerDisplayModeToggle,
   status,
 }: ProviderCardProps) {
-  const hasRetainedContent = lines.length > 0;
-  const isRefreshingWithData = loading && hasRetainedContent;
+  const hasRetainedContent = lines.length > 0
+  const isRefreshingWithData = loading && hasRetainedContent
   const cooldownRemainingMs = useMemo(() => {
-    if (!lastManualRefreshAt) return 0;
-    const remaining = REFRESH_COOLDOWN_MS - (Date.now() - lastManualRefreshAt);
-    return remaining > 0 ? remaining : 0;
-  }, [lastManualRefreshAt]);
+    if (!lastManualRefreshAt) return 0
+    const remaining = REFRESH_COOLDOWN_MS - (Date.now() - lastManualRefreshAt)
+    return remaining > 0 ? remaining : 0
+  }, [lastManualRefreshAt])
 
   // Filter lines to overview-scoped subset when rendering in the overview panel.
   const overviewLabels = new Set(
-    skeletonLines
-      .filter((line) => line.scope === "overview")
-      .map((line) => line.label),
-  );
+    skeletonLines.filter((line) => line.scope === "overview").map((line) => line.label)
+  )
   const filteredSkeletonLines =
     scopeFilter === "all"
       ? skeletonLines
-      : skeletonLines.filter((line) => line.scope === "overview");
+      : skeletonLines.filter((line) => line.scope === "overview")
   const filteredLines =
-    scopeFilter === "all"
-      ? lines
-      : lines.filter((line) => overviewLabels.has(line.label));
+    scopeFilter === "all" ? lines : lines.filter((line) => overviewLabels.has(line.label))
 
   const hasResetCountdown = filteredLines.some(
-    (line) => line.type === "progress" && Boolean(line.resetsAt),
-  );
+    (line) => line.type === "progress" && Boolean(line.resetsAt)
+  )
 
-  const tickerIntervalMs = cooldownRemainingMs > 0 ? 1000 : 30_000;
+  const tickerIntervalMs = cooldownRemainingMs > 0 ? 1000 : 30_000
   const now = useNowTicker({
     enabled: cooldownRemainingMs > 0 || hasResetCountdown,
     intervalMs: tickerIntervalMs,
-    stopAfterMs:
-      cooldownRemainingMs > 0 && !hasResetCountdown
-        ? cooldownRemainingMs
-        : null,
-  });
+    stopAfterMs: cooldownRemainingMs > 0 && !hasResetCountdown ? cooldownRemainingMs : null,
+  })
 
-  const inCooldown = lastManualRefreshAt
-    ? now - lastManualRefreshAt < REFRESH_COOLDOWN_MS
-    : false;
+  const inCooldown = lastManualRefreshAt ? now - lastManualRefreshAt < REFRESH_COOLDOWN_MS : false
 
   const visibleLinks = useMemo(
     () =>
@@ -153,33 +137,46 @@ export function ProviderCard({
           (link) =>
             link.label.length > 0 &&
             link.url.length > 0 &&
-            (link.url.startsWith("https://") || link.url.startsWith("http://")),
+            (link.url.startsWith("https://") || link.url.startsWith("http://"))
         ),
-    [links],
-  );
+    [links]
+  )
 
   const formatRemainingTime = () => {
-    if (!lastManualRefreshAt) return "";
-    const remainingMs = REFRESH_COOLDOWN_MS - (now - lastManualRefreshAt);
-    if (remainingMs <= 0) return "";
-    const totalSeconds = Math.ceil(remainingMs / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return minutes > 0
-      ? `Available in ${minutes}m ${seconds}s`
-      : `Available in ${seconds}s`;
-  };
+    if (!lastManualRefreshAt) return ""
+    const remainingMs = REFRESH_COOLDOWN_MS - (now - lastManualRefreshAt)
+    if (remainingMs <= 0) return ""
+    const totalSeconds = Math.ceil(remainingMs / 1000)
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    return minutes > 0 ? `Available in ${minutes}m ${seconds}s` : `Available in ${seconds}s`
+  }
 
   return (
     <div>
       <div className="pt-1 pb-3">
         {/* ── Header row ── */}
         <div className="flex items-center gap-2 mb-2">
-          <div className="relative flex min-w-0 flex-1 items-center">
-            <h2
-              className="truncate text-lg font-semibold"
-              style={{ transform: "translateZ(0)" }}
-            >
+          <div className="relative flex min-w-0 flex-1 items-center gap-1.5">
+            {iconUrl ? (
+              <span
+                role="img"
+                aria-label={`${name} icon`}
+                className="size-4 shrink-0 text-foreground/80"
+                style={{
+                  backgroundColor: "currentColor",
+                  WebkitMaskImage: `url(${iconUrl})`,
+                  WebkitMaskSize: "contain",
+                  WebkitMaskRepeat: "no-repeat",
+                  WebkitMaskPosition: "center",
+                  maskImage: `url(${iconUrl})`,
+                  maskSize: "contain",
+                  maskRepeat: "no-repeat",
+                  maskPosition: "center",
+                }}
+              />
+            ) : null}
+            <h2 className="truncate text-lg font-semibold" style={{ transform: "translateZ(0)" }}>
               {name}
             </h2>
             {onRetry &&
@@ -217,9 +214,7 @@ export function ProviderCard({
                       </span>
                     )}
                   />
-                  <TooltipContent side="top">
-                    {formatRemainingTime()}
-                  </TooltipContent>
+                  <TooltipContent side="top">{formatRemainingTime()}</TooltipContent>
                 </Tooltip>
               ) : (
                 <Tooltip>
@@ -232,8 +227,8 @@ export function ProviderCard({
                         size="icon-xs"
                         aria-label="Retry"
                         onClick={(e) => {
-                          e.currentTarget.blur();
-                          onRetry();
+                          e.currentTarget.blur()
+                          onRetry()
                         }}
                         className="opacity-0 hover:opacity-100 focus-visible:opacity-100"
                         style={{
@@ -292,7 +287,7 @@ export function ProviderCard({
                 size="xs"
                 className="h-6 max-w-full text-[11px]"
                 onClick={() => {
-                  openUrl(link.url).catch(console.error);
+                  openUrl(link.url).catch(console.error)
                 }}
               >
                 <span className="truncate">{link.label}</span>
@@ -321,10 +316,7 @@ export function ProviderCard({
           <Tooltip>
             <TooltipTrigger
               render={(props) => (
-                <div
-                  {...props}
-                  className="mb-2 flex items-center gap-1.5 text-xs text-destructive"
-                >
+                <div {...props} className="mb-2 flex items-center gap-1.5 text-xs text-destructive">
                   <AlertCircle className="h-3 w-3 flex-shrink-0" />
                   <span className="truncate">{error}</span>
                 </div>
@@ -334,8 +326,7 @@ export function ProviderCard({
               <div>{error}</div>
               {lastUpdatedAt != null && (
                 <div className="mt-1 opacity-70">
-                  Last successful:{" "}
-                  {formatRelativeTime(Date.now() - lastUpdatedAt)}
+                  Last successful: {formatRelativeTime(Date.now() - lastUpdatedAt)}
                 </div>
               )}
             </TooltipContent>
@@ -360,9 +351,7 @@ export function ProviderCard({
                       displayMode={displayMode}
                       resetTimerDisplayMode={resetTimerDisplayMode}
                       timeFormatMode={timeFormatMode}
-                      onResetTimerDisplayModeToggle={
-                        onResetTimerDisplayModeToggle
-                      }
+                      onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
                       now={now}
                       refreshing={isRefreshingWithData}
                     />
@@ -377,15 +366,13 @@ export function ProviderCard({
                       displayMode={displayMode}
                       resetTimerDisplayMode={resetTimerDisplayMode}
                       timeFormatMode={timeFormatMode}
-                      onResetTimerDisplayModeToggle={
-                        onResetTimerDisplayModeToggle
-                      }
+                      onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
                       now={now}
                       refreshing={isRefreshingWithData}
                     />
                   ))}
                 </Fragment>
-              ),
+              )
             )}
           </div>
         )}
@@ -400,5 +387,5 @@ export function ProviderCard({
       </div>
       {showSeparator && <Separator />}
     </div>
-  );
+  )
 }
