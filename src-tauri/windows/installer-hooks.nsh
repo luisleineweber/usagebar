@@ -1,10 +1,15 @@
 !include "WinMessages.nsh"
+!include "LogicLib.nsh"
 
 !macro BroadcastEnvironmentChange
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "UsageBar"
+  ${If} $0 != ""
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "UsageBar" "$INSTDIR\usagebar.exe"
+  ${EndIf}
   ExecWait `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$p=[Environment]::GetEnvironmentVariable('Path','User'); if(-not (($p -split ';' | ForEach-Object { $_.Trim() }) -contains '$INSTDIR')) {[Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';' + '$INSTDIR'), 'User')}"` $0
   !insertmacro BroadcastEnvironmentChange
 !macroend

@@ -106,6 +106,7 @@ function createArgs() {
 
 describe("useSettingsBootstrap", () => {
   beforeEach(() => {
+    vi.stubEnv("DEV", false)
     invokeMock.mockReset()
     isTauriMock.mockReset()
     isAutostartEnabledMock.mockReset()
@@ -164,6 +165,29 @@ describe("useSettingsBootstrap", () => {
 
     expect(disableAutostartMock).toHaveBeenCalledTimes(1)
     expect(enableAutostartMock).not.toHaveBeenCalled()
+  })
+
+  it("refreshes an already-enabled autostart entry for the current executable", async () => {
+    isAutostartEnabledMock.mockResolvedValueOnce(true)
+    const args = createArgs()
+    const { result } = renderHook(() => useSettingsBootstrap(args))
+
+    await result.current.applyStartOnLogin(true)
+
+    expect(enableAutostartMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not register autostart from a development build", async () => {
+    vi.stubEnv("DEV", true)
+    const args = createArgs()
+    const { result } = renderHook(() => useSettingsBootstrap(args))
+
+    await result.current.applyStartOnLogin(true)
+
+    expect(isAutostartEnabledMock).not.toHaveBeenCalled()
+    expect(enableAutostartMock).not.toHaveBeenCalled()
+
+    vi.unstubAllEnvs()
   })
 
   it("falls back to default reset timer mode when loading fails", async () => {

@@ -76,14 +76,15 @@ export function useSettingsBootstrap({
   startBatch,
 }: UseSettingsBootstrapArgs) {
   const applyStartOnLogin = useCallback(async (value: boolean) => {
-    if (!isTauri()) return
+    if (!isTauri() || import.meta.env.DEV) return
     const currentlyEnabled = await isAutostartEnabled()
-    if (currentlyEnabled === value) return
 
     if (value) {
       await enableAutostart()
       return
     }
+
+    if (!currentlyEnabled) return
 
     await disableAutostart()
   }, [])
