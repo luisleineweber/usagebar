@@ -26,6 +26,7 @@ vi.mock("@/hooks/use-changelog", () => ({
 describe("AboutDialog", () => {
   it("renders version, fork lineage, author, and links", () => {
     render(<AboutDialog version="1.2.3" onClose={() => {}} />)
+    expect(screen.getByRole("img", { name: APP_NAME })).toHaveAttribute("src", "/favicon.png")
     expect(screen.getByText(APP_NAME)).toBeInTheDocument()
     expect(screen.getByText("v1.2.3")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "OpenUsage" })).toBeInTheDocument()
