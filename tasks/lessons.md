@@ -1,5 +1,19 @@
 # Lessons
 
+## 2026-07-22
+
+- Settings provider presentation was coupled to the persisted tray order and exposed the same drag interaction; the first decoupling also dropped the established primary-provider prefix, then pinned legacy `opencode` (OpenCode Zen) instead of visible `opencode-go` (OpenCode). Fix: keep Codex, Claude, Cursor, and `opencode-go` first in Settings, alphabetize the remainder, and keep reordering solely in tray navigation. Prevention: distinguish provider display names from stable IDs and regression-test the real manifest IDs for the complete Settings prefix.
+
+- New ccusage adapters copied only totalTokens and cost, so current provider history showed cost with zero detailed token fields. Fix: map every available token dimension consistently across adapters. Prevention: fixture input/output/cache/reasoning fields whenever adding a ccusage-backed provider.
+
+## 2026-07-22
+
+- Neue Settings-Imports müssen in vollständigen Vitest-Modul-Mocks und in partiellen Mocks mit Tauri-Zugriff ergänzt werden. Fix: `DEFAULT_ACCENT_COLOR` und `loadAccentColor` in Bootstrap-/App-Tests mocken. Prevention: nach jedem neuen Settings-Export alle `@/lib/settings`-Mocks prüfen.
+
+## 2026-07-22
+
+- Accent settings must use the actual former product color (`#bfff00`), not a separate historical light-theme variant. Prevention: identify the user-visible source token before defining migration/options.
+
 ## 2026-07-16
 
 - Antigravity OAuth: never embed or submit a Google OAuth client secret or a stored refresh token. Read only the current access token; when it expires or is rejected, require the user to sign in again in Antigravity. Historical secret detections must be removed before a standalone GitHub migration.
@@ -10,7 +24,18 @@ Full historical lesson log is archived locally at:
 
 Keep this file short. Retain only recent or frequently relevant prevention rules. Search the archive only when working near older behavior.
 
+## 2026-07-22
+
+- Alpha 6 dev isolation separated the app-data directory from installed Alpha 5 without a migration, so local preferences and provider secrets appeared reset. Fix: perform a one-time, read-only-source migration from the release sibling directory before startup settings access. Prevention: every new app identifier requires an explicit data migration decision and regression test.
+
 ## Current Prevention Rules
+
+- Frontend About assets: verify every absolute image URL has a tracked Vite `public` asset; a missing favicon silently renders as a broken image in the dialog.
+
+- ccusage source expansion: keep the runner namespace list aligned with the upstream focused commands, and add a first-class local-history plugin when a named source has no provider card; a host mapping alone cannot render a graph.
+
+- External usage runners: a green mocked plugin test does not prove the pinned package is executable. For ccusage bumps, run the exact production package-manager command against a local provider fixture or real local history before release.
+- Package-runner fallbacks: exhaust every runner with the authoritative current package before trying a legacy package; one corrupt runner cache must not silently select an older parser with different accounting semantics.
 
 - History availability: provider history is optional. When no selected provider exposes entries, omit the history section instead of rendering unsupported-provider copy.
 - OpenCode SQLite history: distinguish the Zen-only balance/cost-window query from the all-provider activity-history query; their similar shapes make context-free edits unsafe.
@@ -52,3 +77,16 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - Copilot plan metadata: `access_type_sku: free_limited_copilot` can coexist with authoritative token-based `quota_snapshots`; select available current snapshots before free-tier classification, and fixture both fields together.
 - Settings provider navigation: a provider-row callback reused the tray handoff option, so selecting a row hid Settings instead of opening its detail panel. Keep tray reveal as an explicit detail action and test row selection without options.
 - Alpha 5 release verification exposed four stale `App` UI assertions after the tray-footer/settings refinement. Fix: assert the current accessible footer label and explicit tray action. Prevention: whenever a user-visible interaction is renamed or moved, update all integration tests that target its accessible role/name in the same change.
+- Plugin bundling: a manifest can require an icon that source control no longer contains, causing the dev wrapper to fail after the bundler entrypoint is restored. Prevention: run the source-to-bundle command from a clean checkout and keep manifest assets in the provider package.
+- Vite startup: a healthy dev server can still serve HTTP 404 at the Tauri `devUrl` when the repo has no root `index.html`. Prevention: keep the HTML entrypoint tracked and assert its main-module mount in the startup smoke tests.
+- Frontend checkout completeness: a tracked app entry can import production modules that are absent from the checkout without Git reporting deletions. Prevention: run the frontend production build after restoring/merging checkpoint work and treat unresolved-import errors as missing-source inventory findings.
+- Dev/release isolation: a local Tauri build sharing the release identifier also shares settings, secrets, cache, WebView data, and logs with the installed app. Prevention: force a tracked dev-only identifier as the final `--config` override and test the config order.
+- Provider icon integrity: an existing manifest asset can still be a generated text fallback. Prevention: startup smoke coverage must reject `<text>` placeholder SVGs; provider packages keep the real `currentColor` artwork.
+- History calendar days: a provider-local midnight serialized as UTC can fall on the previous UTC date. Group and label history using the history source time zone; never derive a calendar day by slicing an ISO timestamp.
+- Alpha 6 line helpers: shared grouping code must preserve the input line type because manifest skeleton rows and runtime metric rows have different contracts. Prevention: type helpers against the smallest shared shape and add a manifest-shaped regression case.
+- TypeScript target compatibility: avoid newer built-ins such as `Array.prototype.at` when the configured lib target is ES2020. Prevention: check tsconfig lib/target before using standard-library APIs.
+- Local HTTP API CORS: removing the wildcard default breaks existing browser clients even when documented. Preserve the legacy default and make an explicit allowed-origin value the restrictive mode; add tests for both paths.
+- Provider order updates: preserve existing drag order, but place newly discovered providers between their sorted neighbors instead of blindly appending them. Add a normalization regression test for the new-provider path.
+- Primary provider order: keep the four product-priority providers (`codex`, `claude`, `cursor`, `opencode`) ahead of the alphabetical remainder. Prevention: test the full default prefix whenever its membership changes.
+- Legacy provider order: when a provider was persisted by an old append-to-end default, repair only the recognizable generated order; preserve arbitrary user drag order. Prevention: add a regression fixture for persisted orders created before provider-order fixes.
+- Used metric labels: progress values in `used` mode had no textual mode label, while `left` values were explicitly labeled. Use one shared display suffix and test every supported format in both modes.

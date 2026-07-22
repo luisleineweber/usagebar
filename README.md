@@ -12,7 +12,7 @@ Windows alpha/beta builds are published as GitHub prereleases.
 
 Release plan:
 
-- Next public milestone: Alpha 5, as an unsigned Windows technical preview
+- Next public milestone: Alpha 6, as an unsigned Windows technical preview
 - Windows: GitHub prerelease with a NSIS setup `.exe`
 - macOS: still secondary while the Windows fork stabilizes
 
@@ -24,7 +24,7 @@ Release process and preflight checks live in [docs/releasing.md](docs/releasing.
 
 Alpha and beta Windows builds are distributed from GitHub Releases as a NSIS setup `.exe`.
 
-Alpha 5 signing note: the Windows installer is intentionally unsigned while Authenticode signing is deferred. Windows may show `Unknown publisher` or SmartScreen warnings. Treat Alpha 5 as a technical preview for users comfortable with prerelease desktop software.
+Alpha 6 signing note: the Windows installer is intentionally unsigned while Authenticode signing is deferred. Windows may show `Unknown publisher` or SmartScreen warnings. Treat Alpha 6 as a technical preview for users comfortable with prerelease desktop software.
 
 Install:
 
@@ -47,7 +47,7 @@ Local data:
 
 ## Alpha Readiness
 
-UsageBar is still pre-release. Alpha 5 means a Windows user can install from GitHub, enable supported providers, refresh usage, inspect local history/reporting, manage provider credentials, and configure local quota notifications. The Alpha 5 installer is unsigned; Authenticode signing is deferred.
+UsageBar is still pre-release. Alpha 6 means a Windows user can install from GitHub, enable supported providers, refresh usage, inspect local history/reporting, manage provider credentials, and configure local quota notifications. The Alpha 6 installer is unsigned; Authenticode signing is deferred.
 
 ## What It Does
 
@@ -104,6 +104,7 @@ Status meanings:
 | [**OpenAI API**](docs/providers/openai-api.md)                         | Experimental   | Organization API spend windows, completions tokens, requests, and top model from the OpenAI Admin API                                                                           |
 | [**OpenRouter**](docs/providers/openrouter.md)                         | Experimental   | Credits, balance, request-rate detail                                                                                                                                           |
 | [**Perplexity**](docs/providers/perplexity.md)                         | Experimental   | Recurring, purchased, and bonus credit pools via manual cookie/env auth                                                                                                         |
+| [**Qwen Code**](docs/providers/qwen.md)                                | Experimental   | Local Qwen Code token usage and estimated cost history via `ccusage`                                                                                                            |
 | [**Synthetic**](docs/providers/synthetic.md)                           | Experimental   | Direct API-key quota endpoint                                                                                                                                                   |
 | [**Vertex AI**](docs/providers/vertex-ai.md)                           | Experimental   | gcloud ADC OAuth plus Cloud Monitoring quota usage                                                                                                                              |
 | [**Warp**](docs/providers/warp.md)                                     | Experimental   | Request limits and plan badge from an undocumented app GraphQL operation                                                                                                        |
@@ -119,7 +120,7 @@ Want a provider that's not listed? [Open an issue.](https://github.com/luisleine
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
 - Prerelease auto-updates are intentionally conservative because GitHub's `releases/latest` alias does not resolve prereleases. Prerelease builds may open the matching GitHub release page instead of installing in-app.
-- Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations are full-release work, not an Alpha 5 promise.
+- Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations are full-release work, not an Alpha 6 promise.
 
 ## Architecture
 

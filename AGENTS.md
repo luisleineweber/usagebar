@@ -1,181 +1,99 @@
 # AGENTS.md
 
-Version: 0.26 (2026-02-10)
+## Project
 
-Start: say hi + 1 motivating line.
-Work style: Be radically precise. No fluff. Pure information only (drop grammar; min tokens).
-
-## Project Summary
-- Goal: cross-platform menu bar / tray app to track AI coding subscription usage across providers in one place.
+- Contact: Luis Leineweber (@luisleineweber).
+- Goal: Windows-first Tauri menu-bar/tray app for tracking AI coding subscription usage.
 - Stack: Tauri v2, Rust, React 19, TypeScript, Vite, Tailwind CSS v4, Zustand, Vitest.
-- Constraints: plugin-first architecture, simple UX, small reviewable changes, Windows fork context while keeping upstream `openusage` lineage visible.
-
-## Placeholder Policy
-- Placeholders marked `--- Enter ... ---` are editable without asking first.
-- On project start, replace placeholders with concrete repo details.
-- Remove placeholder lines once real content is added.
-
-## Agent Protocol
-- Contact: Luis Leineweber (@loues000).
-- “Make a note” => edit AGENTS.md (Ignore `CLAUDE.md`, symlink for AGENTS.md).
+- Architecture: plugin-first; keep UX simple and changes small/reviewable.
+- Fork lineage: `openusage`; Windows work also draws from `CodexBar`; local Claude/Codex usage reference is `ccusage`.
+- “Make a note” means edit this file. Ignore `CLAUDE.md`; it is a symlink target for this file.
 - Editor: `cursor <path>`.
-- New deps: quick health check (recent releases/commits, adoption).
 
-## Session Start Checklist
-1. Read this file before significant work; summarize project goal + stack in-thread.
-2. Review `tasks/lessons.md`; create it if missing.
-3. Review `tasks/todo.md`; if missing create it with the first 3 concrete steps.
-4. For stack/domain-specific work outside the active skill set, run `$find-skills <keywords>` before substantial implementation.
-5. Run a basic environment sanity check relevant to the task (`ls`, targeted test, build, or similar) before major work when safe.
-6. Confirm in-thread that the environment/context is ready before the first substantial task.
+## Start of Task
 
-## Guardrails
-- Use `trash` for deletes.
-- Use `mv` / `cp` to move and copy files.
-- Bugs: add regression test when it fits.
-- Keep files <~400 LOC; split/refactor as needed.
-- Simplicity first: handle only important cases; no enterprise over-engineering.
-- New functionality: small OR absolutely necessary.
-- NEVER delete files, folders or other data unless explicilty approved or part of a plan.
-- Before writing code, stricly follow the blow research rules
-- Always start with "Executive Summary" and summarize the plan for a non-technical reader in a few short bullets (what will change, behavior outcomes, intent, etc), avoiding jargon and implementation details. After that, show the full technical plan with details needed to implement.
+1. Read this file and summarize the relevant project context in-thread.
+2. Read `tasks/lessons.md`; create it if missing.
+3. Read or create `tasks/todo.md`. For non-trivial work, add acceptance criteria and a short testable plan before coding.
+4. For work outside the active skill set, search for a relevant skill before substantial implementation.
+5. Run a relevant baseline check when safe: targeted test, build, typecheck, or environment sanity check.
+6. State when the environment is ready before substantial work.
 
-## Research
-- Always create a spec in-memory (no files), even if minimal
-- Prefer skills if available over research
-- Prefer researched knowledge over existing knowledge when skills are unavailable
-- Research: Exa to websearch early, and Ref to seek specific documention or web fetch.
-- Best results: Quote exact errors; prefer 2025-2026 sources.
+## Working Rules
 
-## Git
-- Always use `gh` to communicate with GitHub.
-- GitHub CLI for PRs/CI/releases. Given issue/PR URL (or `/pull/5`): use `gh`, not web search.
-- Examples: `gh issue view <url> --comments -R owner/repo`, `gh pr view <url> --comments --files -R owner/repo`.
-- Conventional branches (`feat|fix|refactor|build|ci|chore|docs|style|perf|test`).
-- Make changes in small, reviewable packages; one concept per package.
-- Do not create commits unless the user explicitly asks.
-- Safe by default: `git status/diff/log`. Push only when user asks.
-- `git checkout` ok for PR review / explicit request.
-- Branch workflow: keep feature branches rebased onto the target branch before merge.
-- Branch changes require user consent.
-- Destructive ops forbidden unless explicit (`reset --hard`, `clean`, `restore`, `rm`, …).
-- No repo-wide S/R scripts; keep edits small/reviewable.
-- Avoid manual `git stash`; if Git auto-stashes during pull/rebase, that’s fine (hint, not hard guardrail).
-- If user types a command (“pull and push”), that’s consent for that command.
-- Big review: `git --no-pager diff --color=never`.
-- Before creating a PR, run `bun run test:coverage`; coverage minimums must pass.
+- Fix root causes; avoid band-aids, speculative fallbacks, and unnecessary features.
+- For bugs, reproduce the failure with a focused test or deterministic check before implementing the smallest root-cause fix.
+- Add regression coverage for core logic and bugs when practical.
+- Keep files near 400 lines or less; split focused helpers when approaching the limit.
+- Preserve unrelated user changes. Stop and ask only when an unrecognized change directly conflicts with the requested work.
+- Do not delete, reset, clean, restore, or overwrite user data without explicit approval. Use `trash` for approved deletes and `mv`/`cp` for moves/copies.
+- Do not create commits, change branches, push, or publish unless explicitly requested.
+- After three failed attempts at the same test/build/lint/blocker, stop and report the blocker with a recommended alternative.
+
+## Communication
+
+- Begin work updates with `Executive Summary`: a few short bullets describing behavior, intent, and scope for a non-technical reader.
+- Then provide the technical plan when the task has three or more meaningful steps.
+- Lead with outcomes. Use concise, precise language; avoid filler.
+- Do not ask whether to continue. Continue within scope unless the user says stop or progress is genuinely blocked.
+- If choosing an opinionated default, record it in `docs/choices.md` with the date.
+- Record meaningful investigation breadcrumbs in `docs/breadcrumbs.md`, appended under the current date.
+
+## Research and Skills
+
+- Prefer an applicable installed skill over ad-hoc research. Search for a skill when the task is outside the active project skills.
+- For unstable, niche, external, or high-stakes facts, research authoritative current sources before implementation.
+- Quote exact errors when useful; distinguish source-backed facts, local evidence, inference, and unresolved blockers.
+- New dependencies require a quick health check: maintenance, recent releases/commits, and adoption.
 
 ## Error Handling
-- Expected issues: explicit result types (not throw/try/catch).
-  - Exception: external systems (git, gh) → try/catch ok.
-  - Exception: React Query mutations → throw ok.
-- Unexpected issues: fail loud (throw/console.error + toast.error); NEVER add fallbacks.
 
-## Backwards Compat
-- Local/uncommitted: none needed; rewrite as if fresh.
-- In main: probably needed, ask user.
+- Expected domain failures use explicit result types; do not use exceptions as ordinary control flow.
+- External systems such as Git, GitHub, and React Query mutations may use exceptions where required by their APIs.
+- Unexpected failures must be visible: throw or log with an appropriate user-facing error/toast. Do not silently fall back.
 
-## Critical Thinking
-- Fix root cause (not band-aid).
-- Unsure: read more code; if still stuck, ask w/ short options (A/B/C).
-- Conflicts: stop. call out; pick safer path.
-- Unrecognized changes: assume other agent; keep going; focus your changes. If it causes issues, stop + ask user.
-- Work in small, shippable slices.
-- Prefer correctness + guardrails over more features.
-- Ralph Wiggum Loop: after 3 failed attempts on the same task (tests/build/lint/blocker), stop and ask for a different path.
+## Git and GitHub
 
-## Planning Default
-- Non-trivial work (3+ steps, refactors, architectural changes) starts with a written plan before coding.
-- Plan mode in this repo: create/update `tasks/todo.md`, keep steps short/testable, and track `[ ]` -> `[x]`.
-- Write acceptance criteria in `tasks/todo.md` before implementation for non-trivial work.
-- If new information invalidates the plan, stop and re-plan immediately.
+- Use normal `git` commands for local status, diffs, history, and file work.
+- Use `gh` for GitHub issues, pull requests, checks, releases, and comments.
+- Use conventional branch prefixes: `feat`, `fix`, `refactor`, `build`, `ci`, `chore`, `docs`, `style`, `perf`, `test`.
+- Keep changes small and reviewable; one concept per slice.
+- Before a PR, run `bun run test:coverage`; required coverage gates must pass or the documented project waiver must apply.
+- Review substantial changes with `git --no-pager diff --color=never` and `git diff --check`.
 
-## Subagent Strategy
-- Use subagents liberally for research, parallel analysis, or exploration when helpful.
-- Give each subagent one specific task.
-- Subagent output should be short findings + recommended next step unless code is explicitly requested.
+## Verification and Completion
 
-## Self-Improvement Loop
-- Every bug fix or user correction must be appended to `tasks/lessons.md` before the related todo item is marked done.
-- Record: what went wrong, the fix, and a concrete prevention rule.
-- Review `tasks/lessons.md` at the start of each session before significant work.
+- Verification order: focused tests/checks, related suite, full checks/build, formatting/lint, diff review.
+- Record exact commands, outcomes, and pre-existing blockers in `tasks/todo.md`.
+- Mark todo items complete only after their acceptance criteria are verified.
+- Every bug fix or user correction gets a concise entry in `tasks/lessons.md`: what went wrong, the fix, and a prevention rule.
+- For provider/plugin work, verify source tests, manifest, documentation, redaction obligations, and synchronized bundled resources.
+- Distinguish fixture/mock coverage, local browser verification, packaged Windows verification, and real-account/provider verification.
 
-## Completion and Autonomy Gate
-- Assume "continue" unless the user explicitly says "stop" or "pause".
-- Do not ask "should I continue?" or similar questions.
-- If more progress is possible without user input, continue.
-- BEFORE you end a turn or ask the user a question, run this checklist
--- Answer these privately, then act:
-   1) Was the initial task fully completed?
-   2) If a definition-of-done was provided, did you run and verify every item?
-   3) Are you about to stop to ask a question?
-      - If yes: is the question actually blocking forward progress?
-   4) Can the question be answered by choosing an opinionated default?
-      - If yes: choose a default, document it in , and continue.
-- When you choose opinionated defaults, document them in `/docs/choices.md` as you work.
-- Leave breadcrumb notes in thread and `/docs/breadcrumbs.md`.
-- When writing to `/docs/choices.md` or `/docs/breadcrumbs.md` categorize by date (tail)
-- If you must ask the user:
--- Ask exclusively blocking question only.
--- Explain why it is blocking and what you will do once answered.
--- Provide your best default/assumption as an alternative if the user does not care.
+## Provider and Plugin Rules
 
-## Useful Tidbits
-- When using Vercel AI Gateway, use a single API key across the project, not individual providers.
-- When using Convex, run `bunx convex dev --once` to verify, not `bunx convex codegen`.
+- Plugin SVG logos must use `currentColor`.
+- `plugin.json` `brandColor` must use the provider’s real brand color.
+- Audit plugin-exposed request/response fields against redaction lists in `src-tauri/src/plugin_engine/host_api.rs`; add tests for gaps.
+- After plugin changes, run `bun run bundle:plugins` and verify source/bundled files are synchronized.
+- Do not infer zero, Free, quota limits, subscription state, or metric labels from missing or ambiguous data; preserve unknown state and require authoritative provider evidence.
 
-## Before Creating Pull Request
-- Before creating a PR or pushing to main, ensure that `README.md` is updated with what plugins are supported.
-- On any plugin change/new plugin, audit plugin-exposed request/response fields against `src-tauri/src/plugin_engine/host_api.rs` redaction lists and add/update tests for gaps. Compare with existing plugins for patterns.
-- In `plugin.json`, set `brandColor` to the provider's real brand color.
-- Plugin SVG logos must use `currentColor` so icon theming works correctly.
+## Release
 
-## Before Release
-- Update `CHANGELOG.md` with a section for the exact release version before tagging, publishing, or running the final release preflight.
-- GitHub release body must follow the previous release format exactly:
+- Update `CHANGELOG.md` with the exact release version before tagging, publishing, or final release preflight.
+- Before publishing or editing a release body, run `gh release view <previous-tag> --json body` and mirror its structure:
   - `What's Changed`
-  - bullet list of notable commits as `- Human summary by @luisleineweber in shortsha`
-  - `Alpha Notes` / milestone notes
+  - notable commits as `- Human summary by @luisleineweber in shortsha`
+  - `Alpha Notes`
   - `New Contributors`
   - `Full Changelog: https://github.com/luisleineweber/usagebar/compare/<previous-tag>...<new-tag>`
-- Never leave `Full Changelog` as plain text tag names; it must be the GitHub compare URL.
-- Before publishing or editing a release body, view the previous release with `gh release view <previous-tag> --json body` and mirror its structure.
-
-## Project Notes
-- This repo is a fork of `openusage`: `https://github.com/robinebers/openusage`.
-- Windows transformation work was helped by `CodexBar`: `https://github.com/steipete/CodexBar`.
-- Claude/Codex local usage reference: `ccusage`: `https://github.com/ryoppippi/ccusage`.
-
-## Skills Strategy
-- Search-first: before work outside the core/active skill set, run `$find-skills <relevant keywords>`.
-- Install/use skills just-in-time; keep active skills lean.
-- Web UI implementation or redesign: use `$frontend-design`.
-- Web accessibility/guideline review: use `$web-design-guidelines`.
-- UX flow/usability review: use `$ui-ux-audit`.
-- Convex work: use `$convex`.
-
-### Active Skills For This Project
-- `find-skills`
-- `tauri-development`
-- `tauri-v2`
-- `frontend-design`
-- `web-design-guidelines`
-- `ui-ux-audit`
-
-## Definition Of Done
-- Do not mark a task done without verification: build, tests, logs, diff review, or a manual check that matches scope.
-- Add at least one test when introducing core logic or when a regression test clearly fits.
-- For provider/plugin changes, also verify related docs/redaction/test obligations in the existing PR checklist section.
-
-## Task Management Protocol
-1. Initialize: write/update the plan in `tasks/todo.md`.
-2. Execute: mark items `[x]` only after verification.
-3. Summarize: provide a short high-level summary when the slice is complete.
-4. Lesson capture: if a bug or correction happened, document it in `tasks/lessons.md`.
+- Never leave `Full Changelog` as plain tag names.
+- Before a PR or release, ensure `README.md` lists supported plugins.
 
 ## User Notes
-Use below list to store and recall user notes when asked to do so.
 
-- Tauri IPC: JS must use camelCase (`{ batchId, pluginIds }`), Tauri auto-converts to Rust's snake_case. Never send snake_case from JS—params silently won't match.
-- tauri-action `latest.json`: Parallel matrix builds are safe—action fetches existing `latest.json`, merges platform entries, re-uploads. No `max-parallel: 1` needed.
-- User environment: Windows is localized in German. When parsing OS/process/network command output, do not depend on English-only tokens like `LISTENING`; prefer locale-stable columns, flags, structured output, or path/process evidence.
+- Tauri IPC: JavaScript uses camelCase (`{ batchId, pluginIds }`); Tauri converts to Rust snake_case. Never send snake_case from JavaScript.
+- Vercel AI Gateway: use one project API key, not individual provider keys.
+- Convex verification: run `bunx convex dev --once`, not `bunx convex codegen`.
+- Parallel `tauri-action` matrix builds are safe; the action merges existing `latest.json` platform entries.
+- Windows is localized in German. Use locale-stable columns, flags, structured output, or path/process evidence; do not parse English-only tokens such as `LISTENING`.

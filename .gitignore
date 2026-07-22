@@ -46,6 +46,7 @@ package-lock.json
 
 # Local/generated captures
 /screenshot*.png
+!/screenshot.png
 /screenshots/
 /captures/
 /reports/

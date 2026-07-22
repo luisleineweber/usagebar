@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0-alpha.6
+
+### Highlights
+
+- Started the Alpha 6 provider-audit cycle with clean source-to-bundle validation for all 33 providers.
+- Restored the dev plugin bundler and missing provider icon assets so `npm run tauri dev` can reach Tauri startup.
+- Aligned package, Tauri, and Cargo metadata to `0.1.0-alpha.6`.
+
+### Notes
+
+- Alpha 6 is the active development baseline; release notes and installer readiness remain in progress.
+
 ## 0.1.0-alpha.5
 
 ### Highlights

@@ -1,5 +1,229 @@
 ﻿# Active Todo
 
+# Settings provider presentation order, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] Settings keeps Codex, Claude, Cursor, and OpenCode first, then lists the remainder alphabetically.
+- [x] Settings provider rows have no drag handles or reorder interaction.
+- [x] Persisted provider order and tray/bar reorder behavior remain unchanged.
+- [x] Focused regression tests, typecheck, formatting, and diff checks pass.
+
+## Plan
+
+- [x] Reproduce the Settings dependency on persisted provider order in a focused test.
+- [x] Make alphabetical ordering local to Settings and remove its drag-and-drop wiring.
+- [x] Verify Settings behavior and confirm the tray/bar ordering path is untouched.
+
+## Verification Notes
+
+- `bun run test -- src/pages/settings.test.tsx src/components/side-nav.test.tsx --run` -> 2 files, 19 tests passed.
+- `bun run typecheck` and `bun run lint` -> passed.
+- Targeted Prettier check and `git diff --check` -> passed.
+- Follow-up regression covers the real visible-provider prefix: `codex`, `claude`, `cursor`, `opencode-go`; legacy `opencode` (OpenCode Zen) remains in the alphabetical remainder.
+
+# Alpha 6 persisted Qwen order repair, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] Persisted Alpha 6 default order moves Qwen between Perplexity and Synthetic.
+- [x] Arbitrary saved provider order remains unchanged.
+- [x] Regression test, typecheck, and diff check pass.
+
+## Verification Notes
+
+- `bun run test -- src/lib/settings.test.ts --run` -> 58 passed.
+- `bun run typecheck` -> passed.
+- `git diff --check` -> passed; existing CRLF normalization warnings only.
+
+# Accent-color test mocks, 2026-07-22
+
+### Acceptance Criteria
+
+- [x] Betroffene fünf Tests bestehen.
+- [x] Vollständige Frontend-Testsuite besteht.
+- [x] Diff und Formatierung geprüft.
+
+### Plan
+
+- [x] Fehler reproduzieren und Mock-Lücken identifizieren.
+- [x] Mocks ergänzen und fokussiert verifizieren.
+- [x] Vollständige Suite ausführen und Änderungen prüfen.
+
+### Verification Notes
+
+- `bun run test -- src/hooks/app/use-settings-bootstrap.test.ts src/App.test.tsx --run --reporter dot` -> 92 passed.
+- `bun run test -- src/lib/settings.test.ts --run` -> 57 passed, including the four-provider prefix regression.
+- `bun run test:all -- --reporter=dot` -> 88 files, 1,329 tests passed.
+- `bun run typecheck` -> passed.
+- Targeted Prettier and `git diff --check` passed; existing CRLF normalization warnings only.
+
+# Local HTTP API CORS backwards compatibility, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] Existing browser clients receive the legacy wildcard CORS response without configuration.
+- [x] `USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN` still restricts responses to the configured origin.
+- [x] Focused Rust tests and documentation verify both modes.
+
+## Plan
+
+- [x] Reproduce the default CORS regression in the local HTTP API tests.
+- [x] Restore legacy default headers while retaining explicit origin restriction.
+- [x] Run focused verification and review the diff.
+
+## Verification Notes
+
+- Default `GET` and `OPTIONS` responses include `Access-Control-Allow-Origin: *`.
+- Configured origin mode omits CORS headers for missing or unapproved origins.
+
+# ccusage token mapping for newer providers, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] OpenCode history preserves input, output, cache, reasoning, and total token fields.
+- [x] Other ccusage-backed newer providers preserve the same token fields.
+- [x] Regression coverage fails before the fix and passes after it.
+- [x] Focused tests, bundle synchronization, formatting, and diff review pass.
+
+## Plan
+
+- [x] Reproduce the missing-token symptom through a provider plugin test.
+- [x] Update the copied ccusage history mapping in all affected providers.
+- [x] Run focused verification and synchronize bundled plugin resources.
+- [x] Record choices, breadcrumbs, lessons if needed, and review the diff.
+
+# Accent color setting, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] Settings offers green, blue, red, orange, and pink accent colors.
+- [x] Blue `#86c5ff` is the default and the selection persists.
+- [x] Main/settings windows and non-template tray branding stay synchronized.
+- [x] Focused tests, lint, frontend build, and diff check pass.
+
+## Verification Notes
+
+- `bun eslint` on all touched TypeScript/TSX files passed.
+- `bun run test -- src/lib/settings.test.ts --run` passed: 55 tests.
+- `bun run build:frontend` passed.
+- `git diff --check` passed.
+- Full typecheck remains blocked by pre-existing errors in `skeleton-lines.tsx`, `group-lines-by-type.ts`, and `group-metric-lines.ts`.
+
+# Alpha 6 local settings migration, 2026-07-22
+
+## Executive Summary
+
+- Local Alpha 6 inherits user settings from the installed/previous Alpha 5 data directory.
+- Development data remains isolated after the first migration.
+- Provider credentials and local account data remain available in local Alpha 6.
+
+## Acceptance Criteria
+
+- [x] A deterministic test reproduces missing Alpha 5 settings in a fresh dev data directory.
+- [x] Local Alpha 6 imports existing release settings once without changing release data.
+- [x] Provider secrets and account data are available after migration.
+- [x] Focused Rust tests, formatting, and diff review pass; full cargo fmt remains blocked by the pre-existing missing `src-tauri/src/app_nap.rs`.
+
+## Plan
+
+- [x] Add the red migration test at the filesystem seam.
+- [x] Implement one-time dev data migration with release-data isolation.
+- [x] Verify settings, secrets, account data, and startup integration.
+- [x] Record choice, lesson, breadcrumb, and evidence.
+
+## Verification Notes
+
+- Red repro: `cargo test --manifest-path src-tauri/Cargo.toml dev_data_migration --lib` failed at the unimplemented migration seam.
+- Fixed repro: the same test passed; it verifies settings merge, provider-secret copy, account-data copy, release-data preservation, and one-time behavior.
+- Full Rust lib tests: 144 passed, 1 ignored; `cargo check --manifest-path src-tauri/Cargo.toml` passed.
+- `rustfmt --edition 2024 --check src-tauri/src/dev_data_migration.rs` and `git diff --check` passed. Full `cargo fmt --check` remains blocked by the pre-existing missing `src-tauri/src/app_nap.rs`.
+
+# Codex history runner regression, 2026-07-22
+
+## Executive Summary
+
+- Restore the Codex usage graph and local token/cost totals.
+- Replace the broken pinned history runner with the verified current release.
+- Lock the package boundary with focused regression coverage.
+
+## Acceptance Criteria
+
+- [x] The real Codex history command returns daily usage through the production runner.
+- [x] Codex output again contains history plus token and cost metrics.
+- [x] A regression test fails before and passes after the runner update.
+- [x] Focused plugin/Rust tests, scoped formatting, and diff review pass; no plugin bundle content changed.
+
+## Plan
+
+- [x] Reproduce and minimize the missing-history failure at the runner boundary.
+- [x] Rank and test root-cause hypotheses against local Codex data.
+- [x] Add the red package-contract regression and update the pinned runner.
+- [x] Verify the production command and Codex output end to end.
+- [x] Record the lesson, choice, breadcrumb, and evidence.
+
+## Verification Notes
+
+- Red repro: `bun x --silent ccusage@20.0.2 codex daily ...` failed before CLI startup with `Cannot find module ...ccusage\\dist\\cli.js`.
+- Red regression: focused Rust assertion failed with actual `ccusage@20.0.2`, expected `ccusage@20.0.18`.
+- Production command with `ccusage@20.0.18` returned 20 daily rows, non-zero tokens/cost, and latest date `2026-07-22`.
+- `cargo test --manifest-path src-tauri/Cargo.toml ccusage --lib` passed: 24 tests.
+- `bun run test -- plugins/codex/plugin.test.js --run` passed: 58 tests.
+- Task/docs Prettier and `git diff --check` passed. Full `cargo fmt --check` is blocked by the pre-existing missing `src-tauri/src/app_nap.rs`; direct rustfmt also reports unrelated pre-existing formatting in `host_api.rs`.
+
+# Alpha 6 startup regression: provider assets and charts, 2026-07-22
+
+## Executive Summary
+
+- Prevent a local Alpha 6 start from removing provider identity assets.
+- Prevent the development build from disrupting chart data used by installed Alpha versions.
+- Lock the startup boundary with a focused regression test.
+
+## Acceptance Criteria
+
+- [x] A fast automated repro detects the reported icon/chart startup regression.
+- [x] The root cause is isolated without overwriting unrelated Alpha 6 work.
+- [x] A regression test fails before and passes after the fix.
+- [x] Focused tests, production build, lint, formatting, and diff review pass; pre-existing type errors are recorded.
+
+## Plan
+
+- [x] Build a deterministic startup/persistence feedback loop.
+- [x] Rank and test falsifiable root-cause hypotheses.
+- [x] Implement the smallest root-cause fix and regression coverage.
+- [x] Verify both installed and development data/asset isolation.
+- [x] Record the lesson, choice, breadcrumb, and evidence.
+
+## Verification Notes
+
+- Red repro: `node --test scripts/tauri/wrapper.test.mjs` -> 5 passed, 2 failed: missing dev identifier and provider text-fallback icons.
+- Fixed repro: 8 tests passed; tracked dev config is applied last after optional local/user config.
+- `node copy-bundled.cjs` -> 33 providers bundled; `node scripts/release-preflight.mjs` -> passed.
+- `bun run build:frontend`, focused ESLint, focused Prettier, and `git diff --check` -> passed.
+- Restored `tsconfig.json`/`tsconfig.node.json` make typecheck execute project code; it reports pre-existing type errors in three restored Alpha 6 UI modules. No startup-regression file has a TypeScript error.
+
+# Local HTTP API hardening, 2026-07-22
+
+## Executive Summary
+
+- Make the local usage API opt-out and optionally protected.
+- Stop exposing cached usage to every browser origin by default.
+- Preserve the command-line/local-widget workflow unless hardening is enabled.
+
+## Acceptance Criteria
+
+- [x] The API can be disabled before it binds its loopback port.
+- [x] An optional bearer token rejects unauthenticated API reads.
+- [x] Browser CORS is disabled by default and can be explicitly enabled for one origin.
+- [x] Focused Rust tests and documentation verify the configuration contract.
+
+## Plan
+
+- [x] Add and validate runtime API configuration.
+- [x] Enforce configuration at startup, request authentication, and CORS response generation.
+- [x] Add regression tests and update user-facing documentation.
+- [x] Run focused verification and review the diff.
+
 # Commit packaging, 2026-07-15
 
 ## Executive Summary
@@ -1212,3 +1436,254 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun run build:frontend` -> passed; Vite reports a non-blocking 613 kB minified JavaScript chunk warning.
 - `bun run test:coverage` -> all 1,409 tests passed, strict gate failed at 86.06% statements, 79.32% branches, 91.42% functions, and 89.29% lines. The documented Alpha coverage waiver is required; the 90% threshold was not changed.
 - `git diff --check` -> passed. Current local release-fix changes are uncommitted, so no release tag or GitHub draft was created; publishing automation publishes directly on a pushed `v*` tag and requires `TAURI_SIGNING_PRIVATE_KEY`.
+
+# Alpha 6 provider audit, 2026-07-22
+
+## Executive Summary
+
+- Audit all 33 real providers before Alpha 6 packaging.
+- Find only reproducible provider, contract, Windows, bundle, or UI defects.
+- Implement confirmed fixes with focused regression tests.
+
+## Acceptance Criteria
+
+- [ ] Every provider manifest, source plugin, test, and bundled resource is inventoried.
+- [ ] Shared host/API, credential, error, Windows, and UI contracts are checked.
+- [ ] Provider tests and relevant Rust/frontend quality checks have recorded outcomes.
+- [ ] Every finding is classified as confirmed fix, source-maturity blocker, or no issue.
+- [ ] Confirmed fixes include regression tests and synchronized bundles.
+
+## Plan
+
+- [ ] Inventory providers and bundle parity.
+- [ ] Review provider implementations and shared contracts.
+- [ ] Run tests and reproduce high-confidence findings.
+- [ ] Implement and verify prioritized fixes.
+- [ ] Record audit evidence and final Alpha 6 blockers.
+
+# ccusage runner fallback correctness, 2026-07-22
+
+## Executive Summary
+
+- Keep current ccusage data authoritative when one package runner has a broken cache.
+- Try every current runner before using the legacy compatibility package.
+- Verify Claude history matches the current ccusage CLI totals.
+
+## Acceptance Criteria
+
+- [x] A failed current Bun runner does not select legacy while another current runner works.
+- [x] Legacy remains available only after all current runners fail.
+- [x] Focused Rust regression tests and formatting pass.
+- [x] Claude 7-day reference remains `$49.15 / 265,354,981 tokens` for the supplied fixture window.
+
+## Plan
+
+- [x] Reproduce current and legacy ccusage outputs against the local Claude data.
+- [x] Identify the runner-order root cause.
+- [x] Change selection order and add a regression test.
+- [x] Run focused verification and review the diff.
+
+## Verification Notes
+
+- Current `ccusage@20.0.18 claude daily --since 20260715` -> `$49.1526748`, `265,354,981` tokens.
+- Legacy `ccusage@18.0.11 daily --since 20260715` -> `$142.0640586`, `630,710,767` tokens; exact incorrect UsageBar result.
+- Local `ccusage@20.0.2` Bun execution reproduced the trigger: missing cached `dist/cli.js`; old per-runner fallback selected v18 immediately.
+- `cargo test --manifest-path src-tauri/Cargo.toml ccusage_runner --lib` -> 11 passed.
+- Focused rustfmt check and `git diff --check` -> passed.
+
+# Alpha 6 dev launch repair, 2026-07-22
+
+## Executive Summary
+
+- Restore the plugin bundler required by `npm run tauri dev`.
+- Align app metadata with the Alpha 6 development cycle.
+- Lock the startup path with a focused regression check.
+
+## Acceptance Criteria
+
+- [x] `copy-bundled.cjs` exists and bundles all source plugins successfully.
+- [x] Package, Tauri, Cargo, and lock metadata report `0.1.0-alpha.6`.
+- [x] The wrapper reaches the Tauri CLI instead of failing module resolution.
+- [x] Focused tests/checks and final diff review pass.
+
+## Plan
+
+- [x] Restore the repo-owned bundler and add a startup regression assertion.
+- [x] Restore Amp's manifest-declared icon so a clean plugin bundle succeeds.
+- [x] Align Alpha 6 version metadata and document the development-cycle choice.
+- [x] Run focused verification and review the resulting diff.
+
+## Verification Notes
+
+- `node copy-bundled.cjs` -> bundled all 33 providers successfully.
+- `node --test scripts/tauri/wrapper.test.mjs` -> 4 tests passed.
+- `node scripts/release-preflight.mjs` -> passed for `0.1.0-alpha.6`.
+- `node scripts/tauri/wrapper.mjs dev --help` -> bundler ran and Tauri CLI help reached successfully.
+- Runtime metadata check and `git diff --check` -> passed; existing CRLF normalization warnings only.
+
+# Vite dev root 404, 2026-07-22
+
+## Executive Summary
+
+- Restore the missing Vite HTML entrypoint so Tauri’s configured dev URL renders the app.
+- Add a regression check for the root document and frontend mount.
+
+## Acceptance Criteria
+
+- [x] `http://localhost:1420/` serves the frontend entry document instead of 404.
+- [x] The document mounts `/src/main.tsx` into `#root`.
+- [x] Focused startup tests and formatting checks pass.
+
+## Plan
+
+- [x] Confirm Vite root/config and reproduce the missing-entry symptom.
+- [x] Add the root HTML entrypoint and regression assertion.
+- [x] Restore the missing production modules required by the tracked app imports.
+- [x] Verify the live dev URL and review the diff.
+
+## Verification Notes
+
+- Vite smoke -> `HTTP 200` at `http://127.0.0.1:1420/`, with `/src/main.tsx` in the document.
+- `bun run build:frontend` -> passed; existing large-chunk and Tailwind timing warnings only.
+- `node --test scripts/tauri/wrapper.test.mjs` -> 5 tests passed.
+- Targeted Prettier and `git diff --check` -> passed.
+
+# ccusage history chart local-day label, 2026-07-22
+
+## Executive Summary
+
+- Show the current local calendar day as today in the history graph.
+- Preserve ccusage's day meaning when stored timestamps cross a UTC date boundary.
+- Lock the behavior with a deterministic Europe/Berlin regression test.
+
+## Acceptance Criteria
+
+- [x] A ccusage entry for local today is grouped and labeled as today.
+- [x] Explicit and system-local history time zones remain supported.
+- [x] Focused frontend regression tests and formatting pass; unrelated existing type errors are recorded.
+
+## Plan
+
+- [x] Reproduce the wrong date with a timezone-boundary UI test.
+- [x] Group history records by their source calendar day.
+- [x] Run focused verification and review the diff.
+
+# Multi-source ccusage graphs, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] Current ccusage version is verified and the host runner supports its focused source namespaces.
+- [x] OpenCode, Amp, Droid/Factory, Kilo, Kimi, Gemini, and Qwen plugins expose local ccusage activity history.
+- [x] Existing OpenCode SQLite history remains authoritative when available.
+- [x] Focused provider/Rust tests and bundled plugin synchronization pass.
+- [x] Full-check blockers are recorded without changing unrelated UI/type failures.
+
+## Plan
+
+- [x] Extend the Rust ccusage resolver and source-specific data-root environment mapping.
+- [x] Add provider history adapters and regression coverage.
+- [x] Update plugin API documentation and synchronize bundled resources.
+- [x] Run focused tests, build, full suite, and diff verification.
+
+## Verification Notes
+
+- npm latest: `ccusage@20.0.18`; focused command smoke passed for Amp, Droid, Kilo, Kimi, Gemini, and Qwen with `--offline`.
+- Provider tests: 8 files, 166 passed. Rust `host_api` tests: 62 passed. Bundled resources: 34 plugins.
+- `rustfmt --check src-tauri/src/plugin_engine/host_api.rs` and `git diff --check` passed.
+- Frontend build passed. Full check remains blocked by existing TypeScript errors in `skeleton-lines.tsx`, `group-lines-by-type.ts`, and `group-metric-lines.ts`; full Vitest previously had 3 existing App start-on-login timing failures.
+
+## Verification Notes
+
+- Red repro: Europe/Berlin local day `2026-07-22` was exposed as graph point `2026-07-21`.
+- Focused Vitest: 2 files, 17 tests passed.
+- Focused Prettier passed after formatting.
+- Full typecheck reaches unrelated pre-existing errors in `skeleton-lines.tsx`, `group-lines-by-type.ts`, and `group-metric-lines.ts`; touched files report no TypeScript error.
+
+# About dialog icon, 2026-07-22
+
+## Executive Summary
+
+- Restore the missing UsageBar icon in the About dialog.
+- Keep the asset local so packaged and development builds resolve it consistently.
+
+## Acceptance Criteria
+
+- [x] About dialog renders the UsageBar icon without a broken-image state.
+- [x] Focused AboutDialog test and frontend build pass.
+
+## Plan
+
+- [x] Reproduce the missing asset reference.
+- [x] Add the packaged frontend icon and point the dialog at it.
+- [x] Run focused verification and review the diff.
+
+## Verification Notes
+
+- `bun run test -- src/components/about-dialog.test.tsx --run` -> 11 tests passed.
+- `bun run build:frontend` -> passed; existing large JavaScript chunk warning only.
+- `git diff --check` -> passed; existing CRLF normalization warnings only.
+
+# Alpha 6 line-helper typecheck repair, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] `bun run typecheck` passes without errors in the three Alpha-6 files.
+- [x] Grouping accepts both manifest skeleton lines and runtime metric lines.
+- [x] Focused regression tests, formatting, lint, and diff checks pass.
+
+## Plan
+
+- [x] Reproduce and identify the three compiler errors.
+- [x] Generalize the shared grouping helper and preserve section label types.
+- [x] Add regression coverage and run verification.
+
+## Verification Notes
+
+- `bun run check` passed: format, ESLint, and TypeScript.
+- Focused Vitest passed: 2 files, 42 tests.
+- `git diff --check` passed; existing CRLF normalization warnings only.
+
+# Qwen provider ordering, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] New Qwen providers are inserted at their default sorted position.
+- [x] Existing saved drag order remains stable.
+- [x] Focused settings tests and diff verification pass.
+
+## Plan
+
+- [x] Reproduce the append-to-end behavior.
+- [x] Insert new providers using the default provider order.
+- [x] Add regression coverage and verify.
+# Alpha 6 primary provider order correction, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] Default order starts with Codex, Claude, Cursor, and OpenCode.
+- [x] Remaining providers follow alphabetically by display name.
+- [x] Existing saved order behavior remains covered.
+
+## Verification Notes
+
+- Focused settings regression added for the four-provider prefix and alphabetical remainder.
+
+# Used metric labels, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] Progress values shown in `used` mode include the `used` label.
+- [x] Percent, count, and dollar formats keep their existing units and formatting.
+- [x] Focused provider-card regression and frontend formatting checks pass.
+
+## Plan
+
+- [x] Reproduce the missing `used` label in the shared metric renderer.
+- [x] Add regression coverage for percent, count, and dollar metrics.
+- [x] Run focused verification and record the result.
+
+## Verification Notes
+
+- `bun run test -- src/components/provider-card.test.tsx --run` -> 42 tests passed.
+- `bunx prettier --check src/components/metric-line-renderer.tsx src/components/provider-card.test.tsx` -> passed.
+- `git diff --check` -> passed; existing CRLF normalization warnings only.

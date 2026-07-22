@@ -12,7 +12,7 @@ colors:
   dark-muted: "#2a2a2c"
   dark-muted-foreground: "#888888"
   dark-border: "#ffffff14"
-  dark-accent: "#bfff00"
+  dark-accent: "#86c5ff"
   destructive: "#ef4444"
 typography:
   headline:
@@ -68,7 +68,7 @@ components:
 
 UsageBar is a compact working instrument that sits beside the user's editor and terminal. It favors legible numbers, familiar controls, calm state changes, and direct provenance over decorative dashboard styling. Density is welcome when it reduces navigation, but the most important quota or cost signal must remain obvious at a glance.
 
-The interface rejects glassmorphism, oversized promotional metrics, novelty controls, and inconsistent provider-specific layouts. Light mode is neutral and crisp. Dark mode uses a charcoal Windows surface with a rare lime highlight for the active product state.
+The interface rejects glassmorphism, oversized promotional metrics, novelty controls, and inconsistent provider-specific layouts. Light mode is neutral and crisp. Dark mode uses a charcoal Windows surface with a rare light-blue highlight for the active product state.
 
 **Key Characteristics:**
 
@@ -85,7 +85,7 @@ The palette is neutral by default so quota, incident, and provider colors retain
 ### Primary
 
 - **Instrument Ink** (`#121722`): primary light-theme text and actions.
-- **Signal Lime** (`#bfff00`): dark-theme active navigation and selected product state, used sparingly.
+- **Signal Blue** (`#86c5ff`): active navigation and selected product state, used sparingly.
 
 ### Neutral
 
