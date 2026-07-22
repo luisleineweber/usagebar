@@ -19,7 +19,6 @@ import {
   loadSurfacePins,
   loadThemeMode,
   REFRESH_COOLDOWN_MS,
-  savePluginSettings,
 } from "@/lib/settings"
 import {
   clearProviderSecretMetadata,
@@ -42,7 +41,6 @@ import {
 import { listenDisplayPreferenceUpdated } from "@/lib/display-preference-events"
 
 const TRAY_PROBE_DEBOUNCE_MS = 500
-const TRAY_SETTINGS_DEBOUNCE_MS = 2000
 
 function App() {
   const { activeView, setActiveView } = useAppUiStore(
@@ -289,7 +287,7 @@ function App() {
       applyStartOnLogin,
     })
 
-  const { handleReorder, handleToggle } = useSettingsPluginActions({
+  const { handleHide, handleReorder, handleToggle } = useSettingsPluginActions({
     pluginSettings,
     setPluginSettings,
     setLoadingForPlugins,
@@ -496,11 +494,6 @@ function App() {
     startBatch,
   ])
 
-  const pluginSettingsRef = useRef(pluginSettings)
-  useEffect(() => {
-    pluginSettingsRef.current = pluginSettings
-  }, [pluginSettings])
-
   const handlePluginContextAction = useCallback(
     (pluginId: string, action: PluginContextAction) => {
       if (action === "reload") {
@@ -511,26 +504,10 @@ function App() {
         return
       }
 
-      const currentSettings = pluginSettingsRef.current
-      if (!currentSettings) return
-      const alreadyDisabled = currentSettings.disabled.includes(pluginId)
-      if (alreadyDisabled) return
-
-      const nextSettings = {
-        ...currentSettings,
-        disabled: [...currentSettings.disabled, pluginId],
-      }
-      setPluginSettings(nextSettings)
-      scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
-      void savePluginSettings(nextSettings).catch((error) => {
-        console.error("Failed to save plugin toggle:", error)
-      })
-
-      if (activeView === pluginId) {
-        setActiveView("home")
-      }
+      handleHide(pluginId)
+      if (activeView === pluginId) setActiveView("home")
     },
-    [activeView, handleRetryPlugin, scheduleTrayIconUpdate, setActiveView, setPluginSettings]
+    [activeView, handleHide, handleRetryPlugin, setActiveView]
   )
 
   const isPluginRefreshAvailable = useCallback(

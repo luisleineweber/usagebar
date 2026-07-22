@@ -24,85 +24,116 @@ export function useSettingsPluginActions({
   scheduleTrayIconUpdate,
   onPluginSettingsChange,
 }: UseSettingsPluginActionsArgs) {
-  const publishPluginSettingsChange = useCallback((settings: PluginSettings) => {
-    if (!onPluginSettingsChange) return
-    void Promise.resolve(onPluginSettingsChange(settings)).catch((error) => {
-      console.error("Failed to publish plugin settings change:", error)
-    })
-  }, [onPluginSettingsChange])
+  const publishPluginSettingsChange = useCallback(
+    (settings: PluginSettings) => {
+      if (!onPluginSettingsChange) return
+      void Promise.resolve(onPluginSettingsChange(settings)).catch((error) => {
+        console.error("Failed to publish plugin settings change:", error)
+      })
+    },
+    [onPluginSettingsChange]
+  )
 
-  const handleReorder = useCallback((orderedIds: string[]) => {
-    if (!pluginSettings) return
-    const savedOrder = pluginSettings.order ?? []
-    const orderedSet = new Set(orderedIds)
-    const missingIds = savedOrder.filter((id) => !orderedSet.has(id))
-    const mergedOrder = [...orderedIds]
+  const handleReorder = useCallback(
+    (orderedIds: string[]) => {
+      if (!pluginSettings) return
+      const savedOrder = pluginSettings.order ?? []
+      const orderedSet = new Set(orderedIds)
+      const missingIds = savedOrder.filter((id) => !orderedSet.has(id))
+      const mergedOrder = [...orderedIds]
 
-    for (const missingId of missingIds) {
-      const savedIndex = (pluginSettings.order ?? []).indexOf(missingId)
-      let insertAt = 0
+      for (const missingId of missingIds) {
+        const savedIndex = (pluginSettings.order ?? []).indexOf(missingId)
+        let insertAt = 0
 
-      for (let index = mergedOrder.length - 1; index >= 0; index -= 1) {
-        const mergedSavedIndex = (pluginSettings.order ?? []).indexOf(mergedOrder[index])
-        if (mergedSavedIndex < savedIndex) {
-          insertAt = index + 1
-          break
+        for (let index = mergedOrder.length - 1; index >= 0; index -= 1) {
+          const mergedSavedIndex = (pluginSettings.order ?? []).indexOf(mergedOrder[index])
+          if (mergedSavedIndex < savedIndex) {
+            insertAt = index + 1
+            break
+          }
         }
+
+        mergedOrder.splice(insertAt, 0, missingId)
       }
 
-      mergedOrder.splice(insertAt, 0, missingId)
-    }
-
-    const nextSettings: PluginSettings = {
-      ...pluginSettings,
-      order: mergedOrder,
-    }
-    setPluginSettings(nextSettings)
-    publishPluginSettingsChange(nextSettings)
-    scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
-    void savePluginSettings(nextSettings).catch((error) => {
-      console.error("Failed to save plugin order:", error)
-    })
-  }, [pluginSettings, publishPluginSettingsChange, scheduleTrayIconUpdate, setPluginSettings])
-
-  const handleToggle = useCallback((id: string) => {
-    if (!pluginSettings) return
-    const wasDisabled = pluginSettings.disabled.includes(id)
-    const disabled = new Set(pluginSettings.disabled)
-
-    if (wasDisabled) {
-      disabled.delete(id)
-      setLoadingForPlugins([id])
-      startBatch([id]).catch((error) => {
-        console.error("Failed to start probe for enabled plugin:", error)
-        setErrorForPlugins([id], "Failed to start probe")
+      const nextSettings: PluginSettings = {
+        ...pluginSettings,
+        order: mergedOrder,
+      }
+      setPluginSettings(nextSettings)
+      publishPluginSettingsChange(nextSettings)
+      scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
+      void savePluginSettings(nextSettings).catch((error) => {
+        console.error("Failed to save plugin order:", error)
       })
-    } else {
-      disabled.add(id)
-    }
+    },
+    [pluginSettings, publishPluginSettingsChange, scheduleTrayIconUpdate, setPluginSettings]
+  )
 
-    const nextSettings: PluginSettings = {
-      ...pluginSettings,
-      disabled: Array.from(disabled),
-    }
-    setPluginSettings(nextSettings)
-    publishPluginSettingsChange(nextSettings)
-    scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
-    void savePluginSettings(nextSettings).catch((error) => {
-      console.error("Failed to save plugin toggle:", error)
-    })
-  }, [
-    pluginSettings,
-    publishPluginSettingsChange,
-    scheduleTrayIconUpdate,
-    setErrorForPlugins,
-    setLoadingForPlugins,
-    setPluginSettings,
-    startBatch,
-  ])
+  const handleToggle = useCallback(
+    (id: string) => {
+      if (!pluginSettings) return
+      const wasDisabled = pluginSettings.disabled.includes(id)
+      const disabled = new Set(pluginSettings.disabled)
+
+      if (wasDisabled) {
+        disabled.delete(id)
+        setLoadingForPlugins([id])
+        startBatch([id]).catch((error) => {
+          console.error("Failed to start probe for enabled plugin:", error)
+          setErrorForPlugins([id], "Failed to start probe")
+        })
+      } else {
+        disabled.add(id)
+      }
+
+      const nextSettings: PluginSettings = {
+        ...pluginSettings,
+        disabled: Array.from(disabled),
+      }
+      setPluginSettings(nextSettings)
+      publishPluginSettingsChange(nextSettings)
+      scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
+      void savePluginSettings(nextSettings).catch((error) => {
+        console.error("Failed to save plugin toggle:", error)
+      })
+    },
+    [
+      pluginSettings,
+      publishPluginSettingsChange,
+      scheduleTrayIconUpdate,
+      setErrorForPlugins,
+      setLoadingForPlugins,
+      setPluginSettings,
+      startBatch,
+    ]
+  )
+
+  const handleHide = useCallback(
+    (id: string) => {
+      if (!pluginSettings) return
+      const hidden = new Set(pluginSettings.hidden ?? [])
+      if (hidden.has(id)) hidden.delete(id)
+      else hidden.add(id)
+
+      const nextSettings: PluginSettings = {
+        ...pluginSettings,
+        ...(hidden.size > 0 ? { hidden: Array.from(hidden) } : { hidden: undefined }),
+      }
+      setPluginSettings(nextSettings)
+      publishPluginSettingsChange(nextSettings)
+      scheduleTrayIconUpdate("settings", TRAY_SETTINGS_DEBOUNCE_MS)
+      void savePluginSettings(nextSettings).catch((error) => {
+        console.error("Failed to save provider visibility:", error)
+      })
+    },
+    [pluginSettings, publishPluginSettingsChange, scheduleTrayIconUpdate, setPluginSettings]
+  )
 
   return {
     handleReorder,
+    handleHide,
     handleToggle,
   }
 }

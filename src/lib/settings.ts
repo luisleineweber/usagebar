@@ -9,6 +9,8 @@ export const REFRESH_COOLDOWN_MS = 300_000
 export type PluginSettings = {
   order: string[]
   disabled: string[]
+  /** Providers hidden from sidebar/provider navigation, but still shown on the shared dashboard. */
+  hidden?: string[]
 }
 
 export type AutoUpdateIntervalMinutes = 5 | 15 | 30 | 60
@@ -127,6 +129,7 @@ export async function loadPluginSettings(): Promise<PluginSettings> {
   return {
     order: Array.isArray(stored.order) ? stored.order : [],
     disabled: Array.isArray(stored.disabled) ? stored.disabled : [],
+    ...(Array.isArray(stored.hidden) ? { hidden: stored.hidden } : {}),
   }
 }
 
@@ -189,9 +192,7 @@ export function normalizePluginSettings(
   const hasLegacyAppendedQwen =
     knownSavedOrder[knownSavedOrder.length - 1] === LEGACY_APPENDED_PROVIDER &&
     knownSavedOrder.slice(0, -1).join("\0") === legacyOrderWithoutQwen.join("\0")
-  const savedOrder = hasLegacyAppendedQwen
-    ? settings.order.slice(0, -1)
-    : settings.order
+  const savedOrder = hasLegacyAppendedQwen ? settings.order.slice(0, -1) : settings.order
 
   const order: string[] = []
   const seen = new Set<string>()
@@ -214,6 +215,7 @@ export function normalizePluginSettings(
   }
 
   const disabled = settings.disabled.filter((id) => knownSet.has(id))
+  const hidden = (settings.hidden ?? []).filter((id) => knownSet.has(id))
   for (const id of defaultOrder) {
     if (savedOrder.includes(id)) continue
     if (!DEFAULT_ENABLED_PLUGINS.has(id) && !disabled.includes(id)) {
@@ -221,17 +223,27 @@ export function normalizePluginSettings(
     }
   }
 
-  return { order: hasStoredOrder ? order : defaultOrder, disabled }
+  return {
+    order: hasStoredOrder ? order : defaultOrder,
+    disabled,
+    ...(hidden.length > 0 ? { hidden } : {}),
+  }
 }
 
 export function arePluginSettingsEqual(a: PluginSettings, b: PluginSettings): boolean {
   if (a.order.length !== b.order.length) return false
   if (a.disabled.length !== b.disabled.length) return false
+  const aHidden = a.hidden ?? []
+  const bHidden = b.hidden ?? []
+  if (aHidden.length !== bHidden.length) return false
   for (let i = 0; i < a.order.length; i += 1) {
     if (a.order[i] !== b.order[i]) return false
   }
   for (let i = 0; i < a.disabled.length; i += 1) {
     if (a.disabled[i] !== b.disabled[i]) return false
+  }
+  for (let i = 0; i < aHidden.length; i += 1) {
+    if (aHidden[i] !== bHidden[i]) return false
   }
   return true
 }

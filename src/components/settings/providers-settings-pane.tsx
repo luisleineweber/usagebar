@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react"
-import { ArrowLeft, ChevronRight } from "lucide-react"
+import { ArrowLeft, ChevronRight, Eye } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
@@ -93,11 +93,13 @@ function ProviderRow({
   selected,
   onSelect,
   onToggle,
+  onShow,
 }: {
   plugin: SettingsPluginState
   selected: boolean
   onSelect: () => void
   onToggle: (id: string) => void
+  onShow: (id: string) => void
 }) {
   const isConnected = Boolean(plugin.state.data || plugin.state.lastSuccessAt)
 
@@ -178,6 +180,20 @@ function ProviderRow({
         }}
         onClick={(event) => event.stopPropagation()}
       />
+      {plugin.hidden ? (
+        <button
+          type="button"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label={`Show ${plugin.name} in sidebar`}
+          title="Show in sidebar"
+          onClick={(event) => {
+            event.stopPropagation()
+            onShow(plugin.id)
+          }}
+        >
+          <Eye className="size-4" />
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -191,6 +207,7 @@ type ProvidersSettingsPaneProps = {
   selectedProviderId: string | null
   onSelectedProviderChange: (id: string, options?: SelectedProviderChangeOptions) => void
   onToggle: (id: string) => void
+  onShow: (id: string) => void
   onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
   onProviderSecretSave: (providerId: string, secretKey: string, value: string) => Promise<void>
   onProviderSecretDelete: (providerId: string, secretKey: string) => Promise<void>
@@ -202,6 +219,7 @@ export function ProvidersSettingsPane({
   selectedProviderId,
   onSelectedProviderChange,
   onToggle,
+  onShow,
   onProviderConfigChange,
   onProviderSecretSave,
   onProviderSecretDelete,
@@ -277,6 +295,7 @@ export function ProvidersSettingsPane({
                 selected={plugin.id === selectedProvider?.id}
                 onSelect={() => handleRowSelect(plugin.id)}
                 onToggle={onToggle}
+                onShow={onShow}
               />
             ))}
           </div>

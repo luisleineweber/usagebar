@@ -1279,6 +1279,15 @@ describe("App", () => {
     expect(within(menu).getByRole("menuitem", { name: "Close" })).toBeInTheDocument()
   })
 
+  it("does not offer hide provider from the shared dashboard context menu", async () => {
+    render(<App />)
+
+    fireEvent.contextMenu(await screen.findByRole("button", { name: "Home" }))
+    const menu = await screen.findByRole("menu", { name: "UsageBar context menu" })
+
+    expect(within(menu).queryByRole("menuitem", { name: "Hide provider" })).not.toBeInTheDocument()
+  })
+
   it("removes plugin from sidebar context menu", async () => {
     state.loadPluginSettingsMock.mockResolvedValueOnce({
       order: ["a", "b"],
@@ -1295,13 +1304,14 @@ describe("App", () => {
     await waitFor(() =>
       expect(state.savePluginSettingsMock).toHaveBeenCalledWith({
         order: ["a", "b"],
-        disabled: ["b"],
+        disabled: [],
+        hidden: ["b"],
       })
     )
     expect(state.startBatchMock).not.toHaveBeenCalled()
   })
 
-  it("ignores removing an already disabled plugin from context menu", async () => {
+  it("hides a plugin from the sidebar without disabling its probe", async () => {
     state.loadPluginSettingsMock.mockResolvedValueOnce({
       order: ["a", "b"],
       disabled: [],
@@ -1315,16 +1325,13 @@ describe("App", () => {
     await waitFor(() =>
       expect(state.savePluginSettingsMock).toHaveBeenCalledWith({
         order: ["a", "b"],
-        disabled: ["b"],
+        disabled: [],
+        hidden: ["b"],
       })
     )
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Beta" })).not.toBeInTheDocument()
     )
-    state.savePluginSettingsMock.mockClear()
-
-    removeAction()
-    expect(state.savePluginSettingsMock).not.toHaveBeenCalled()
   })
 
   it("returns to home when removing the active plugin from context menu", async () => {
@@ -1342,10 +1349,9 @@ describe("App", () => {
 
     await waitFor(() =>
       expect(state.savePluginSettingsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ disabled: expect.arrayContaining(["a"]) })
+        expect.objectContaining({ hidden: expect.arrayContaining(["a"]) })
       )
     )
-    await screen.findByText("No active providers yet.")
     expect(screen.queryByText("Provider not found")).not.toBeInTheDocument()
   })
 

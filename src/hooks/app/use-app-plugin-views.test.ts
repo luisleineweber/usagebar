@@ -15,6 +15,16 @@ function createPluginMeta(id: string, name: string): PluginMeta {
   }
 }
 
+function defaultPluginState() {
+  return {
+    data: null,
+    loading: false,
+    error: null,
+    lastManualRefreshAt: null,
+    lastSuccessAt: null,
+  }
+}
+
 describe("useAppPluginViews", () => {
   it("derives display and nav plugins from settings order", () => {
     const pluginSettings: PluginSettings = {
@@ -22,10 +32,7 @@ describe("useAppPluginViews", () => {
       disabled: ["cursor"],
     }
 
-    const pluginsMeta = [
-      createPluginMeta("cursor", "Cursor"),
-      createPluginMeta("codex", "Codex"),
-    ]
+    const pluginsMeta = [createPluginMeta("cursor", "Cursor"), createPluginMeta("codex", "Codex")]
 
     const { result } = renderHook(() =>
       useAppPluginViews({
@@ -91,10 +98,7 @@ describe("useAppPluginViews", () => {
       disabled: [],
     }
 
-    const pluginsMeta = [
-      createPluginMeta("codex", "Codex"),
-      createPluginMeta("cursor", "Cursor"),
-    ]
+    const pluginsMeta = [createPluginMeta("codex", "Codex"), createPluginMeta("cursor", "Cursor")]
 
     const { result } = renderHook(() =>
       useAppPluginViews({
@@ -121,8 +125,43 @@ describe("useAppPluginViews", () => {
       })
     )
 
-    expect(result.current.displayPlugins.map((plugin) => plugin.meta.id)).toEqual(["codex", "cursor"])
+    expect(result.current.displayPlugins.map((plugin) => plugin.meta.id)).toEqual([
+      "codex",
+      "cursor",
+    ])
     expect(result.current.navPlugins.map((plugin) => plugin.id)).toEqual(["codex", "cursor"])
+  })
+
+  it("hides a provider from navigation without removing it from the shared dashboard", () => {
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        pluginSettings: { order: ["codex", "cursor"], disabled: [], hidden: ["cursor"] },
+        pluginsMeta: [createPluginMeta("codex", "Codex"), createPluginMeta("cursor", "Cursor")],
+        pluginStates: {
+          codex: {
+            ...defaultPluginState(),
+            data: { providerId: "codex", displayName: "Codex", lines: [], iconUrl: "/codex.svg" },
+          },
+          cursor: {
+            ...defaultPluginState(),
+            data: {
+              providerId: "cursor",
+              displayName: "Cursor",
+              lines: [],
+              iconUrl: "/cursor.svg",
+            },
+          },
+        },
+      })
+    )
+
+    expect(result.current.displayPlugins.map((plugin) => plugin.meta.id)).toEqual([
+      "codex",
+      "cursor",
+    ])
+    expect(result.current.navPlugins.map((plugin) => plugin.id)).toEqual(["codex"])
   })
 
   it("falls back to home when active provider becomes disabled", async () => {
@@ -219,7 +258,13 @@ describe("useAppPluginViews", () => {
 
   it("keeps the previous nav snapshot when bootstrap state transiently clears", async () => {
     const { result, rerender } = renderHook(
-      ({ pluginSettings, pluginsMeta }: { pluginSettings: PluginSettings | null; pluginsMeta: PluginMeta[] }) =>
+      ({
+        pluginSettings,
+        pluginsMeta,
+      }: {
+        pluginSettings: PluginSettings | null
+        pluginsMeta: PluginMeta[]
+      }) =>
         useAppPluginViews({
           activeView: "home",
           setActiveView: vi.fn(),

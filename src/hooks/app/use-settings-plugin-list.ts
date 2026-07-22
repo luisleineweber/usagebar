@@ -10,6 +10,7 @@ export type SettingsPluginState = {
   iconUrl: string
   brandColor?: string
   enabled: boolean
+  hidden: boolean
   supported: boolean
   supportState?: PluginMeta["supportState"]
   supportMessage: string | null
@@ -45,6 +46,7 @@ export function useSettingsPluginList({
           iconUrl: meta.iconUrl,
           brandColor: meta.brandColor,
           enabled: !pluginSettings.disabled.includes(id),
+          hidden: pluginSettings.hidden?.includes(id) === true,
           supported: meta.supportState !== "comingSoonOnWindows",
           supportState: meta.supportState,
           supportMessage: meta.supportMessage ?? null,

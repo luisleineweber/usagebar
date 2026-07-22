@@ -39,16 +39,15 @@ export function useAppPluginViews({
         const isSupported = meta.supportState !== "comingSoonOnWindows"
         const isEnabled = !disabledSet.has(id)
         if (!isEnabled || !isSupported) return null
-        const state =
-          pluginStates[id] ?? {
-            data: null,
-            lastSettledData: null,
-            history: undefined,
-            loading: false,
-            error: null,
-            lastManualRefreshAt: null,
-            lastSuccessAt: null,
-          }
+        const state = pluginStates[id] ?? {
+          data: null,
+          lastSettledData: null,
+          history: undefined,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }
         return {
           meta,
           ...state,
@@ -69,16 +68,19 @@ export function useAppPluginViews({
   )
 
   const navPlugins = useMemo<NavPlugin[]>(() => {
-    return enabledSupportedPlugins.map((plugin) => ({
-      id: plugin.meta.id,
-      name: plugin.meta.name,
-      iconUrl: plugin.meta.iconUrl,
-      brandColor: plugin.meta.brandColor,
-      supportState: plugin.meta.supportState,
-      supportMessage: plugin.meta.supportMessage,
-      status: providerStatuses[plugin.meta.id],
-    }))
-  }, [enabledSupportedPlugins, providerStatuses])
+    const hiddenSet = new Set(pluginSettings?.hidden ?? [])
+    return enabledSupportedPlugins
+      .filter((plugin) => !hiddenSet.has(plugin.meta.id))
+      .map((plugin) => ({
+        id: plugin.meta.id,
+        name: plugin.meta.name,
+        iconUrl: plugin.meta.iconUrl,
+        brandColor: plugin.meta.brandColor,
+        supportState: plugin.meta.supportState,
+        supportMessage: plugin.meta.supportMessage,
+        status: providerStatuses[plugin.meta.id],
+      }))
+  }, [enabledSupportedPlugins, pluginSettings?.hidden, providerStatuses])
 
   const hasResolvedViews = pluginSettings !== null && pluginsMeta.length > 0
 
@@ -93,11 +95,11 @@ export function useAppPluginViews({
     if (!pluginSettings) return
     const isKnownPlugin = pluginsMeta.some((plugin) => plugin.id === activeView)
     if (!isKnownPlugin) return
-    const isStillEnabled = enabledSupportedPlugins.some((plugin) => plugin.meta.id === activeView)
-    if (!isStillEnabled) {
+    const isStillVisible = navPlugins.some((plugin) => plugin.id === activeView)
+    if (!isStillVisible) {
       setActiveView("home")
     }
-  }, [activeView, enabledSupportedPlugins, pluginSettings, pluginsMeta, setActiveView])
+  }, [activeView, enabledSupportedPlugins, navPlugins, pluginSettings, pluginsMeta, setActiveView])
 
   const selectedPlugin = useMemo(() => {
     if (activeView === "home") return null

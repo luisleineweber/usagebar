@@ -107,7 +107,7 @@ export function AppShell({
   const contentMinHeightPx = panelPreferredMinHeightForView(activeView)
   const activeProviderId = navPlugins.some((plugin) => plugin.id === activeView)
     ? activeView
-    : (selectedPlugin?.meta.id ?? resolvedSelectedPlugin?.meta.id ?? navPlugins[0]?.id ?? null)
+    : (selectedPlugin?.meta.id ?? resolvedSelectedPlugin?.meta.id ?? null)
   const contextProviderId = contextMenu?.pluginId ?? activeProviderId
   const contextProvider = contextProviderId
     ? (navPlugins.find((plugin) => plugin.id === contextProviderId) ?? null)
@@ -309,17 +309,20 @@ export function AppShell({
               <SettingsIcon className="size-4" />
               <span className="flex-1">Provider settings</span>
             </button>
-            <div className="my-1 h-px bg-border" />
-            <button
-              type="button"
-              role="menuitem"
-              disabled={!contextProvider}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-45"
-              onClick={() => runContextAction("remove")}
-            >
-              <EyeOff className="size-4" />
-              <span className="flex-1">Hide provider</span>
-            </button>
+            {contextProvider ? (
+              <>
+                <div className="my-1 h-px bg-border" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={() => runContextAction("remove")}
+                >
+                  <EyeOff className="size-4" />
+                  <span className="flex-1">Hide provider</span>
+                </button>
+              </>
+            ) : null}
             <button
               type="button"
               role="menuitem"

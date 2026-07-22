@@ -185,7 +185,10 @@ describe("useSettingsPluginActions", () => {
     act(() => {
       result.current.handleToggle("a")
     })
-    expect(setPluginSettings).toHaveBeenNthCalledWith(2, { order: ["a", "b"], disabled: ["b", "a"] })
+    expect(setPluginSettings).toHaveBeenNthCalledWith(2, {
+      order: ["a", "b"],
+      disabled: ["b", "a"],
+    })
   })
 
   it("returns early when plugin settings are missing", () => {
@@ -209,6 +212,23 @@ describe("useSettingsPluginActions", () => {
 
     expect(setPluginSettings).not.toHaveBeenCalled()
     expect(savePluginSettingsMock).not.toHaveBeenCalled()
+  })
+
+  it("toggles provider visibility without changing enabled probes", () => {
+    const setPluginSettings = vi.fn()
+    const { result } = renderHook(() =>
+      useSettingsPluginActions({
+        pluginSettings: { order: ["a"], disabled: [] },
+        setPluginSettings,
+        setLoadingForPlugins: vi.fn(),
+        setErrorForPlugins: vi.fn(),
+        startBatch: vi.fn(),
+        scheduleTrayIconUpdate: vi.fn(),
+      })
+    )
+
+    act(() => result.current.handleHide("a"))
+    expect(setPluginSettings).toHaveBeenCalledWith({ order: ["a"], disabled: [], hidden: ["a"] })
   })
 
   it("logs errors when enabling probe start fails", async () => {

@@ -25,6 +25,7 @@ interface SettingsPageProps {
   settingsTab: "general" | "providers"
   onSettingsTabChange: (value: "general" | "providers") => void
   onToggle: (id: string) => void
+  onShow: (id: string) => void
   autoUpdateInterval: AutoUpdateIntervalMinutes
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   themeMode: ThemeMode
@@ -59,6 +60,7 @@ export function SettingsPage({
   settingsTab,
   onSettingsTabChange,
   onToggle,
+  onShow,
   autoUpdateInterval,
   onAutoUpdateIntervalChange,
   themeMode,
@@ -153,6 +155,7 @@ export function SettingsPage({
           selectedProviderId={selectedProviderId}
           onSelectedProviderChange={onSelectedProviderChange}
           onToggle={onToggle}
+          onShow={onShow}
           onProviderConfigChange={onProviderConfigChange}
           onProviderSecretSave={onProviderSecretSave}
           onProviderSecretDelete={onProviderSecretDelete}

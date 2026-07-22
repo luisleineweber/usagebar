@@ -182,7 +182,7 @@ export function SettingsWindowApp() {
       applyStartOnLogin,
     })
 
-  const { handleToggle } = useSettingsPluginActions({
+  const { handleHide, handleToggle } = useSettingsPluginActions({
     pluginSettings,
     setPluginSettings,
     setLoadingForPlugins,
@@ -389,6 +389,7 @@ export function SettingsWindowApp() {
           settingsTab={settingsTab}
           onSettingsTabChange={setSettingsTab}
           onToggle={handleToggle}
+          onShow={(id) => handleHide(id)}
           autoUpdateInterval={autoUpdateInterval}
           onAutoUpdateIntervalChange={handleAutoUpdateIntervalChange}
           themeMode={themeMode}
