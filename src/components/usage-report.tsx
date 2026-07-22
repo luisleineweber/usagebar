@@ -71,6 +71,25 @@ function formatMetric(value: number, metric: ReportMetric): string {
   return formatCompact(value)
 }
 
+function recordCalendarDay(record: UsageHistoryRecord): string {
+  const timeZone =
+    record.timeZone === "system-local"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+      : record.timeZone
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .formatToParts(new Date(record.periodStart))
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  )
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
 function dailySeries(
   records: UsageHistoryRecord[],
   metric: ReportMetric,
@@ -78,7 +97,7 @@ function dailySeries(
 ) {
   const totals = new Map<string, { value: number; tokens: number; cost: number }>()
   for (const record of records) {
-    const day = record.periodStart.slice(0, 10)
+    const day = recordCalendarDay(record)
     const current = totals.get(day) ?? { value: 0, tokens: 0, cost: 0 }
     totals.set(day, {
       value: current.value + metricValue(record, metric, overrides),

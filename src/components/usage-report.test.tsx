@@ -90,6 +90,32 @@ describe("UsageReport", () => {
     expect(screen.getByTestId("history-tooltip")).toBeInTheDocument()
   })
 
+  it("labels local calendar days instead of the preceding UTC date", () => {
+    const data = output()
+    data.history = {
+      ...data.history!,
+      timeZone: "Europe/Berlin",
+      entries: [
+        {
+          periodStart: "2026-07-21T22:00:00.000Z",
+          periodEnd: "2026-07-22T22:00:00.000Z",
+          costUsd: 1,
+          totalTokens: 100,
+        },
+        {
+          periodStart: "2026-07-20T22:00:00.000Z",
+          periodEnd: "2026-07-21T22:00:00.000Z",
+          costUsd: 0.5,
+          totalTokens: 50,
+        },
+      ],
+    }
+
+    render(<UsageReport outputs={[data]} nowMs={Date.UTC(2026, 6, 22, 12)} />)
+
+    expect(screen.getByRole("button", { name: /2026-07-22: 100 tokens/ })).toBeInTheDocument()
+  })
+
   it("uses multi-day periods and switches metric without hiding history", async () => {
     const user = userEvent.setup()
     render(<UsageReport outputs={[output()]} nowMs={NOW_MS} />)

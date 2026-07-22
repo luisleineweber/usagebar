@@ -158,9 +158,9 @@ describe("ProviderCard", () => {
     )
     expect(screen.getByText("Label")).toBeInTheDocument()
     expect(screen.getByText("Pro")).toBeInTheDocument()
-    expect(screen.getByText("32%")).toBeInTheDocument()
-    expect(screen.getByText("$12.34")).toBeInTheDocument()
-    expect(screen.getByText("342 credits")).toBeInTheDocument()
+    expect(screen.getByText("32% used")).toBeInTheDocument()
+    expect(screen.getByText("$12.34 used")).toBeInTheDocument()
+    expect(screen.getByText("342 credits used")).toBeInTheDocument()
   })
 
   it("renders quick links and opens URL", async () => {
@@ -253,6 +253,35 @@ describe("ProviderCard", () => {
     )
     expect(screen.getByText("58% left")).toBeInTheDocument()
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "58")
+  })
+
+  it("labels displayed usage values in displayMode=used", () => {
+    render(
+      <ProviderCard
+        name="Used"
+        displayMode="used"
+        lines={[
+          { type: "progress", label: "Session", used: 42, limit: 100, format: { kind: "percent" } },
+          {
+            type: "progress",
+            label: "Requests",
+            used: 6,
+            limit: 100,
+            format: { kind: "count", suffix: "requests" },
+          },
+          {
+            type: "progress",
+            label: "Spend",
+            used: 12.34,
+            limit: 100,
+            format: { kind: "dollars" },
+          },
+        ]}
+      />
+    )
+    expect(screen.getByText("42% used")).toBeInTheDocument()
+    expect(screen.getByText("6 requests used")).toBeInTheDocument()
+    expect(screen.getByText("$12.34 used")).toBeInTheDocument()
   })
 
   it("uses elapsed-time marker position in displayMode=left", () => {
@@ -927,5 +956,17 @@ describe("groupLinesByType", () => {
     expect(groups[1].lines).toHaveLength(2)
     expect(groups[2].kind).toBe("other")
     expect(groups[2].lines).toHaveLength(1)
+  })
+
+  it("preserves manifest lines when grouping loading skeletons", () => {
+    const lines = [
+      { type: "text" as const, label: "Account", scope: "overview" as const },
+      { type: "progress" as const, label: "Quota", scope: "overview" as const },
+    ]
+
+    expect(groupLinesByType(lines)).toEqual([
+      { kind: "text", lines: [lines[0]] },
+      { kind: "other", lines: [lines[1]] },
+    ])
   })
 })
