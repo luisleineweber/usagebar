@@ -2,70 +2,17 @@
 
 Windows-first tray app for tracking AI coding subscription usage across providers in one place.
 
-UsageBar is a fork of [OpenUsage](https://github.com/robinebers/openusage), redirected toward a Windows-native desktop experience instead of preserving upstream compatibility as the main constraint.
-
 ![UsageBar Screenshot](screenshot.png)
 
 ## Download
 
-Windows alpha/beta builds are published as GitHub prereleases.
+Windows alpha/beta builds are published as GitHub prereleases. Download the latest Windows NSIS installer from [UsageBar releases](https://github.com/luisleineweber/usagebar/releases). Release process and preflight checks live in [docs/releasing.md](docs/releasing.md).
 
-Release plan:
+## Install
 
-- Next public milestone: Alpha 6, as an unsigned Windows technical preview
-- Windows: GitHub prerelease with a NSIS setup `.exe`
-- macOS: still secondary while the Windows fork stabilizes
-
-Download published builds from [UsageBar releases](https://github.com/luisleineweber/usagebar/releases).
-
-Release process and preflight checks live in [docs/releasing.md](docs/releasing.md).
-
-## Install, Uninstall, And Data
-
-Alpha and beta Windows builds are distributed from GitHub Releases as a NSIS setup `.exe`.
-
-Alpha 6 signing note: the Windows installer is intentionally unsigned while Authenticode signing is deferred. Windows may show `Unknown publisher` or SmartScreen warnings. Treat Alpha 6 as a technical preview for users comfortable with prerelease desktop software.
-
-Install:
-
-1. Download the latest `UsageBar_*_x64-setup.exe` asset from [UsageBar releases](https://github.com/luisleineweber/usagebar/releases).
-2. Run the installer.
-3. Open UsageBar from the Start menu or tray.
-4. Open Settings, enable a provider, and follow that provider's setup instructions.
-
-Uninstall:
-
-- Use Windows Settings > Apps > Installed apps > UsageBar > Uninstall.
-- If a local test build was installed manually, rerun the same installer and choose uninstall if Windows does not list it yet.
-
-Local data:
-
-- App settings, provider order, display preferences, and app-owned provider secrets live under `%APPDATA%\com.sunstory.usagebar`.
-- Provider secrets saved by UsageBar on Windows are encrypted with Windows DPAPI in the app data directory.
-- Some providers also read their own local CLI, IDE, browser, or cloud SDK files. Those paths are documented in each provider page.
-- Legacy beta installs may still have old OpenUsage data under `%APPDATA%\com.sunstory.openusage`; do not delete it until migration is verified.
-
-## Alpha Readiness
-
-UsageBar is still pre-release. Alpha 6 means a Windows user can install from GitHub, enable supported providers, refresh usage, inspect local history/reporting, manage provider credentials, and configure local quota notifications. The Alpha 6 installer is unsigned; Authenticode signing is deferred.
-
-## What It Does
-
-UsageBar lives in your Windows tray and shows you how much of your AI coding subscriptions you've used. Progress bars, badges, and clear labels. No dashboard hopping.
-
-- **One glance.** All your AI tools, one panel.
-- **Always up-to-date.** Refreshes automatically on a schedule you pick.
-- **Global shortcut.** Toggle the panel from anywhere with a customizable keyboard shortcut.
-- **Lightweight.** Opens instantly, stays out of your way.
-- **Plugin-based.** New providers get added without updating the whole app.
-- **Local HTTP API.** Read cached usage from `127.0.0.1:6736` for local widgets, scripts, and dashboards.
-- **Cache-only CLI.** Read usage, history, JSON, and status-line output without launching or probing the desktop app.
-- **Local reporting.** Group history by day or project and configure custom history paths, pricing, and offline model data for Claude and Codex.
-- **Account controls.** Ping providers, re-authenticate, remove stored credentials, and manage imported Codex accounts.
-- **Quota notifications.** Track local threshold, reset, incident, recovery, quiet-hours, and recent-event state.
-- **Opt-in Edge import.** Import the approved Claude session cookie through a backend-owned, redacted Windows flow.
-- **Proxy support.** Route requests through SOCKS5/HTTP proxies for restricted networks.
-- **Custom OAuth.** Bring your own OAuth credentials for enterprise compliance.
+1. Download and run `UsageBar_*_x64-setup.exe`.
+2. Open UsageBar from the Start menu or tray.
+3. In Settings, enable a provider and follow its setup instructions.
 
 ## Providers
 
@@ -114,7 +61,15 @@ Status meanings:
 
 Want a provider that's not listed? [Open an issue.](https://github.com/luisleineweber/usagebar/issues/new)
 
-## Current Limitations
+## What It Does
+
+UsageBar sits in your Windows tray and gives you one quick view of your AI coding usage across providers. It refreshes automatically, supports a global shortcut, and keeps provider integrations modular.
+
+You can also read cached usage locally through the [HTTP API](docs/local-http-api.md) or [CLI](docs/cli.md), review supported history/reporting, manage credentials, and configure quota notifications.
+
+## Alpha Readiness And Current Limitations
+
+UsageBar is still pre-release. Alpha 6 is intended to let Windows users install from GitHub, enable supported providers, refresh usage, inspect local history/reporting, manage credentials, and configure local quota notifications. The installer is unsigned; Authenticode signing is deferred.
 
 - Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
@@ -131,9 +86,11 @@ UsageBar is a Tauri v2 desktop app with a Rust host and a React/TypeScript front
 - **Plugin manifests:** provider identity, platform support, icons, docs links, and capability declarations.
 - **Bundled plugins:** generated by `bun run bundle:plugins` before dev/build so desktop resources match source plugins.
 
-## Privacy And Security
+## Uninstall, Data, Privacy And Security
 
-UsageBar is local-first. Secrets stay local. Provider APIs are called only when you explicitly enable and configure that provider, and credentials come from app settings, environment variables, browser/session cookies you provide, or OS credential storage depending on the provider.
+Uninstall UsageBar in Windows Settings > Apps > Installed apps > UsageBar > Uninstall. If a local test build was installed manually, rerun its installer and choose uninstall if Windows does not list it yet.
+
+UsageBar is local-first. App settings, provider order, display preferences, and app-owned provider secrets live under `%APPDATA%\com.sunstory.usagebar`; Windows secrets are encrypted with DPAPI. Some providers also read their own local CLI, IDE, browser, or cloud SDK files, documented on each provider page. Legacy beta installs may still use `%APPDATA%\com.sunstory.openusage`; do not delete it until migration is verified.
 
 - Secrets stay on the machine unless a provider plugin must call that provider's API to read usage.
 - UsageBar does not send provider credentials, raw usage payloads, API keys, cookies, or app-owned provider secret files to UsageBar-owned services.
@@ -148,8 +105,6 @@ UsageBar is local-first. Secrets stay local. Provider APIs are called only when 
 This repository is no longer trying to stay narrowly aligned with upstream pull-request boundaries. The priority here is a clean Windows tray app, a plugin-first provider model, and pragmatic product decisions for this fork.
 
 That means the fork can change UX, provider strategy, release packaging, and architecture when that is the right tradeoff for Windows.
-
-Upstream lineage stays visible through the original [OpenUsage](https://github.com/robinebers/openusage) link, fork history, and the `upstream` remote used for selective fixes. This repository should be read as its own product direction.
 
 ## Contributing
 
