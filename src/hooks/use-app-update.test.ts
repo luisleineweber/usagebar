@@ -42,10 +42,13 @@ describe("useAppUpdate", () => {
     getVersionMock.mockReset()
     getVersionMock.mockResolvedValue("1.0.0")
     checkMock.mockResolvedValue(null)
-    vi.stubGlobal("fetch", vi.fn(async () => ({
-      ok: true,
-      json: async () => [],
-    })))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => [],
+      }))
+    )
     // `@tauri-apps/api/core` considers `globalThis.isTauri` the runtime flag.
     globalThis.isTauri = true
   })
@@ -90,7 +93,10 @@ describe("useAppUpdate", () => {
 
     expect(getVersionMock).not.toHaveBeenCalled()
     expect(checkMock).not.toHaveBeenCalled()
-    expect(result.current.updateStatus).toEqual({ status: "idle" })
+    expect(result.current.updateStatus).toEqual({
+      status: "unavailable",
+      message: "Updates unavailable in development",
+    })
   })
 
   it("uses the signed updater for prerelease versions", async () => {
@@ -138,6 +144,31 @@ describe("useAppUpdate", () => {
     })
   })
 
+  it("uses GitHub releases when the unsigned prerelease updater check rejects", async () => {
+    getVersionMock.mockResolvedValue("0.1.0-alpha.7")
+    checkMock.mockRejectedValueOnce(new Error("latest.json returned 404"))
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          draft: false,
+          prerelease: true,
+          tag_name: "v0.1.0-alpha.8",
+          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.8",
+        },
+      ],
+    } as Response)
+
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+    await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
+
+    expect(result.current.updateStatus).toEqual({
+      status: "available",
+      version: "0.1.0-alpha.8",
+      url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.8",
+    })
+  })
+
   it("clears a pending up-to-date timeout on re-check", async () => {
     vi.useFakeTimers()
     const clearTimeoutSpy = vi.spyOn(window, "clearTimeout")
@@ -146,14 +177,20 @@ describe("useAppUpdate", () => {
     checkMock.mockResolvedValueOnce(null)
     // Second check: hang so we can observe "checking".
     let resolveSecond: ((value: null) => void) | undefined
-    checkMock.mockReturnValueOnce(new Promise<null>((resolve) => { resolveSecond = resolve }))
+    checkMock.mockReturnValueOnce(
+      new Promise<null>((resolve) => {
+        resolveSecond = resolve
+      })
+    )
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await act(() => Promise.resolve())
     await act(() => Promise.resolve())
     expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
 
-    act(() => { void result.current.checkForUpdates() })
+    act(() => {
+      void result.current.checkForUpdates()
+    })
     await act(() => Promise.resolve())
     expect(clearTimeoutSpy).toHaveBeenCalled()
     expect(result.current.updateStatus).toEqual({ status: "checking" })
@@ -173,7 +210,11 @@ describe("useAppUpdate", () => {
       onEvent({ event: "Progress", data: { chunkLength: 500 } })
       onEvent({ event: "Finished", data: {} })
     })
-    checkMock.mockResolvedValue({ version: "1.1.0", downloadAndInstall: downloadAndInstallMock, install: vi.fn() })
+    checkMock.mockResolvedValue({
+      version: "1.1.0",
+      downloadAndInstall: downloadAndInstallMock,
+      install: vi.fn(),
+    })
     relaunchMock.mockResolvedValue(undefined)
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
@@ -245,7 +286,11 @@ describe("useAppUpdate", () => {
     const downloadAndInstallMock = vi.fn(async (onEvent: (event: any) => void) => {
       onEvent({ event: "Finished", data: {} })
     })
-    checkMock.mockResolvedValue({ version: "1.1.0", downloadAndInstall: downloadAndInstallMock, install: vi.fn() })
+    checkMock.mockResolvedValue({
+      version: "1.1.0",
+      downloadAndInstall: downloadAndInstallMock,
+      install: vi.fn(),
+    })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await act(() => Promise.resolve())
@@ -283,24 +328,38 @@ describe("useAppUpdate", () => {
     let resolveDownload: (() => void) | null = null
     const downloadAndInstallMock = vi.fn((onEvent: (event: any) => void) => {
       onEvent({ event: "Started", data: { contentLength: null } })
-      return new Promise<void>((resolve) => { resolveDownload = resolve })
+      return new Promise<void>((resolve) => {
+        resolveDownload = resolve
+      })
     })
-    checkMock.mockResolvedValue({ version: "1.1.0", downloadAndInstall: downloadAndInstallMock, install: vi.fn() })
+    checkMock.mockResolvedValue({
+      version: "1.1.0",
+      downloadAndInstall: downloadAndInstallMock,
+      install: vi.fn(),
+    })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
-    act(() => { void result.current.triggerInstall() })
+    act(() => {
+      void result.current.triggerInstall()
+    })
     await waitFor(() => expect(result.current.updateStatus.status).toBe("downloading"))
 
     expect(result.current.updateStatus).toEqual({ status: "downloading", progress: -1 })
 
     // Clean up: resolve the download
-    await act(async () => { resolveDownload?.() })
+    await act(async () => {
+      resolveDownload?.()
+    })
   })
 
   it("transitions to error on download or install failure", async () => {
     const downloadAndInstallMock = vi.fn().mockRejectedValue(new Error("download failed"))
-    checkMock.mockResolvedValue({ version: "1.1.0", downloadAndInstall: downloadAndInstallMock, install: vi.fn() })
+    checkMock.mockResolvedValue({
+      version: "1.1.0",
+      downloadAndInstall: downloadAndInstallMock,
+      install: vi.fn(),
+    })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
@@ -314,7 +373,11 @@ describe("useAppUpdate", () => {
       onEvent({ event: "Finished", data: {} })
     })
     relaunchMock.mockResolvedValue(undefined)
-    checkMock.mockResolvedValue({ version: "1.1.0", downloadAndInstall: downloadAndInstallMock, install: vi.fn() })
+    checkMock.mockResolvedValue({
+      version: "1.1.0",
+      downloadAndInstall: downloadAndInstallMock,
+      install: vi.fn(),
+    })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
@@ -326,7 +389,11 @@ describe("useAppUpdate", () => {
 
   it("does not update state after unmount during check", async () => {
     const resolveRef: { current: ((val: any) => void) | null } = { current: null }
-    checkMock.mockReturnValue(new Promise((resolve) => { resolveRef.current = resolve }))
+    checkMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRef.current = resolve
+      })
+    )
 
     const { result, unmount } = renderHook(() => useAppUpdate({ isDev: false }))
     const statusAtUnmount = result.current.updateStatus
@@ -354,13 +421,21 @@ describe("useAppUpdate", () => {
     const installMock = vi.fn().mockResolvedValue(undefined)
     const downloadAndInstallMock = vi.fn((onEvent: (event: any) => void) => {
       onEvent({ event: "Started", data: { contentLength: 100 } })
-      return new Promise<void>((resolve) => { resolveDownload = resolve })
+      return new Promise<void>((resolve) => {
+        resolveDownload = resolve
+      })
     })
-    checkMock.mockResolvedValue({ version: "1.1.0", downloadAndInstall: downloadAndInstallMock, install: installMock })
+    checkMock.mockResolvedValue({
+      version: "1.1.0",
+      downloadAndInstall: downloadAndInstallMock,
+      install: installMock,
+    })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
-    act(() => { void result.current.triggerInstall() })
+    act(() => {
+      void result.current.triggerInstall()
+    })
     await act(() => Promise.resolve())
     expect(result.current.updateStatus.status).toBe("downloading")
 
@@ -368,28 +443,42 @@ describe("useAppUpdate", () => {
     expect(installMock).not.toHaveBeenCalled()
 
     // Cleanup: resolve download
-    await act(async () => { resolveDownload?.() })
+    await act(async () => {
+      resolveDownload?.()
+    })
   })
 
   it("prevents concurrent install attempts", async () => {
     let resolveInstall: (() => void) | null = null
     const downloadAndInstallMock = vi.fn((onEvent: (event: any) => void) => {
       onEvent({ event: "Finished", data: {} })
-      return new Promise<void>((resolve) => { resolveInstall = resolve })
+      return new Promise<void>((resolve) => {
+        resolveInstall = resolve
+      })
     })
     relaunchMock.mockResolvedValue(undefined)
-    checkMock.mockResolvedValue({ version: "1.1.0", downloadAndInstall: downloadAndInstallMock, install: vi.fn() })
+    checkMock.mockResolvedValue({
+      version: "1.1.0",
+      downloadAndInstall: downloadAndInstallMock,
+      install: vi.fn(),
+    })
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
 
-    act(() => { void result.current.triggerInstall() })
-    act(() => { void result.current.triggerInstall() })
+    act(() => {
+      void result.current.triggerInstall()
+    })
+    act(() => {
+      void result.current.triggerInstall()
+    })
     await act(() => Promise.resolve())
 
     expect(result.current.updateStatus).toEqual({ status: "installing" })
     expect(downloadAndInstallMock).toHaveBeenCalledTimes(1)
 
-    await act(async () => { resolveInstall?.() })
+    await act(async () => {
+      resolveInstall?.()
+    })
   })
 })

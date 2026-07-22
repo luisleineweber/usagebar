@@ -13,6 +13,7 @@ export type UpdateStatus =
   | { status: "downloading"; progress: number } // 0-100, or -1 if indeterminate
   | { status: "installing" }
   | { status: "ready" }
+  | { status: "unavailable"; message: string }
   | { status: "error"; message: string }
 
 interface UseAppUpdateReturn {
@@ -89,12 +90,15 @@ export function compareVersions(left: string, right: string): number {
   return comparePrerelease(parsedLeft.prerelease, parsedRight.prerelease)
 }
 
-export function isEligibleUpdateCandidate(candidateVersion: string, currentVersion: string): boolean {
+export function isEligibleUpdateCandidate(
+  candidateVersion: string,
+  currentVersion: string
+): boolean {
   const candidate = parseVersion(candidateVersion)
   const current = parseVersion(currentVersion)
   const coreDelta = compareVersions(
     `${candidate.major}.${candidate.minor}.${candidate.patch}`,
-    `${current.major}.${current.minor}.${current.patch}`,
+    `${current.major}.${current.minor}.${current.patch}`
   )
 
   if (coreDelta > 0) return true
@@ -120,7 +124,7 @@ type GitHubReleaseCandidate = {
 
 async function findNewerGitHubRelease(
   repo: string,
-  currentVersion: string,
+  currentVersion: string
 ): Promise<GitHubReleaseCandidate | null> {
   const response = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=20`, {
     headers: { Accept: "application/vnd.github+json" },
@@ -130,14 +134,16 @@ async function findNewerGitHubRelease(
   }
 
   const releases = (await response.json()) as GitHubRelease[]
-  return releases
-    .filter((release) => !release.draft && release.tag_name && release.html_url)
-    .map((release) => ({
-      version: normalizeVersion(release.tag_name ?? ""),
-      url: release.html_url ?? "",
-    }))
-    .filter((release) => isEligibleUpdateCandidate(release.version, currentVersion))
-    .sort((left, right) => compareVersions(right.version, left.version))[0] ?? null
+  return (
+    releases
+      .filter((release) => !release.draft && release.tag_name && release.html_url)
+      .map((release) => ({
+        version: normalizeVersion(release.tag_name ?? ""),
+        url: release.html_url ?? "",
+      }))
+      .filter((release) => isEligibleUpdateCandidate(release.version, currentVersion))
+      .sort((left, right) => compareVersions(right.version, left.version))[0] ?? null
+  )
 }
 
 export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateReturn {
@@ -196,8 +202,19 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
   }, [setStatus])
 
   const checkForUpdates = useCallback(async () => {
-    if (!isTauri() || isDev) return
-    if (inFlightRef.current.checking || inFlightRef.current.downloading || inFlightRef.current.installing) return
+    if (!isTauri() || isDev) {
+      setStatus({
+        status: "unavailable",
+        message: isDev ? "Updates unavailable in development" : "Updates unavailable outside the app",
+      })
+      return
+    }
+    if (
+      inFlightRef.current.checking ||
+      inFlightRef.current.downloading ||
+      inFlightRef.current.installing
+    )
+      return
     if (statusRef.current.status === "ready" || statusRef.current.status === "available") return
 
     // Clear any pending up-to-date timeout
@@ -211,12 +228,21 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
       const currentVersion = await getCurrentVersion()
       let update: Update | null = null
       let canUseSignedUpdater = updaterEnabledRef.current
+      let signedUpdaterError: unknown = null
       if (!updaterEligibilityResolvedRef.current) {
         canUseSignedUpdater = await resolveUpdaterEligibility()
       }
 
       if (canUseSignedUpdater) {
-        update = await check()
+        try {
+          update = await check()
+        } catch (error) {
+          signedUpdaterError = error
+          // Prerelease builds may intentionally be published without signed
+          // updater artifacts. In that case the GitHub release API below is
+          // still authoritative for discovering the next prerelease.
+          console.warn("Signed updater check failed; trying GitHub release fallback:", error)
+        }
       }
       if (!mountedRef.current) return
       if (update) {
@@ -228,7 +254,9 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
           setStatus({ status: "available", version: updateVersion })
           return
         }
-        console.warn(`Ignoring updater candidate ${update.version}; current version is ${currentVersion}.`)
+        console.warn(
+          `Ignoring updater candidate ${update.version}; current version is ${currentVersion}.`
+        )
       }
 
       let release: GitHubReleaseCandidate | null = null
@@ -236,6 +264,9 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
         release = await findNewerGitHubRelease(repo, currentVersion)
       } catch (error) {
         if (canUseSignedUpdater) {
+          if (signedUpdaterError) {
+            throw error
+          }
           console.warn("GitHub release fallback failed after signed updater check:", error)
         } else {
           throw error
@@ -248,6 +279,10 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
         externalReleaseUrlRef.current = release.url
         setStatus({ status: "available", version: release.version, url: release.url })
         return
+      }
+
+      if (signedUpdaterError) {
+        throw signedUpdaterError
       }
 
       setUpToDateThenIdle()
@@ -268,9 +303,12 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
 
       void checkForUpdates()
 
-      intervalId = window.setInterval(() => {
-        void checkForUpdates()
-      }, 15 * 60 * 1000)
+      intervalId = window.setInterval(
+        () => {
+          void checkForUpdates()
+        },
+        15 * 60 * 1000
+      )
     })
 
     return () => {
