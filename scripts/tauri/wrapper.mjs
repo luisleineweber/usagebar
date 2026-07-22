@@ -3,13 +3,16 @@ import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { cleanupStaleDebugBuildMetadata, getTauriChildEnv } from "./wrapper-lib.mjs"
+import {
+  cleanupStaleDebugBuildMetadata,
+  getDevConfigArgs,
+  getTauriChildEnv,
+} from "./wrapper-lib.mjs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const repoRoot = path.resolve(__dirname, "..", "..")
 const args = process.argv.slice(2)
-const localTauriConfigPath = path.join(repoRoot, "src-tauri", "tauri.conf.local.json")
 
 function quoteForPowerShell(value) {
   return `'${String(value).replace(/'/g, "''")}'`
@@ -84,10 +87,7 @@ function bundlePluginsForDev() {
 }
 
 function resolveTauriCli() {
-  const cliArgs = [...args]
-  if (args[0] === "dev" && existsSync(localTauriConfigPath) && !args.includes("--config") && !args.includes("-c")) {
-    cliArgs.push("--config", localTauriConfigPath)
-  }
+  const cliArgs = [...args, ...getDevConfigArgs(args, repoRoot)]
 
   const packagedCli = path.join(repoRoot, "node_modules", "@tauri-apps", "cli", "tauri.js")
   if (existsSync(packagedCli)) {
@@ -98,9 +98,8 @@ function resolveTauriCli() {
   }
 
   const binDir = path.join(repoRoot, "node_modules", ".bin")
-  const localBinary = process.platform === "win32"
-    ? path.join(binDir, "tauri.cmd")
-    : path.join(binDir, "tauri")
+  const localBinary =
+    process.platform === "win32" ? path.join(binDir, "tauri.cmd") : path.join(binDir, "tauri")
 
   if (existsSync(localBinary)) {
     if (process.platform === "win32" && localBinary.endsWith(".cmd")) {

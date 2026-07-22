@@ -1,12 +1,21 @@
 import assert from "node:assert/strict"
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { fileURLToPath } from "node:url"
 
 import {
   cleanupStaleDebugBuildMetadata,
   findStaleDebugBuildMetadata,
+  getDevConfigArgs,
   getTauriChildEnv,
 } from "./wrapper-lib.mjs"
 
@@ -53,4 +62,66 @@ test("cleanupStaleDebugBuildMetadata removes copied debug metadata from another 
 test("getTauriChildEnv marks only local dev launches", () => {
   assert.equal(getTauriChildEnv(["dev"], {}).USAGEBAR_TAURI_DEV, "1")
   assert.equal(getTauriChildEnv(["build"], {}).USAGEBAR_TAURI_DEV, undefined)
+})
+
+test("getDevConfigArgs applies the isolated dev config last", () => {
+  const { repoRoot } = createRepoFixture()
+  const localConfigPath = path.join(repoRoot, "src-tauri", "tauri.conf.local.json")
+  const devConfigPath = path.join(repoRoot, "src-tauri", "tauri.dev.conf.json")
+
+  writeFileSync(localConfigPath, "{}")
+
+  assert.deepEqual(getDevConfigArgs(["dev"], repoRoot), [
+    "--config",
+    localConfigPath,
+    "--config",
+    devConfigPath,
+  ])
+  assert.deepEqual(getDevConfigArgs(["dev", "--config", "custom.json"], repoRoot), [
+    "--config",
+    devConfigPath,
+  ])
+  assert.deepEqual(getDevConfigArgs(["build"], repoRoot), [])
+})
+
+test("the dev wrapper has its plugin bundler entrypoint", () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+
+  assert.equal(existsSync(path.join(repoRoot, "copy-bundled.cjs")), true)
+})
+
+test("the Vite root mounts the frontend entrypoint", () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+  const indexPath = path.join(repoRoot, "index.html")
+
+  assert.equal(existsSync(indexPath), true)
+  assert.match(readFileSync(indexPath, "utf8"), /src\/main\.tsx/)
+})
+
+test("local dev uses an isolated Tauri identifier", () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+  const releaseConfig = JSON.parse(
+    readFileSync(path.join(repoRoot, "src-tauri", "tauri.conf.json"), "utf8")
+  )
+  const devConfig = JSON.parse(
+    readFileSync(path.join(repoRoot, "src-tauri", "tauri.dev.conf.json"), "utf8")
+  )
+
+  assert.equal(typeof devConfig.identifier, "string")
+  assert.notEqual(devConfig.identifier, releaseConfig.identifier)
+})
+
+test("every provider manifest resolves to a real provider icon", () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+  const pluginsDir = path.join(repoRoot, "plugins")
+
+  for (const entry of readdirSync(pluginsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === "mock") continue
+    const manifest = JSON.parse(
+      readFileSync(path.join(pluginsDir, entry.name, "plugin.json"), "utf8")
+    )
+    const icon = readFileSync(path.join(pluginsDir, entry.name, manifest.icon), "utf8")
+
+    assert.doesNotMatch(icon, /<text\b/, `${entry.name} icon must not be a text fallback`)
+  }
 })

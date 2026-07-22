@@ -6,6 +6,7 @@ mod atomic_file;
 mod browser_cookie_import;
 pub mod cli;
 mod codex_account_store;
+mod dev_data_migration;
 mod local_http_api;
 #[cfg(not(test))]
 mod panel;
@@ -1586,9 +1587,20 @@ pub fn run() {
             let version = app.package_info().version.to_string();
             log::info!("UsageBar v{} starting", version);
 
+            let app_data_dir = app.path().app_data_dir().expect("no app data dir");
+            match dev_data_migration::migrate_for_dev(&app_data_dir) {
+                Ok(report) if report.copied_files > 0 => {
+                    log::info!(
+                        "Migrated {} Alpha 5 data file(s) into local Alpha 6 data",
+                        report.copied_files
+                    );
+                }
+                Ok(_) => {}
+                Err(error) => log::warn!("Could not migrate local Alpha 5 data: {}", error),
+            }
+
             track_app_started_once_per_day_per_version(app);
 
-            let app_data_dir = app.path().app_data_dir().expect("no app data dir");
             let resource_dir = app.path().resource_dir().expect("no resource dir");
             log::debug!("app_data_dir: {:?}", app_data_dir);
 

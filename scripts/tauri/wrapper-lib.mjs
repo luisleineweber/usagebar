@@ -75,3 +75,20 @@ export function getTauriChildEnv(args, baseEnv = process.env) {
     ...(args[0] === "dev" ? { USAGEBAR_TAURI_DEV: "1" } : {}),
   }
 }
+
+export function getDevConfigArgs(args, repoRoot) {
+  if (args[0] !== "dev") {
+    return []
+  }
+
+  const configArgs = []
+  const localConfigPath = path.join(repoRoot, "src-tauri", "tauri.conf.local.json")
+  const hasExplicitConfig = args.includes("--config") || args.includes("-c")
+
+  if (existsSync(localConfigPath) && !hasExplicitConfig) {
+    configArgs.push("--config", localConfigPath)
+  }
+
+  configArgs.push("--config", path.join(repoRoot, "src-tauri", "tauri.dev.conf.json"))
+  return configArgs
+}
