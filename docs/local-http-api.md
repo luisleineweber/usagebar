@@ -6,6 +6,25 @@ UsageBar exposes a read-only HTTP API on the loopback interface so local tools, 
 
 The server starts automatically with the app. It only binds to `127.0.0.1`. If the port is already in use, the API is disabled for that app session and UsageBar continues running normally.
 
+## Hardening
+
+The API is loopback-only, but it exposes cached subscription information. It is therefore configurable before app startup:
+
+| Variable | Effect |
+| --- | --- |
+| `USAGEBAR_LOCAL_HTTP_API_ENABLED=false` | Does not start the listener. `0` and `off` have the same effect. |
+| `USAGEBAR_LOCAL_HTTP_API_TOKEN=<secret>` | Requires `Authorization: Bearer <secret>` for every `GET` request. |
+| `USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN=<origin>` | Restricts browser CORS to exactly one origin, for example `http://localhost:3000`. |
+
+Without this variable, the API retains its legacy `Access-Control-Allow-Origin: *` behavior for existing browser clients. Set it to restrict browser CORS to one origin.
+
+When a token is configured, use:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:USAGEBAR_LOCAL_HTTP_API_TOKEN" }
+Invoke-RestMethod http://127.0.0.1:6736/v1/usage -Headers $headers
+```
+
 ## Routes
 
 ### `GET /v1/health`
@@ -110,12 +129,13 @@ The `lines` array uses the same metric line types as plugin output: `progress`, 
 
 ## CORS
 
-All responses include permissive CORS headers for local browser-based tools:
+Browser CORS remains permissive by default for backwards compatibility. When `USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN` is set, only matching responses include:
 
 ```http
-Access-Control-Allow-Origin: *
+Access-Control-Allow-Origin: http://localhost:3000
 Access-Control-Allow-Methods: GET, OPTIONS
-Access-Control-Allow-Headers: Content-Type
+Access-Control-Allow-Headers: Authorization, Content-Type
+Vary: Origin
 ```
 
 `OPTIONS` requests return `204 No Content`.
@@ -128,7 +148,7 @@ Access-Control-Allow-Headers: Content-Type
 }
 ```
 
-Possible error codes are `provider_not_found`, `not_found`, and `method_not_allowed`.
+Possible error codes are `provider_not_found`, `not_found`, `method_not_allowed`, and `unauthorized`.
 
 ## Examples
 

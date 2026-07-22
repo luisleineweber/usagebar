@@ -8,8 +8,49 @@ use std::time::Duration;
 const BIND_ADDR: &str = "127.0.0.1:6736";
 const MAX_REQUEST_BYTES: usize = 4096;
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct ServerConfig {
+    bearer_token: Option<String>,
+    allowed_origin: Option<String>,
+}
+
+impl ServerConfig {
+    fn from_environment() -> Option<Self> {
+        let enabled = std::env::var("USAGEBAR_LOCAL_HTTP_API_ENABLED")
+            .map(|value| parse_enabled_value(&value))
+            .unwrap_or(true);
+        if !enabled {
+            return None;
+        }
+
+        Some(Self {
+            bearer_token: optional_environment_value("USAGEBAR_LOCAL_HTTP_API_TOKEN"),
+            allowed_origin: optional_environment_value("USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN"),
+        })
+    }
+}
+
+fn parse_enabled_value(value: &str) -> bool {
+    !matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "0" | "false" | "off"
+    )
+}
+
+fn optional_environment_value(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 pub fn start_server() {
-    std::thread::spawn(|| {
+    let Some(config) = ServerConfig::from_environment() else {
+        log::info!("local HTTP API disabled by USAGEBAR_LOCAL_HTTP_API_ENABLED");
+        return;
+    };
+
+    std::thread::spawn(move || {
         let listener = match TcpListener::bind(BIND_ADDR) {
             Ok(listener) => {
                 log::info!("local HTTP API listening on {}", BIND_ADDR);
@@ -28,7 +69,8 @@ pub fn start_server() {
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
-                    std::thread::spawn(move || handle_connection(stream));
+                    let config = config.clone();
+                    std::thread::spawn(move || handle_connection(stream, &config));
                 }
                 Err(error) => log::debug!("local HTTP API accept error: {}", error),
             }
@@ -36,7 +78,7 @@ pub fn start_server() {
     });
 }
 
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(mut stream: TcpStream, config: &ServerConfig) {
     let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
 
     let mut buffer = [0u8; MAX_REQUEST_BYTES];
@@ -51,9 +93,60 @@ fn handle_connection(mut stream: TcpStream) {
     let method = parts.next().unwrap_or("");
     let raw_path = parts.next().unwrap_or("");
 
-    let response = route(method, raw_path);
+    let origin = request_header(&request, "origin");
+    let response = if method != "OPTIONS" && !request_is_authorized(&request, config) {
+        response_unauthorized()
+    } else {
+        route(method, raw_path)
+    };
+    let response = apply_cors_headers(response, origin, config);
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.flush();
+}
+
+fn request_header<'a>(request: &'a str, name: &str) -> Option<&'a str> {
+    request.lines().skip(1).find_map(|line| {
+        let (header_name, value) = line.split_once(':')?;
+        header_name
+            .trim()
+            .eq_ignore_ascii_case(name)
+            .then_some(value.trim())
+    })
+}
+
+fn request_is_authorized(request: &str, config: &ServerConfig) -> bool {
+    let Some(token) = config.bearer_token.as_deref() else {
+        return true;
+    };
+    let expected = format!("Bearer {token}");
+    request_header(request, "authorization")
+        .is_some_and(|provided| constant_time_eq(provided.as_bytes(), expected.as_bytes()))
+}
+
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    left.iter()
+        .zip(right)
+        .fold(0u8, |difference, (left, right)| difference | (left ^ right))
+        == 0
+}
+
+fn apply_cors_headers(response: String, origin: Option<&str>, config: &ServerConfig) -> String {
+    let (allow_origin, vary_origin) = match config.allowed_origin.as_deref() {
+        Some(allowed_origin) if Some(allowed_origin) == origin => (allowed_origin, true),
+        Some(_) => return response,
+        None => ("*", false),
+    };
+    response.replacen(
+        "Connection: close\r\n",
+        &format!(
+            "Connection: close\r\nAccess-Control-Allow-Origin: {allow_origin}\r\n{}Access-Control-Allow-Methods: GET, OPTIONS\r\nAccess-Control-Allow-Headers: Authorization, Content-Type\r\n",
+            if vary_origin { "Vary: Origin\r\n" } else { "" },
+        ),
+        1,
+    )
 }
 
 fn route(method: &str, raw_path: &str) -> String {
@@ -241,27 +334,18 @@ fn handle_get_usage_single(provider_id: &str) -> String {
     }
 }
 
-const CORS_HEADERS: &str = "\
-Access-Control-Allow-Origin: *\r\n\
-Access-Control-Allow-Methods: GET, OPTIONS\r\n\
-Access-Control-Allow-Headers: Content-Type";
-
 fn response_json(status: u16, reason: &str, body: &str) -> String {
     format!(
-        "HTTP/1.1 {} {}\r\nConnection: close\r\nContent-Type: application/json; charset=utf-8\r\n{}\r\nContent-Length: {}\r\n\r\n{}",
+        "HTTP/1.1 {} {}\r\nConnection: close\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
         status,
         reason,
-        CORS_HEADERS,
         body.len(),
         body,
     )
 }
 
 fn response_no_content() -> String {
-    format!(
-        "HTTP/1.1 204 No Content\r\nConnection: close\r\n{}\r\n\r\n",
-        CORS_HEADERS,
-    )
+    format!("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n",)
 }
 
 fn response_not_found(error_code: &str) -> String {
@@ -283,6 +367,10 @@ fn response_method_not_allowed() -> String {
         "Method Not Allowed",
         r#"{"error":"method_not_allowed"}"#,
     )
+}
+
+fn response_unauthorized() -> String {
+    response_json(401, "Unauthorized", r#"{"error":"unauthorized"}"#)
 }
 
 #[cfg(test)]
@@ -402,9 +490,10 @@ mod tests {
     }
 
     #[test]
-    fn route_options_returns_204_with_cors() {
+    fn route_options_returns_204_with_legacy_cors() {
         let response = route("OPTIONS", "/v1/usage");
         assert!(response.starts_with("HTTP/1.1 204"));
+        let response = apply_cors_headers(response, None, &ServerConfig::default());
         assert!(response.contains("Access-Control-Allow-Origin: *"));
     }
 
@@ -497,9 +586,84 @@ mod tests {
     }
 
     #[test]
-    fn response_json_includes_cors_headers() {
-        let response = response_json(200, "OK", "[]");
+    fn response_json_has_legacy_cors_headers_by_default() {
+        let response = apply_cors_headers(
+            response_json(200, "OK", "[]"),
+            None,
+            &ServerConfig::default(),
+        );
         assert!(response.contains("Access-Control-Allow-Origin: *"));
         assert!(response.contains("Content-Type: application/json; charset=utf-8"));
+    }
+
+    #[test]
+    fn configured_origin_restricts_cors_to_that_origin() {
+        let config = ServerConfig {
+            bearer_token: None,
+            allowed_origin: Some("http://localhost:3000".to_string()),
+        };
+
+        let response = apply_cors_headers(response_json(200, "OK", "[]"), None, &config);
+        assert!(!response.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn request_authentication_requires_the_configured_bearer_token() {
+        let config = ServerConfig {
+            bearer_token: Some("local-secret".to_string()),
+            allowed_origin: None,
+        };
+
+        assert!(!request_is_authorized(
+            "GET /v1/usage HTTP/1.1\r\n\r\n",
+            &config
+        ));
+        assert!(!request_is_authorized(
+            "GET /v1/usage HTTP/1.1\r\nAuthorization: Bearer wrong\r\n\r\n",
+            &config
+        ));
+        assert!(request_is_authorized(
+            "GET /v1/usage HTTP/1.1\r\nAuthorization: Bearer local-secret\r\n\r\n",
+            &config
+        ));
+    }
+
+    #[test]
+    fn explicit_origin_gets_cors_headers() {
+        let config = ServerConfig {
+            bearer_token: None,
+            allowed_origin: Some("http://localhost:3000".to_string()),
+        };
+        let response = apply_cors_headers(
+            response_json(200, "OK", "[]"),
+            Some("http://localhost:3000"),
+            &config,
+        );
+
+        assert!(response.contains("Access-Control-Allow-Origin: http://localhost:3000"));
+        assert!(response.contains("Vary: Origin"));
+        assert!(response.contains("Access-Control-Allow-Headers: Authorization, Content-Type"));
+    }
+
+    #[test]
+    fn unapproved_origin_does_not_get_cors_headers() {
+        let config = ServerConfig {
+            bearer_token: None,
+            allowed_origin: Some("http://localhost:3000".to_string()),
+        };
+        let response = apply_cors_headers(
+            response_json(200, "OK", "[]"),
+            Some("https://untrusted.example"),
+            &config,
+        );
+
+        assert!(!response.contains("Access-Control-Allow-Origin"));
+    }
+
+    #[test]
+    fn disabled_environment_value_is_recognized() {
+        assert!(!parse_enabled_value(" false "));
+        assert!(!parse_enabled_value("OFF"));
+        assert!(parse_enabled_value("true"));
     }
 }
