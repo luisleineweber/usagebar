@@ -86,6 +86,7 @@ describe("useAppUpdate", () => {
   })
 
   it("skips updater checks in dev", async () => {
+    vi.useFakeTimers()
     const { result } = renderHook(() => useAppUpdate({ isDev: true }))
 
     await act(() => Promise.resolve())
@@ -97,6 +98,11 @@ describe("useAppUpdate", () => {
       status: "unavailable",
       message: "Updates unavailable in development",
     })
+    await act(async () => {
+      vi.advanceTimersByTime(5000)
+    })
+    expect(result.current.updateStatus).toEqual({ status: "idle" })
+    vi.useRealTimers()
   })
 
   it("uses the signed updater for prerelease versions", async () => {

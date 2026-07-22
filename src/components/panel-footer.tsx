@@ -44,21 +44,29 @@ function VersionDisplay({
   onVersionClick: () => void
 }) {
   const versionButton = (
+    label = formatFooterVersionLabel(version),
+    title = `${APP_NAME} ${version}. Right-click to check for updates.`
+  ) => (
     <button
       type="button"
       onClick={onVersionClick}
       onContextMenu={(event) => {
         event.preventDefault()
+        event.stopPropagation()
         onUpdateCheck()
       }}
       className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-      title={`${APP_NAME} ${version}. Right-click to check for updates.`}
+      title={title}
     >
-      {formatFooterVersionLabel(version)}
+      {label}
     </button>
   )
 
   switch (updateStatus.status) {
+    case "checking":
+      return <span className="text-xs text-muted-foreground">Checking for updates...</span>
+    case "up-to-date":
+      return <span className="text-xs text-muted-foreground">Up to date</span>
     case "available":
       return (
         <Button
@@ -92,9 +100,18 @@ function VersionDisplay({
       )
     case "installing":
       return <span className="text-xs text-muted-foreground">Installing...</span>
+    case "unavailable":
+      return (
+        <span className="text-xs text-muted-foreground" title={updateStatus.message}>
+          Updates unavailable
+        </span>
+      )
     case "error":
       if (updateStatus.message === "Update check failed") {
-        return versionButton
+        return versionButton(
+          "Update check failed",
+          "Update check failed. Right-click to try again."
+        )
       }
       return (
         <span className="text-xs text-destructive" title={updateStatus.message}>
@@ -102,7 +119,7 @@ function VersionDisplay({
         </span>
       )
     default:
-      return versionButton
+      return versionButton()
   }
 }
 

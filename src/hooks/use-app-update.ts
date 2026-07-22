@@ -201,12 +201,25 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
     }, 3000)
   }, [setStatus])
 
+  const setUnavailableThenIdle = useCallback(
+    (message: string) => {
+      if (upToDateTimeoutRef.current !== null) {
+        clearTimeout(upToDateTimeoutRef.current)
+      }
+      setStatus({ status: "unavailable", message })
+      upToDateTimeoutRef.current = window.setTimeout(() => {
+        upToDateTimeoutRef.current = null
+        if (mountedRef.current) setStatus({ status: "idle" })
+      }, 5000)
+    },
+    [setStatus]
+  )
+
   const checkForUpdates = useCallback(async () => {
     if (!isTauri() || isDev) {
-      setStatus({
-        status: "unavailable",
-        message: isDev ? "Updates unavailable in development" : "Updates unavailable outside the app",
-      })
+      setUnavailableThenIdle(
+        isDev ? "Updates unavailable in development" : "Updates unavailable outside the app"
+      )
       return
     }
     if (
@@ -292,7 +305,15 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
       console.error("Update check failed:", err)
       setStatus({ status: "error", message: "Update check failed" })
     }
-  }, [getCurrentVersion, isDev, repo, resolveUpdaterEligibility, setStatus, setUpToDateThenIdle])
+  }, [
+    getCurrentVersion,
+    isDev,
+    repo,
+    resolveUpdaterEligibility,
+    setStatus,
+    setUnavailableThenIdle,
+    setUpToDateThenIdle,
+  ])
 
   useEffect(() => {
     mountedRef.current = true

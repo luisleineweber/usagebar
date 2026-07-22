@@ -118,6 +118,30 @@ describe("PanelFooter", () => {
     expect(onUpdateCheck).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps the version context menu from reaching the panel context menu", () => {
+    const onUpdateCheck = vi.fn()
+    const onPanelContextMenu = vi.fn()
+    render(
+      <div onContextMenu={onPanelContextMenu}>
+        <PanelFooter
+          version="0.1.0-alpha.1"
+          autoUpdateNextAt={null}
+          updateStatus={idle}
+          onUpdateInstall={noop}
+          showAbout={false}
+          onShowAbout={noop}
+          onCloseAbout={noop}
+          onUpdateCheck={onUpdateCheck}
+        />
+      </div>
+    )
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: "UsageBar Alpha 1" }))
+
+    expect(onUpdateCheck).toHaveBeenCalledTimes(1)
+    expect(onPanelContextMenu).not.toHaveBeenCalled()
+  })
+
   it("shows downloading state", () => {
     render(
       <PanelFooter
@@ -129,6 +153,34 @@ describe("PanelFooter", () => {
       />
     )
     expect(screen.getByText("Downloading update 42%")).toBeTruthy()
+  })
+
+  it("shows visible feedback while checking for updates", () => {
+    render(
+      <PanelFooter
+        version="0.0.0"
+        autoUpdateNextAt={null}
+        updateStatus={{ status: "checking" }}
+        onUpdateInstall={noop}
+        {...footerProps}
+      />
+    )
+
+    expect(screen.getByText("Checking for updates...")).toBeInTheDocument()
+  })
+
+  it("shows when the app is up to date", () => {
+    render(
+      <PanelFooter
+        version="0.0.0"
+        autoUpdateNextAt={null}
+        updateStatus={{ status: "up-to-date" }}
+        onUpdateInstall={noop}
+        {...footerProps}
+      />
+    )
+
+    expect(screen.getByText("Up to date")).toBeInTheDocument()
   })
 
   it("shows downloading state without percentage when progress is unknown", () => {
@@ -195,7 +247,8 @@ describe("PanelFooter", () => {
       />
     )
 
-    const versionButton = screen.getByRole("button", { name: "UsageBar Alpha 4" })
+    const versionButton = screen.getByRole("button", { name: "Update check failed" })
+    expect(versionButton).toHaveAttribute("title", "Update check failed. Right-click to try again.")
     expect(screen.queryByRole("button", { name: "Updates soon" })).toBeNull()
 
     await userEvent.click(versionButton)
@@ -231,6 +284,23 @@ describe("PanelFooter", () => {
       />
     )
     expect(screen.getByText("Installing...")).toBeTruthy()
+  })
+
+  it("shows when update checks are unavailable", () => {
+    render(
+      <PanelFooter
+        version="0.0.0"
+        autoUpdateNextAt={null}
+        updateStatus={{ status: "unavailable", message: "Updates unavailable in development" }}
+        onUpdateInstall={noop}
+        {...footerProps}
+      />
+    )
+
+    expect(screen.getByText("Updates unavailable")).toHaveAttribute(
+      "title",
+      "Updates unavailable in development"
+    )
   })
 
   it("opens About dialog when clicking version in idle state", async () => {
