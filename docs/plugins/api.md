@@ -530,10 +530,10 @@ ctx.line.progress({
 
 ```typescript
 host.ccusage.query(opts: {
-  provider?: "claude" | "codex", // Optional; defaults to plugin id, then "claude"
+  provider?: "claude" | "codex" | "opencode" | "amp" | "droid" | "codebuff" | "hermes" | "pi" | "goose" | "openclaw" | "kilo" | "kimi" | "qwen" | "copilot" | "gemini", // Optional; defaults to plugin id, then "claude"
   since?: string,                // Start date (YYYYMMDD or YYYY-MM-DD)
   until?: string,                // End date (YYYYMMDD or YYYY-MM-DD)
-  homePath?: string,             // Provider home override (CLAUDE_CONFIG_DIR or CODEX_HOME)
+  homePath?: string,             // Provider data-root override (source-specific environment variable)
   claudePath?: string,           // Legacy Claude-only override (deprecated; use homePath)
 }):
   | { status: "ok", data: { daily: DailyUsage[] } }
@@ -545,6 +545,10 @@ Queries local token usage via provider-focused ccusage commands:
 
 - Claude: [`ccusage claude daily`](https://github.com/ryoppippi/ccusage)
 - Codex: [`ccusage codex daily`](https://github.com/ryoppippi/ccusage)
+- OpenCode: [`ccusage opencode daily`](https://github.com/ryoppippi/ccusage)
+- Amp: [`ccusage amp daily`](https://github.com/ryoppippi/ccusage)
+- Droid/Factory: [`ccusage droid daily`](https://github.com/ryoppippi/ccusage)
+- Kilo, Kimi, Qwen, and Gemini: source-focused `ccusage <source> daily` commands
 
 Returns a status envelope:
 
@@ -554,10 +558,10 @@ Returns a status envelope:
 
 ### Behavior
 
-- **Runtime runners**: Executes pinned `ccusage@20.0.2` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
-- **Provider-aware**: Resolves provider from `opts.provider` or plugin id (`claude`/`codex`)
-- **Focused commands**: Uses `ccusage claude daily` or `ccusage codex daily`; it intentionally does not use `ccusage daily` because that aggregates all detected agents
-- **Legacy fallback**: If `ccusage@20.0.2` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude or `@ccusage/codex@18.0.11` for Codex
+- **Runtime runners**: Executes pinned `ccusage@20.0.18` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
+- **Provider-aware**: Resolves provider from `opts.provider` or the plugin id, including aliases such as `factory` → `droid` and `opencode-go` → `opencode`
+- **Focused commands**: Uses `ccusage <source> daily`; it intentionally does not use `ccusage daily` because that aggregates all detected agents
+- **Legacy fallback**: If `ccusage@20.0.18` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude or `@ccusage/codex@18.0.11` for Codex
 - **No provider API calls**: Usage is computed from local JSONL session files; the host does not call Claude/Codex (or other provider) APIs, but package runners may contact a package registry to download the `ccusage` CLI if it is not already available locally
 - **Graceful degradation**: returns `no_runner` when no runner exists, `runner_failed` when execution fails
 - **Pricing**: Uses ccusage's built-in LiteLLM pricing data
@@ -568,17 +572,18 @@ The host normalizes only the top-level shape to `{ daily: [...] }`. Inner day fi
 
 Commonly observed fields include:
 
-| Property              | Type             | Notes                                                  |
-| --------------------- | ---------------- | ------------------------------------------------------ |
-| `date`                | `string`         | Date label from CLI output (provider/locale-dependent) |
-| `inputTokens`         | `number`         | Present in Claude and Codex                            |
-| `outputTokens`        | `number`         | Present in Claude and Codex                            |
-| `cacheCreationTokens` | `number`         | Claude field                                           |
-| `cacheReadTokens`     | `number`         | Claude field                                           |
-| `cachedInputTokens`   | `number`         | Codex field                                            |
-| `totalTokens`         | `number`         | Present in current Claude/Codex outputs                |
-| `totalCost`           | `number \| null` | Claude cost field                                      |
-| `costUSD`             | `number`         | Codex cost field                                       |
+| Property              | Type             | Notes                                                        |
+| --------------------- | ---------------- | ------------------------------------------------------------ |
+| `date`                | `string`         | Date label from CLI output (provider/locale-dependent)       |
+| `inputTokens`         | `number`         | Present when the selected provider reports input usage       |
+| `outputTokens`        | `number`         | Present when the selected provider reports output usage      |
+| `cacheCreationTokens` | `number`         | Provider-reported cache-write usage                          |
+| `cacheReadTokens`     | `number`         | Provider-reported cache-read usage                           |
+| `reasoningTokens`     | `number`         | Provider-reported reasoning usage                            |
+| `cachedInputTokens`   | `number`         | Codex field                                                  |
+| `totalTokens`         | `number`         | Optional aggregate; clients sum component fields when absent |
+| `totalCost`           | `number \| null` | Claude cost field                                            |
+| `costUSD`             | `number`         | Codex cost field                                             |
 
 ### Example
 

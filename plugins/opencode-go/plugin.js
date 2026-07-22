@@ -844,5 +844,67 @@
     }
   }
 
-  globalThis.__openusage_plugin = { id: PROVIDER_ID, probe }
+  function addCcusageHistory(ctx, result) {
+    if (
+      !result ||
+      result.history ||
+      !ctx.host.ccusage ||
+      typeof ctx.host.ccusage.query !== "function"
+    )
+      return result
+    var sinceDate = new Date(ctx.nowIso || Date.now())
+    sinceDate.setDate(sinceDate.getDate() - 30)
+    var since =
+      sinceDate.getFullYear() +
+      String(sinceDate.getMonth() + 1).padStart(2, "0") +
+      String(sinceDate.getDate()).padStart(2, "0")
+    var usage = ctx.host.ccusage.query({ provider: "opencode", since: since }),
+      daily =
+        usage && usage.status === "ok" && usage.data && Array.isArray(usage.data.daily)
+          ? usage.data.daily
+          : [],
+      entries = []
+    for (var i = 0; i < daily.length; i += 1) {
+      var m = String((daily[i] && daily[i].date) || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (!m) continue
+      var start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      var end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1)
+      var rows =
+        Array.isArray(daily[i].modelBreakdowns) && daily[i].modelBreakdowns.length
+          ? daily[i].modelBreakdowns
+          : [daily[i]]
+      for (var j = 0; j < rows.length; j += 1) {
+        var row = rows[j] || {},
+          entry = { periodStart: start.toISOString(), periodEnd: end.toISOString() },
+          model = String(row.modelName || row.model || "").trim(),
+          input = Number(row.inputTokens),
+          output = Number(row.outputTokens),
+          cacheRead = Number(row.cacheReadTokens),
+          cacheCreation = Number(row.cacheCreationTokens),
+          reasoning = Number(row.reasoningTokens),
+          total = Number(row.totalTokens),
+          cost = Number(row.cost != null ? row.cost : row.totalCost)
+        if (model) entry.model = model
+        if (Number.isFinite(input) && input >= 0) entry.inputTokens = input
+        if (Number.isFinite(output) && output >= 0) entry.outputTokens = output
+        if (Number.isFinite(cacheRead) && cacheRead >= 0) entry.cacheReadTokens = cacheRead
+        if (Number.isFinite(cacheCreation) && cacheCreation >= 0)
+          entry.cacheCreationTokens = cacheCreation
+        if (Number.isFinite(reasoning) && reasoning >= 0) entry.reasoningTokens = reasoning
+        if (Number.isFinite(total) && total >= 0) entry.totalTokens = total
+        if (Number.isFinite(cost) && cost >= 0) entry.costUsd = cost
+        if (Object.keys(entry).length > 2) entries.push(entry)
+      }
+    }
+    if (entries.length)
+      result.history = { version: 1, source: "ccusage", timeZone: "system-local", entries: entries }
+    return result
+  }
+  var probeCore = probe
+  globalThis.__openusage_plugin = {
+    id: PROVIDER_ID,
+    probe: function (ctx) {
+      return addCcusageHistory(ctx, probeCore(ctx))
+    },
+  }
 })()

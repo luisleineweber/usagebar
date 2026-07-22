@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   const CRED_PATH = "~/.kimi/credentials/kimi-code.json"
   const USAGE_URL = "https://api.kimi.com/coding/v1/usages"
   const BALANCE_URL = "https://api.moonshot.ai/v1/users/me/balance"
@@ -43,10 +43,7 @@
 
   function parsePlanLabel(data) {
     const level =
-      data &&
-      data.user &&
-      data.user.membership &&
-      typeof data.user.membership.level === "string"
+      data && data.user && data.user.membership && typeof data.user.membership.level === "string"
         ? data.user.membership.level
         : null
     if (!level) return null
@@ -224,7 +221,9 @@
         value: "$" + formatMoney(balance.available),
       })
     )
-    lines.push(ctx.line.text({ label: "Voucher balance", value: "$" + formatMoney(balance.voucher) }))
+    lines.push(
+      ctx.line.text({ label: "Voucher balance", value: "$" + formatMoney(balance.voucher) })
+    )
     lines.push(ctx.line.text({ label: "Cash balance", value: "$" + formatMoney(balance.cash) }))
   }
 
@@ -425,9 +424,7 @@
               format: { kind: "count", suffix: "quota units" },
               resetsAt: weeklyUsage.resetsAt || undefined,
               periodDurationMs:
-                typeof weeklyCandidate.periodMs === "number"
-                  ? weeklyCandidate.periodMs
-                  : undefined,
+                typeof weeklyCandidate.periodMs === "number" ? weeklyCandidate.periodMs : undefined,
             })
           )
         }
@@ -442,7 +439,9 @@
         throw "Moonshot API key invalid. Check Setup or MOONSHOT_API_KEY."
       }
       if (resp.status < 200 || resp.status >= 300) {
-        throw "Moonshot API balance request failed (HTTP " + String(resp.status) + "). Try again later."
+        throw (
+          "Moonshot API balance request failed (HTTP " + String(resp.status) + "). Try again later."
+        )
       }
       const data = ctx.util.tryParseJson(resp.bodyText)
       const balance = parseBalance(data)
@@ -463,5 +462,61 @@
     }
   }
 
-  globalThis.__openusage_plugin = { id: "kimi", probe }
+  function addCcusageHistory(ctx, result) {
+    if (
+      !result ||
+      result.history ||
+      !ctx.host.ccusage ||
+      typeof ctx.host.ccusage.query !== "function"
+    )
+      return result
+    var sinceDate = new Date(ctx.nowIso || Date.now())
+    sinceDate.setDate(sinceDate.getDate() - 30)
+    var since =
+      sinceDate.getFullYear() +
+      String(sinceDate.getMonth() + 1).padStart(2, "0") +
+      String(sinceDate.getDate()).padStart(2, "0")
+    var usage = ctx.host.ccusage.query({ provider: "kimi", since: since }),
+      daily =
+        usage && usage.status === "ok" && usage.data && Array.isArray(usage.data.daily)
+          ? usage.data.daily
+          : [],
+      entries = []
+    for (var i = 0; i < daily.length; i += 1) {
+      var m = String((daily[i] && daily[i].date) || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (!m) continue
+      var start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      var end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1)
+      var row = daily[i],
+        entry = { periodStart: start.toISOString(), periodEnd: end.toISOString() },
+        model = String(row.modelName || "").trim(),
+        input = Number(row.inputTokens),
+        output = Number(row.outputTokens),
+        cacheRead = Number(row.cacheReadTokens),
+        cacheCreation = Number(row.cacheCreationTokens),
+        reasoning = Number(row.reasoningTokens),
+        total = Number(row.totalTokens),
+        cost = Number(row.totalCost)
+      if (Number.isFinite(input) && input >= 0) entry.inputTokens = input
+      if (Number.isFinite(output) && output >= 0) entry.outputTokens = output
+      if (Number.isFinite(cacheRead) && cacheRead >= 0) entry.cacheReadTokens = cacheRead
+      if (Number.isFinite(cacheCreation) && cacheCreation >= 0)
+        entry.cacheCreationTokens = cacheCreation
+      if (Number.isFinite(reasoning) && reasoning >= 0) entry.reasoningTokens = reasoning
+      if (model) entry.model = model
+      if (Number.isFinite(total) && total >= 0) entry.totalTokens = total
+      if (Number.isFinite(cost) && cost >= 0) entry.costUsd = cost
+      if (Object.keys(entry).length > 2) entries.push(entry)
+    }
+    if (entries.length)
+      result.history = { version: 1, source: "ccusage", timeZone: "system-local", entries: entries }
+    return result
+  }
+  var probeCore = probe
+  globalThis.__openusage_plugin = {
+    id: "kimi",
+    probe: function (ctx) {
+      return addCcusageHistory(ctx, probeCore(ctx))
+    },
+  }
 })()

@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   var SECRETS_FILE = "~/.local/share/amp/secrets.json"
   var SECRETS_KEY = "apiKey@https://ampcode.com/"
   var API_URL = "https://ampcode.com/api/internal"
@@ -10,7 +10,8 @@
   }
 
   function loadStoredApiKey(ctx) {
-    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function")
+      return null
     try {
       var key = readString(ctx.host.providerSecrets.read("apiKey"))
       if (key) {
@@ -47,7 +48,7 @@
       method: "POST",
       url: API_URL,
       headers: {
-        "Authorization": "Bearer " + apiKey,
+        Authorization: "Bearer " + apiKey,
         "Content-Type": "application/json",
       },
       bodyText: JSON.stringify({ method: "userDisplayBalanceInfo", params: {} }),
@@ -71,7 +72,9 @@
       credits: null,
     }
 
-    var balanceMatch = text.match(/\$([0-9][0-9,]*(?:\.[0-9]+)?)\/\$([0-9][0-9,]*(?:\.[0-9]+)?) remaining/)
+    var balanceMatch = text.match(
+      /\$([0-9][0-9,]*(?:\.[0-9]+)?)\/\$([0-9][0-9,]*(?:\.[0-9]+)?) remaining/
+    )
     if (balanceMatch) {
       var remaining = parseMoney(balanceMatch[1])
       var total = parseMoney(balanceMatch[2])
@@ -150,7 +153,14 @@
         throw "Could not parse usage data."
       }
       ctx.host.log.warn("no balance data found, assuming credits-only: " + json.result.displayText)
-      balance = { remaining: null, total: null, hourlyRate: 0, bonusPct: null, bonusDays: null, credits: 0 }
+      balance = {
+        remaining: null,
+        total: null,
+        hourlyRate: 0,
+        bonusPct: null,
+        bonusDays: null,
+        credits: 0,
+      }
     }
 
     var lines = []
@@ -166,34 +176,102 @@
         resetsAtMs = Date.now() + hoursToFull * 3600 * 1000
       }
 
-      lines.push(ctx.line.progress({
-        label: "Free",
-        used: used,
-        limit: total,
-        format: { kind: "dollars" },
-        resetsAt: ctx.util.toIso(resetsAtMs),
-        periodDurationMs: 24 * 3600 * 1000,
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Free",
+          used: used,
+          limit: total,
+          format: { kind: "dollars" },
+          resetsAt: ctx.util.toIso(resetsAtMs),
+          periodDurationMs: 24 * 3600 * 1000,
+        })
+      )
 
       if (balance.bonusPct && balance.bonusDays) {
-        lines.push(ctx.line.text({
-          label: "Bonus",
-          value: "+" + balance.bonusPct + "% for " + balance.bonusDays + "d",
-        }))
+        lines.push(
+          ctx.line.text({
+            label: "Bonus",
+            value: "+" + balance.bonusPct + "% for " + balance.bonusDays + "d",
+          })
+        )
       }
     }
 
     if (balance.credits !== null && balance.total === null) plan = "Credits"
 
     if (balance.credits !== null && (balance.credits > 0 || balance.total === null)) {
-      lines.push(ctx.line.text({
-        label: "Credits",
-        value: "$" + balance.credits.toFixed(2),
-      }))
+      lines.push(
+        ctx.line.text({
+          label: "Credits",
+          value: "$" + balance.credits.toFixed(2),
+        })
+      )
     }
 
     return { plan: plan, lines: lines }
   }
 
-  globalThis.__openusage_plugin = { id: "amp", probe: probe }
+  function addCcusageHistory(ctx, result, provider) {
+    if (
+      !result ||
+      result.history ||
+      !ctx.host.ccusage ||
+      typeof ctx.host.ccusage.query !== "function"
+    )
+      return result
+    var sinceDate = new Date(ctx.nowIso || Date.now())
+    sinceDate.setDate(sinceDate.getDate() - 30)
+    var since =
+      sinceDate.getFullYear() +
+      String(sinceDate.getMonth() + 1).padStart(2, "0") +
+      String(sinceDate.getDate()).padStart(2, "0")
+    var usage = ctx.host.ccusage.query({ provider: provider, since: since })
+    var daily =
+      usage && usage.status === "ok" && usage.data && Array.isArray(usage.data.daily)
+        ? usage.data.daily
+        : []
+    var entries = []
+    for (var i = 0; i < daily.length; i += 1) {
+      var m = String((daily[i] && daily[i].date) || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (!m) continue
+      var start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      var end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1)
+      var rows =
+        Array.isArray(daily[i].modelBreakdowns) && daily[i].modelBreakdowns.length
+          ? daily[i].modelBreakdowns
+          : [daily[i]]
+      for (var j = 0; j < rows.length; j += 1) {
+        var row = rows[j] || {},
+          entry = { periodStart: start.toISOString(), periodEnd: end.toISOString() }
+        var model = String(row.modelName || row.model || "").trim()
+        if (model) entry.model = model
+        var input = Number(row.inputTokens),
+          output = Number(row.outputTokens),
+          cacheRead = Number(row.cacheReadTokens),
+          cacheCreation = Number(row.cacheCreationTokens),
+          reasoning = Number(row.reasoningTokens),
+          total = Number(row.totalTokens),
+          cost = Number(row.cost != null ? row.cost : row.totalCost)
+        if (Number.isFinite(input) && input >= 0) entry.inputTokens = input
+        if (Number.isFinite(output) && output >= 0) entry.outputTokens = output
+        if (Number.isFinite(cacheRead) && cacheRead >= 0) entry.cacheReadTokens = cacheRead
+        if (Number.isFinite(cacheCreation) && cacheCreation >= 0)
+          entry.cacheCreationTokens = cacheCreation
+        if (Number.isFinite(reasoning) && reasoning >= 0) entry.reasoningTokens = reasoning
+        if (Number.isFinite(total) && total >= 0) entry.totalTokens = total
+        if (Number.isFinite(cost) && cost >= 0) entry.costUsd = cost
+        if (Object.keys(entry).length > 2) entries.push(entry)
+      }
+    }
+    if (entries.length)
+      result.history = { version: 1, source: "ccusage", timeZone: "system-local", entries: entries }
+    return result
+  }
+  var probeCore = probe
+  globalThis.__openusage_plugin = {
+    id: "amp",
+    probe: function (ctx) {
+      return addCcusageHistory(ctx, probeCore(ctx), "amp")
+    },
+  }
 })()

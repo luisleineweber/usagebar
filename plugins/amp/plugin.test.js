@@ -155,7 +155,9 @@ describe("amp plugin", () => {
   it("throws on network error", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockImplementation(() => { throw new Error("ECONNREFUSED") })
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("ECONNREFUSED")
+    })
     var plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Request failed. Check your connection.")
   })
@@ -194,9 +196,15 @@ describe("amp plugin", () => {
   it("parses standard balance text", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      remaining: 1.66, total: 20, rate: 0.83,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          remaining: 1.66,
+          total: 20,
+          rate: 0.83,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
     var line = result.lines[0]
@@ -210,9 +218,16 @@ describe("amp plugin", () => {
   it("parses balance with no bonus bracket", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      remaining: 10, total: 20, rate: 0.83, bonus: false,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          remaining: 10,
+          total: 20,
+          rate: 0.83,
+          bonus: false,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
     expect(result.lines.length).toBe(1)
@@ -222,12 +237,19 @@ describe("amp plugin", () => {
   it("includes bonus text line when present", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      bonusPct: 100, bonusDays: 2,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          bonusPct: 100,
+          bonusDays: 2,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
-    var bonusLine = result.lines.find(function (l) { return l.label === "Bonus" })
+    var bonusLine = result.lines.find(function (l) {
+      return l.label === "Bonus"
+    })
     expect(bonusLine).toBeTruthy()
     expect(bonusLine.value).toBe("+100% for 2d")
   })
@@ -235,12 +257,18 @@ describe("amp plugin", () => {
   it("includes credits text line when credits > 0", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      credits: 5.50,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          credits: 5.5,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
-    var creditsLine = result.lines.find(function (l) { return l.label === "Credits" })
+    var creditsLine = result.lines.find(function (l) {
+      return l.label === "Credits"
+    })
     expect(creditsLine).toBeTruthy()
     expect(creditsLine.value).toBe("$5.50")
   })
@@ -248,21 +276,32 @@ describe("amp plugin", () => {
   it("omits credits line when credits are zero", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      credits: 0,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          credits: 0,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
-    var creditsLine = result.lines.find(function (l) { return l.label === "Credits" })
+    var creditsLine = result.lines.find(function (l) {
+      return l.label === "Credits"
+    })
     expect(creditsLine).toBeUndefined()
   })
 
   it("clamps used to 0 when remaining exceeds total", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      remaining: 25, total: 20,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          remaining: 25,
+          total: 20,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
     expect(result.lines[0].used).toBe(0)
@@ -273,9 +312,15 @@ describe("amp plugin", () => {
   it("returns resetsAt and periodDurationMs", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      remaining: 1.66, total: 20, rate: 0.83,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          remaining: 1.66,
+          total: 20,
+          rate: 0.83,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
     var line = result.lines[0]
@@ -286,9 +331,15 @@ describe("amp plugin", () => {
   it("returns null resetsAt when nothing used", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      remaining: 20, total: 20, rate: 0.83,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          remaining: 20,
+          total: 20,
+          rate: 0.83,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
     expect(result.lines[0].used).toBe(0)
@@ -298,9 +349,15 @@ describe("amp plugin", () => {
   it("returns null resetsAt when hourly rate is zero", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      remaining: 10, total: 20, rate: 0,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          remaining: 10,
+          total: 20,
+          rate: 0,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
     expect(result.lines[0].used).toBe(10)
@@ -323,7 +380,8 @@ describe("amp plugin", () => {
   it("handles credits-only user", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    var text = "Signed in as user@test.com (testuser)\nIndividual credits: $25.50 remaining - https://ampcode.com/settings"
+    var text =
+      "Signed in as user@test.com (testuser)\nIndividual credits: $25.50 remaining - https://ampcode.com/settings"
     ctx.host.http.request.mockReturnValue(balanceResponse(text))
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
@@ -336,8 +394,9 @@ describe("amp plugin", () => {
   it("parses credits-only text with top-up hint", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    var text = "Signed in as person@example.com (exampleuser)\n"
-      + "Individual credits: $5 remaining (set up automatic top-up to avoid running out) - https://ampcode.com/settings"
+    var text =
+      "Signed in as person@example.com (exampleuser)\n" +
+      "Individual credits: $5 remaining (set up automatic top-up to avoid running out) - https://ampcode.com/settings"
     ctx.host.http.request.mockReturnValue(balanceResponse(text))
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
@@ -350,14 +409,22 @@ describe("amp plugin", () => {
   it("shows both free tier and credits when both present", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText({
-      credits: 10,
-    })))
+    ctx.host.http.request.mockReturnValue(
+      balanceResponse(
+        standardDisplayText({
+          credits: 10,
+        })
+      )
+    )
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
     expect(result.plan).toBe("Free")
-    var progressLine = result.lines.find(function (l) { return l.type === "progress" })
-    var creditsLine = result.lines.find(function (l) { return l.label === "Credits" })
+    var progressLine = result.lines.find(function (l) {
+      return l.type === "progress"
+    })
+    var creditsLine = result.lines.find(function (l) {
+      return l.label === "Credits"
+    })
     expect(progressLine).toBeTruthy()
     expect(creditsLine).toBeTruthy()
     expect(creditsLine.value).toBe("$10.00")
@@ -380,7 +447,8 @@ describe("amp plugin", () => {
   it("shows $0.00 for credits-only user with zero balance", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    var text = "Signed in as user@test.com (testuser)\nIndividual credits: $0 remaining - https://ampcode.com/settings"
+    var text =
+      "Signed in as user@test.com (testuser)\nIndividual credits: $0 remaining - https://ampcode.com/settings"
     ctx.host.http.request.mockReturnValue(balanceResponse(text))
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
@@ -395,13 +463,62 @@ describe("amp plugin", () => {
   it("parses balance with comma-formatted amounts", async () => {
     var ctx = makeCtx()
     writeSecrets(ctx)
-    var text = "Signed in as user@test.com (testuser)\n"
-      + "Amp Free: $1,000.50/$2,000 remaining (replenishes +$0.83/hour) - https://ampcode.com/settings#amp-free\n"
-      + "Individual credits: $0 remaining - https://ampcode.com/settings"
+    var text =
+      "Signed in as user@test.com (testuser)\n" +
+      "Amp Free: $1,000.50/$2,000 remaining (replenishes +$0.83/hour) - https://ampcode.com/settings#amp-free\n" +
+      "Individual credits: $0 remaining - https://ampcode.com/settings"
     ctx.host.http.request.mockReturnValue(balanceResponse(text))
     var plugin = await loadPlugin()
     var result = plugin.probe(ctx)
     expect(result.lines[0].limit).toBe(2000)
-    expect(result.lines[0].used).toBeCloseTo(999.50, 2)
+    expect(result.lines[0].used).toBeCloseTo(999.5, 2)
+  })
+
+  it("adds local ccusage history for the graph", async () => {
+    var ctx = makeCtx()
+    writeSecrets(ctx)
+    ctx.host.http.request.mockReturnValue(balanceResponse(standardDisplayText()))
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: {
+        daily: [
+          {
+            date: "2026-02-01",
+            totalTokens: 120,
+            totalCost: 0.42,
+            modelBreakdowns: [
+              {
+                modelName: "amp-model",
+                inputTokens: 80,
+                outputTokens: 40,
+                cacheReadTokens: 20,
+                cacheCreationTokens: 5,
+                reasoningTokens: 3,
+                totalTokens: 120,
+                cost: 0.42,
+              },
+            ],
+          },
+        ],
+      },
+    })
+
+    var plugin = await loadPlugin()
+    var result = plugin.probe(ctx)
+
+    expect(ctx.host.ccusage.query).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "amp", since: expect.any(String) })
+    )
+    expect(result.history).toMatchObject({ source: "ccusage", timeZone: "system-local" })
+    expect(result.history.entries[0]).toMatchObject({
+      model: "amp-model",
+      totalTokens: 120,
+      inputTokens: 80,
+      outputTokens: 40,
+      cacheReadTokens: 20,
+      cacheCreationTokens: 5,
+      reasoningTokens: 3,
+      costUsd: 0.42,
+    })
   })
 })

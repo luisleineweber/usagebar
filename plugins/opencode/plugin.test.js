@@ -462,4 +462,47 @@ describe("opencode plugin", () => {
       expect.stringContaining("opencode zen billing response missing balance for " + workspaceId)
     )
   })
+
+  it("falls back to ccusage when SQLite history is empty", async () => {
+    const ctx = makeCtx()
+    setManualCookie(ctx)
+    setWorkspace(ctx, "wrk_ccusage_fallback")
+    ctx.host.http.request.mockReturnValue(response(JSON.stringify({ billing: { balance: 1.25 } })))
+    ctx.host.sqlite.query.mockReturnValue("[]")
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: {
+        daily: [
+          {
+            date: "2026-07-20",
+            modelBreakdowns: [
+              {
+                modelName: "deepseek-v4-flash-free",
+                inputTokens: 20,
+                outputTokens: 10,
+                cacheReadTokens: 60,
+                cacheCreationTokens: 5,
+                cost: 0.25,
+              },
+            ],
+          },
+        ],
+      },
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(ctx.host.ccusage.query).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "opencode", since: expect.any(String) })
+    )
+    expect(result.history).toMatchObject({ source: "ccusage" })
+    expect(result.history.entries[0]).toMatchObject({
+      inputTokens: 20,
+      outputTokens: 10,
+      cacheReadTokens: 60,
+      cacheCreationTokens: 5,
+      costUsd: 0.25,
+    })
+  })
 })

@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   const SETTINGS_PATH = "~/.gemini/settings.json"
   const CREDS_PATH = "~/.gemini/oauth_creds.json"
   const SHARED_OAUTH2_JS_PATHS = [
@@ -43,7 +43,9 @@
   function assertSupportedAuthType(ctx) {
     const settings = loadSettings(ctx)
     const authType =
-      settings && typeof settings.authType === "string" ? settings.authType.trim().toLowerCase() : null
+      settings && typeof settings.authType === "string"
+        ? settings.authType.trim().toLowerCase()
+        : null
 
     if (!authType || authType === "oauth-personal") return
     if (authType === "api-key") {
@@ -95,9 +97,10 @@
   }
 
   function getOauth2JsPaths(ctx) {
-    const candidates = ctx.app.platform === "windows"
-      ? WINDOWS_OAUTH2_JS_PATHS.concat(SHARED_OAUTH2_JS_PATHS)
-      : SHARED_OAUTH2_JS_PATHS
+    const candidates =
+      ctx.app.platform === "windows"
+        ? WINDOWS_OAUTH2_JS_PATHS.concat(SHARED_OAUTH2_JS_PATHS)
+        : SHARED_OAUTH2_JS_PATHS
     const seen = new Set()
     const out = []
     for (let i = 0; i < candidates.length; i += 1) {
@@ -208,7 +211,8 @@
 
     creds.access_token = data.access_token
     if (typeof data.id_token === "string" && data.id_token) creds.id_token = data.id_token
-    if (typeof data.refresh_token === "string" && data.refresh_token) creds.refresh_token = data.refresh_token
+    if (typeof data.refresh_token === "string" && data.refresh_token)
+      creds.refresh_token = data.refresh_token
     if (typeof data.expires_in === "number") {
       creds.expiry_date = Date.now() + data.expires_in * 1000
     }
@@ -255,25 +259,30 @@
       normalized === "google_ai_pro" ||
       normalized === "ai-pro" ||
       normalized === "pro-tier"
-    ) return "Google AI Pro"
+    )
+      return "Google AI Pro"
     if (
       normalized === "google-ai-ultra" ||
       normalized === "google_ai_ultra" ||
       normalized === "ai-ultra" ||
       normalized === "ultra-tier"
-    ) return "Google AI Ultra"
+    )
+      return "Google AI Ultra"
     if (
       normalized === "enterprise-tier" ||
       normalized === "code-assist-enterprise" ||
       normalized === "code_assist_enterprise"
-    ) return "Code Assist Enterprise"
+    )
+      return "Code Assist Enterprise"
     if (
       normalized === "standard-tier" ||
       normalized === "code-assist-standard" ||
       normalized === "code_assist_standard"
-    ) return idTokenPayload && idTokenPayload.hd ? "Code Assist Standard" : "Google AI Pro"
+    )
+      return idTokenPayload && idTokenPayload.hd ? "Code Assist Standard" : "Google AI Pro"
     if (normalized === "legacy-tier") return "Legacy"
-    if (normalized === "free-tier") return idTokenPayload && idTokenPayload.hd ? "Google Workspace" : "Individual"
+    if (normalized === "free-tier")
+      return idTokenPayload && idTokenPayload.hd ? "Google Workspace" : "Individual"
     return null
   }
 
@@ -296,13 +305,15 @@
 
     if (projectsResp.status < 200 || projectsResp.status >= 300) return null
     const projectsData = ctx.util.tryParseJson(projectsResp.bodyText)
-    const projects = projectsData && Array.isArray(projectsData.projects) ? projectsData.projects : []
+    const projects =
+      projectsData && Array.isArray(projectsData.projects) ? projectsData.projects : []
     for (let i = 0; i < projects.length; i += 1) {
       const project = projects[i]
       const projectId = project && typeof project.projectId === "string" ? project.projectId : null
       if (!projectId) continue
       if (projectId.indexOf("gen-lang-client") === 0) return projectId
-      const labels = project && project.labels && typeof project.labels === "object" ? project.labels : null
+      const labels =
+        project && project.labels && typeof project.labels === "object" ? project.labels : null
       if (labels && labels["generative-language"] !== undefined) return projectId
     }
     return null
@@ -336,10 +347,18 @@
           : typeof value.model_id === "string"
             ? value.model_id
             : null
-      const limit = firstNumber(value, ["limit", "quota", "total", "dailyLimit", "daily_limit", "max"])
+      const limit = firstNumber(value, [
+        "limit",
+        "quota",
+        "total",
+        "dailyLimit",
+        "daily_limit",
+        "max",
+      ])
       const used = firstNumber(value, ["used", "usage", "consumed", "current", "count"])
       const remaining = firstNumber(value, ["remaining", "remainingQuota", "remaining_quota"])
-      const computedUsed = used !== null ? used : limit !== null && remaining !== null ? limit - remaining : null
+      const computedUsed =
+        used !== null ? used : limit !== null && remaining !== null ? limit - remaining : null
       if (modelId && limit !== null && limit > 0 && computedUsed !== null) {
         out.push({
           modelId,
@@ -404,7 +423,11 @@
       const lower = String(bucket.modelId || "").toLowerCase()
       if (lower.indexOf("gemini") !== -1 && lower.indexOf("pro") !== -1) {
         proBuckets.push(bucket)
-      } else if (lower.indexOf("gemini") !== -1 && lower.indexOf("flash") !== -1 && lower.indexOf("lite") !== -1) {
+      } else if (
+        lower.indexOf("gemini") !== -1 &&
+        lower.indexOf("flash") !== -1 &&
+        lower.indexOf("lite") !== -1
+      ) {
         flashLiteBuckets.push(bucket)
       } else if (lower.indexOf("gemini") !== -1 && lower.indexOf("flash") !== -1) {
         flashBuckets.push(bucket)
@@ -425,7 +448,9 @@
     let currentToken = accessToken
     const resp = ctx.util.retryOnceOnAuth({
       request: function (token) {
-        return postJson(ctx, LOAD_CODE_ASSIST_URL, token || currentToken, { metadata: IDE_METADATA })
+        return postJson(ctx, LOAD_CODE_ASSIST_URL, token || currentToken, {
+          metadata: IDE_METADATA,
+        })
       },
       refresh: function () {
         const refreshed = refreshToken(ctx, creds)
@@ -499,12 +524,68 @@
     }
 
     const lines = parseQuotaLines(ctx, quotaData)
-    const email = idTokenPayload && typeof idTokenPayload.email === "string" ? idTokenPayload.email : null
+    const email =
+      idTokenPayload && typeof idTokenPayload.email === "string" ? idTokenPayload.email : null
     if (email) lines.push(ctx.line.text({ label: "Account", value: email }))
-    if (!lines.length) lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
+    if (!lines.length)
+      lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
 
     return { plan: plan || undefined, lines }
   }
 
-  globalThis.__openusage_plugin = { id: "gemini", probe }
+  function addCcusageHistory(ctx, result) {
+    if (
+      !result ||
+      result.history ||
+      !ctx.host.ccusage ||
+      typeof ctx.host.ccusage.query !== "function"
+    )
+      return result
+    var sinceDate = new Date(ctx.nowIso || Date.now())
+    sinceDate.setDate(sinceDate.getDate() - 30)
+    var since =
+      sinceDate.getFullYear() +
+      String(sinceDate.getMonth() + 1).padStart(2, "0") +
+      String(sinceDate.getDate()).padStart(2, "0")
+    var usage = ctx.host.ccusage.query({ provider: "gemini", since: since }),
+      daily =
+        usage && usage.status === "ok" && usage.data && Array.isArray(usage.data.daily)
+          ? usage.data.daily
+          : [],
+      entries = []
+    for (var i = 0; i < daily.length; i += 1) {
+      var m = String((daily[i] && daily[i].date) || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (!m) continue
+      var start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      var end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1)
+      var row = daily[i],
+        entry = { periodStart: start.toISOString(), periodEnd: end.toISOString() },
+        input = Number(row.inputTokens),
+        output = Number(row.outputTokens),
+        cacheRead = Number(row.cacheReadTokens),
+        cacheCreation = Number(row.cacheCreationTokens),
+        reasoning = Number(row.reasoningTokens),
+        total = Number(row.totalTokens),
+        cost = Number(row.totalCost)
+      if (Number.isFinite(input) && input >= 0) entry.inputTokens = input
+      if (Number.isFinite(output) && output >= 0) entry.outputTokens = output
+      if (Number.isFinite(cacheRead) && cacheRead >= 0) entry.cacheReadTokens = cacheRead
+      if (Number.isFinite(cacheCreation) && cacheCreation >= 0)
+        entry.cacheCreationTokens = cacheCreation
+      if (Number.isFinite(reasoning) && reasoning >= 0) entry.reasoningTokens = reasoning
+      if (Number.isFinite(total) && total >= 0) entry.totalTokens = total
+      if (Number.isFinite(cost) && cost >= 0) entry.costUsd = cost
+      if (Object.keys(entry).length > 2) entries.push(entry)
+    }
+    if (entries.length)
+      result.history = { version: 1, source: "ccusage", timeZone: "system-local", entries: entries }
+    return result
+  }
+  var probeCore = probe
+  globalThis.__openusage_plugin = {
+    id: "gemini",
+    probe: function (ctx) {
+      return addCcusageHistory(ctx, probeCore(ctx))
+    },
+  }
 })()

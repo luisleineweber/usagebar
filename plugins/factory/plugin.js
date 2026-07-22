@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   const AUTH_V2_FILE = "~/.factory/auth.v2.file"
   const AUTH_V2_KEY = "~/.factory/auth.v2.key"
   const AUTH_PATHS = ["~/.factory/auth.encrypted", "~/.factory/auth.json"]
@@ -254,8 +254,10 @@
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         bodyText:
           "grant_type=refresh_token" +
-          "&refresh_token=" + encodeURIComponent(auth.refresh_token) +
-          "&client_id=" + encodeURIComponent(WORKOS_CLIENT_ID),
+          "&refresh_token=" +
+          encodeURIComponent(auth.refresh_token) +
+          "&client_id=" +
+          encodeURIComponent(WORKOS_CLIENT_ID),
         timeoutMs: 15000,
       })
 
@@ -394,23 +396,24 @@
     const endDate = usage.endDate
     const startDate = usage.startDate
     const resetsAt = typeof endDate === "number" ? ctx.util.toIso(endDate) : null
-    const periodDurationMs = (typeof endDate === "number" && typeof startDate === "number")
-      ? (endDate - startDate)
-      : null
+    const periodDurationMs =
+      typeof endDate === "number" && typeof startDate === "number" ? endDate - startDate : null
 
     // Standard tokens (primary line)
     const standard = usage.standard
     if (standard && typeof standard.totalAllowance === "number" && standard.totalAllowance > 0) {
       const used = standard.orgTotalTokensUsed || 0
       const limit = standard.totalAllowance
-      lines.push(ctx.line.progress({
-        label: "Standard",
-        used: used,
-        limit: limit,
-        format: { kind: "count", suffix: "tokens" },
-        resetsAt: resetsAt,
-        periodDurationMs: periodDurationMs,
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Standard",
+          used: used,
+          limit: limit,
+          format: { kind: "count", suffix: "tokens" },
+          resetsAt: resetsAt,
+          periodDurationMs: periodDurationMs,
+        })
+      )
     }
 
     // Premium tokens (detail line, only if plan includes premium)
@@ -418,14 +421,16 @@
     if (premium && typeof premium.totalAllowance === "number" && premium.totalAllowance > 0) {
       const used = premium.orgTotalTokensUsed || 0
       const limit = premium.totalAllowance
-      lines.push(ctx.line.progress({
-        label: "Premium",
-        used: used,
-        limit: limit,
-        format: { kind: "count", suffix: "tokens" },
-        resetsAt: resetsAt,
-        periodDurationMs: periodDurationMs,
-      }))
+      lines.push(
+        ctx.line.progress({
+          label: "Premium",
+          used: used,
+          limit: limit,
+          format: { kind: "count", suffix: "tokens" },
+          resetsAt: resetsAt,
+          periodDurationMs: periodDurationMs,
+        })
+      )
     }
 
     if (lines.length === 0) {
@@ -435,5 +440,59 @@
     return { plan: null, lines: lines }
   }
 
-  globalThis.__openusage_plugin = { id: "factory", probe }
+  function addCcusageHistory(ctx, result) {
+    if (
+      !result ||
+      result.history ||
+      !ctx.host.ccusage ||
+      typeof ctx.host.ccusage.query !== "function"
+    )
+      return result
+    var sinceDate = new Date(ctx.nowIso || Date.now())
+    sinceDate.setDate(sinceDate.getDate() - 30)
+    var since =
+      sinceDate.getFullYear() +
+      String(sinceDate.getMonth() + 1).padStart(2, "0") +
+      String(sinceDate.getDate()).padStart(2, "0")
+    var usage = ctx.host.ccusage.query({ provider: "droid", since: since })
+    var daily =
+      usage && usage.status === "ok" && usage.data && Array.isArray(usage.data.daily)
+        ? usage.data.daily
+        : []
+    var entries = []
+    for (var i = 0; i < daily.length; i += 1) {
+      var m = String((daily[i] && daily[i].date) || "").match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (!m) continue
+      var start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      var end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1)
+      var row = daily[i],
+        entry = { periodStart: start.toISOString(), periodEnd: end.toISOString() }
+      var input = Number(row.inputTokens),
+        output = Number(row.outputTokens),
+        cacheRead = Number(row.cacheReadTokens),
+        cacheCreation = Number(row.cacheCreationTokens),
+        reasoning = Number(row.reasoningTokens),
+        total = Number(row.totalTokens),
+        cost = Number(row.totalCost)
+      if (Number.isFinite(input) && input >= 0) entry.inputTokens = input
+      if (Number.isFinite(output) && output >= 0) entry.outputTokens = output
+      if (Number.isFinite(cacheRead) && cacheRead >= 0) entry.cacheReadTokens = cacheRead
+      if (Number.isFinite(cacheCreation) && cacheCreation >= 0)
+        entry.cacheCreationTokens = cacheCreation
+      if (Number.isFinite(reasoning) && reasoning >= 0) entry.reasoningTokens = reasoning
+      if (Number.isFinite(total) && total >= 0) entry.totalTokens = total
+      if (Number.isFinite(cost) && cost >= 0) entry.costUsd = cost
+      if (Object.keys(entry).length > 2) entries.push(entry)
+    }
+    if (entries.length)
+      result.history = { version: 1, source: "ccusage", timeZone: "system-local", entries: entries }
+    return result
+  }
+  var probeCore = probe
+  globalThis.__openusage_plugin = {
+    id: "factory",
+    probe: function (ctx) {
+      return addCcusageHistory(ctx, probeCore(ctx))
+    },
+  }
 })()

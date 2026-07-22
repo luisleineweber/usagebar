@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "qwen",
+  "name": "Qwen Code",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#615CED",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Experimental on Windows. Usage is read from local Qwen Code history."
+    }
+  },
+  "lines": [
+    {
+      "type": "text",
+      "label": "Last 30 Days",
+      "scope": "overview"
+    }
+  ],
+  "capabilities": {
+    "ccusage": true
+  }
+}

@@ -6,7 +6,7 @@ use aes_gcm::{Aes256Gcm, Nonce};
 use base64::Engine;
 use keyring::Entry;
 use rquickjs::{Ctx, Exception, Function, Object};
-use rusqlite::{Connection, OpenFlags, types::ValueRef};
+use rusqlite::{types::ValueRef, Connection, OpenFlags};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
@@ -35,7 +35,7 @@ fn clone_host_app_handle(app_handle: &Option<HostAppHandle>) -> Option<HostAppHa
 use windows_sys::Win32::Foundation::GetLastError;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Security::Credentials::{
-    CRED_TYPE_GENERIC, CREDENTIALW, CredFree, CredReadW,
+    CredFree, CredReadW, CREDENTIALW, CRED_TYPE_GENERIC,
 };
 
 const WHITELISTED_ENV_VARS: [&str; 39] = [
@@ -1956,7 +1956,7 @@ fn ls_parse_netstat_ports(output: &str, process_pid: i32) -> Vec<i32> {
     ports.into_iter().collect()
 }
 
-const CCUSAGE_VERSION: &str = "20.0.2";
+const CCUSAGE_VERSION: &str = "20.0.18";
 const CCUSAGE_PACKAGE_NAME: &str = "ccusage";
 const CCUSAGE_BIN_NAME: &str = "ccusage";
 const CCUSAGE_LEGACY_VERSION: &str = "18.0.11";
@@ -1982,6 +1982,19 @@ struct CcusageQueryOpts {
 enum CcusageProvider {
     Claude,
     Codex,
+    OpenCode,
+    Amp,
+    Droid,
+    Codebuff,
+    Hermes,
+    Pi,
+    Goose,
+    OpenClaw,
+    Kilo,
+    Kimi,
+    Qwen,
+    Copilot,
+    Gemini,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -2022,13 +2035,26 @@ fn ccusage_runner_label(kind: CcusageRunnerKind) -> &'static str {
 #[derive(Copy, Clone)]
 struct CcusageProviderConfig {
     command_namespace: &'static str,
-    home_env_var: &'static str,
+    home_env_var: Option<&'static str>,
 }
 
 fn parse_ccusage_provider(value: &str) -> Option<CcusageProvider> {
     match value.trim().to_ascii_lowercase().as_str() {
         "claude" => Some(CcusageProvider::Claude),
         "codex" => Some(CcusageProvider::Codex),
+        "opencode" | "opencode-go" => Some(CcusageProvider::OpenCode),
+        "amp" => Some(CcusageProvider::Amp),
+        "droid" | "factory" => Some(CcusageProvider::Droid),
+        "codebuff" => Some(CcusageProvider::Codebuff),
+        "hermes" => Some(CcusageProvider::Hermes),
+        "pi" => Some(CcusageProvider::Pi),
+        "goose" => Some(CcusageProvider::Goose),
+        "openclaw" => Some(CcusageProvider::OpenClaw),
+        "kilo" => Some(CcusageProvider::Kilo),
+        "kimi" => Some(CcusageProvider::Kimi),
+        "qwen" => Some(CcusageProvider::Qwen),
+        "copilot" => Some(CcusageProvider::Copilot),
+        "gemini" => Some(CcusageProvider::Gemini),
         _ => None,
     }
 }
@@ -2049,13 +2075,69 @@ fn ccusage_provider_config(provider: CcusageProvider) -> CcusageProviderConfig {
     match provider {
         CcusageProvider::Claude => CcusageProviderConfig {
             command_namespace: "claude",
-            home_env_var: "CLAUDE_CONFIG_DIR",
+            home_env_var: Some("CLAUDE_CONFIG_DIR"),
         },
         CcusageProvider::Codex => CcusageProviderConfig {
             command_namespace: "codex",
-            home_env_var: "CODEX_HOME",
+            home_env_var: Some("CODEX_HOME"),
+        },
+        CcusageProvider::OpenCode => CcusageProviderConfig {
+            command_namespace: "opencode",
+            home_env_var: Some("OPENCODE_DATA_DIR"),
+        },
+        CcusageProvider::Amp => CcusageProviderConfig {
+            command_namespace: "amp",
+            home_env_var: Some("AMP_DATA_DIR"),
+        },
+        CcusageProvider::Droid => CcusageProviderConfig {
+            command_namespace: "droid",
+            home_env_var: Some("DROID_SESSIONS_DIR"),
+        },
+        CcusageProvider::Codebuff => CcusageProviderConfig {
+            command_namespace: "codebuff",
+            home_env_var: Some("CODEBUFF_DATA_DIR"),
+        },
+        CcusageProvider::Hermes => CcusageProviderConfig {
+            command_namespace: "hermes",
+            home_env_var: Some("HERMES_HOME"),
+        },
+        CcusageProvider::Pi => CcusageProviderConfig {
+            command_namespace: "pi",
+            home_env_var: Some("PI_AGENT_DIR"),
+        },
+        CcusageProvider::Goose => CcusageProviderConfig {
+            command_namespace: "goose",
+            home_env_var: Some("GOOSE_PATH_ROOT"),
+        },
+        CcusageProvider::OpenClaw => CcusageProviderConfig {
+            command_namespace: "openclaw",
+            home_env_var: Some("OPENCLAW_DIR"),
+        },
+        CcusageProvider::Kilo => CcusageProviderConfig {
+            command_namespace: "kilo",
+            home_env_var: Some("KILO_DATA_DIR"),
+        },
+        CcusageProvider::Kimi => CcusageProviderConfig {
+            command_namespace: "kimi",
+            home_env_var: Some("KIMI_DATA_DIR"),
+        },
+        CcusageProvider::Qwen => CcusageProviderConfig {
+            command_namespace: "qwen",
+            home_env_var: Some("QWEN_DATA_DIR"),
+        },
+        CcusageProvider::Copilot => CcusageProviderConfig {
+            command_namespace: "copilot",
+            home_env_var: Some("COPILOT_OTEL_FILE_EXPORTER_PATH"),
+        },
+        CcusageProvider::Gemini => CcusageProviderConfig {
+            command_namespace: "gemini",
+            home_env_var: Some("GEMINI_DATA_DIR"),
         },
     }
+}
+
+fn ccusage_legacy_supported(provider: CcusageProvider) -> bool {
+    matches!(provider, CcusageProvider::Claude | CcusageProvider::Codex)
 }
 
 fn ccusage_package_spec() -> String {
@@ -2066,6 +2148,7 @@ fn ccusage_legacy_package_spec(provider: CcusageProvider) -> String {
     let package_name = match provider {
         CcusageProvider::Claude => CCUSAGE_LEGACY_CLAUDE_PACKAGE_NAME,
         CcusageProvider::Codex => CCUSAGE_LEGACY_CODEX_PACKAGE_NAME,
+        _ => CCUSAGE_PACKAGE_NAME,
     };
     format!("{}@{}", package_name, CCUSAGE_LEGACY_VERSION)
 }
@@ -2086,7 +2169,7 @@ fn ccusage_home_override(opts: &CcusageQueryOpts, provider: CcusageProvider) -> 
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty()),
-        CcusageProvider::Codex => None,
+        _ => None,
     }
 }
 
@@ -2387,6 +2470,7 @@ fn ccusage_runner_args(
         (CcusageCommandFlavor::Current, _) => CCUSAGE_BIN_NAME,
         (CcusageCommandFlavor::Legacy, CcusageProvider::Claude) => CCUSAGE_BIN_NAME,
         (CcusageCommandFlavor::Legacy, CcusageProvider::Codex) => CCUSAGE_LEGACY_CODEX_BIN_NAME,
+        (CcusageCommandFlavor::Legacy, _) => CCUSAGE_BIN_NAME,
     };
     let mut args: Vec<String> = match kind {
         CcusageRunnerKind::Bunx => {
@@ -2477,34 +2561,6 @@ enum CcusageRunStatus {
     SpawnFailed,
 }
 
-fn run_ccusage_with_runner(
-    kind: CcusageRunnerKind,
-    program: &str,
-    opts: &CcusageQueryOpts,
-    provider: CcusageProvider,
-    plugin_id: &str,
-) -> (CcusageRunStatus, Option<String>) {
-    let current = run_ccusage_with_runner_flavor(
-        kind,
-        program,
-        opts,
-        provider,
-        plugin_id,
-        CcusageCommandFlavor::Current,
-    );
-    match current {
-        (CcusageRunStatus::Failed, None) => run_ccusage_with_runner_flavor(
-            kind,
-            program,
-            opts,
-            provider,
-            plugin_id,
-            CcusageCommandFlavor::Legacy,
-        ),
-        other => other,
-    }
-}
-
 fn run_ccusage_with_runner_flavor(
     kind: CcusageRunnerKind,
     program: &str,
@@ -2520,7 +2576,9 @@ fn run_ccusage_with_runner_flavor(
 
     if let Some(home_path) = ccusage_home_override(opts, provider) {
         let config = ccusage_provider_config(provider);
-        command.env(config.home_env_var, home_path);
+        if let Some(home_env_var) = config.home_env_var {
+            command.env(home_env_var, home_path);
+        }
     }
 
     log::info!(
@@ -2632,18 +2690,26 @@ fn run_ccusage_with_runner_list(
     provider: CcusageProvider,
     plugin_id: &str,
 ) -> (bool, Option<String>) {
-    for (kind, program) in runners {
-        let (status, result) = run_ccusage_with_runner(*kind, program, opts, provider, plugin_id);
-        if let Some(result) = result {
-            return (false, Some(result));
-        }
-
-        if status == CcusageRunStatus::SpawnFailed {
-            return (true, None);
+    let mut every_runner_failed_to_spawn = true;
+    let flavors = if ccusage_legacy_supported(provider) {
+        vec![CcusageCommandFlavor::Current, CcusageCommandFlavor::Legacy]
+    } else {
+        vec![CcusageCommandFlavor::Current]
+    };
+    for flavor in flavors {
+        for (kind, program) in runners {
+            let (status, result) =
+                run_ccusage_with_runner_flavor(*kind, program, opts, provider, plugin_id, flavor);
+            if let Some(result) = result {
+                return (false, Some(result));
+            }
+            if status != CcusageRunStatus::SpawnFailed {
+                every_runner_failed_to_spawn = false;
+            }
         }
     }
 
-    (false, None)
+    (every_runner_failed_to_spawn, None)
 }
 
 fn run_ccusage_query_with<FCached, FInvalidate, FRun>(
@@ -3914,7 +3980,7 @@ mod tests {
             ..Default::default()
         };
         let expected_ccusage_package = ccusage_package_spec();
-        assert_eq!(expected_ccusage_package, "ccusage@20.0.2");
+        assert_eq!(expected_ccusage_package, "ccusage@20.0.18");
         let expected_npm_exec_package = format!("--package={expected_ccusage_package}");
         #[cfg(target_os = "windows")]
         let expected_bunx = vec![
@@ -4202,11 +4268,9 @@ mod tests {
             CcusageProvider::Claude,
             CcusageCommandFlavor::Current,
         );
-        assert!(
-            current
-                .windows(2)
-                .any(|args| args == ["--mode", "calculate"])
-        );
+        assert!(current
+            .windows(2)
+            .any(|args| args == ["--mode", "calculate"]));
         assert!(current.iter().any(|arg| arg == "--offline"));
 
         let legacy = ccusage_runner_args(
@@ -4430,6 +4494,43 @@ mod tests {
         assert_eq!(
             resolve_ccusage_provider(&opts_empty, "unknown-provider"),
             CcusageProvider::Claude
+        );
+    }
+
+    #[test]
+    fn resolve_ccusage_provider_supports_current_multi_source_namespaces() {
+        let expected = [
+            ("opencode-go", CcusageProvider::OpenCode),
+            ("amp", CcusageProvider::Amp),
+            ("factory", CcusageProvider::Droid),
+            ("kilo", CcusageProvider::Kilo),
+            ("kimi", CcusageProvider::Kimi),
+            ("gemini", CcusageProvider::Gemini),
+            ("qwen", CcusageProvider::Qwen),
+        ];
+
+        for (plugin_id, provider) in expected {
+            assert_eq!(
+                resolve_ccusage_provider(&CcusageQueryOpts::default(), plugin_id),
+                provider
+            );
+            assert!(!ccusage_legacy_supported(provider));
+        }
+    }
+
+    #[test]
+    fn ccusage_provider_config_uses_source_specific_data_environment() {
+        assert_eq!(
+            ccusage_provider_config(CcusageProvider::OpenCode).home_env_var,
+            Some("OPENCODE_DATA_DIR")
+        );
+        assert_eq!(
+            ccusage_provider_config(CcusageProvider::Droid).command_namespace,
+            "droid"
+        );
+        assert_eq!(
+            ccusage_provider_config(CcusageProvider::Gemini).home_env_var,
+            Some("GEMINI_DATA_DIR")
         );
     }
 
@@ -4658,7 +4759,7 @@ Saved lockfile
                 &path,
                 "@echo off\r\n\
                  echo %* > \"%~dp0args.txt\"\r\n\
-                 echo %* | findstr /C:\"20.0.2\" > nul\r\n\
+                 echo %* | findstr /C:\"20.0.18\" > nul\r\n\
                  if %ERRORLEVEL% EQU 0 exit /b 1\r\n\
                  echo {\"daily\":[]}\r\n\
                  exit /b 0\r\n",
@@ -4676,7 +4777,7 @@ Saved lockfile
             let mut file = std::fs::File::create(&path).expect("create runner");
             writeln!(
                 file,
-                "#!/bin/sh\nprintf '%s' \"$*\" > \"$(dirname \"$0\")/args.txt\"\ncase \"$*\" in *20.0.2*) exit 1 ;; esac\nprintf '{{\"daily\":[]}}\\n'\n"
+                "#!/bin/sh\nprintf '%s' \"$*\" > \"$(dirname \"$0\")/args.txt\"\ncase \"$*\" in *20.0.18*) exit 1 ;; esac\nprintf '{{\"daily\":[]}}\\n'\n"
             )
             .expect("write runner");
             let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
@@ -4686,9 +4787,8 @@ Saved lockfile
         };
 
         let opts = CcusageQueryOpts::default();
-        let result = run_ccusage_with_runner(
-            CcusageRunnerKind::Npx,
-            runner.to_string_lossy().as_ref(),
+        let result = run_ccusage_with_runner_list(
+            &[(CcusageRunnerKind::Npx, runner.to_string_lossy().to_string())],
             &opts,
             CcusageProvider::Claude,
             "claude",
@@ -4697,16 +4797,82 @@ Saved lockfile
         let args = std::fs::read_to_string(test_dir.join("args.txt")).expect("read args");
         let _ = std::fs::remove_dir_all(&test_dir);
 
-        assert_eq!(
-            result,
-            (
-                CcusageRunStatus::Success,
-                Some(r#"{"daily":[]}"#.to_string())
-            )
-        );
+        assert_eq!(result, (false, Some(r#"{"daily":[]}"#.to_string())));
         assert!(
             args.contains("ccusage@18.0.11"),
             "expected legacy fallback args, got {args}"
+        );
+    }
+
+    #[test]
+    fn ccusage_runner_list_tries_all_current_runners_before_legacy_fallback() {
+        let test_dir = std::env::temp_dir().join(format!(
+            "usagebar-ccusage-current-before-legacy-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&test_dir).expect("create test dir");
+
+        #[cfg(target_os = "windows")]
+        let (first_runner, second_runner) = {
+            let first = test_dir.join("first.cmd");
+            std::fs::write(
+                &first,
+                "@echo off\r\necho %* | findstr /C:\"ccusage@20.0.18\" > nul\r\nif %ERRORLEVEL% EQU 0 exit /b 1\r\necho {\"daily\":[{\"date\":\"legacy\"}]}\r\n",
+            )
+            .expect("write first runner");
+            let second = test_dir.join("second.cmd");
+            std::fs::write(
+                &second,
+                "@echo off\r\necho {\"daily\":[{\"date\":\"current\"}]}\r\n",
+            )
+            .expect("write second runner");
+            (first, second)
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let (first_runner, second_runner) = {
+            use std::os::unix::fs::PermissionsExt;
+            let first = test_dir.join("first.sh");
+            std::fs::write(
+                &first,
+                "#!/bin/sh\ncase \"$*\" in *ccusage@20.0.18*) exit 1 ;; esac\nprintf '{\"daily\":[{\"date\":\"legacy\"}]}\\n'\n",
+            )
+            .expect("write first runner");
+            let second = test_dir.join("second.sh");
+            std::fs::write(
+                &second,
+                "#!/bin/sh\nprintf '{\"daily\":[{\"date\":\"current\"}]}\\n'\n",
+            )
+            .expect("write second runner");
+            for path in [&first, &second] {
+                let mut permissions = std::fs::metadata(path).expect("metadata").permissions();
+                permissions.set_mode(0o755);
+                std::fs::set_permissions(path, permissions).expect("chmod runner");
+            }
+            (first, second)
+        };
+
+        let result = run_ccusage_with_runner_list(
+            &[
+                (
+                    CcusageRunnerKind::Bunx,
+                    first_runner.to_string_lossy().to_string(),
+                ),
+                (
+                    CcusageRunnerKind::Npx,
+                    second_runner.to_string_lossy().to_string(),
+                ),
+            ],
+            &CcusageQueryOpts::default(),
+            CcusageProvider::Claude,
+            "claude",
+        );
+        let _ = std::fs::remove_dir_all(&test_dir);
+
+        assert_eq!(
+            result,
+            (false, Some(r#"{"daily":[{"date":"current"}]}"#.to_string()))
         );
     }
 }
