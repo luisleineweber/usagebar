@@ -81,7 +81,7 @@
   --sidebar-accent-foreground: oklch(0.21 0.034 264.665);
   --sidebar-border: oklch(0.928 0.006 264.531);
   --sidebar-ring: oklch(0.707 0.022 261.325);
-  --page-accent: #76a900;
+  --page-accent: #86c5ff;
 
   /* Tailwind green/yellow/red-500 (light: stock defaults) */
   --green-500: oklch(0.723 0.219 142.37);
@@ -122,11 +122,10 @@
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #555555;
 
-  /* Accent highlight (lime) */
-  --page-accent: #bfff00;
+  /* Accent highlight */
+  --page-accent: #86c5ff;
 
-  /* Tailwind green/yellow/red-500 derived from page-accent lime
-     #BFFF00 ≈ oklch(0.93 0.27 128) — hue-rotate, keep chroma family */
+  /* Tailwind green/yellow/red-500 remain semantic status colors. */
   --green-500: oklch(0.93 0.27 128);
   --yellow-500: oklch(0.9 0.21 85);
   --red-500: oklch(0.7 0.24 29);

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { resolveResource } from "@tauri-apps/api/path"
 import { TrayIcon } from "@tauri-apps/api/tray"
 import type { PluginMeta } from "@/lib/plugin-types"
-import type { DisplayMode, MenubarIconStyle, PluginSettings, SurfacePin } from "@/lib/settings"
+import type { AccentColor, DisplayMode, MenubarIconStyle, PluginSettings, SurfacePin } from "@/lib/settings"
 import { getProbeEligiblePluginIds } from "@/lib/settings"
 import {
   getTrayPinnedBars,
@@ -12,7 +12,6 @@ import {
 import {
   getTrayIconSizePx,
   renderTrayBarsIcon,
-  TRAY_BRAND_FOREGROUND,
   TRAY_TEMPLATE_FOREGROUND,
 } from "@/lib/tray-bars-icon"
 import { formatTrayPercentText, formatTrayTooltip } from "@/lib/tray-tooltip"
@@ -26,6 +25,7 @@ type UseTrayIconArgs = {
   pluginSettings: PluginSettings | null
   pluginStates: Record<string, PluginState>
   displayMode: DisplayMode
+  accentColor: AccentColor
   menubarIconStyle: MenubarIconStyle
   surfacePins?: SurfacePin[]
   activeView: string
@@ -72,6 +72,7 @@ export function useTrayIcon({
   pluginSettings,
   pluginStates,
   displayMode,
+  accentColor,
   menubarIconStyle,
   surfacePins = [],
   activeView,
@@ -91,6 +92,7 @@ export function useTrayIcon({
   const pluginSettingsRef = useRef(pluginSettings)
   const pluginStatesRef = useRef(pluginStates)
   const displayModeRef = useRef(displayMode)
+  const accentColorRef = useRef(accentColor)
   const menubarIconStyleRef = useRef(menubarIconStyle)
   const providerStatusesRef = useRef(providerStatuses)
   const surfacePinsRef = useRef(surfacePins)
@@ -113,6 +115,10 @@ export function useTrayIcon({
   useEffect(() => {
     displayModeRef.current = displayMode
   }, [displayMode])
+
+  useEffect(() => {
+    accentColorRef.current = accentColor
+  }, [accentColor])
 
   useEffect(() => {
     menubarIconStyleRef.current = menubarIconStyle
@@ -291,7 +297,7 @@ export function useTrayIcon({
         statusIndicator,
         foregroundColor: useTemplateIconRef.current
           ? TRAY_TEMPLATE_FOREGROUND
-          : TRAY_BRAND_FOREGROUND,
+          : accentColorRef.current,
       })
         .then((image) =>
           Promise.all([

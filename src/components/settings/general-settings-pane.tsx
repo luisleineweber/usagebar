@@ -10,12 +10,14 @@ import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 import type { PluginMeta } from "@/lib/plugin-types"
 import {
   AUTO_UPDATE_OPTIONS,
+  ACCENT_COLOR_OPTIONS,
   DISPLAY_MODE_OPTIONS,
   MENUBAR_ICON_STYLE_OPTIONS,
   RESET_TIMER_DISPLAY_OPTIONS,
   THEME_OPTIONS,
   TIME_FORMAT_OPTIONS,
   type AutoUpdateIntervalMinutes,
+  type AccentColor,
   type DisplayMode,
   type GlobalShortcut,
   type MenubarIconStyle,
@@ -38,6 +40,8 @@ type GeneralSettingsPaneProps = {
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   themeMode: ThemeMode
   onThemeModeChange: (value: ThemeMode) => void
+  accentColor: AccentColor
+  onAccentColorChange: (value: AccentColor) => void
   displayMode: DisplayMode
   onDisplayModeChange: (value: DisplayMode) => void
   resetTimerDisplayMode: ResetTimerDisplayMode
@@ -61,6 +65,8 @@ export function GeneralSettingsPane({
   onAutoUpdateIntervalChange,
   themeMode,
   onThemeModeChange,
+  accentColor,
+  onAccentColorChange,
   displayMode,
   onDisplayModeChange,
   resetTimerDisplayMode,
@@ -262,6 +268,34 @@ export function GeneralSettingsPane({
                 size="sm"
                 className="min-h-9 w-full"
                 onClick={() => onThemeModeChange(option.value)}
+              >
+                {option.label}
+              </Button>
+            )
+          })}
+        </div>
+        <h3 className="mb-0 mt-5 text-base font-semibold">Accent Color</h3>
+        <p className="mb-3 text-sm text-muted-foreground">Choose the UsageBar highlight color.</p>
+        <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Accent color">
+          {ACCENT_COLOR_OPTIONS.map((option) => {
+            const isActive = option.value === accentColor
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                aria-label={option.label}
+                variant="outline"
+                size="sm"
+                className={cn("min-h-10 w-full px-2", isActive && "ring-2 ring-offset-2")}
+                style={{
+                  borderColor: option.value,
+                  backgroundColor: isActive ? option.value : undefined,
+                  color: isActive ? "#111827" : option.value,
+                  outlineColor: option.value,
+                }}
+                onClick={() => onAccentColorChange(option.value)}
               >
                 {option.label}
               </Button>

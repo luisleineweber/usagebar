@@ -75,6 +75,8 @@ function App() {
     setAutoUpdateInterval,
     themeMode,
     setThemeMode,
+    accentColor,
+    setAccentColor,
     displayMode,
     setDisplayMode,
     menubarIconStyle,
@@ -92,6 +94,8 @@ function App() {
       setAutoUpdateInterval: state.setAutoUpdateInterval,
       themeMode: state.themeMode,
       setThemeMode: state.setThemeMode,
+      accentColor: state.accentColor,
+      setAccentColor: state.setAccentColor,
       displayMode: state.displayMode,
       setDisplayMode: state.setDisplayMode,
       menubarIconStyle: state.menubarIconStyle,
@@ -138,6 +142,7 @@ function App() {
     pluginSettings,
     pluginStates,
     displayMode,
+    accentColor,
     menubarIconStyle,
     surfacePins,
     activeView,
@@ -184,6 +189,11 @@ function App() {
         setThemeMode(update.value)
         return
       }
+      if (update.key === "accentColor") {
+        setAccentColor(update.value)
+        scheduleTrayIconUpdate("settings", 0)
+        return
+      }
       if (update.key === "displayMode") {
         setDisplayMode(update.value)
         scheduleTrayIconUpdate("settings", 0)
@@ -228,6 +238,7 @@ function App() {
     setSurfacePins,
     setTimeFormatMode,
     setThemeMode,
+    setAccentColor,
   ])
 
   const { applyStartOnLogin } = useSettingsBootstrap({
@@ -235,6 +246,7 @@ function App() {
     setPluginsMeta,
     setAutoUpdateInterval,
     setThemeMode,
+    setAccentColor,
     setDisplayMode,
     setMenubarIconStyle,
     setSurfacePins,
@@ -247,7 +259,7 @@ function App() {
     startBatch,
   })
 
-  useSettingsTheme(themeMode)
+  useSettingsTheme(themeMode, accentColor)
 
   const {
     handleThemeModeChange,
@@ -257,6 +269,7 @@ function App() {
     handleTimeFormatModeChange,
   } = useSettingsDisplayActions({
     setThemeMode,
+    setAccentColor,
     setDisplayMode,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,

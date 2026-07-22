@@ -8,6 +8,7 @@ import type { ProviderConfig } from "@/lib/provider-settings"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import type {
   AutoUpdateIntervalMinutes,
+  AccentColor,
   DisplayMode,
   GlobalShortcut,
   MenubarIconStyle,
@@ -23,12 +24,13 @@ interface SettingsPageProps {
   onSelectedProviderChange: (id: string, options?: SelectedProviderChangeOptions) => void
   settingsTab: "general" | "providers"
   onSettingsTabChange: (value: "general" | "providers") => void
-  onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
   autoUpdateInterval: AutoUpdateIntervalMinutes
   onAutoUpdateIntervalChange: (value: AutoUpdateIntervalMinutes) => void
   themeMode: ThemeMode
   onThemeModeChange: (value: ThemeMode) => void
+  accentColor: AccentColor
+  onAccentColorChange: (value: AccentColor) => void
   displayMode: DisplayMode
   onDisplayModeChange: (value: DisplayMode) => void
   resetTimerDisplayMode: ResetTimerDisplayMode
@@ -56,12 +58,13 @@ export function SettingsPage({
   onSelectedProviderChange,
   settingsTab,
   onSettingsTabChange,
-  onReorder,
   onToggle,
   autoUpdateInterval,
   onAutoUpdateIntervalChange,
   themeMode,
   onThemeModeChange,
+  accentColor,
+  onAccentColorChange,
   displayMode,
   onDisplayModeChange,
   resetTimerDisplayMode,
@@ -122,6 +125,8 @@ export function SettingsPage({
           onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
           themeMode={themeMode}
           onThemeModeChange={onThemeModeChange}
+          accentColor={accentColor}
+          onAccentColorChange={onAccentColorChange}
           displayMode={displayMode}
           onDisplayModeChange={onDisplayModeChange}
           resetTimerDisplayMode={resetTimerDisplayMode}
@@ -147,7 +152,6 @@ export function SettingsPage({
           providers={providers}
           selectedProviderId={selectedProviderId}
           onSelectedProviderChange={onSelectedProviderChange}
-          onReorder={onReorder}
           onToggle={onToggle}
           onProviderConfigChange={onProviderConfigChange}
           onProviderSecretSave={onProviderSecretSave}

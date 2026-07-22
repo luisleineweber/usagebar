@@ -68,6 +68,8 @@ export function SettingsWindowApp() {
     setAutoUpdateInterval,
     themeMode,
     setThemeMode,
+    accentColor,
+    setAccentColor,
     displayMode,
     setDisplayMode,
     menubarIconStyle,
@@ -88,6 +90,8 @@ export function SettingsWindowApp() {
       setAutoUpdateInterval: state.setAutoUpdateInterval,
       themeMode: state.themeMode,
       setThemeMode: state.setThemeMode,
+      accentColor: state.accentColor,
+      setAccentColor: state.setAccentColor,
       displayMode: state.displayMode,
       setDisplayMode: state.setDisplayMode,
       menubarIconStyle: state.menubarIconStyle,
@@ -122,6 +126,7 @@ export function SettingsWindowApp() {
     pluginSettings,
     pluginStates,
     displayMode,
+    accentColor,
     menubarIconStyle,
     surfacePins,
     activeView: "home",
@@ -132,6 +137,7 @@ export function SettingsWindowApp() {
     setPluginsMeta,
     setAutoUpdateInterval,
     setThemeMode,
+    setAccentColor,
     setDisplayMode,
     setMenubarIconStyle,
     setSurfacePins,
@@ -144,10 +150,11 @@ export function SettingsWindowApp() {
     startBatch,
   })
 
-  useSettingsTheme(themeMode)
+  useSettingsTheme(themeMode, accentColor)
 
   const {
     handleThemeModeChange,
+    handleAccentColorChange,
     handleDisplayModeChange,
     handleResetTimerDisplayModeChange,
     handleTimeFormatModeChange,
@@ -155,6 +162,7 @@ export function SettingsWindowApp() {
     handleSurfacePinsChange,
   } = useSettingsDisplayActions({
     setThemeMode,
+    setAccentColor,
     setDisplayMode,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
@@ -174,7 +182,7 @@ export function SettingsWindowApp() {
       applyStartOnLogin,
     })
 
-  const { handleReorder, handleToggle } = useSettingsPluginActions({
+  const { handleToggle } = useSettingsPluginActions({
     pluginSettings,
     setPluginSettings,
     setLoadingForPlugins,
@@ -380,12 +388,13 @@ export function SettingsWindowApp() {
           onSelectedProviderChange={handleSelectedProviderChange}
           settingsTab={settingsTab}
           onSettingsTabChange={setSettingsTab}
-          onReorder={handleReorder}
           onToggle={handleToggle}
           autoUpdateInterval={autoUpdateInterval}
           onAutoUpdateIntervalChange={handleAutoUpdateIntervalChange}
           themeMode={themeMode}
           onThemeModeChange={handleThemeModeChange}
+          accentColor={accentColor}
+          onAccentColorChange={handleAccentColorChange}
           displayMode={displayMode}
           onDisplayModeChange={handleDisplayModeChange}
           resetTimerDisplayMode={resetTimerDisplayMode}

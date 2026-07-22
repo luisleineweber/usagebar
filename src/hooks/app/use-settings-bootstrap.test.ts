@@ -10,6 +10,7 @@ const {
   isAutostartEnabledMock,
   isTauriMock,
   loadAutoUpdateIntervalMock,
+  loadAccentColorMock,
   loadDisplayModeMock,
   loadGlobalShortcutMock,
   loadMenubarIconStyleMock,
@@ -31,6 +32,7 @@ const {
   arePluginSettingsEqualMock: vi.fn(),
   getProbeEligiblePluginIdsMock: vi.fn(),
   loadAutoUpdateIntervalMock: vi.fn(),
+  loadAccentColorMock: vi.fn(),
   loadDisplayModeMock: vi.fn(),
   loadGlobalShortcutMock: vi.fn(),
   loadMenubarIconStyleMock: vi.fn(),
@@ -59,6 +61,7 @@ vi.mock("@tauri-apps/plugin-autostart", () => ({
 vi.mock("@/lib/settings", () => ({
   arePluginSettingsEqual: arePluginSettingsEqualMock,
   DEFAULT_AUTO_UPDATE_INTERVAL: 15,
+  DEFAULT_ACCENT_COLOR: "#86c5ff",
   DEFAULT_DISPLAY_MODE: "left",
   DEFAULT_GLOBAL_SHORTCUT: null,
   DEFAULT_MENUBAR_ICON_STYLE: "provider",
@@ -69,6 +72,7 @@ vi.mock("@/lib/settings", () => ({
   DEFAULT_TIME_FORMAT_MODE: "auto",
   getProbeEligiblePluginIds: getProbeEligiblePluginIdsMock,
   loadAutoUpdateInterval: loadAutoUpdateIntervalMock,
+  loadAccentColor: loadAccentColorMock,
   loadDisplayMode: loadDisplayModeMock,
   loadGlobalShortcut: loadGlobalShortcutMock,
   loadMenubarIconStyle: loadMenubarIconStyleMock,
@@ -91,6 +95,7 @@ function createArgs() {
     setPluginsMeta: vi.fn(),
     setAutoUpdateInterval: vi.fn(),
     setThemeMode: vi.fn(),
+    setAccentColor: vi.fn(),
     setDisplayMode: vi.fn(),
     setResetTimerDisplayMode: vi.fn(),
     setTimeFormatMode: vi.fn(),
@@ -115,6 +120,7 @@ describe("useSettingsBootstrap", () => {
     arePluginSettingsEqualMock.mockReset()
     getProbeEligiblePluginIdsMock.mockReset()
     loadAutoUpdateIntervalMock.mockReset()
+    loadAccentColorMock.mockReset()
     loadDisplayModeMock.mockReset()
     loadGlobalShortcutMock.mockReset()
     loadMenubarIconStyleMock.mockReset()
@@ -144,6 +150,7 @@ describe("useSettingsBootstrap", () => {
     normalizePluginSettingsMock.mockImplementation((stored) => stored)
     arePluginSettingsEqualMock.mockReturnValue(true)
     loadAutoUpdateIntervalMock.mockResolvedValue(15)
+    loadAccentColorMock.mockResolvedValue("#86c5ff")
     loadThemeModeMock.mockResolvedValue("dark")
     loadDisplayModeMock.mockResolvedValue("used")
     loadResetTimerDisplayModeMock.mockResolvedValue("relative")

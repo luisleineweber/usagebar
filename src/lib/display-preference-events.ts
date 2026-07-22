@@ -3,6 +3,7 @@ import { emit, listen } from "@tauri-apps/api/event"
 import type { EventCallback, UnlistenFn } from "@tauri-apps/api/event"
 import type {
   DisplayMode,
+  AccentColor,
   MenubarIconStyle,
   ResetTimerDisplayMode,
   ThemeMode,
@@ -14,6 +15,7 @@ const DISPLAY_PREFERENCES_UPDATED_EVENT = "display-preferences:updated"
 
 export type DisplayPreferenceUpdate =
   | { key: "themeMode"; value: ThemeMode }
+  | { key: "accentColor"; value: AccentColor }
   | { key: "displayMode"; value: DisplayMode }
   | { key: "resetTimerDisplayMode"; value: ResetTimerDisplayMode }
   | { key: "timeFormatMode"; value: TimeFormatMode }

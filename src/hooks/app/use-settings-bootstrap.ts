@@ -8,6 +8,7 @@ import {
 import type { PluginMeta } from "@/lib/plugin-types"
 import {
   arePluginSettingsEqual,
+  DEFAULT_ACCENT_COLOR,
   DEFAULT_AUTO_UPDATE_INTERVAL,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
@@ -19,6 +20,7 @@ import {
   DEFAULT_TIME_FORMAT_MODE,
   getProbeEligiblePluginIds,
   loadAutoUpdateInterval,
+  loadAccentColor,
   loadDisplayMode,
   loadGlobalShortcut,
   loadMenubarIconStyle,
@@ -32,6 +34,7 @@ import {
   normalizePluginSettings,
   savePluginSettings,
   type AutoUpdateIntervalMinutes,
+  type AccentColor,
   type DisplayMode,
   type GlobalShortcut,
   type MenubarIconStyle,
@@ -47,6 +50,7 @@ type UseSettingsBootstrapArgs = {
   setPluginsMeta: (value: PluginMeta[]) => void
   setAutoUpdateInterval: (value: AutoUpdateIntervalMinutes) => void
   setThemeMode: (value: ThemeMode) => void
+  setAccentColor: (value: AccentColor) => void
   setDisplayMode: (value: DisplayMode) => void
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
   setTimeFormatMode: (value: TimeFormatMode) => void
@@ -64,6 +68,7 @@ export function useSettingsBootstrap({
   setPluginsMeta,
   setAutoUpdateInterval,
   setThemeMode,
+  setAccentColor,
   setDisplayMode,
   setResetTimerDisplayMode,
   setTimeFormatMode,
@@ -122,6 +127,13 @@ export function useSettingsBootstrap({
           storedThemeMode = await loadThemeMode()
         } catch (error) {
           console.error("Failed to load theme mode:", error)
+        }
+
+        let storedAccentColor = DEFAULT_ACCENT_COLOR
+        try {
+          storedAccentColor = await loadAccentColor()
+        } catch (error) {
+          console.error("Failed to load accent color:", error)
         }
 
         let storedDisplayMode = DEFAULT_DISPLAY_MODE
@@ -187,6 +199,7 @@ export function useSettingsBootstrap({
         if (isMounted) {
           setAutoUpdateInterval(storedInterval)
           setThemeMode(storedThemeMode)
+          setAccentColor(storedAccentColor)
           setDisplayMode(storedDisplayMode)
           setResetTimerDisplayMode(storedResetTimerDisplayMode)
           setTimeFormatMode(storedTimeFormatMode)
@@ -229,6 +242,7 @@ export function useSettingsBootstrap({
     setResetTimerDisplayMode,
     setStartOnLogin,
     setThemeMode,
+    setAccentColor,
     setTimeFormatMode,
     startBatch,
   ])

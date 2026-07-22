@@ -1,5 +1,6 @@
 import { useCallback } from "react"
 import {
+  saveAccentColor,
   saveDisplayMode,
   saveMenubarIconStyle,
   saveResetTimerDisplayMode,
@@ -7,6 +8,7 @@ import {
   saveTimeFormatMode,
   saveSurfacePins,
   type DisplayMode,
+  type AccentColor,
   type MenubarIconStyle,
   type ResetTimerDisplayMode,
   type ThemeMode,
@@ -19,6 +21,7 @@ type ScheduleTrayIconUpdate = (reason: "probe" | "settings" | "init", delayMs?: 
 
 type UseSettingsDisplayActionsArgs = {
   setThemeMode: (value: ThemeMode) => void
+  setAccentColor: (value: AccentColor) => void
   setDisplayMode: (value: DisplayMode) => void
   resetTimerDisplayMode: ResetTimerDisplayMode
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
@@ -30,6 +33,7 @@ type UseSettingsDisplayActionsArgs = {
 
 export function useSettingsDisplayActions({
   setThemeMode,
+  setAccentColor,
   setDisplayMode,
   resetTimerDisplayMode,
   setResetTimerDisplayMode,
@@ -47,6 +51,17 @@ export function useSettingsDisplayActions({
       console.error("Failed to save theme mode:", error)
     })
   }, [setThemeMode])
+
+  const handleAccentColorChange = useCallback((color: AccentColor) => {
+    setAccentColor(color)
+    scheduleTrayIconUpdate("settings", 0)
+    void notifyDisplayPreferenceUpdated({ key: "accentColor", value: color }).catch((error) => {
+      console.error("Failed to publish accent color update:", error)
+    })
+    void saveAccentColor(color).catch((error) => {
+      console.error("Failed to save accent color:", error)
+    })
+  }, [scheduleTrayIconUpdate, setAccentColor])
 
   const handleDisplayModeChange = useCallback((mode: DisplayMode) => {
     setDisplayMode(mode)
@@ -108,6 +123,7 @@ export function useSettingsDisplayActions({
 
   return {
     handleThemeModeChange,
+    handleAccentColorChange,
     handleDisplayModeChange,
     handleResetTimerDisplayModeChange,
     handleResetTimerDisplayModeToggle,

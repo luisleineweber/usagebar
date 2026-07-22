@@ -4,7 +4,8 @@ import type { PluginMeta } from "@/lib/plugin-types"
 // Refresh cooldown duration in milliseconds (5 minutes)
 export const REFRESH_COOLDOWN_MS = 300_000
 
-// Spec: persist plugin order + disabled list; new plugins append, default disabled unless in DEFAULT_ENABLED_PLUGINS.
+// Spec: persist plugin order + disabled list; new plugins join their default sorted position,
+// default disabled unless in DEFAULT_ENABLED_PLUGINS.
 export type PluginSettings = {
   order: string[]
   disabled: string[]
@@ -13,6 +14,8 @@ export type PluginSettings = {
 export type AutoUpdateIntervalMinutes = 5 | 15 | 30 | 60
 
 export type ThemeMode = "system" | "light" | "dark"
+
+export type AccentColor = "#bfff00" | "#86c5ff" | "#c1121f" | "#eb4600" | "#e07c8e"
 
 export type DisplayMode = "used" | "left"
 
@@ -34,6 +37,7 @@ const SETTINGS_STORE_PATH = "settings.json"
 const PLUGIN_SETTINGS_KEY = "plugins"
 const AUTO_UPDATE_SETTINGS_KEY = "autoUpdateInterval"
 const THEME_MODE_KEY = "themeMode"
+const ACCENT_COLOR_KEY = "accentColor"
 const DISPLAY_MODE_KEY = "displayMode"
 const RESET_TIMER_DISPLAY_MODE_KEY = "resetTimerDisplayMode"
 const TIME_FORMAT_MODE_KEY = "timeFormatMode"
@@ -46,6 +50,7 @@ const START_ON_LOGIN_KEY = "startOnLogin"
 
 export const DEFAULT_AUTO_UPDATE_INTERVAL: AutoUpdateIntervalMinutes = 15
 export const DEFAULT_THEME_MODE: ThemeMode = "system"
+export const DEFAULT_ACCENT_COLOR: AccentColor = "#86c5ff"
 export const DEFAULT_DISPLAY_MODE: DisplayMode = "left"
 export const DEFAULT_RESET_TIMER_DISPLAY_MODE: ResetTimerDisplayMode = "relative"
 export const DEFAULT_TIME_FORMAT_MODE: TimeFormatMode = "auto"
@@ -57,6 +62,7 @@ export const DEFAULT_START_ON_LOGIN = false
 
 const AUTO_UPDATE_INTERVALS: AutoUpdateIntervalMinutes[] = [5, 15, 30, 60]
 const THEME_MODES: ThemeMode[] = ["system", "light", "dark"]
+const ACCENT_COLORS: AccentColor[] = ["#bfff00", "#86c5ff", "#c1121f", "#eb4600", "#e07c8e"]
 const DISPLAY_MODES: DisplayMode[] = ["used", "left"]
 const RESET_TIMER_DISPLAY_MODES: ResetTimerDisplayMode[] = ["relative", "absolute"]
 const TIME_FORMAT_MODES: TimeFormatMode[] = ["auto", "12h", "24h"]
@@ -80,6 +86,14 @@ export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = THEME_MODES.
   label: value.charAt(0).toUpperCase() + value.slice(1),
 }))
 
+export const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string }[] = [
+  { value: "#bfff00", label: "Green" },
+  { value: "#86c5ff", label: "Blue" },
+  { value: "#c1121f", label: "Red" },
+  { value: "#eb4600", label: "Orange" },
+  { value: "#e07c8e", label: "Pink" },
+]
+
 export const DISPLAY_MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
   { value: "left", label: "Left" },
   { value: "used", label: "Used" },
@@ -99,7 +113,8 @@ export const TIME_FORMAT_OPTIONS: { value: TimeFormatMode; label: string }[] = [
 const store = new LazyStore(SETTINGS_STORE_PATH)
 
 const DEFAULT_ENABLED_PLUGINS = new Set(["claude", "codex", "cursor"])
-const SETTINGS_PROVIDER_ORDER_PREFIX = ["codex", "claude", "cursor"]
+const SETTINGS_PROVIDER_ORDER_PREFIX = ["codex", "claude", "cursor", "opencode"]
+const LEGACY_APPENDED_PROVIDER = "qwen"
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   order: [],
@@ -167,25 +182,40 @@ export function normalizePluginSettings(
   const defaultOrder = getDefaultPluginOrder(plugins)
   const knownSet = new Set(defaultOrder)
 
+  // Alpha 6 briefly appended Qwen after the full provider list. Repair only
+  // that recognizable generated order; preserve arbitrary user drag order.
+  const legacyOrderWithoutQwen = defaultOrder.filter((id) => id !== LEGACY_APPENDED_PROVIDER)
+  const knownSavedOrder = settings.order.filter((id) => knownSet.has(id))
+  const hasLegacyAppendedQwen =
+    knownSavedOrder[knownSavedOrder.length - 1] === LEGACY_APPENDED_PROVIDER &&
+    knownSavedOrder.slice(0, -1).join("\0") === legacyOrderWithoutQwen.join("\0")
+  const savedOrder = hasLegacyAppendedQwen
+    ? settings.order.slice(0, -1)
+    : settings.order
+
   const order: string[] = []
   const seen = new Set<string>()
-  for (const id of settings.order) {
+  for (const id of savedOrder) {
     if (!knownSet.has(id) || seen.has(id)) continue
     seen.add(id)
     order.push(id)
   }
-  const newlyAdded: string[] = []
   const hasStoredOrder = order.length > 0
   for (const id of defaultOrder) {
     if (!seen.has(id)) {
       seen.add(id)
-      order.push(id)
-      newlyAdded.push(id)
+      const defaultIndex = defaultOrder.indexOf(id)
+      const insertAt = order.findIndex(
+        (existingId, index) => index > 0 && defaultOrder.indexOf(existingId) > defaultIndex
+      )
+      if (insertAt === -1) order.push(id)
+      else order.splice(insertAt, 0, id)
     }
   }
 
   const disabled = settings.disabled.filter((id) => knownSet.has(id))
-  for (const id of newlyAdded) {
+  for (const id of defaultOrder) {
+    if (savedOrder.includes(id)) continue
     if (!DEFAULT_ENABLED_PLUGINS.has(id) && !disabled.includes(id)) {
       disabled.push(id)
     }
@@ -218,6 +248,21 @@ export async function loadThemeMode(): Promise<ThemeMode> {
 
 export async function saveThemeMode(mode: ThemeMode): Promise<void> {
   await store.set(THEME_MODE_KEY, mode)
+  await store.save()
+}
+
+function isAccentColor(value: unknown): value is AccentColor {
+  return typeof value === "string" && ACCENT_COLORS.includes(value as AccentColor)
+}
+
+export async function loadAccentColor(): Promise<AccentColor> {
+  const stored = await store.get<unknown>(ACCENT_COLOR_KEY)
+  if (isAccentColor(stored)) return stored
+  return DEFAULT_ACCENT_COLOR
+}
+
+export async function saveAccentColor(color: AccentColor): Promise<void> {
+  await store.set(ACCENT_COLOR_KEY, color)
   await store.save()
 }
 
@@ -288,11 +333,7 @@ export function normalizeSurfacePins(value: unknown, plugins: PluginMeta[]): Sur
   const progressLabelsByProvider = new Map(
     plugins.map((plugin) => [
       plugin.id,
-      new Set(
-        plugin.lines
-          .filter((line) => line.type === "progress")
-          .map((line) => line.label)
-      ),
+      new Set(plugin.lines.filter((line) => line.type === "progress").map((line) => line.label)),
     ])
   )
   const pins: SurfacePin[] = []
@@ -303,10 +344,17 @@ export function normalizeSurfacePins(value: unknown, plugins: PluginMeta[]): Sur
     const raw = candidate as Record<string, unknown>
     const providerId = typeof raw.providerId === "string" ? raw.providerId.trim() : ""
     const metricLabel = typeof raw.metricLabel === "string" ? raw.metricLabel.trim() : ""
-    const presentation = raw.presentation === "text" ? "text" : raw.presentation === "bar" ? "bar" : null
+    const presentation =
+      raw.presentation === "text" ? "text" : raw.presentation === "bar" ? "bar" : null
     const metricLabels = progressLabelsByProvider.get(providerId)
     const key = `${providerId}\u0000${metricLabel}`
-    if (!providerId || !metricLabel || !presentation || !metricLabels?.has(metricLabel) || seen.has(key)) {
+    if (
+      !providerId ||
+      !metricLabel ||
+      !presentation ||
+      !metricLabels?.has(metricLabel) ||
+      seen.has(key)
+    ) {
       continue
     }
     seen.add(key)

@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import {
   DEFAULT_AUTO_UPDATE_INTERVAL,
+  DEFAULT_ACCENT_COLOR,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
@@ -10,6 +11,7 @@ import {
   DEFAULT_THEME_MODE,
   DEFAULT_TIME_FORMAT_MODE,
   type AutoUpdateIntervalMinutes,
+  type AccentColor,
   type DisplayMode,
   type GlobalShortcut,
   type MenubarIconStyle,
@@ -22,6 +24,7 @@ import {
 type AppPreferencesStore = {
   autoUpdateInterval: AutoUpdateIntervalMinutes
   themeMode: ThemeMode
+  accentColor: AccentColor
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
   timeFormatMode: TimeFormatMode
@@ -31,6 +34,7 @@ type AppPreferencesStore = {
   surfacePins: SurfacePin[]
   setAutoUpdateInterval: (value: AutoUpdateIntervalMinutes) => void
   setThemeMode: (value: ThemeMode) => void
+  setAccentColor: (value: AccentColor) => void
   setDisplayMode: (value: DisplayMode) => void
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
   setTimeFormatMode: (value: TimeFormatMode) => void
@@ -44,6 +48,7 @@ type AppPreferencesStore = {
 const initialState = {
   autoUpdateInterval: DEFAULT_AUTO_UPDATE_INTERVAL,
   themeMode: DEFAULT_THEME_MODE,
+  accentColor: DEFAULT_ACCENT_COLOR,
   displayMode: DEFAULT_DISPLAY_MODE,
   resetTimerDisplayMode: DEFAULT_RESET_TIMER_DISPLAY_MODE,
   timeFormatMode: DEFAULT_TIME_FORMAT_MODE,
@@ -57,6 +62,7 @@ export const useAppPreferencesStore = create<AppPreferencesStore>((set) => ({
   ...initialState,
   setAutoUpdateInterval: (value) => set({ autoUpdateInterval: value }),
   setThemeMode: (value) => set({ themeMode: value }),
+  setAccentColor: (value) => set({ accentColor: value }),
   setDisplayMode: (value) => set({ displayMode: value }),
   setResetTimerDisplayMode: (value) => set({ resetTimerDisplayMode: value }),
   setTimeFormatMode: (value) => set({ timeFormatMode: value }),

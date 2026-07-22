@@ -1,59 +1,15 @@
 import { cleanup, render, screen, within } from "@testing-library/react"
-import type { ReactNode } from "react"
 import { useState } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { openUrl } from "@tauri-apps/plugin-opener"
-
-let latestOnDragEnd: ((event: any) => void) | undefined
-
-vi.mock("@dnd-kit/core", () => ({
-  DndContext: ({
-    children,
-    onDragEnd,
-  }: {
-    children: ReactNode
-    onDragEnd?: (event: any) => void
-  }) => {
-    latestOnDragEnd = onDragEnd
-    return <div data-testid="dnd-context">{children}</div>
-  },
-  closestCenter: vi.fn(),
-  PointerSensor: class {},
-  KeyboardSensor: class {},
-  useSensor: vi.fn((_sensor: any, options?: any) => ({ sensor: _sensor, options })),
-  useSensors: vi.fn((...sensors: any[]) => sensors),
-}))
-
-vi.mock("@dnd-kit/sortable", () => ({
-  arrayMove: (items: any[], from: number, to: number) => {
-    const next = [...items]
-    const [moved] = next.splice(from, 1)
-    next.splice(to, 0, moved)
-    return next
-  },
-  SortableContext: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  sortableKeyboardCoordinates: vi.fn(),
-  useSortable: () => ({
-    attributes: {},
-    listeners: {},
-    setNodeRef: vi.fn(),
-    transform: null,
-    transition: undefined,
-    isDragging: false,
-  }),
-  verticalListSortingStrategy: vi.fn(),
-}))
-
-vi.mock("@dnd-kit/utilities", () => ({
-  CSS: { Transform: { toString: () => "" } },
-}))
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(() => Promise.resolve()),
 }))
 
 import { SettingsPage } from "@/pages/settings"
+import { orderSettingsProviders } from "@/components/settings/providers-settings-pane"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 
@@ -115,7 +71,6 @@ const providers: SettingsPluginState[] = [
 
 const defaultProps = {
   providers,
-  onReorder: vi.fn(),
   onToggle: vi.fn(),
   autoUpdateInterval: 15 as const,
   onAutoUpdateIntervalChange: vi.fn(),
@@ -167,6 +122,30 @@ afterEach(() => {
 })
 
 describe("SettingsPage", () => {
+  it("keeps the primary four providers ahead of the alphabetical remainder", () => {
+    const ordered = orderSettingsProviders([
+      { id: "zed", name: "Zed" },
+      { id: "opencode", name: "OpenCode Zen" },
+      { id: "opencode-go", name: "OpenCode" },
+      { id: "claude", name: "Claude" },
+      { id: "amp", name: "Amp" },
+      { id: "cursor", name: "Cursor" },
+      { id: "codex", name: "Codex" },
+      { id: "abacus", name: "Abacus" },
+    ])
+
+    expect(ordered.map((provider) => provider.id)).toEqual([
+      "codex",
+      "claude",
+      "cursor",
+      "opencode-go",
+      "abacus",
+      "amp",
+      "opencode",
+      "zed",
+    ])
+  })
+
   it("renders General and Providers tabs", () => {
     render(<TestHarness />)
     expect(screen.getByRole("tab", { name: "General" })).toBeInTheDocument()
@@ -261,13 +240,20 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("button", { name: /open in tray/i })).toBeInTheDocument()
   })
 
-  it("reorders providers from the Providers tab", async () => {
-    const onReorder = vi.fn()
-    render(<TestHarness onReorder={onReorder} />)
+  it("lists providers alphabetically without drag controls", async () => {
+    render(<TestHarness />)
     await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
 
-    latestOnDragEnd?.({ active: { id: "opencode" }, over: { id: "codex" } })
-    expect(onReorder).toHaveBeenCalledWith(["codex", "opencode"])
+    const codexRow = screen.getByRole("button", { name: /^codexnot signed in/i })
+    const openCodeRow = screen.getByRole("button", {
+      name: /^opencode zenexperimental on windows/i,
+    })
+
+    expect(codexRow.compareDocumentPosition(openCodeRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    expect(codexRow.querySelector(".cursor-grab")).not.toBeInTheDocument()
+    expect(openCodeRow.querySelector(".cursor-grab")).not.toBeInTheDocument()
   })
 
   it("toggles providers from the Providers tab", async () => {

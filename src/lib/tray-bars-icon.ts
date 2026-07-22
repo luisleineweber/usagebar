@@ -9,7 +9,7 @@ const BARS_TRACK_OPACITY = 0.16
 const BARS_REMAINDER_OPACITY = 0.24
 const BARS_FILL_OPACITY = 1
 export const TRAY_TEMPLATE_FOREGROUND = "black"
-export const TRAY_BRAND_FOREGROUND = "#B6F36A"
+export const TRAY_BRAND_FOREGROUND = "#86c5ff"
 
 function rgbaToImageDataBytes(rgba: Uint8ClampedArray): Uint8Array {
   // Image.new expects Uint8Array. Uint8ClampedArray shares the same buffer layout.

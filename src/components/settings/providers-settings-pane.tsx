@@ -13,31 +13,37 @@
  * JSDOM-based tests never apply CSS, so both panels remain in the DOM; tests pass unchanged.
  */
 
-import { useState, useEffect } from "react"
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  type DragEndEvent,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core"
-import {
-  SortableContext,
-  arrayMove,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
-import { ArrowLeft, ChevronRight, GripVertical } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { ArrowLeft, ChevronRight } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { ProviderConfig } from "@/lib/provider-settings"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import { cn } from "@/lib/utils"
+
+const SETTINGS_PROVIDER_PRIORITY = ["codex", "claude", "cursor", "opencode-go"] as const
+
+export function orderSettingsProviders<T extends Pick<SettingsPluginState, "id" | "name">>(
+  providers: T[]
+): T[] {
+  const priorityById = new Map<string, number>(
+    SETTINGS_PROVIDER_PRIORITY.map((id, index) => [id, index])
+  )
+
+  return [...providers].sort((left, right) => {
+    const leftPriority = priorityById.get(left.id)
+    const rightPriority = priorityById.get(right.id)
+
+    if (leftPriority !== undefined || rightPriority !== undefined) {
+      if (leftPriority === undefined) return 1
+      if (rightPriority === undefined) return -1
+      return leftPriority - rightPriority
+    }
+
+    return left.name.localeCompare(right.name)
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Provider icon mask
@@ -79,10 +85,10 @@ function getProviderSubtitle(plugin: SettingsPluginState): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sortable provider row
+// Provider row
 // ---------------------------------------------------------------------------
 
-function SortableProviderRow({
+function ProviderRow({
   plugin,
   selected,
   onSelect,
@@ -93,9 +99,6 @@ function SortableProviderRow({
   onSelect: () => void
   onToggle: (id: string) => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: plugin.id,
-  })
   const isConnected = Boolean(plugin.state.data || plugin.state.lastSuccessAt)
 
   return (
@@ -113,16 +116,13 @@ function SortableProviderRow({
      * same keyboard contract as a native button.
      */
     <div
-      ref={setNodeRef}
       role="button"
       tabIndex={0}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         "group flex w-full cursor-pointer flex-wrap items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors sm:flex-nowrap sm:items-center",
         selected
           ? "border-border bg-muted/70 text-foreground shadow-sm"
-          : "border-transparent bg-transparent hover:border-border/55 hover:bg-muted/35",
-        isDragging && "opacity-50"
+          : "border-transparent bg-transparent hover:border-border/55 hover:bg-muted/35"
       )}
       onClick={onSelect}
       onKeyDown={(e) => {
@@ -132,16 +132,6 @@ function SortableProviderRow({
         }
       }}
     >
-      {/* Drag handle */}
-      <span
-        className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
-        onClick={(event) => event.stopPropagation()}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" />
-      </span>
-
       {/* Icon + status dot */}
       <div className="relative">
         <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} />
@@ -200,7 +190,6 @@ type ProvidersSettingsPaneProps = {
   providers: SettingsPluginState[]
   selectedProviderId: string | null
   onSelectedProviderChange: (id: string, options?: SelectedProviderChangeOptions) => void
-  onReorder: (orderedIds: string[]) => void
   onToggle: (id: string) => void
   onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
   onProviderSecretSave: (providerId: string, secretKey: string, value: string) => Promise<void>
@@ -212,19 +201,13 @@ export function ProvidersSettingsPane({
   providers,
   selectedProviderId,
   onSelectedProviderChange,
-  onReorder,
   onToggle,
   onProviderConfigChange,
   onProviderSecretSave,
   onProviderSecretDelete,
   onRetryProvider,
 }: ProvidersSettingsPaneProps) {
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
+  const settingsProviders = useMemo(() => orderSettingsProviders(providers), [providers])
 
   /*
    * Push navigation state for narrow screens.
@@ -237,24 +220,19 @@ export function ProvidersSettingsPane({
 
   // Auto-select the first provider when none is selected (or when the selected one disappears).
   useEffect(() => {
-    if (providers.length === 0) return
-    if (!selectedProviderId || !providers.some((provider) => provider.id === selectedProviderId)) {
-      onSelectedProviderChange(providers[0]!.id)
+    if (settingsProviders.length === 0) return
+    if (
+      !selectedProviderId ||
+      !settingsProviders.some((provider) => provider.id === selectedProviderId)
+    ) {
+      onSelectedProviderChange(settingsProviders[0]!.id)
     }
-  }, [onSelectedProviderChange, providers, selectedProviderId])
+  }, [onSelectedProviderChange, selectedProviderId, settingsProviders])
 
   const selectedProvider =
-    providers.find((provider) => provider.id === selectedProviderId) ?? providers[0] ?? null
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = providers.findIndex((item) => item.id === active.id)
-    const newIndex = providers.findIndex((item) => item.id === over.id)
-    if (oldIndex === -1 || newIndex === -1) return
-    const next = arrayMove(providers, oldIndex, newIndex)
-    onReorder(next.map((item) => item.id))
-  }
+    settingsProviders.find((provider) => provider.id === selectedProviderId) ??
+    settingsProviders[0] ??
+    null
 
   /** Called when the user explicitly taps / clicks a provider row. */
   const handleRowSelect = (id: string) => {
@@ -291,28 +269,17 @@ export function ProvidersSettingsPane({
         </div>
 
         <div className="pr-1">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={providers.map((p) => p.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-2.5">
-                {providers.map((plugin) => (
-                  <SortableProviderRow
-                    key={plugin.id}
-                    plugin={plugin}
-                    selected={plugin.id === selectedProvider?.id}
-                    onSelect={() => handleRowSelect(plugin.id)}
-                    onToggle={onToggle}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
+          <div className="space-y-2.5">
+            {settingsProviders.map((plugin) => (
+              <ProviderRow
+                key={plugin.id}
+                plugin={plugin}
+                selected={plugin.id === selectedProvider?.id}
+                onSelect={() => handleRowSelect(plugin.id)}
+                onToggle={onToggle}
+              />
+            ))}
+          </div>
         </div>
       </section>
 

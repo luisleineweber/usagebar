@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   DEFAULT_AUTO_UPDATE_INTERVAL,
+  DEFAULT_ACCENT_COLOR,
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
@@ -12,6 +13,7 @@ import {
   arePluginSettingsEqual,
   getEnabledPluginIds,
   loadAutoUpdateInterval,
+  loadAccentColor,
   loadDisplayMode,
   loadGlobalShortcut,
   loadMenubarIconStyle,
@@ -25,6 +27,7 @@ import {
   normalizePluginSettings,
   normalizeSurfacePins,
   saveAutoUpdateInterval,
+  saveAccentColor,
   saveDisplayMode,
   saveGlobalShortcut,
   saveMenubarIconStyle,
@@ -220,6 +223,112 @@ describe("settings", () => {
     expect(result.disabled).toEqual(["copilot", "windsurf"])
   })
 
+  it("inserts a new provider at its default position instead of appending it", () => {
+    const plugins: PluginMeta[] = [
+      { id: "codex", name: "Codex", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "claude", name: "Claude", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "cursor", name: "Cursor", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "copilot", name: "Copilot", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "qwen", name: "Qwen Code", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "windsurf", name: "Windsurf", iconUrl: "", lines: [], primaryCandidates: [] },
+    ]
+    const result = normalizePluginSettings(
+      { order: ["codex", "claude", "cursor", "copilot", "windsurf"], disabled: [] },
+      plugins
+    )
+    expect(result.order).toEqual(["codex", "claude", "cursor", "copilot", "qwen", "windsurf"])
+    expect(result.disabled).toContain("qwen")
+  })
+
+  it("keeps the four primary providers before the alphabetical remainder", () => {
+    const plugins: PluginMeta[] = [
+      { id: "windsurf", name: "Windsurf", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "opencode", name: "OpenCode", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "qwen", name: "Qwen Code", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "cursor", name: "Cursor", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "claude", name: "Claude", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "codex", name: "Codex", iconUrl: "", lines: [], primaryCandidates: [] },
+    ]
+
+    expect(normalizePluginSettings({ order: [], disabled: [] }, plugins).order).toEqual([
+      "codex",
+      "claude",
+      "cursor",
+      "opencode",
+      "qwen",
+      "windsurf",
+    ])
+  })
+
+  it("repairs the old Alpha 6 Qwen-at-end default order", () => {
+    const plugins: PluginMeta[] = [
+      { id: "codex", name: "Codex", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "claude", name: "Claude", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "cursor", name: "Cursor", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "opencode", name: "OpenCode", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "perplexity", name: "Perplexity", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "qwen", name: "Qwen Code", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "synthetic", name: "Synthetic", iconUrl: "", lines: [], primaryCandidates: [] },
+    ]
+
+    const result = normalizePluginSettings(
+      {
+        order: ["codex", "claude", "cursor", "opencode", "perplexity", "synthetic", "qwen"],
+        disabled: [],
+      },
+      plugins
+    )
+
+    expect(result.order).toEqual([
+      "codex",
+      "claude",
+      "cursor",
+      "opencode",
+      "perplexity",
+      "qwen",
+      "synthetic",
+    ])
+  })
+
+  it("repairs the old order when saved hidden providers are present", () => {
+    const plugins: PluginMeta[] = [
+      { id: "codex", name: "Codex", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "claude", name: "Claude", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "cursor", name: "Cursor", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "opencode", name: "OpenCode", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "perplexity", name: "Perplexity", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "qwen", name: "Qwen Code", iconUrl: "", lines: [], primaryCandidates: [] },
+      { id: "synthetic", name: "Synthetic", iconUrl: "", lines: [], primaryCandidates: [] },
+    ]
+
+    const result = normalizePluginSettings(
+      {
+        order: [
+          "codex",
+          "claude",
+          "cursor",
+          "opencode",
+          "hidden-provider",
+          "perplexity",
+          "synthetic",
+          "qwen",
+        ],
+        disabled: [],
+      },
+      plugins
+    )
+
+    expect(result.order).toEqual([
+      "codex",
+      "claude",
+      "cursor",
+      "opencode",
+      "perplexity",
+      "qwen",
+      "synthetic",
+    ])
+  })
+
   it("compares settings equality", () => {
     const a = { order: ["a"], disabled: [] }
     const b = { order: ["a"], disabled: [] }
@@ -263,6 +372,20 @@ describe("settings", () => {
   it("falls back to default for invalid theme mode", async () => {
     storeState.set("themeMode", "invalid")
     await expect(loadThemeMode()).resolves.toBe(DEFAULT_THEME_MODE)
+  })
+
+  it("loads and saves the selected accent color", async () => {
+    await expect(loadAccentColor()).resolves.toBe(DEFAULT_ACCENT_COLOR)
+
+    await saveAccentColor("#c1121f")
+
+    await expect(loadAccentColor()).resolves.toBe("#c1121f")
+  })
+
+  it("falls back to the default for an invalid accent color", async () => {
+    storeState.set("accentColor", "#ffffff")
+
+    await expect(loadAccentColor()).resolves.toBe(DEFAULT_ACCENT_COLOR)
   })
 
   it("loads default display mode when missing", async () => {
