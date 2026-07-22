@@ -10,7 +10,9 @@
 
 ### Notes
 
-- Alpha 6 is the active development baseline; release notes and installer readiness remain in progress.
+- Alpha 6 is an unsigned Windows technical preview. Windows may show `Unknown publisher` or SmartScreen warnings.
+- No Tauri updater signing key is configured for this prerelease, so updater signature assets are intentionally omitted and prerelease updater checks remain disabled.
+- The NSIS installer is the supported prerelease artifact; MSI remains skipped because WiX rejects semver prerelease versions.
 
 ## 0.1.0-alpha.5
 

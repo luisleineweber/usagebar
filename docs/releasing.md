@@ -7,7 +7,7 @@ The next stranger-facing milestone should be an alpha, not a full release, unles
 Current alpha label:
 
 ```text
-v0.1.0-alpha.2
+v0.1.0-alpha.6
 ```
 
 If the repo stays on the existing beta line instead, document the reason in `CHANGELOG.md` and release notes before tagging.
@@ -38,7 +38,7 @@ bun run build:release -- --bundles nsis
 
 If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local builds can still complete without Tauri updater signatures. Windows installer builds require Authenticode material by default. When that material is configured, the helper signs the final NSIS/MSI artifact after the build so the setup executable has a real publisher.
 
-Alpha 2 exception: unsigned Windows prerelease installers are allowed as technical-preview artifacts while Authenticode signing is deferred. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local unsigned builds. GitHub prerelease publishes set this automatically for tags that contain a prerelease suffix such as `v0.1.0-alpha.2`. These artifacts can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and must be described as unsigned in release notes.
+Alpha 6 exception: unsigned Windows prerelease installers are allowed as technical-preview artifacts while Authenticode signing is deferred. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local unsigned builds. GitHub prerelease publishes set this automatically for tags that contain a prerelease suffix such as `v0.1.0-alpha.6`. These artifacts can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and must be described as unsigned in release notes.
 
 ## Windows Code Signing
 
@@ -68,11 +68,9 @@ You can publish in two ways:
 
 The workflow runs the same release preflight, builds platform artifacts, and verifies that the GitHub release contains:
 
-- `latest.json`
-- updater signature files (`.sig`)
 - a Windows setup executable ending in `setup.exe`
 
-The Windows job always fails before packaging if updater signing secrets are missing. For prerelease tags only, the workflow sets `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` and allows an unsigned installer when Authenticode secrets are missing. Stable tags still require Windows Authenticode signing material.
+Stable releases require `TAURI_SIGNING_PRIVATE_KEY` and updater signature assets. For prerelease tags, the workflow passes `--no-sign` when that key is unavailable and publishes an unsigned technical-preview installer without updater assets. Prerelease tags also set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` so Authenticode signing remains optional.
 
 Current updater channel note:
 
@@ -82,7 +80,7 @@ Current updater channel note:
 
 ## Alpha Gate
 
-Before publishing Alpha 2, verify and record:
+Before publishing Alpha 6, verify and record:
 
 - Windows installer exists as a GitHub release asset or local NSIS artifact.
 - If the installer is unsigned, release notes must say `Unknown publisher` / SmartScreen warnings are expected for this technical preview.

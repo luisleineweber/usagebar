@@ -73,7 +73,7 @@ jobs:
           echo "Prerelease $RELEASE_TAG will publish an unsigned Windows installer until Authenticode signing is configured."
 
       - name: Verify updater signing key is configured
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !contains(env.RELEASE_TAG, '-')
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
@@ -81,6 +81,12 @@ jobs:
             echo "Missing TAURI_SIGNING_PRIVATE_KEY secret."
             exit 1
           fi
+
+      - name: Allow unsigned prerelease updater artifacts
+        if: runner.os == 'Windows' && contains(env.RELEASE_TAG, '-')
+        run: |
+          echo "No Tauri updater signing key configured; publishing this technical-preview installer without updater signatures."
+          echo "USAGEBAR_ALLOW_UNSIGNED_UPDATER=1" >> "$GITHUB_ENV"
 
       - name: Verify Windows Authenticode signing secrets are configured
         if: runner.os == 'Windows'
@@ -128,7 +134,7 @@ jobs:
           releaseDraft: false
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           includeUpdaterJson: true
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ contains(env.RELEASE_TAG, '-') && '--no-sign' || '' }}
 
       - name: Verify updater assets uploaded
         env:
@@ -136,8 +142,12 @@ jobs:
         run: |
           ASSETS=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
 
-          printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
-          printf '%s\n' "$ASSETS" | grep -Eq '\.sig$' || { echo "Missing updater signatures (.sig)"; exit 1; }
+          if [[ "$USAGEBAR_ALLOW_UNSIGNED_UPDATER" != "1" ]]; then
+            printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
+            printf '%s\n' "$ASSETS" | grep -Eq '\.sig$' || { echo "Missing updater signatures (.sig)"; exit 1; }
+          else
+            echo "Unsigned prerelease: updater manifest and signature assets are not required."
+          fi
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             printf '%s\n' "$ASSETS" | grep -Eq 'setup\.exe$' || { echo "Missing Windows setup executable"; exit 1; }
           fi
