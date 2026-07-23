@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   const GLOBAL_PRIMARY_USAGE_URL = "https://api.minimax.io/v1/api/openplatform/coding_plan/remains"
   const GLOBAL_FALLBACK_USAGE_URLS = [
     "https://api.minimax.io/v1/coding_plan/remains",
@@ -39,7 +39,7 @@
     const raw = readString(value)
     if (!raw) return null
     const compact = raw.replace(/\s+/g, " ").trim()
-    const withoutPrefix = compact.replace(/^minimax\s+coding\s+plan\b[:\-]?\s*/i, "").trim()
+    const withoutPrefix = compact.replace(/^minimax\s+coding\s+plan\b[-:]?\s*/i, "").trim()
     if (withoutPrefix) return withoutPrefix
     if (/coding\s+plan/i.test(compact)) return "Coding Plan"
     return compact
@@ -82,7 +82,8 @@
   }
 
   function loadStoredApiKey(ctx) {
-    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") return null
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function")
+      return null
     try {
       const key = readString(ctx.host.providerSecrets.read("apiKey"))
       if (key) {
@@ -198,7 +199,7 @@
     throw "Could not parse usage data."
   }
 
-  function parsePayloadShape(ctx, payload, endpointSelection) {
+  function parsePayloadShape(ctx, payload) {
     if (!payload || typeof payload !== "object") return null
 
     const data = payload.data && typeof payload.data === "object" ? payload.data : payload
@@ -243,10 +244,14 @@
 
     if (!chosen || typeof chosen !== "object") return null
 
-    const total = readNumber(chosen.current_interval_total_count ?? chosen.currentIntervalTotalCount)
+    const total = readNumber(
+      chosen.current_interval_total_count ?? chosen.currentIntervalTotalCount
+    )
     if (total === null || total <= 0) return null
 
-    const usageFieldCount = readNumber(chosen.current_interval_usage_count ?? chosen.currentIntervalUsageCount)
+    const usageFieldCount = readNumber(
+      chosen.current_interval_usage_count ?? chosen.currentIntervalUsageCount
+    )
     const remainingCount = readNumber(
       chosen.current_interval_remaining_count ??
         chosen.currentIntervalRemainingCount ??
@@ -293,16 +298,18 @@
       periodDurationMs = endMs - startMs
     }
 
-    const explicitPlanName = normalizePlanName(pickFirstString([
-      data.current_subscribe_title,
-      data.plan_name,
-      data.plan,
-      data.current_plan_title,
-      data.combo_title,
-      payload.current_subscribe_title,
-      payload.plan_name,
-      payload.plan,
-    ]))
+    const explicitPlanName = normalizePlanName(
+      pickFirstString([
+        data.current_subscribe_title,
+        data.plan_name,
+        data.plan,
+        data.current_plan_title,
+        data.combo_title,
+        payload.current_subscribe_title,
+        payload.plan_name,
+        payload.plan,
+      ])
+    )
     const planName = explicitPlanName
 
     return {
@@ -330,7 +337,7 @@
       if (!apiKeyInfo) continue
       try {
         const payload = fetchUsagePayload(ctx, apiKeyInfo.value, endpoint)
-        parsed = parsePayloadShape(ctx, payload, endpoint)
+        parsed = parsePayloadShape(ctx, payload)
         if (parsed) {
           successfulEndpoint = endpoint
           break

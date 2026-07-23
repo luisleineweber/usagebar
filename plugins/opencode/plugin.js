@@ -70,7 +70,9 @@
         if (typeof stored === "string" && stored.trim()) {
           return { value: stored.trim(), source: "Legacy keychain Cookie header" }
         }
-      } catch {}
+      } catch {
+        // Ignore an unavailable legacy keychain entry and continue with other credentials.
+      }
     }
     throw "Set OPENCODE_COOKIE_HEADER to your OpenCode cookie header."
   }
@@ -296,7 +298,9 @@
       for (var i = 0; i < OPENCODE_DB_PATHS.length; i += 1) {
         try {
           if (ctx.host.fs.exists(OPENCODE_DB_PATHS[i])) return OPENCODE_DB_PATHS[i]
-        } catch {}
+        } catch {
+          // Ignore an unreadable candidate path and continue searching.
+        }
       }
     }
     return OPENCODE_DB_PATHS[0]

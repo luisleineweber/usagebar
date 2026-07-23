@@ -14,7 +14,9 @@ const coverageResult = run("bun", ["vitest", "run", "--coverage.enabled"], {
   },
 })
 
-const summaryResult = run("node", ["./scripts/coverage-summary.mjs"])
+const summaryResult = run("node", ["./scripts/coverage-summary.mjs"], {
+  env: process.env,
+})
 
 if (coverageResult.status !== 0) {
   process.exitCode = coverageResult.status ?? 1

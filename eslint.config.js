@@ -68,14 +68,22 @@ export default tseslint.config(
   },
   {
     rules: {
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-require-imports": "off",
-      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          args: "after-used",
+          argsIgnorePattern: "^_",
+          caughtErrors: "none",
+          varsIgnorePattern: "^_",
+        },
+      ],
       "no-console": "off",
-      "no-empty": "off",
-      "no-redeclare": "off",
-      "no-useless-escape": "off",
-      "no-useless-assignment": "off",
+      "no-empty": "error",
+      "no-redeclare": "error",
+      "no-useless-assignment": "error",
+      "no-useless-escape": "error",
     },
   }
 )

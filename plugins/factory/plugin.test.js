@@ -730,7 +730,6 @@ describe("factory plugin", () => {
       refresh_token: "refresh",
     }))
 
-    let usageCalls = 0
     ctx.host.http.request.mockImplementation((opts) => {
       if (String(opts.url).includes("workos.com")) {
         return {
@@ -741,7 +740,6 @@ describe("factory plugin", () => {
           }),
         }
       }
-      usageCalls++
       return { status: 403, headers: {}, bodyText: "" }
     })
 

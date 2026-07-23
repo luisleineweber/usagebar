@@ -3,7 +3,9 @@ import path from "node:path"
 import { execFileSync } from "node:child_process"
 
 const THRESHOLD = 90
+const CHANGED_FILE_THRESHOLD = 80
 const SUMMARY_PATH = path.resolve("coverage", "coverage-summary.json")
+const enforceChangedCoverage = process.env.USAGEBAR_COVERAGE_ENFORCE_CHANGED === "1"
 
 function formatPercent(value) {
   return `${Number(value).toFixed(2)}%`
@@ -114,7 +116,8 @@ function main() {
   const changedFiles = getChangedFiles().map(normalizePath)
   const changedCoverage = changedFiles
     .map((file) => ({ file, entry: byFile.get(file) }))
-    .filter(({ file }) => /\.(cjs|js|jsx|mjs|ts|tsx)$/.test(file))
+    .filter(({ file }) => /^(src|plugins)\//.test(file))
+    .filter(({ file }) => /\.(js|jsx|ts|tsx)$/.test(file))
     .filter(
       ({ file }) =>
         !file.endsWith(".test.js") && !file.endsWith(".test.ts") && !file.endsWith(".test.tsx")
@@ -131,6 +134,25 @@ function main() {
         continue
       }
       console.log(fileCoverageLine(entry, "lines"))
+    }
+  }
+
+  if (enforceChangedCoverage) {
+    const failedChangedCoverage = changedCoverage.filter(({ entry }) => {
+      if (!entry) return true
+      return Number(entry.metrics.lines.pct) < CHANGED_FILE_THRESHOLD
+    })
+
+    if (failedChangedCoverage.length > 0) {
+      console.error("")
+      console.error(`Changed-file coverage gate: fail (${CHANGED_FILE_THRESHOLD}% line threshold)`)
+      for (const { file } of failedChangedCoverage) {
+        console.error(`- ${file}`)
+      }
+      process.exitCode = 1
+    } else {
+      console.log("")
+      console.log(`Changed-file coverage gate: pass (${CHANGED_FILE_THRESHOLD}% line threshold)`)
     }
   }
 }

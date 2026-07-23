@@ -42,7 +42,7 @@ const state = vi.hoisted(() => ({
   autostartIsEnabledMock: vi.fn(),
   renderTrayBarsIconMock: vi.fn(),
   probeHandlers: null as null | {
-    onResult: (output: any) => void
+    onResult: (output: unknown) => void
     onBatchComplete: () => void
   },
   trayGetByIdMock: vi.fn(),
@@ -53,7 +53,7 @@ const state = vi.hoisted(() => ({
 }))
 
 const dndState = vi.hoisted(() => ({
-  latestOnDragEnd: null as null | ((event: any) => void),
+  latestOnDragEnd: null as null | ((event: unknown) => void),
 }))
 
 const updaterState = vi.hoisted(() => ({
@@ -62,11 +62,11 @@ const updaterState = vi.hoisted(() => ({
 }))
 
 const eventState = vi.hoisted(() => {
-  const handlers = new Map<string, (event: any) => void>()
+  const handlers = new Map<string, (event: unknown) => void>()
   return {
     handlers,
     emitMock: vi.fn(async () => undefined),
-    listenMock: vi.fn(async (eventName: string, handler: (event: any) => void) => {
+    listenMock: vi.fn(async (eventName: string, handler: (event: unknown) => void) => {
       handlers.set(eventName, handler)
       return () => {
         handlers.delete(eventName)
@@ -97,7 +97,7 @@ vi.mock("@dnd-kit/core", () => ({
     onDragEnd,
   }: {
     children: ReactNode
-    onDragEnd?: (event: any) => void
+    onDragEnd?: (event: unknown) => void
   }) => {
     dndState.latestOnDragEnd = onDragEnd ?? null
     return <div>{children}</div>
@@ -105,15 +105,15 @@ vi.mock("@dnd-kit/core", () => ({
   closestCenter: vi.fn(),
   PointerSensor: class {},
   KeyboardSensor: class {},
-  useSensor: vi.fn((_sensor: any, options?: any) => ({
+  useSensor: vi.fn((_sensor: unknown, options?: unknown) => ({
     sensor: _sensor,
     options,
   })),
-  useSensors: vi.fn((...sensors: any[]) => sensors),
+  useSensors: vi.fn((...sensors: unknown[]) => sensors),
 }))
 
 vi.mock("@dnd-kit/sortable", () => ({
-  arrayMove: (items: any[], from: number, to: number) => {
+  arrayMove: (items: unknown[], from: number, to: number) => {
     const next = [...items]
     const [moved] = next.splice(from, 1)
     next.splice(to, 0, moved)
@@ -255,7 +255,10 @@ vi.mock("@/lib/tray-bars-icon", async () => {
 })
 
 vi.mock("@/hooks/use-probe-events", () => ({
-  useProbeEvents: (handlers: { onResult: (output: any) => void; onBatchComplete: () => void }) => {
+  useProbeEvents: (handlers: {
+    onResult: (output: unknown) => void
+    onBatchComplete: () => void
+  }) => {
     state.probeHandlers = handlers
     return { startBatch: state.startBatchMock }
   },
@@ -393,7 +396,7 @@ describe("App", () => {
     eventState.handlers.clear()
     eventState.listenMock.mockReset()
     eventState.listenMock.mockImplementation(
-      async (eventName: string, handler: (event: any) => void) => {
+      async (eventName: string, handler: (event: unknown) => void) => {
         eventState.handlers.set(eventName, handler)
         return () => {
           eventState.handlers.delete(eventName)

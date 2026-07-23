@@ -50,7 +50,7 @@ function setGhCliAccountKeychain(ctx, login, value) {
 }
 
 function setGhCliCommandToken(ctx, token) {
-  ctx.host.gh.readAuthToken.mockImplementation((host, user) => {
+  ctx.host.gh.readAuthToken.mockImplementation((host, _user) => {
     if (host !== "github.com") return null
     return token
   })

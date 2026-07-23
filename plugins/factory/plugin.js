@@ -18,7 +18,9 @@
       if (typeof TextDecoder !== "undefined") {
         try {
           return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes))
-        } catch {}
+        } catch {
+          // TextDecoder is unavailable or rejected the input; use the fallback decoder below.
+        }
       }
 
       let escaped = ""

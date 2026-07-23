@@ -345,7 +345,7 @@ fn response_json(status: u16, reason: &str, body: &str) -> String {
 }
 
 fn response_no_content() -> String {
-    format!("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n",)
+    "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n".to_string()
 }
 
 fn response_not_found(error_code: &str) -> String {

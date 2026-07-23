@@ -112,7 +112,9 @@
         if (typeof stored === "string" && stored.trim()) {
           return { value: stored.trim(), source: "Legacy keychain Cookie header" }
         }
-      } catch {}
+      } catch {
+        // Ignore an unavailable legacy keychain entry and continue with other credentials.
+      }
     }
     return null
   }
@@ -564,16 +566,6 @@
     return Math.round(total * 10000) / 10000
   }
 
-  function countRange(rows, startMs, endMs) {
-    let total = 0
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = rows[i]
-      if (row.createdMs < startMs || row.createdMs >= endMs) continue
-      total += 1
-    }
-    return total
-  }
-
   function countFreeRange(rows, startMs, endMs) {
     let total = 0
     for (let i = 0; i < rows.length; i += 1) {
@@ -594,16 +586,6 @@
       normalized.indexOf(":free") !== -1 ||
       normalized.indexOf("free") !== -1
     )
-  }
-
-  function isFreeOnlyUsage(rows) {
-    if (!rows.length) return false
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = rows[i]
-      if (row.cost !== 0) return false
-      if (!isFreeModel(row.modelId)) return false
-    }
-    return true
   }
 
   function nextRollingReset(rows, nowMs) {

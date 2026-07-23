@@ -124,12 +124,6 @@
     return "language_server_macos"
   }
 
-  function lsOsName(ctx) {
-    if (ctx.app.platform === "windows") return "windows"
-    if (ctx.app.platform === "linux") return "linux"
-    return "macos"
-  }
-
   // Antigravity wraps OAuth state in a double-base64 envelope:
   //   b64(outer.f1 = wrapper{ f1=sentinel, f2=payload{ f1=b64(inner proto) } }).
   // The inner base64 layer is a UTF-8 string field, not raw bytes.
@@ -318,15 +312,6 @@
       proto.accessToken &&
       (!proto.expirySeconds || proto.expirySeconds > Math.floor(Date.now() / 1000))
     )
-  }
-
-  function tryCloudCodeToken(ctx, token, label) {
-    if (!token) return null
-    var data = requestCloudCode(ctx, token)
-    if (data && !data.authFailed) return data
-    if (data && data.authFailed) ctx.host.log.warn(label + " rejected by Cloud Code auth")
-    else ctx.host.log.warn(label + " did not yield usable Cloud Code data")
-    return null
   }
 
   function resolveCloudCodeData(ctx, cached, dbTokens, status) {
@@ -596,11 +581,15 @@
     if (groups.length > 0 && !hasClaudeGroup) {
       var exhaustedClaude = null
       for (var m = 0; m < models.length; m++) {
-        var model = models[m]
-        if (model.family !== "claude" || model.remainingFraction !== undefined || !model.resetTime)
+        var candidateModel = models[m]
+        if (
+          candidateModel.family !== "claude" ||
+          candidateModel.remainingFraction !== undefined ||
+          !candidateModel.resetTime
+        )
           continue
-        if (!exhaustedClaude || model.order < exhaustedClaude.order) {
-          exhaustedClaude = model
+        if (!exhaustedClaude || candidateModel.order < exhaustedClaude.order) {
+          exhaustedClaude = candidateModel
         }
       }
       if (exhaustedClaude) {

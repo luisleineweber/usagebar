@@ -107,43 +107,6 @@
     return { data, endpoint: url }
   }
 
-  function requestQuotasWithCookie(ctx, cookie, region) {
-    const baseUrl = getApiBase(region)
-    const url = baseUrl + "/webapi/codingplan/quotas"
-
-    let resp
-    try {
-      resp = ctx.util.request({
-        method: "GET",
-        url: url,
-        headers: {
-          Cookie: cookie,
-          Accept: "application/json",
-          "X-Region": region,
-        },
-        timeoutMs: 15000,
-      })
-    } catch (e) {
-      ctx.host.log.error("request failed (" + url + "): " + String(e))
-      throw "Alibaba request failed. Check your connection."
-    }
-
-    if (ctx.util.isAuthStatus(resp.status)) {
-      throw "Alibaba cookie invalid. Sign in via browser."
-    }
-
-    if (resp.status < 200 || resp.status >= 300) {
-      throw "Alibaba request failed (HTTP " + String(resp.status) + "). Try again later."
-    }
-
-    const data = ctx.util.tryParseJson(resp.bodyText)
-    if (!data || typeof data !== "object") {
-      throw "Alibaba response invalid. Try again later."
-    }
-
-    return data
-  }
-
   function readNumber(value) {
     if (typeof value === "number") return Number.isFinite(value) ? value : null
     if (typeof value === "string" && value.trim()) {

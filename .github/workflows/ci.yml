@@ -53,26 +53,34 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Cache Bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-
+            ${{ runner.os }}-bun-
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Enforce lint and formatting contract
         run: bun run check
 
-      - name: Type-check frontend
-        run: bun run typecheck
-
       - name: Build frontend
         run: bun run build:frontend
 
       - name: Run frontend and plugin tests
+        if: runner.os == 'Windows'
         run: bun run test -- --run
 
-      - name: Generate coverage report
+      - name: Run frontend and plugin tests with coverage
         if: runner.os == 'Linux'
         env:
           USAGEBAR_COVERAGE_REPORT_ONLY: "1"
-        run: bun run test:coverage
+          USAGEBAR_COVERAGE_ENFORCE_CHANGED: "1"
+        run: bun run test:coverage:report
 
       - name: Upload coverage report
         if: runner.os == 'Linux'
@@ -84,8 +92,14 @@ jobs:
       - name: Run Tauri wrapper tests
         run: node --test scripts/tauri/wrapper.test.mjs
 
+      - name: Prepare CLI sidecar
+        run: bun run prepare:cli-sidecar
+
       - name: Check Rust backend
         run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+
+      - name: Enforce Rust lint contract
+        run: bun run lint:rust
 
       - name: Run Rust backend tests (Linux)
         if: runner.os == 'Linux'

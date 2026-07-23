@@ -183,7 +183,9 @@
     if (typeof TextDecoder !== "undefined") {
       try {
         return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes))
-      } catch {}
+      } catch {
+        // TextDecoder is unavailable or rejected the input; use the fallback decoder below.
+      }
     }
 
     // Minimal UTF-8 decoder (replacement char on invalid sequences).
@@ -286,7 +288,9 @@
       const decoded = utf8DecodeBytes(bytes)
       const decodedParsed = ctx.util.tryParseJson(decoded)
       if (decodedParsed) return decodedParsed
-    } catch {}
+    } catch {
+      // Ignore malformed cached auth and let the caller try the remaining sources.
+    }
 
     return null
   }
@@ -795,7 +799,11 @@
       } else {
         const metrics = historyMetrics(day)
         if (Object.keys(metrics).length === 0) continue
-        entries.push({ ...period, ...(day.project ? { project: String(day.project) } : {}), ...metrics })
+        entries.push({
+          ...period,
+          ...(day.project ? { project: String(day.project) } : {}),
+          ...metrics,
+        })
       }
     }
     return { version: 1, source: "ccusage", timeZone: "system-local", entries }
@@ -951,8 +959,7 @@
     return {
       plan: plan,
       lines: lines,
-      history:
-        usageResult.status === "ok" ? buildTokenUsageHistory(usageResult.data) : undefined,
+      history: usageResult.status === "ok" ? buildTokenUsageHistory(usageResult.data) : undefined,
     }
   }
 
@@ -1137,8 +1144,7 @@
     return {
       plan: plan,
       lines: lines,
-      history:
-        usageResult.status === "ok" ? buildTokenUsageHistory(usageResult.data) : undefined,
+      history: usageResult.status === "ok" ? buildTokenUsageHistory(usageResult.data) : undefined,
     }
   }
 

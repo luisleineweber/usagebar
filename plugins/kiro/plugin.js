@@ -1,4 +1,4 @@
-(function () {
+;(function () {
   const STATE_DB = "~/Library/Application Support/Kiro/User/globalStorage/state.vscdb"
   const STATE_KEY = "kiro.kiroAgent"
   const LOGS_ROOT = "~/Library/Application Support/Kiro/logs"
@@ -7,7 +7,8 @@
   const CLI_DB = "~/AppData/Local/Kiro-Cli/data.sqlite3"
   const CLI_AUTH_TOKEN_KEY = "kirocli:social:token"
   const TOKEN_PATH = "~/.aws/sso/cache/kiro-auth-token.json"
-  const PROFILE_PATH = "~/Library/Application Support/Kiro/User/globalStorage/kiro.kiroagent/profile.json"
+  const PROFILE_PATH =
+    "~/Library/Application Support/Kiro/User/globalStorage/kiro.kiroagent/profile.json"
   const REFRESH_URL = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
   const LIVE_STALE_MS = 15 * 60 * 1000
   const REFRESH_BUFFER_MS = 10 * 60 * 1000
@@ -15,7 +16,8 @@
   const COUNT_FORMAT = { kind: "count", suffix: "credits" }
   const LOGIN_HINT = "Open Kiro and sign in, then try again."
   const SESSION_HINT = "Kiro session expired. Open Kiro and sign in again."
-  const DATA_HINT = "Kiro usage data unavailable. Open the Kiro account dashboard once and try again."
+  const DATA_HINT =
+    "Kiro usage data unavailable. Open the Kiro account dashboard once and try again."
 
   function num(value) {
     if (typeof value === "number") return Number.isFinite(value) ? value : null
@@ -59,10 +61,16 @@
         profileArn: token.profileArn || token.profile_arn,
       }
     }
-    if (token.provider === "Google" || token.provider === "Github") return { ...token, authMethod: "social" }
-    if (token.provider === "google" || token.provider === "github") return { ...token, authMethod: "social" }
+    if (token.provider === "Google" || token.provider === "Github")
+      return { ...token, authMethod: "social" }
+    if (token.provider === "google" || token.provider === "github")
+      return { ...token, authMethod: "social" }
     if (token.provider === "ExternalIdp") return { ...token, authMethod: "external_idp" }
-    if (token.provider === "Enterprise" || token.provider === "BuilderId" || token.provider === "Internal") {
+    if (
+      token.provider === "Enterprise" ||
+      token.provider === "BuilderId" ||
+      token.provider === "Internal"
+    ) {
       return { ...token, authMethod: "IdC" }
     }
     return token
@@ -129,13 +137,24 @@
     if (!dbPath) return null
     try {
       const exactRows = ctx.util.tryParseJson(
-        ctx.host.sqlite.query(dbPath, "SELECT value FROM auth_kv WHERE key = '" + CLI_AUTH_TOKEN_KEY + "' LIMIT 1;")
+        ctx.host.sqlite.query(
+          dbPath,
+          "SELECT value FROM auth_kv WHERE key = '" + CLI_AUTH_TOKEN_KEY + "' LIMIT 1;"
+        )
       )
-      if (Array.isArray(exactRows) && exactRows.length && typeof exactRows[0].value === "string") return exactRows[0].value
+      if (Array.isArray(exactRows) && exactRows.length && typeof exactRows[0].value === "string")
+        return exactRows[0].value
       const fallbackRows = ctx.util.tryParseJson(
-        ctx.host.sqlite.query(dbPath, "SELECT value FROM auth_kv WHERE key LIKE 'kirocli:%:token' ORDER BY key LIMIT 1;")
+        ctx.host.sqlite.query(
+          dbPath,
+          "SELECT value FROM auth_kv WHERE key LIKE 'kirocli:%:token' ORDER BY key LIMIT 1;"
+        )
       )
-      return Array.isArray(fallbackRows) && fallbackRows.length && typeof fallbackRows[0].value === "string" ? fallbackRows[0].value : null
+      return Array.isArray(fallbackRows) &&
+        fallbackRows.length &&
+        typeof fallbackRows[0].value === "string"
+        ? fallbackRows[0].value
+        : null
     } catch (e) {
       ctx.host.log.warn("Kiro CLI auth sqlite read failed: " + String(e))
       return null
@@ -148,7 +167,9 @@
     const parsed = ctx.util.tryParseJson(raw)
     if (!parsed || typeof parsed !== "object") return null
     const token = sanitizeAuth(parsed)
-    return token && (token.refreshToken || token.accessToken) ? { path: null, token, source: "Kiro CLI auth" } : null
+    return token && (token.refreshToken || token.accessToken)
+      ? { path: null, token, source: "Kiro CLI auth" }
+      : null
   }
 
   function monthWindow(nowMs) {
@@ -198,7 +219,7 @@
     const window = monthWindow(nowMs)
     if (!window) return null
     const root = cliSessionsRoot(ctx)
-    let files = []
+    let files
     try {
       files = ctx.host.fs.listDir(root)
     } catch {
@@ -215,7 +236,8 @@
         const usage = collectCliSessionUsage(parsed, window)
         if (!usage) continue
         used += usage.used
-        if (usage.latestMs !== null && (latestMs === null || usage.latestMs > latestMs)) latestMs = usage.latestMs
+        if (usage.latestMs !== null && (latestMs === null || usage.latestMs > latestMs))
+          latestMs = usage.latestMs
       } catch (e) {
         ctx.host.log.warn("failed to parse Kiro CLI session usage: " + String(e))
       }
@@ -250,9 +272,12 @@
   function readStateValue(ctx, key) {
     const dbPath = stateDbPath(ctx)
     try {
-      const sql = "SELECT value FROM ItemTable WHERE key = '" + String(key).replace(/'/g, "''") + "' LIMIT 1;"
+      const sql =
+        "SELECT value FROM ItemTable WHERE key = '" + String(key).replace(/'/g, "''") + "' LIMIT 1;"
       const rows = ctx.util.tryParseJson(ctx.host.sqlite.query(dbPath, sql))
-      return Array.isArray(rows) && rows.length && typeof rows[0].value === "string" ? rows[0].value : null
+      return Array.isArray(rows) && rows.length && typeof rows[0].value === "string"
+        ? rows[0].value
+        : null
     } catch (e) {
       ctx.host.log.warn("Kiro sqlite read failed: " + String(e))
       return null
@@ -272,7 +297,10 @@
       currentUsage,
       usageLimit,
       expiryDate: iso(ctx, raw[config.expiryA] || raw[config.expiryB]),
-      displayName: typeof raw.displayName === "string" && raw.displayName.trim() ? raw.displayName.trim() : null,
+      displayName:
+        typeof raw.displayName === "string" && raw.displayName.trim()
+          ? raw.displayName.trim()
+          : null,
     }
   }
 
@@ -320,9 +348,17 @@
     const parsed = ctx.util.tryParseJson(readStateValue(ctx, STATE_KEY))
     const usageState = parsed && parsed["kiro.resourceNotifications.usageState"]
     if (!usageState || !Array.isArray(usageState.usageBreakdowns)) return null
-    const usageBreakdowns = usageState.usageBreakdowns.map((item) => normalizeBreakdown(ctx, item)).filter(Boolean)
+    const usageBreakdowns = usageState.usageBreakdowns
+      .map((item) => normalizeBreakdown(ctx, item))
+      .filter(Boolean)
     return usageBreakdowns.length
-      ? { usageBreakdowns, timestampMs: first(usageState.timestamp), plan: null, overageEnabled: null, source: "Desktop cache" }
+      ? {
+          usageBreakdowns,
+          timestampMs: first(usageState.timestamp),
+          plan: null,
+          overageEnabled: null,
+          source: "Desktop cache",
+        }
       : null
   }
 
@@ -334,7 +370,9 @@
         : [],
       timestampMs: timestampMs !== null ? timestampMs : null,
       plan: title(raw.subscriptionInfo && raw.subscriptionInfo.subscriptionTitle),
-      overageEnabled: raw.overageConfiguration ? raw.overageConfiguration.overageStatus === "ENABLED" : null,
+      overageEnabled: raw.overageConfiguration
+        ? raw.overageConfiguration.overageStatus === "ENABLED"
+        : null,
       source: "Live usage API",
     }
   }
@@ -349,14 +387,18 @@
       const parsed = ctx.util.tryParseJson(line.slice(jsonStart))
       if (!parsed || !parsed.output) continue
       const loggedAt = line.slice(0, jsonStart).trim().split(" [")[0]
-      return normalizeApiSnapshot(ctx, parsed.output, loggedAt ? ctx.util.parseDateMs(loggedAt.replace(" ", "T")) : null)
+      return normalizeApiSnapshot(
+        ctx,
+        parsed.output,
+        loggedAt ? ctx.util.parseDateMs(loggedAt.replace(" ", "T")) : null
+      )
     }
     return null
   }
 
   function loadLoggedState(ctx) {
     const logsRoot = ctx.app.platform === "windows" ? "~/AppData/Roaming/Kiro/logs" : LOGS_ROOT
-    let sessions = []
+    let sessions
     try {
       sessions = ctx.host.fs.listDir(logsRoot).slice().sort().reverse()
     } catch {
@@ -364,7 +406,7 @@
     }
     for (let i = 0; i < sessions.length && i < 12; i += 1) {
       const sessionRoot = logsRoot + "/" + sessions[i]
-      let windows = []
+      let windows
       try {
         windows = ctx.host.fs.listDir(sessionRoot).slice().sort().reverse()
       } catch {
@@ -400,9 +442,15 @@
   }
 
   function buildUsageHeaders(ctx, authState, accessToken) {
-    const headers = { Authorization: "Bearer " + accessToken, Accept: "application/json", "User-Agent": buildUserAgent(ctx) }
-    if (authState.token && authState.token.authMethod === "external_idp") headers.TokenType = "EXTERNAL_IDP"
-    if (authState.token && authState.token.provider === "Internal") headers["redirect-for-internal"] = "true"
+    const headers = {
+      Authorization: "Bearer " + accessToken,
+      Accept: "application/json",
+      "User-Agent": buildUserAgent(ctx),
+    }
+    if (authState.token && authState.token.authMethod === "external_idp")
+      headers.TokenType = "EXTERNAL_IDP"
+    if (authState.token && authState.token.provider === "Internal")
+      headers["redirect-for-internal"] = "true"
     return headers
   }
 
@@ -416,7 +464,13 @@
       timeoutMs: 15000,
     })
     if (ctx.util.isAuthStatus(resp.status)) throw SESSION_HINT
-    if (resp.status < 200 || resp.status >= 300 || !json || typeof json.accessToken !== "string" || !json.accessToken) {
+    if (
+      resp.status < 200 ||
+      resp.status >= 300 ||
+      !json ||
+      typeof json.accessToken !== "string" ||
+      !json.accessToken
+    ) {
       ctx.host.log.warn("Kiro token refresh failed: HTTP " + resp.status)
       return null
     }
@@ -424,9 +478,18 @@
     authState.token = sanitizeAuth({
       ...authState.token,
       accessToken: json.accessToken,
-      refreshToken: typeof json.refreshToken === "string" && json.refreshToken ? json.refreshToken : authState.token.refreshToken,
-      profileArn: typeof json.profileArn === "string" && json.profileArn ? json.profileArn : authState.token.profileArn,
-      expiresAt: expiresIn !== null && expiresIn > 0 ? new Date(nowMs + expiresIn * 1000).toISOString() : authState.token.expiresAt,
+      refreshToken:
+        typeof json.refreshToken === "string" && json.refreshToken
+          ? json.refreshToken
+          : authState.token.refreshToken,
+      profileArn:
+        typeof json.profileArn === "string" && json.profileArn
+          ? json.profileArn
+          : authState.token.profileArn,
+      expiresAt:
+        expiresIn !== null && expiresIn > 0
+          ? new Date(nowMs + expiresIn * 1000).toISOString()
+          : authState.token.expiresAt,
     })
     saveAuthState(ctx, authState)
     return authState.token.accessToken
@@ -474,7 +537,13 @@
   }
 
   function shouldTryLive(localState, loggedState, nowMs) {
-    return !localState || !loggedState || !loggedState.plan || localState.timestampMs === null || nowMs - localState.timestampMs > LIVE_STALE_MS
+    return (
+      !localState ||
+      !loggedState ||
+      !loggedState.plan ||
+      localState.timestampMs === null ||
+      nowMs - localState.timestampMs > LIVE_STALE_MS
+    )
   }
 
   function mergeSnapshots(localState, loggedState, liveState, nowMs) {
@@ -482,10 +551,10 @@
       liveState && liveState.usageBreakdowns.length
         ? liveState
         : localState && localState.usageBreakdowns.length
-        ? localState
-        : loggedState && loggedState.usageBreakdowns.length
-        ? loggedState
-        : null
+          ? localState
+          : loggedState && loggedState.usageBreakdowns.length
+            ? loggedState
+            : null
     if (!usageSource) return null
     return {
       plan: (liveState && liveState.plan) || (loggedState && loggedState.plan) || null,
@@ -493,8 +562,8 @@
         liveState && liveState.overageEnabled !== null
           ? liveState.overageEnabled
           : loggedState && loggedState.overageEnabled !== null
-          ? loggedState.overageEnabled
-          : null,
+            ? loggedState.overageEnabled
+            : null,
       usageBreakdowns: usageSource.usageBreakdowns,
       timestampMs: usageSource.timestampMs !== null ? usageSource.timestampMs : nowMs,
       source: usageSource.source || "Usage snapshot",
@@ -502,28 +571,33 @@
   }
 
   function pickPrimaryBreakdown(usageBreakdowns) {
-    for (let i = 0; i < usageBreakdowns.length; i += 1) if (usageBreakdowns[i].type === "CREDIT") return usageBreakdowns[i]
+    for (let i = 0; i < usageBreakdowns.length; i += 1)
+      if (usageBreakdowns[i].type === "CREDIT") return usageBreakdowns[i]
     return usageBreakdowns.length ? usageBreakdowns[0] : null
   }
 
   function pickBonusUsage(primary) {
-    return !primary ? null : primary.freeTrialUsage && primary.freeTrialUsage.usageLimit > 0 ? primary.freeTrialUsage : primary.bonuses && primary.bonuses.length ? primary.bonuses[0] : null
+    return !primary
+      ? null
+      : primary.freeTrialUsage && primary.freeTrialUsage.usageLimit > 0
+        ? primary.freeTrialUsage
+        : primary.bonuses && primary.bonuses.length
+          ? primary.bonuses[0]
+          : null
   }
 
-  function formatAge(nowMs, timestampMs) {
-    if (!Number.isFinite(nowMs) || !Number.isFinite(timestampMs)) return null
-    const diffMs = Math.max(0, nowMs - timestampMs)
-    if (diffMs < 60000) return "Just now"
-    const minutes = Math.floor(diffMs / 60000)
-    if (minutes < 60) return minutes + "m ago"
-    const hours = Math.floor(minutes / 60)
-    return hours < 48 ? hours + "h ago" : Math.floor(hours / 24) + "d ago"
-  }
-
-  function buildOutput(ctx, snapshot, nowMs) {
+  function buildOutput(ctx, snapshot) {
     const primary = pickPrimaryBreakdown(snapshot.usageBreakdowns)
     if (!primary) throw DATA_HINT
-    const lines = [ctx.line.progress({ label: "Credits", used: primary.currentUsage, limit: primary.usageLimit, format: COUNT_FORMAT, resetsAt: primary.resetDate || undefined })]
+    const lines = [
+      ctx.line.progress({
+        label: "Credits",
+        used: primary.currentUsage,
+        limit: primary.usageLimit,
+        format: COUNT_FORMAT,
+        resetsAt: primary.resetDate || undefined,
+      }),
+    ]
     const bonusUsage = pickBonusUsage(primary)
     if (bonusUsage) {
       lines.push(
@@ -536,7 +610,13 @@
         })
       )
     }
-    if (snapshot.overageEnabled !== null) lines.push(ctx.line.badge({ label: "Overages", text: snapshot.overageEnabled ? "Enabled" : "Disabled" }))
+    if (snapshot.overageEnabled !== null)
+      lines.push(
+        ctx.line.badge({
+          label: "Overages",
+          text: snapshot.overageEnabled ? "Enabled" : "Disabled",
+        })
+      )
     if (snapshot.source) lines.push(ctx.line.text({ label: "Source", value: snapshot.source }))
     return { plan: snapshot.plan || undefined, lines }
   }
@@ -579,8 +659,10 @@
       }
     }
     if (triedLive && (!liveState || !liveState.usageBreakdowns.length)) {
-      if (localState && localState.usageBreakdowns.length) localState.source = "Desktop cache after live API failure"
-      if (!localState && loggedState && loggedState.usageBreakdowns.length) loggedState.source = "Usage log after live API failure"
+      if (localState && localState.usageBreakdowns.length)
+        localState.source = "Desktop cache after live API failure"
+      if (!localState && loggedState && loggedState.usageBreakdowns.length)
+        loggedState.source = "Usage log after live API failure"
     }
     const snapshot = mergeSnapshots(localState, loggedState, liveState, nowMs)
     if (!snapshot) {
@@ -591,7 +673,7 @@
       if (typeof liveError === "string" && liveError) throw liveError
       throw DATA_HINT
     }
-    return buildOutput(ctx, snapshot, nowMs)
+    return buildOutput(ctx, snapshot)
   }
 
   globalThis.__openusage_plugin = { id: "kiro", probe }

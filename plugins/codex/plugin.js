@@ -38,7 +38,9 @@
       if (typeof TextDecoder !== "undefined") {
         try {
           return new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes))
-        } catch {}
+        } catch {
+          // TextDecoder is unavailable or rejected the input; use the fallback decoder below.
+        }
       }
 
       let escaped = ""
@@ -119,7 +121,7 @@
     }
 
     const secretKey = "account:" + profileId + ":authJson"
-    let value = null
+    let value
     try {
       value = ctx.host.providerSecrets.read(secretKey)
     } catch (e) {
@@ -665,9 +667,7 @@
     const metrics = {}
     const inputTokens = historyNumber(row && row.inputTokens)
     const outputTokens = historyNumber(row && row.outputTokens)
-    const cacheReadTokens = historyNumber(
-      row && (row.cacheReadTokens ?? row.cachedInputTokens)
-    )
+    const cacheReadTokens = historyNumber(row && (row.cacheReadTokens ?? row.cachedInputTokens))
     const cacheCreationTokens = historyNumber(row && row.cacheCreationTokens)
     const reasoningTokens = historyNumber(row && row.reasoningTokens)
     const totalTokens = historyNumber(row && row.totalTokens)
@@ -707,7 +707,11 @@
       } else {
         const metrics = historyMetrics(day)
         if (Object.keys(metrics).length === 0) continue
-        entries.push({ ...period, ...(day.project ? { project: String(day.project) } : {}), ...metrics })
+        entries.push({
+          ...period,
+          ...(day.project ? { project: String(day.project) } : {}),
+          ...metrics,
+        })
       }
     }
     return { version: 1, source: "ccusage", timeZone: "system-local", entries }

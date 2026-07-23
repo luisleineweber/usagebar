@@ -24,9 +24,11 @@ pub mod browser_bridge {
         Err("browser-backed requests are unavailable in Rust unit tests".to_string())
     }
 }
+pub(crate) mod env;
 pub mod host_api;
 pub mod manifest;
 pub mod probe_error;
+pub(crate) mod redaction;
 pub mod runtime;
 
 use manifest::LoadedPlugin;

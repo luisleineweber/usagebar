@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { ProviderCard } from "@/components/provider-card"
+import type { MetricLine } from "@/lib/plugin-types"
 import { groupLinesByType } from "@/lib/group-lines-by-type"
 import { formatResetTooltipText } from "@/lib/reset-tooltip"
 import { REFRESH_COOLDOWN_MS } from "@/lib/settings"
@@ -152,7 +153,7 @@ describe("ProviderCard", () => {
             limit: 1000,
             format: { kind: "count", suffix: "credits" },
           },
-          { type: "unknown", label: "Ignored" } as any,
+          { type: "unknown", label: "Ignored" } as unknown as MetricLine,
         ]}
       />
     )

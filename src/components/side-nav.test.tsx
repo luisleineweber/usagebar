@@ -11,7 +11,7 @@ const darkModeState = vi.hoisted(() => ({
 }))
 
 const dndState = vi.hoisted(() => ({
-  latestOnDragEnd: null as null | ((event: any) => void),
+  latestOnDragEnd: null as null | ((event: unknown) => void),
 }))
 
 vi.mock("@/hooks/use-dark-mode", () => ({
@@ -24,19 +24,19 @@ vi.mock("@dnd-kit/core", () => ({
     onDragEnd,
   }: {
     children: ReactNode
-    onDragEnd?: (event: any) => void
+    onDragEnd?: (event: unknown) => void
   }) => {
     dndState.latestOnDragEnd = onDragEnd ?? null
     return <div>{children}</div>
   },
   closestCenter: vi.fn(),
   PointerSensor: class {},
-  useSensor: vi.fn((_sensor: any, options?: any) => ({ sensor: _sensor, options })),
-  useSensors: vi.fn((...sensors: any[]) => sensors),
+  useSensor: vi.fn((_sensor: unknown, options?: unknown) => ({ sensor: _sensor, options })),
+  useSensors: vi.fn((...sensors: unknown[]) => sensors),
 }))
 
 vi.mock("@dnd-kit/sortable", () => ({
-  arrayMove: (items: any[], from: number, to: number) => {
+  arrayMove: (items: unknown[], from: number, to: number) => {
     const next = [...items]
     const [moved] = next.splice(from, 1)
     next.splice(to, 0, moved)

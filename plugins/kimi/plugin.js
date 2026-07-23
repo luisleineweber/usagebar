@@ -383,16 +383,15 @@
       const candidates = collectLimitCandidates(ctx, data)
       const sessionCandidate = pickSessionCandidate(candidates)
 
-      let weeklyCandidate = null
       const usageQuota = parseQuota(data.usage, ctx)
-      if (usageQuota) {
-        weeklyCandidate = { quota: usageQuota, periodMs: null }
-      } else {
-        const withoutSession = candidates.filter(function (candidate) {
-          return candidate !== sessionCandidate
-        })
-        weeklyCandidate = pickLargestByPeriod(withoutSession)
-      }
+      const weeklyCandidate = usageQuota
+        ? { quota: usageQuota, periodMs: null }
+        : (() => {
+            const withoutSession = candidates.filter(function (candidate) {
+              return candidate !== sessionCandidate
+            })
+            return pickLargestByPeriod(withoutSession)
+          })()
 
       if (sessionCandidate) {
         const sessionUsage = toCountUsage(sessionCandidate.quota)
