@@ -6,12 +6,17 @@ mod atomic_file;
 mod browser_cookie_import;
 pub mod cli;
 mod codex_account_store;
+#[cfg(not(test))]
+mod credential_commands;
 mod dev_data_migration;
 mod local_http_api;
 #[cfg(not(test))]
 mod panel;
 mod plugin_engine;
+#[cfg(not(test))]
+mod probe_commands;
 mod probe_coordinator;
+mod provider_secrets;
 mod provider_secret_store;
 #[cfg(not(test))]
 mod settings_window;
@@ -20,8 +25,6 @@ mod tray;
 #[cfg(target_os = "macos")]
 mod webkit_config;
 
-#[cfg(not(test))]
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 #[cfg(not(test))]
 use std::sync::{Arc, Mutex, OnceLock};
@@ -30,27 +33,31 @@ use std::sync::{Mutex, OnceLock};
 
 use base64::Engine;
 use keyring::Entry;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value as JsonValue;
+pub(crate) use provider_secrets::*;
 #[cfg(not(test))]
 use tauri::{Emitter, Manager};
 #[cfg(not(test))]
 use tauri_plugin_aptabase::EventTracker;
 #[cfg(not(test))]
 use tauri_plugin_log::{Target, TargetKind};
-#[cfg(not(test))]
-use uuid::Uuid;
 
 #[cfg(all(desktop, not(test)))]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 #[cfg(not(test))]
+use credential_commands::{
+    capture_provider_cookie_header, delete_codex_account_profile, delete_provider_secret,
+    import_browser_cookies, import_current_codex_account_profile, list_browser_import_sources,
+    list_codex_account_profiles, set_provider_secret,
+};
+#[cfg(not(test))]
+use probe_commands::start_probe_batch;
+
+#[cfg(not(test))]
 const GLOBAL_SHORTCUT_STORE_KEY: &str = "globalShortcut";
 const APP_STARTED_TRACKED_DAY_KEY_PREFIX: &str = "analytics.app_started_day.";
-const PROVIDER_SECRET_KEYRING_TARGET: &str = "OpenUsage";
-#[cfg(target_os = "windows")]
-const PROVIDER_SECRET_WINDOWS_USER: &str = "provider-secret";
-
 fn pending_panel_view_slot() -> &'static Mutex<Option<String>> {
     static SLOT: OnceLock<Mutex<Option<String>>> = OnceLock::new();
     SLOT.get_or_init(|| Mutex::new(None))
@@ -64,167 +71,6 @@ fn store_pending_panel_view(view: String) {
 
 fn take_pending_panel_view_inner() -> Option<String> {
     pending_panel_view_slot().lock().ok()?.take()
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct ProviderSecretEntrySpec<'a> {
-    target: Option<&'a str>,
-    service: &'a str,
-    user: &'a str,
-}
-
-fn provider_secret_service(provider_id: &str, secret_key: &str) -> String {
-    format!("OpenUsage Provider Secret {} {}", provider_id, secret_key)
-}
-
-fn provider_secret_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
-    #[cfg(target_os = "windows")]
-    {
-        ProviderSecretEntrySpec {
-            target: Some(service),
-            service: PROVIDER_SECRET_KEYRING_TARGET,
-            user: PROVIDER_SECRET_WINDOWS_USER,
-        }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        ProviderSecretEntrySpec {
-            target: None,
-            service: PROVIDER_SECRET_KEYRING_TARGET,
-            user: service,
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn provider_secret_legacy_entry_spec(service: &str) -> ProviderSecretEntrySpec<'_> {
-    ProviderSecretEntrySpec {
-        target: None,
-        service: PROVIDER_SECRET_KEYRING_TARGET,
-        user: service,
-    }
-}
-
-fn open_provider_secret_entry(spec: ProviderSecretEntrySpec<'_>) -> Result<Entry, keyring::Error> {
-    match spec.target {
-        Some(target) => Entry::new_with_target(target, spec.service, spec.user),
-        None => Entry::new(spec.service, spec.user),
-    }
-}
-
-fn provider_display_name(provider_id: &str) -> String {
-    match provider_id {
-        "ollama" => "Ollama".to_string(),
-        "opencode" => "OpenCode".to_string(),
-        "codex" => "Codex".to_string(),
-        "claude" => "Claude".to_string(),
-        _ => provider_id.to_string(),
-    }
-}
-
-fn provider_secret_field_label(secret_key: &str) -> &'static str {
-    match secret_key {
-        "cookieHeader" => "cookie header",
-        _ => "secret",
-    }
-}
-
-fn provider_secret_label(provider_id: &str, secret_key: &str) -> String {
-    format!(
-        "{} {}",
-        provider_display_name(provider_id),
-        provider_secret_field_label(secret_key)
-    )
-}
-
-fn provider_secret_legacy_services(provider_id: &str, secret_key: &str) -> Vec<String> {
-    match (provider_id, secret_key) {
-        ("opencode", "cookieHeader") => vec!["OpenCode Cookie Header".to_string()],
-        _ => Vec::new(),
-    }
-}
-
-fn delete_provider_secret_service(service: &str) -> Result<(), String> {
-    let mut specs = vec![provider_secret_entry_spec(service)];
-    #[cfg(target_os = "windows")]
-    {
-        specs.push(provider_secret_legacy_entry_spec(service));
-    }
-
-    for spec in specs {
-        let entry = open_provider_secret_entry(spec)
-            .map_err(|error| format!("credential store unavailable: {}", error))?;
-        match entry.delete_credential() {
-            Ok(()) => {}
-            Err(error) => {
-                let message = error.to_string().to_lowercase();
-                if is_missing_credential_error(&message) {
-                    continue;
-                }
-                return Err(format!("credential delete failed: {}", error));
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn is_missing_credential_error(message: &str) -> bool {
-    let normalized = message.to_lowercase();
-
-    normalized.contains("no entry")
-        || normalized.contains("no matching entry found")
-        || normalized.contains("not found")
-        || normalized.contains("cannot find")
-        || normalized.contains("element not found")
-        || normalized.contains("credential not found")
-        || normalized.contains("specified file could not be found")
-        || normalized.contains("system cannot find the file specified")
-        || normalized.contains("os error 1168")
-}
-
-#[cfg(not(target_os = "windows"))]
-fn read_provider_secret_service(
-    provider_id: &str,
-    secret_key: &str,
-    service: &str,
-) -> Result<String, String> {
-    let label = provider_secret_label(provider_id, secret_key);
-    let entry =
-        open_provider_secret_entry(provider_secret_entry_spec(service)).map_err(|error| {
-            format!(
-                "Could not access the system credential vault for {}: {}",
-                label, error
-            )
-        })?;
-    entry.get_password().map_err(|error| {
-        format!(
-            "Saved {}, but could not read it back from a fresh system credential vault lookup: {}",
-            label, error
-        )
-    })
-}
-
-fn verify_provider_secret_write_with_fresh_lookup<F>(
-    provider_id: &str,
-    secret_key: &str,
-    service: &str,
-    expected_value: &str,
-    read_secret: F,
-) -> Result<(), String>
-where
-    F: FnOnce(&str) -> Result<String, String>,
-{
-    let label = provider_secret_label(provider_id, secret_key);
-    let read_back = read_secret(service)?;
-    if read_back != expected_value {
-        return Err(format!(
-            "Saved {}, but the fresh system credential vault lookup returned a different value.",
-            label
-        ));
-    }
-    Ok(())
 }
 
 fn app_started_day_key(version: &str) -> String {
@@ -593,13 +439,6 @@ fn codex_profile_label(email: Option<&str>, account_id: Option<&str>, now_ms: i6
     format!("Codex {}", now_ms)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ImportedCodexAccountResponse {
-    profile: codex_account_store::CodexAccountProfile,
-    was_first_profile: bool,
-}
-
 fn should_track_app_started(last_tracked_day: Option<&str>, today: &str) -> bool {
     match last_tracked_day {
         Some(day) => day != today,
@@ -711,29 +550,6 @@ pub struct PluginLinkDto {
 }
 
 #[cfg(not(test))]
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProbeBatchStarted {
-    pub batch_id: String,
-    pub plugin_ids: Vec<String>,
-}
-
-#[cfg(not(test))]
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProbeResult {
-    pub batch_id: String,
-    pub output: plugin_engine::runtime::PluginOutput,
-}
-
-#[cfg(not(test))]
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProbeBatchComplete {
-    pub batch_id: String,
-}
-
-#[cfg(not(test))]
 #[tauri::command]
 fn init_panel(app_handle: tauri::AppHandle) {
     panel::init(&app_handle).expect("Failed to initialize panel");
@@ -820,45 +636,6 @@ async fn open_settings_window(
 
 #[cfg(not(test))]
 #[tauri::command]
-fn capture_provider_cookie_header(
-    app_handle: tauri::AppHandle,
-    provider_id: String,
-    window_title: String,
-    login_url: String,
-    success_url_contains: String,
-    cookie_urls: Vec<String>,
-) -> Result<plugin_engine::browser_bridge::GuidedCookieCaptureResponse, String> {
-    validate_guided_cookie_capture_request(
-        &provider_id,
-        &login_url,
-        &success_url_contains,
-        &cookie_urls,
-    )?;
-    let cookie_names = guided_cookie_policy(&provider_id)
-        .expect("validated guided cookie provider must have a policy")
-        .cookie_names
-        .iter()
-        .map(|name| (*name).to_string())
-        .collect();
-    log::info!(
-        "starting guided cookie login for provider='{}'",
-        provider_id.trim()
-    );
-    plugin_engine::browser_bridge::capture_cookies_interactively(
-        &app_handle,
-        &plugin_engine::browser_bridge::GuidedCookieCaptureParams {
-            provider_id,
-            window_title,
-            login_url,
-            success_url_contains,
-            cookie_urls,
-            cookie_names,
-        },
-    )
-}
-
-#[cfg(not(test))]
-#[tauri::command]
 fn open_devtools(#[allow(unused)] app_handle: tauri::AppHandle) {
     #[cfg(debug_assertions)]
     {
@@ -871,484 +648,10 @@ fn open_devtools(#[allow(unused)] app_handle: tauri::AppHandle) {
 
 #[cfg(not(test))]
 #[tauri::command]
-async fn start_probe_batch(
-    app_handle: tauri::AppHandle,
-    state: tauri::State<'_, Mutex<AppState>>,
-    batch_id: Option<String>,
-    plugin_ids: Option<Vec<String>>,
-) -> Result<ProbeBatchStarted, String> {
-    let batch_id = batch_id
-        .and_then(|id| {
-            let trimmed = id.trim().to_string();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed)
-            }
-        })
-        .unwrap_or_else(|| Uuid::new_v4().to_string());
-
-    let (plugins, app_data_dir, app_version) = {
-        let locked = state.lock().map_err(|e| e.to_string())?;
-        (
-            locked.plugins.clone(),
-            locked.app_data_dir.clone(),
-            locked.app_version.clone(),
-        )
-    };
-
-    let selected_plugins = match plugin_ids {
-        Some(ids) => {
-            let mut by_id: HashMap<String, plugin_engine::manifest::LoadedPlugin> = plugins
-                .into_iter()
-                .map(|plugin| (plugin.manifest.id.clone(), plugin))
-                .collect();
-            let mut seen = HashSet::new();
-            ids.into_iter()
-                .filter_map(|id| {
-                    if !seen.insert(id.clone()) {
-                        return None;
-                    }
-                    by_id.remove(&id)
-                })
-                .collect()
-        }
-        None => plugins,
-    };
-    let selected_plugins: Vec<_> = selected_plugins
-        .into_iter()
-        .filter(|plugin| plugin_is_probe_supported(&plugin.manifest))
-        .collect();
-
-    let response_plugin_ids: Vec<String> = selected_plugins
-        .iter()
-        .map(|plugin| plugin.manifest.id.clone())
-        .collect();
-
-    log::info!(
-        "probe batch {} starting: {:?}",
-        batch_id,
-        response_plugin_ids
-    );
-
-    if selected_plugins.is_empty() {
-        let _ = app_handle.emit(
-            "probe:batch-complete",
-            ProbeBatchComplete {
-                batch_id: batch_id.clone(),
-            },
-        );
-        return Ok(ProbeBatchStarted {
-            batch_id,
-            plugin_ids: response_plugin_ids,
-        });
-    }
-
-    let coordinator = {
-        let locked = state.lock().map_err(|e| e.to_string())?;
-        Arc::clone(&locked.probe_coordinator)
-    };
-    let providers_to_start = coordinator
-        .lock()
-        .map_err(|e| e.to_string())?
-        .reserve_batch(batch_id.clone(), &response_plugin_ids)?;
-    let providers_to_start: HashSet<String> = providers_to_start.into_iter().collect();
-
-    for plugin in selected_plugins
-        .into_iter()
-        .filter(|plugin| providers_to_start.contains(&plugin.manifest.id))
-    {
-        let handle = app_handle.clone();
-        let data_dir = app_data_dir.clone();
-        let version = app_version.clone();
-        let coordinator = Arc::clone(&coordinator);
-
-        tauri::async_runtime::spawn_blocking(move || {
-            let plugin_id = plugin.manifest.id.clone();
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                plugin_engine::runtime::run_probe(&plugin, &data_dir, &version, Some(&handle))
-            }));
-
-            let output = match result {
-                Ok(output) => {
-                    let has_error = output.lines.iter().any(|line| {
-                        matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")
-                    });
-                    if has_error {
-                        log::warn!("probe {} completed with error", plugin_id);
-                    } else {
-                        log::info!(
-                            "probe {} completed ok ({} lines)",
-                            plugin_id,
-                            output.lines.len()
-                        );
-                        local_http_api::cache_successful_output(&output);
-                    }
-                    output
-                }
-                Err(_) => {
-                    log::error!("probe {} panicked", plugin_id);
-                    plugin_engine::runtime::error_output(
-                        &plugin,
-                        "provider probe panicked".to_string(),
-                    )
-                }
-            };
-
-            let completion = coordinator
-                .lock()
-                .expect("probe coordinator lock poisoned")
-                .complete_provider(&plugin_id);
-            for result_batch_id in &completion.result_batch_ids {
-                let _ = handle.emit(
-                    "probe:result",
-                    ProbeResult {
-                        batch_id: result_batch_id.clone(),
-                        output: output.clone(),
-                    },
-                );
-            }
-            for completed_batch_id in completion.completed_batch_ids {
-                log::info!("probe batch {} complete", completed_batch_id);
-                let _ = handle.emit(
-                    "probe:batch-complete",
-                    ProbeBatchComplete {
-                        batch_id: completed_batch_id,
-                    },
-                );
-            }
-        });
-    }
-
-    Ok(ProbeBatchStarted {
-        batch_id,
-        plugin_ids: response_plugin_ids,
-    })
-}
-
-#[cfg(not(test))]
-#[tauri::command]
 fn get_log_path(app_handle: tauri::AppHandle) -> Result<String, String> {
     let log_dir = app_handle.path().app_log_dir().map_err(|e| e.to_string())?;
     let log_file = log_dir.join(format!("{}.log", app_handle.package_info().name));
     Ok(log_file.to_string_lossy().to_string())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-fn set_provider_secret(
-    app_handle: tauri::AppHandle,
-    provider_id: String,
-    secret_key: String,
-    value: String,
-) -> Result<(), String> {
-    let trimmed_provider = provider_id.trim();
-    let trimmed_secret = secret_key.trim();
-    let trimmed_value = value.trim();
-
-    if trimmed_provider.is_empty() || trimmed_secret.is_empty() {
-        return Err("provider and secret key are required".to_string());
-    }
-    if trimmed_value.is_empty() {
-        return Err("secret value cannot be empty".to_string());
-    }
-
-    let service = provider_secret_service(trimmed_provider, trimmed_secret);
-    let label = provider_secret_label(trimmed_provider, trimmed_secret);
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
-        format!(
-            "Could not access the app data directory for {}: {}",
-            label, error
-        )
-    })?;
-    log::info!(
-        "setting provider secret for provider='{}' key='{}'",
-        trimmed_provider,
-        trimmed_secret
-    );
-
-    #[cfg(target_os = "windows")]
-    {
-        provider_secret_store::save_provider_secret(
-            &app_data_dir,
-            trimmed_provider,
-            trimmed_secret,
-            trimmed_value,
-        )
-        .map_err(|error| {
-            format!(
-                "Could not save {} to the Windows-protected local secret store: {}",
-                label, error
-            )
-        })?;
-
-        verify_provider_secret_write_with_fresh_lookup(
-            trimmed_provider,
-            trimmed_secret,
-            &service,
-            trimmed_value,
-            |_| {
-                provider_secret_store::read_provider_secret(
-                    &app_data_dir,
-                    trimmed_provider,
-                    trimmed_secret,
-                )?
-                .ok_or_else(|| {
-                    format!(
-                        "Saved {}, but it was missing from the Windows-protected local secret store on the next read.",
-                        label
-                    )
-                })
-            },
-        )?;
-
-        return Ok(());
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let entry =
-            open_provider_secret_entry(provider_secret_entry_spec(&service)).map_err(|error| {
-                format!(
-                    "Could not access the system credential vault for {}: {}",
-                    label, error
-                )
-            })?;
-
-        entry.set_password(trimmed_value).map_err(|error| {
-            format!(
-                "Could not save {} to the system credential vault: {}",
-                label, error
-            )
-        })?;
-
-        return verify_provider_secret_write_with_fresh_lookup(
-            trimmed_provider,
-            trimmed_secret,
-            &service,
-            trimmed_value,
-            |service| read_provider_secret_service(trimmed_provider, trimmed_secret, service),
-        );
-    }
-
-    #[allow(unreachable_code)]
-    Ok(())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn list_browser_import_sources(
-    app_handle: tauri::AppHandle,
-    provider_id: String,
-) -> Result<Vec<browser_cookie_import::BrowserImportSource>, String> {
-    let provider_id = provider_id.trim().to_ascii_lowercase();
-    if provider_id.is_empty() {
-        return Err("provider id is required".to_string());
-    }
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("Could not access the app data directory: {error}"))?;
-    tauri::async_runtime::spawn_blocking(move || {
-        browser_cookie_import::list_sources(&app_data_dir, &provider_id)
-    })
-    .await
-    .map_err(|error| format!("Could not inspect browser import sources: {error}"))
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-async fn import_browser_cookies(
-    app_handle: tauri::AppHandle,
-    provider_id: String,
-    source_id: String,
-    profile_id: String,
-) -> Result<browser_cookie_import::BrowserCookieImportResult, String> {
-    let provider_id = provider_id.trim().to_ascii_lowercase();
-    let source_id = source_id.trim().to_ascii_lowercase();
-    let profile_id = profile_id.trim().to_string();
-    if provider_id.is_empty() || source_id.is_empty() || profile_id.is_empty() {
-        return Err("provider id, browser source, and profile are required".to_string());
-    }
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("Could not access the app data directory: {error}"))?;
-    tauri::async_runtime::spawn_blocking(move || {
-        browser_cookie_import::import_cookies(&app_data_dir, &provider_id, &source_id, &profile_id)
-    })
-    .await
-    .map_err(|error| format!("Could not import browser cookies: {error}"))
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-fn delete_provider_secret(
-    app_handle: tauri::AppHandle,
-    provider_id: String,
-    secret_key: String,
-) -> Result<(), String> {
-    let trimmed_provider = provider_id.trim();
-    let trimmed_secret = secret_key.trim();
-
-    if trimmed_provider.is_empty() || trimmed_secret.is_empty() {
-        return Err("provider and secret key are required".to_string());
-    }
-
-    log::info!(
-        "deleting provider secret for provider='{}' key='{}'",
-        trimmed_provider,
-        trimmed_secret
-    );
-
-    #[cfg(target_os = "windows")]
-    {
-        let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
-            format!(
-                "Could not access the app data directory while removing {}: {}",
-                provider_secret_label(trimmed_provider, trimmed_secret),
-                error
-            )
-        })?;
-
-        provider_secret_store::delete_provider_secret(
-            &app_data_dir,
-            trimmed_provider,
-            trimmed_secret,
-        )
-        .map_err(|error| {
-            format!(
-                "Could not remove {} from the Windows-protected local secret store: {}",
-                provider_secret_label(trimmed_provider, trimmed_secret),
-                error
-            )
-        })?;
-    }
-
-    let mut services = vec![provider_secret_service(trimmed_provider, trimmed_secret)];
-    services.extend(provider_secret_legacy_services(
-        trimmed_provider,
-        trimmed_secret,
-    ));
-
-    for service in services {
-        if let Err(error) = delete_provider_secret_service(&service) {
-            log::error!(
-                "provider secret delete failed for provider='{}' key='{}' service='{}': {}",
-                trimmed_provider,
-                trimmed_secret,
-                service,
-                error
-            );
-            return Err(error);
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-fn list_codex_account_profiles(
-    app_handle: tauri::AppHandle,
-) -> Result<Vec<codex_account_store::CodexAccountProfile>, String> {
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("Could not access the app data directory: {}", error))?;
-    codex_account_store::list_profiles(&app_data_dir)
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-fn import_current_codex_account_profile(
-    app_handle: tauri::AppHandle,
-) -> Result<ImportedCodexAccountResponse, String> {
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("Could not access the app data directory: {}", error))?;
-    let existing_profiles = codex_account_store::list_profiles(&app_data_dir)?;
-    let resolved = resolve_current_codex_auth()?;
-    let now_ms = now_utc_unix_ms();
-    let imported = codex_account_store::ImportedCodexAccount {
-        label: codex_profile_label(
-            resolved.email.as_deref(),
-            resolved.account_id.as_deref(),
-            now_ms,
-        ),
-        email: resolved.email.clone(),
-        account_id: resolved.account_id.clone(),
-    };
-    let profile = codex_account_store::import_profile(&app_data_dir, imported, now_ms)?;
-    let secret_key = format!("account:{}:authJson", profile.profile_id);
-
-    #[cfg(target_os = "windows")]
-    provider_secret_store::save_provider_secret(
-        &app_data_dir,
-        "codex",
-        &secret_key,
-        &resolved.auth_json,
-    )
-    .map_err(|error| format!("Could not save imported Codex profile auth: {}", error))?;
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let service = provider_secret_service("codex", &secret_key);
-        let entry = open_provider_secret_entry(provider_secret_entry_spec(&service))
-            .map_err(|error| format!("Could not access the system credential vault: {}", error))?;
-        entry
-            .set_password(&resolved.auth_json)
-            .map_err(|error| format!("Could not save imported Codex profile auth: {}", error))?;
-    }
-
-    Ok(ImportedCodexAccountResponse {
-        profile,
-        was_first_profile: existing_profiles.is_empty(),
-    })
-}
-
-#[cfg(not(test))]
-#[tauri::command]
-fn delete_codex_account_profile(
-    app_handle: tauri::AppHandle,
-    profile_id: String,
-) -> Result<Option<codex_account_store::CodexAccountProfile>, String> {
-    let trimmed_profile_id = profile_id.trim();
-    if trimmed_profile_id.is_empty() {
-        return Err("profile id is required".to_string());
-    }
-
-    let app_data_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|error| format!("Could not access the app data directory: {}", error))?;
-    let removed = codex_account_store::delete_profile(&app_data_dir, trimmed_profile_id)?;
-    if removed.is_none() {
-        return Ok(None);
-    }
-
-    let secret_key = format!("account:{}:authJson", trimmed_profile_id);
-    #[cfg(target_os = "windows")]
-    provider_secret_store::delete_provider_secret(&app_data_dir, "codex", &secret_key)
-        .map_err(|error| format!("Could not remove imported Codex profile auth: {}", error))?;
-
-    let service = provider_secret_service("codex", &secret_key);
-    delete_provider_secret_service(&service)
-        .map_err(|error| format!("Could not remove imported Codex profile auth: {}", error))?;
-
-    if let Some(selected_profile_id) =
-        read_provider_config_string(&app_data_dir, "codex", "selectedAccountProfileId")?
-    {
-        if selected_profile_id.trim() == trimmed_profile_id {
-            log::info!(
-                "deleted selected Codex profile '{}'; UI should clear selectedAccountProfileId on next settings load",
-                trimmed_profile_id
-            );
-        }
-    }
-
-    Ok(removed)
 }
 
 struct ResolvedPluginSupport {
