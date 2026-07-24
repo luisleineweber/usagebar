@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 import { AccountManagementSection } from "@/components/settings/account-management-section"
 import { ReportingSourceSettings } from "@/components/settings/reporting-source-settings"
 import type { PluginState } from "@/hooks/app/types"
@@ -32,6 +33,7 @@ import {
   type ProviderSourceMode,
 } from "@/lib/provider-settings"
 import { cn } from "@/lib/utils"
+import { getProviderIconColor } from "@/lib/provider-icon"
 
 export type ProviderSettingsDetailProps = {
   plugin: PluginMeta
@@ -82,13 +84,21 @@ function getProbeStatus(
   }
 }
 
-function ProviderIconMask({ iconUrl, brandColor }: { iconUrl: string; brandColor?: string }) {
+function ProviderIconMask({
+  iconUrl,
+  brandColor,
+  isDark,
+}: {
+  iconUrl: string
+  brandColor?: string
+  isDark: boolean
+}) {
   return (
     <span
       aria-hidden
       className="inline-block size-8 shrink-0 rounded-lg bg-foreground/85"
       style={{
-        backgroundColor: brandColor ?? "currentColor",
+        backgroundColor: getProviderIconColor(brandColor, isDark),
         WebkitMaskImage: `url(${iconUrl})`,
         WebkitMaskSize: "contain",
         WebkitMaskRepeat: "no-repeat",
@@ -114,6 +124,7 @@ export function ProviderSettingsDetail({
   onSecretSave,
   onSecretDelete,
 }: ProviderSettingsDetailProps) {
+  const isDark = useDarkMode()
   const definition = getProviderSettingsDefinition(plugin.id)
   const probeStatus = getProbeStatus(plugin, state, enabled)
   const isConnected = Boolean(state?.data)
@@ -226,7 +237,9 @@ export function ProviderSettingsDetail({
     setIsSavingConfig(true)
     try {
       await onConfigChange(plugin.id, { browserCookieImportEnabled: enabled })
-      setSaveMessage(enabled ? "Browser import enabled for this provider." : "Browser import disabled.")
+      setSaveMessage(
+        enabled ? "Browser import enabled for this provider." : "Browser import disabled."
+      )
     } catch (error) {
       setSaveError(getErrorMessage(error, "Failed to update browser import permission."))
     } finally {
@@ -330,7 +343,11 @@ export function ProviderSettingsDetail({
       {/* Provider header */}
       <div className="border-b border-border/60 pb-5">
         <div className="flex min-w-0 items-start gap-3">
-          <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} />
+          <ProviderIconMask
+            iconUrl={plugin.iconUrl}
+            brandColor={plugin.brandColor}
+            isDark={isDark}
+          />
           <div className="min-w-0 flex-1">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Provider configuration
@@ -507,10 +524,16 @@ export function ProviderSettingsDetail({
                           >
                             {browserSources
                               .flatMap((source) =>
-                                source.profiles.map((profile) => ({ sourceId: source.sourceId, profile }))
+                                source.profiles.map((profile) => ({
+                                  sourceId: source.sourceId,
+                                  profile,
+                                }))
                               )
                               .map((option) => (
-                                <option key={`${option.sourceId}-${option.profile}`} value={option.profile}>
+                                <option
+                                  key={`${option.sourceId}-${option.profile}`}
+                                  value={option.profile}
+                                >
                                   {option.profile}
                                 </option>
                               ))}
@@ -527,7 +550,8 @@ export function ProviderSettingsDetail({
                         </div>
                       ) : (
                         <p className="mt-2 text-xs text-muted-foreground">
-                          No Edge profile with a cookie database was found. Manual entry remains available below.
+                          No Edge profile with a cookie database was found. Manual entry remains
+                          available below.
                         </p>
                       )
                     ) : null}
@@ -652,7 +676,9 @@ export function ProviderSettingsDetail({
               providerId={plugin.id}
               definition={definition}
               connected={isConnected}
-              stale={Boolean(state?.lastSuccessAt && Date.now() - state.lastSuccessAt > 30 * 60_000)}
+              stale={Boolean(
+                state?.lastSuccessAt && Date.now() - state.lastSuccessAt > 30 * 60_000
+              )}
               config={config}
               credentialStored={secretPresent}
               onConfigChange={onConfigChange}

@@ -12,7 +12,9 @@ const state = vi.hoisted(() => ({
   currentMonitorMock: vi.fn(),
   startBatchMock: vi.fn(),
   savePluginSettingsMock: vi.fn(),
+  saveOnboardingInProgressMock: vi.fn(),
   loadPluginSettingsMock: vi.fn(),
+  hasStoredPluginSettings: true,
   loadAutoUpdateIntervalMock: vi.fn(),
   loadAccentColorMock: vi.fn(),
   saveAutoUpdateIntervalMock: vi.fn(),
@@ -269,7 +271,13 @@ vi.mock("@/lib/settings", async () => {
   return {
     ...actual,
     loadPluginSettings: state.loadPluginSettingsMock,
+    loadPluginSettingsRecord: async () => ({
+      settings: await state.loadPluginSettingsMock(),
+      hasStoredSettings: state.hasStoredPluginSettings,
+      onboardingInProgress: false,
+    }),
     savePluginSettings: state.savePluginSettingsMock,
+    saveOnboardingInProgress: state.saveOnboardingInProgressMock,
     loadAutoUpdateInterval: state.loadAutoUpdateIntervalMock,
     loadAccentColor: state.loadAccentColorMock,
     saveAutoUpdateInterval: state.saveAutoUpdateIntervalMock,
@@ -351,7 +359,9 @@ describe("App", () => {
     state.currentMonitorMock.mockReset()
     state.startBatchMock.mockReset()
     state.savePluginSettingsMock.mockReset()
+    state.saveOnboardingInProgressMock.mockReset()
     state.loadPluginSettingsMock.mockReset()
+    state.hasStoredPluginSettings = true
     state.loadAutoUpdateIntervalMock.mockReset()
     state.loadAccentColorMock.mockReset()
     state.saveAutoUpdateIntervalMock.mockReset()
@@ -407,6 +417,7 @@ describe("App", () => {
     updaterState.relaunchMock.mockReset()
     updaterState.checkMock.mockResolvedValue(null)
     state.savePluginSettingsMock.mockResolvedValue(undefined)
+    state.saveOnboardingInProgressMock.mockResolvedValue(undefined)
     state.saveAutoUpdateIntervalMock.mockResolvedValue(undefined)
     state.loadAccentColorMock.mockResolvedValue("#86c5ff")
     state.loadThemeModeMock.mockResolvedValue("system")
@@ -546,6 +557,118 @@ describe("App", () => {
       )
     )
     expect(screen.getByText("Alpha")).toBeInTheDocument()
+  })
+
+  it("opens onboarding without persisting defaults or probing on a fresh install", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    state.hasStoredPluginSettings = false
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: [],
+      disabled: [],
+    })
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "codex",
+            name: "Codex",
+            iconUrl: "/codex.svg",
+            lines: [],
+            primaryCandidates: [],
+          },
+        ]
+      }
+      return null
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(state.invokeMock).toHaveBeenCalledWith("open_settings_window", {
+        tab: "providers",
+        providerId: null,
+      })
+    })
+    expect(state.savePluginSettingsMock).not.toHaveBeenCalled()
+    expect(state.startBatchMock).not.toHaveBeenCalled()
+  })
+
+  it("persists the recommended onboarding providers before checking them", async () => {
+    state.isTauriMock.mockReturnValue(true)
+    state.hasStoredPluginSettings = false
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "codex",
+            name: "Codex",
+            iconUrl: "/codex.svg",
+            lines: [],
+            primaryCandidates: [],
+          },
+          {
+            id: "claude",
+            name: "Claude",
+            iconUrl: "/claude.svg",
+            lines: [],
+            primaryCandidates: [],
+          },
+          {
+            id: "cursor",
+            name: "Cursor",
+            iconUrl: "/cursor.svg",
+            lines: [],
+            primaryCandidates: [],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValue({
+      order: [],
+      disabled: [],
+    })
+    state.startBatchMock.mockResolvedValue(["codex", "claude", "cursor"])
+
+    renderSettingsWindow()
+
+    expect(
+      await screen.findByRole("heading", { name: "Was möchtest du verbinden?" })
+    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole("checkbox", { name: "Codex auswählen" })).toBeChecked()
+    })
+    await userEvent.click(screen.getByRole("button", { name: "Verbindungen prüfen" }))
+
+    expect(state.savePluginSettingsMock).toHaveBeenCalledWith({
+      order: ["codex", "claude", "cursor"],
+      disabled: [],
+    })
+    expect(state.startBatchMock).toHaveBeenCalledWith(["codex", "claude", "cursor"])
+    expect(state.saveOnboardingInProgressMock).toHaveBeenCalledWith(true)
+    expect(eventState.emitMock).not.toHaveBeenCalledWith(
+      "plugin-settings:updated",
+      expect.anything()
+    )
+
+    for (const providerId of ["codex", "claude", "cursor"]) {
+      await act(async () => {
+        state.probeHandlers?.onResult({
+          providerId,
+          displayName: providerId,
+          iconUrl: `/${providerId}.svg`,
+          lines: [],
+        })
+      })
+    }
+    await userEvent.click(screen.getByRole("button", { name: "Einrichtung abschließen" }))
+    await userEvent.click(screen.getByRole("button", { name: "UsageBar öffnen" }))
+
+    expect(eventState.emitMock).toHaveBeenCalledWith("plugin-settings:updated", {
+      order: ["codex", "claude", "cursor"],
+      disabled: [],
+    })
+    expect(state.saveOnboardingInProgressMock).toHaveBeenLastCalledWith(false)
   })
 
   it("raises the cold-start panel height for the full nav stack before slower bootstrap finishes", async () => {
@@ -991,7 +1114,7 @@ describe("App", () => {
 
   it("renders menubar icon style controls in settings", async () => {
     renderSettingsWindow()
-    expect(screen.getByText("Tray Icon")).toBeInTheDocument()
+    expect(await screen.findByText("Tray Icon")).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
   })

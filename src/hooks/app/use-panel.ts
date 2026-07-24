@@ -20,7 +20,9 @@ const SIDE_NAV_TOP_PADDING_PX = 12
 const SIDE_NAV_BUTTON_HEIGHT_PX = 44
 const SIDE_NAV_STATIC_BUTTON_COUNT = 2 // Home + Settings
 
-function getMonitorLogicalHeight(monitor: Awaited<ReturnType<typeof currentMonitor>>): number | null {
+function getMonitorLogicalHeight(
+  monitor: Awaited<ReturnType<typeof currentMonitor>>
+): number | null {
   if (!monitor) return null
   const workAreaHeight = monitor.workArea?.size.height
   if (typeof workAreaHeight === "number" && Number.isFinite(workAreaHeight) && workAreaHeight > 0) {
@@ -298,8 +300,9 @@ export function usePanel({
       resizeSequenceIdRef.current = sequenceId
       measuredTargetPanelHeightPxRef.current = roundedHeight
 
-      const currentDisplayedHeight = currentPanelHeightPxRef.current
-        ?? Math.max(1, Math.round(window.innerHeight || roundedHeight))
+      const currentDisplayedHeight =
+        currentPanelHeightPxRef.current ??
+        Math.max(1, Math.round(window.innerHeight || roundedHeight))
       const delta = roundedHeight - currentDisplayedHeight
 
       clearHeightTween()
@@ -315,28 +318,28 @@ export function usePanel({
         const progress = step / PANEL_HEIGHT_TWEEN_STEPS
         const easedProgress = 1 - Math.pow(1 - progress, 2)
         const nextHeight = Math.round(currentDisplayedHeight + delta * easedProgress)
-        const timeoutId = window.setTimeout(() => {
-          applyHeightStep(nextHeight, sequenceId)
-          if (step === PANEL_HEIGHT_TWEEN_STEPS && resizeSequenceIdRef.current === sequenceId) {
-            tweenTimeoutsRef.current = []
-            setIsPanelResizing(false)
-          }
-        }, Math.round((PANEL_HEIGHT_TWEEN_DURATION_MS / PANEL_HEIGHT_TWEEN_STEPS) * step))
+        const timeoutId = window.setTimeout(
+          () => {
+            applyHeightStep(nextHeight, sequenceId)
+            if (step === PANEL_HEIGHT_TWEEN_STEPS && resizeSequenceIdRef.current === sequenceId) {
+              tweenTimeoutsRef.current = []
+              setIsPanelResizing(false)
+            }
+          },
+          Math.round((PANEL_HEIGHT_TWEEN_DURATION_MS / PANEL_HEIGHT_TWEEN_STEPS) * step)
+        )
         tweenTimeoutsRef.current.push(timeoutId)
       }
     }
 
-      const resizeWindow = async () => {
-        if (isDisposed) return
-        const factor = window.devicePixelRatio
+    const resizeWindow = async () => {
+      if (isDisposed) return
       const contentHeightLogical = Math.ceil(
         contentMeasureRef.current?.scrollHeight ??
           scrollRef.current?.scrollHeight ??
           container.scrollHeight
       )
-      const footerHeightLogical = Math.ceil(
-        footerRef.current?.getBoundingClientRect().height ?? 0
-      )
+      const footerHeightLogical = Math.ceil(footerRef.current?.getBoundingClientRect().height ?? 0)
       const contentColumnStyle = contentColumnRef.current
         ? window.getComputedStyle(contentColumnRef.current)
         : null
@@ -354,17 +357,15 @@ export function usePanel({
       const viewMinHeightLogical = panelPreferredMinHeightForView(activeView)
       const panelMaxHeightPx = panelMaxHeightForView(activeView)
 
-      let maxHeightPhysical: number | null = null
       let maxHeightLogical: number | null = null
 
       try {
         const monitor = await currentMonitor()
         const monitorHeight = getMonitorLogicalHeight(monitor)
         if (monitorHeight !== null) {
-          maxHeightPhysical = Math.floor(
-            Math.min(monitorHeight * factor * MAX_HEIGHT_FRACTION_OF_MONITOR, panelMaxHeightPx * factor)
+          maxHeightLogical = Math.floor(
+            Math.min(monitorHeight * MAX_HEIGHT_FRACTION_OF_MONITOR, panelMaxHeightPx)
           )
-          maxHeightLogical = Math.floor(maxHeightPhysical / factor)
         }
       } catch {
         // fall through to fallback
@@ -375,7 +376,6 @@ export function usePanel({
         maxHeightLogical = Math.floor(
           Math.min(screenAvailHeight * MAX_HEIGHT_FRACTION_OF_MONITOR, panelMaxHeightPx)
         )
-        maxHeightPhysical = Math.floor(maxHeightLogical * factor)
       }
 
       if (maxPanelHeightPxRef.current !== maxHeightLogical) {

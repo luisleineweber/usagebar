@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { useShallow } from "zustand/react/shallow"
 import { SettingsPage } from "@/pages/settings"
+import { FirstRunOnboarding } from "@/components/onboarding/first-run-onboarding"
 import { useProbe } from "@/hooks/app/use-probe"
 import { useSettingsBootstrap } from "@/hooks/app/use-settings-bootstrap"
 import { useSettingsDisplayActions } from "@/hooks/app/use-settings-display-actions"
@@ -10,6 +11,7 @@ import { useSettingsPluginActions } from "@/hooks/app/use-settings-plugin-action
 import { useSettingsPluginList } from "@/hooks/app/use-settings-plugin-list"
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
+import { useFirstRunOnboarding } from "@/hooks/app/use-first-run-onboarding"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { parseSettingsWindowLocation, type SettingsWindowTab } from "@/lib/settings-window"
 import {
@@ -132,7 +134,7 @@ export function SettingsWindowApp() {
     activeView: "home",
   })
 
-  const { applyStartOnLogin } = useSettingsBootstrap({
+  const { applyStartOnLogin, isFirstRun, finishFirstRun } = useSettingsBootstrap({
     setPluginSettings,
     setPluginsMeta,
     setAutoUpdateInterval,
@@ -379,43 +381,67 @@ export function SettingsWindowApp() {
     []
   )
 
+  const { connectProviders, finishOnboarding } = useFirstRunOnboarding({
+    pluginSettings,
+    setPluginSettings,
+    setLoadingForPlugins,
+    setErrorForPlugins,
+    startBatch,
+    scheduleTrayIconUpdate,
+    finishFirstRun,
+  })
+
   return (
     <div className="min-h-screen bg-background px-6 py-6 text-foreground md:px-10 md:py-10">
       <div className="mx-auto w-full max-w-7xl">
-        <SettingsPage
-          providers={settingsPlugins}
-          selectedProviderId={selectedProviderId}
-          onSelectedProviderChange={handleSelectedProviderChange}
-          settingsTab={settingsTab}
-          onSettingsTabChange={setSettingsTab}
-          onToggle={handleToggle}
-          onShow={(id) => handleHide(id)}
-          autoUpdateInterval={autoUpdateInterval}
-          onAutoUpdateIntervalChange={handleAutoUpdateIntervalChange}
-          themeMode={themeMode}
-          onThemeModeChange={handleThemeModeChange}
-          accentColor={accentColor}
-          onAccentColorChange={handleAccentColorChange}
-          displayMode={displayMode}
-          onDisplayModeChange={handleDisplayModeChange}
-          resetTimerDisplayMode={resetTimerDisplayMode}
-          onResetTimerDisplayModeChange={handleResetTimerDisplayModeChange}
-          timeFormatMode={timeFormatMode}
-          onTimeFormatModeChange={handleTimeFormatModeChange}
-          menubarIconStyle={menubarIconStyle}
-          onMenubarIconStyleChange={handleMenubarIconStyleChange}
-          surfacePins={surfacePins}
-          onSurfacePinsChange={handleSurfacePinsChange}
-          traySettingsPreview={traySettingsPreview}
-          globalShortcut={globalShortcut}
-          onGlobalShortcutChange={handleGlobalShortcutChange}
-          startOnLogin={startOnLogin}
-          onStartOnLoginChange={handleStartOnLoginChange}
-          onProviderConfigChange={handleProviderConfigChange}
-          onProviderSecretSave={handleProviderSecretSave}
-          onProviderSecretDelete={handleProviderSecretDelete}
-          onRetryProvider={handleRetryPlugin}
-        />
+        {isFirstRun === true ? (
+          <FirstRunOnboarding
+            providers={settingsPlugins}
+            onConnect={connectProviders}
+            onRetry={handleRetryPlugin}
+            onSecretSave={handleProviderSecretSave}
+            onFinish={finishOnboarding}
+          />
+        ) : isFirstRun === false ? (
+          <SettingsPage
+            providers={settingsPlugins}
+            selectedProviderId={selectedProviderId}
+            onSelectedProviderChange={handleSelectedProviderChange}
+            settingsTab={settingsTab}
+            onSettingsTabChange={setSettingsTab}
+            onToggle={handleToggle}
+            onShow={(id) => handleHide(id)}
+            autoUpdateInterval={autoUpdateInterval}
+            onAutoUpdateIntervalChange={handleAutoUpdateIntervalChange}
+            themeMode={themeMode}
+            onThemeModeChange={handleThemeModeChange}
+            accentColor={accentColor}
+            onAccentColorChange={handleAccentColorChange}
+            displayMode={displayMode}
+            onDisplayModeChange={handleDisplayModeChange}
+            resetTimerDisplayMode={resetTimerDisplayMode}
+            onResetTimerDisplayModeChange={handleResetTimerDisplayModeChange}
+            timeFormatMode={timeFormatMode}
+            onTimeFormatModeChange={handleTimeFormatModeChange}
+            menubarIconStyle={menubarIconStyle}
+            onMenubarIconStyleChange={handleMenubarIconStyleChange}
+            surfacePins={surfacePins}
+            onSurfacePinsChange={handleSurfacePinsChange}
+            traySettingsPreview={traySettingsPreview}
+            globalShortcut={globalShortcut}
+            onGlobalShortcutChange={handleGlobalShortcutChange}
+            startOnLogin={startOnLogin}
+            onStartOnLoginChange={handleStartOnLoginChange}
+            onProviderConfigChange={handleProviderConfigChange}
+            onProviderSecretSave={handleProviderSecretSave}
+            onProviderSecretDelete={handleProviderSecretDelete}
+            onRetryProvider={handleRetryPlugin}
+          />
+        ) : (
+          <div className="flex min-h-[624px] items-center justify-center text-sm text-muted-foreground">
+            Einstellungen werden geladen…
+          </div>
+        )}
       </div>
     </div>
   )

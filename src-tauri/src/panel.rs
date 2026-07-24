@@ -7,7 +7,7 @@ use tauri::{
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos,
+    SetWindowPos, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOZORDER,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -152,6 +152,16 @@ pub fn show_panel_near_cursor(app_handle: &AppHandle) {
     let Some(window) = get_or_init_panel!(app_handle) else {
         return;
     };
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+pub fn show_panel_at_taskbar(app_handle: &AppHandle) {
+    let Some(window) = get_or_init_panel!(app_handle) else {
+        return;
+    };
+
+    position_panel_at_taskbar(app_handle, &window);
     let _ = window.show();
     let _ = window.set_focus();
 }
@@ -339,6 +349,53 @@ fn apply_window_bounds(
     )));
 }
 
+fn taskbar_panel_position(work_area: LogicalRect, window_w: f64, window_h: f64) -> (f64, f64) {
+    let inset = 8.0;
+    let x = (work_area.x + work_area.width - window_w - inset).max(work_area.x + inset);
+    let y = (work_area.y + work_area.height - window_h - inset).max(work_area.y + inset);
+    (x, y)
+}
+
+fn position_panel_at_taskbar(app_handle: &tauri::AppHandle, window: &WebviewWindow) {
+    let monitor = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| app_handle.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else {
+        return;
+    };
+
+    let scale_factor = monitor.scale_factor();
+    let work_area = monitor.work_area();
+    let work_area_rect = LogicalRect {
+        x: work_area.position.x as f64 / scale_factor,
+        y: work_area.position.y as f64 / scale_factor,
+        width: work_area.size.width as f64 / scale_factor,
+        height: work_area.size.height as f64 / scale_factor,
+    };
+    let (window_w, measured_window_h) = logical_window_size(window);
+    let window_h = resolved_panel_height(measured_window_h, stored_panel_height());
+    let (x, y) = taskbar_panel_position(work_area_rect, window_w, window_h);
+
+    // Keep the bottom edge anchored while the WebView reports its final content
+    // height after the window becomes visible.
+    let anchor_position = Position::Logical(LogicalPosition::new(
+        work_area_rect.x + work_area_rect.width - 24.0,
+        work_area_rect.y + work_area_rect.height,
+    ));
+    let anchor_size = Size::Logical(LogicalSize::new(24.0, 24.0));
+    save_tray_anchor(
+        &anchor_position,
+        &anchor_size,
+        Some(VerticalAnchor::Bottom(
+            work_area_rect.y + work_area_rect.height - 8.0,
+        )),
+    );
+
+    apply_window_bounds(window, x, y, window_w, window_h, true, false);
+}
+
 fn compute_panel_placement(
     icon_rect: LogicalRect,
     window_w: f64,
@@ -502,8 +559,8 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
 #[cfg(test)]
 mod tests {
     use super::{
-        LogicalRect, PhysicalWindowBounds, VerticalAnchor, compute_panel_placement,
-        physical_window_bounds,
+        compute_panel_placement, physical_window_bounds, taskbar_panel_position, LogicalRect,
+        PhysicalWindowBounds, VerticalAnchor,
     };
 
     #[test]
@@ -669,6 +726,23 @@ mod tests {
                 width: 500,
                 height: 400,
             }
+        );
+    }
+
+    #[test]
+    fn taskbar_position_uses_the_bottom_right_of_the_work_area() {
+        assert_eq!(
+            taskbar_panel_position(
+                LogicalRect {
+                    x: -1920.0,
+                    y: 0.0,
+                    width: 1920.0,
+                    height: 1040.0,
+                },
+                400.0,
+                500.0,
+            ),
+            (-408.0, 532.0)
         );
     }
 }

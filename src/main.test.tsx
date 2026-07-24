@@ -29,5 +29,9 @@ describe("main", () => {
     await import("@/main")
     expect(createRootMock).toHaveBeenCalled()
     expect(renderMock).toHaveBeenCalled()
+
+    const contextMenuEvent = new MouseEvent("contextmenu", { bubbles: true, cancelable: true })
+    document.dispatchEvent(contextMenuEvent)
+    expect(contextMenuEvent.defaultPrevented).toBe(true)
   }, 30000)
 })

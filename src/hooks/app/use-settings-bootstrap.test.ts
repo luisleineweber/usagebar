@@ -14,7 +14,7 @@ const {
   loadDisplayModeMock,
   loadGlobalShortcutMock,
   loadMenubarIconStyleMock,
-  loadPluginSettingsMock,
+  loadPluginSettingsRecordMock,
   loadResetTimerDisplayModeMock,
   loadStartOnLoginMock,
   loadSurfacePinsMock,
@@ -36,7 +36,7 @@ const {
   loadDisplayModeMock: vi.fn(),
   loadGlobalShortcutMock: vi.fn(),
   loadMenubarIconStyleMock: vi.fn(),
-  loadPluginSettingsMock: vi.fn(),
+  loadPluginSettingsRecordMock: vi.fn(),
   loadResetTimerDisplayModeMock: vi.fn(),
   loadStartOnLoginMock: vi.fn(),
   loadSurfacePinsMock: vi.fn(),
@@ -76,7 +76,7 @@ vi.mock("@/lib/settings", () => ({
   loadDisplayMode: loadDisplayModeMock,
   loadGlobalShortcut: loadGlobalShortcutMock,
   loadMenubarIconStyle: loadMenubarIconStyleMock,
-  loadPluginSettings: loadPluginSettingsMock,
+  loadPluginSettingsRecord: loadPluginSettingsRecordMock,
   loadResetTimerDisplayMode: loadResetTimerDisplayModeMock,
   loadStartOnLogin: loadStartOnLoginMock,
   loadSurfacePins: loadSurfacePinsMock,
@@ -124,7 +124,7 @@ describe("useSettingsBootstrap", () => {
     loadDisplayModeMock.mockReset()
     loadGlobalShortcutMock.mockReset()
     loadMenubarIconStyleMock.mockReset()
-    loadPluginSettingsMock.mockReset()
+    loadPluginSettingsRecordMock.mockReset()
     loadResetTimerDisplayModeMock.mockReset()
     loadStartOnLoginMock.mockReset()
     loadSurfacePinsMock.mockReset()
@@ -146,7 +146,11 @@ describe("useSettingsBootstrap", () => {
         primaryCandidates: [],
       },
     ])
-    loadPluginSettingsMock.mockResolvedValue({ order: ["codex"], disabled: [] })
+    loadPluginSettingsRecordMock.mockResolvedValue({
+      settings: { order: ["codex"], disabled: [] },
+      hasStoredSettings: true,
+      onboardingInProgress: false,
+    })
     normalizePluginSettingsMock.mockImplementation((stored) => stored)
     arePluginSettingsEqualMock.mockReturnValue(true)
     loadAutoUpdateIntervalMock.mockResolvedValue(15)
@@ -251,5 +255,44 @@ describe("useSettingsBootstrap", () => {
     await waitFor(() => {
       expect(args.setStartOnLogin).toHaveBeenCalledWith(true)
     })
+  })
+
+  it("defers persistence and probes when no provider settings exist yet", async () => {
+    loadPluginSettingsRecordMock.mockResolvedValueOnce({
+      settings: { order: [], disabled: [] },
+      hasStoredSettings: false,
+      onboardingInProgress: false,
+    })
+    normalizePluginSettingsMock.mockReturnValueOnce({ order: ["codex"], disabled: [] })
+    const args = createArgs()
+
+    const { result } = renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => {
+      expect(result.current.isFirstRun).toBe(true)
+      expect(args.setPluginSettings).toHaveBeenCalledWith({
+        order: ["codex"],
+        disabled: [],
+      })
+    })
+
+    expect(savePluginSettingsMock).not.toHaveBeenCalled()
+    expect(args.setLoadingForPlugins).not.toHaveBeenCalled()
+    expect(args.startBatch).not.toHaveBeenCalled()
+  })
+
+  it("resumes an interrupted onboarding without probing stored providers", async () => {
+    loadPluginSettingsRecordMock.mockResolvedValueOnce({
+      settings: { order: ["codex"], disabled: [] },
+      hasStoredSettings: true,
+      onboardingInProgress: true,
+    })
+    const args = createArgs()
+
+    const { result } = renderHook(() => useSettingsBootstrap(args))
+
+    await waitFor(() => expect(result.current.isFirstRun).toBe(true))
+    expect(args.setLoadingForPlugins).not.toHaveBeenCalled()
+    expect(args.startBatch).not.toHaveBeenCalled()
   })
 })

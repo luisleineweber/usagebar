@@ -30,6 +30,10 @@ console.warn = (...args: unknown[]) => {
   logWarn(args.map(stringify).join(" ")).catch(() => {});
 };
 
+// UsageBar provides its own provider menu where needed. Never expose the WebView's
+// browser actions (save, print, inspect, and similar) in the desktop app.
+document.addEventListener("contextmenu", (event) => event.preventDefault(), { capture: true })
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     {new URLSearchParams(window.location.search).get("window") === "settings" ? (

@@ -18,6 +18,7 @@ import {
   loadGlobalShortcut,
   loadMenubarIconStyle,
   loadPluginSettings,
+  loadPluginSettingsRecord,
   loadResetTimerDisplayMode,
   loadStartOnLogin,
   loadSurfacePins,
@@ -31,6 +32,7 @@ import {
   saveDisplayMode,
   saveGlobalShortcut,
   saveMenubarIconStyle,
+  saveOnboardingInProgress,
   savePluginSettings,
   saveResetTimerDisplayMode,
   saveStartOnLogin,
@@ -72,6 +74,11 @@ describe("settings", () => {
 
   it("loads defaults when no settings stored", async () => {
     await expect(loadPluginSettings()).resolves.toEqual(DEFAULT_PLUGIN_SETTINGS)
+    await expect(loadPluginSettingsRecord()).resolves.toEqual({
+      settings: DEFAULT_PLUGIN_SETTINGS,
+      hasStoredSettings: false,
+      onboardingInProgress: false,
+    })
   })
 
   it("sanitizes stored settings", async () => {
@@ -86,6 +93,22 @@ describe("settings", () => {
     const settings = { order: ["a"], disabled: ["b"] }
     await savePluginSettings(settings)
     await expect(loadPluginSettings()).resolves.toEqual(settings)
+    await expect(loadPluginSettingsRecord()).resolves.toEqual({
+      settings,
+      hasStoredSettings: true,
+      onboardingInProgress: false,
+    })
+  })
+
+  it("tracks an interrupted first-run flow separately from existing settings", async () => {
+    await savePluginSettings({ order: ["codex"], disabled: [] })
+    await saveOnboardingInProgress(true)
+
+    await expect(loadPluginSettingsRecord()).resolves.toEqual({
+      settings: { order: ["codex"], disabled: [] },
+      hasStoredSettings: true,
+      onboardingInProgress: true,
+    })
   })
 
   it("normalizes surface pins against provider progress metrics and caps them at two", () => {

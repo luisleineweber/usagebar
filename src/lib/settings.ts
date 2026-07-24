@@ -37,6 +37,7 @@ export type GlobalShortcut = string | null
 
 const SETTINGS_STORE_PATH = "settings.json"
 const PLUGIN_SETTINGS_KEY = "plugins"
+const ONBOARDING_IN_PROGRESS_KEY = "onboardingInProgress"
 const AUTO_UPDATE_SETTINGS_KEY = "autoUpdateInterval"
 const THEME_MODE_KEY = "themeMode"
 const ACCENT_COLOR_KEY = "accentColor"
@@ -123,18 +124,46 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   disabled: [],
 }
 
-export async function loadPluginSettings(): Promise<PluginSettings> {
-  const stored = await store.get<PluginSettings>(PLUGIN_SETTINGS_KEY)
-  if (!stored) return { ...DEFAULT_PLUGIN_SETTINGS }
-  return {
-    order: Array.isArray(stored.order) ? stored.order : [],
-    disabled: Array.isArray(stored.disabled) ? stored.disabled : [],
-    ...(Array.isArray(stored.hidden) ? { hidden: stored.hidden } : {}),
+export type LoadedPluginSettings = {
+  settings: PluginSettings
+  hasStoredSettings: boolean
+  onboardingInProgress: boolean
+}
+
+export async function loadPluginSettingsRecord(): Promise<LoadedPluginSettings> {
+  const [stored, onboardingInProgress] = await Promise.all([
+    store.get<PluginSettings>(PLUGIN_SETTINGS_KEY),
+    store.get<unknown>(ONBOARDING_IN_PROGRESS_KEY),
+  ])
+  if (!stored) {
+    return {
+      settings: { ...DEFAULT_PLUGIN_SETTINGS },
+      hasStoredSettings: false,
+      onboardingInProgress: onboardingInProgress === true,
+    }
   }
+  return {
+    settings: {
+      order: Array.isArray(stored.order) ? stored.order : [],
+      disabled: Array.isArray(stored.disabled) ? stored.disabled : [],
+      ...(Array.isArray(stored.hidden) ? { hidden: stored.hidden } : {}),
+    },
+    hasStoredSettings: true,
+    onboardingInProgress: onboardingInProgress === true,
+  }
+}
+
+export async function loadPluginSettings(): Promise<PluginSettings> {
+  return (await loadPluginSettingsRecord()).settings
 }
 
 export async function savePluginSettings(settings: PluginSettings): Promise<void> {
   await store.set(PLUGIN_SETTINGS_KEY, settings)
+  await store.save()
+}
+
+export async function saveOnboardingInProgress(value: boolean): Promise<void> {
+  await store.set(ONBOARDING_IN_PROGRESS_KEY, value)
   await store.save()
 }
 

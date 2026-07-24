@@ -615,8 +615,7 @@ fn show_panel_for_view(app_handle: tauri::AppHandle, view: String) -> Result<(),
     }
 
     store_pending_panel_view(normalized_view.clone());
-    panel::reposition_panel(&app_handle, None);
-    panel::show_panel(&app_handle);
+    panel::show_panel_at_taskbar(&app_handle);
     app_handle
         .emit_to("main", "tray:navigate", normalized_view)
         .map_err(|error| format!("failed to navigate tray panel: {}", error))?;

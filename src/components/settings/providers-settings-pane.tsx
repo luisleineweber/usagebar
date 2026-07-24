@@ -16,11 +16,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { ArrowLeft, ChevronRight, Eye } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { ProviderConfig } from "@/lib/provider-settings"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import { cn } from "@/lib/utils"
+import { getProviderIconColor } from "@/lib/provider-icon"
 
 const SETTINGS_PROVIDER_PRIORITY = ["codex", "claude", "cursor", "opencode-go"] as const
 
@@ -49,13 +51,21 @@ export function orderSettingsProviders<T extends Pick<SettingsPluginState, "id" 
 // Provider icon mask
 // ---------------------------------------------------------------------------
 
-function ProviderIconMask({ iconUrl, brandColor }: { iconUrl: string; brandColor?: string }) {
+function ProviderIconMask({
+  iconUrl,
+  brandColor,
+  isDark,
+}: {
+  iconUrl: string
+  brandColor?: string
+  isDark: boolean
+}) {
   return (
     <span
       aria-hidden
       className="inline-block size-5 shrink-0 rounded-md bg-foreground/85"
       style={{
-        backgroundColor: brandColor ?? "currentColor",
+        backgroundColor: getProviderIconColor(brandColor, isDark),
         WebkitMaskImage: `url(${iconUrl})`,
         WebkitMaskSize: "contain",
         WebkitMaskRepeat: "no-repeat",
@@ -91,12 +101,14 @@ function getProviderSubtitle(plugin: SettingsPluginState): string {
 function ProviderRow({
   plugin,
   selected,
+  isDark,
   onSelect,
   onToggle,
   onShow,
 }: {
   plugin: SettingsPluginState
   selected: boolean
+  isDark: boolean
   onSelect: () => void
   onToggle: (id: string) => void
   onShow: (id: string) => void
@@ -136,7 +148,7 @@ function ProviderRow({
     >
       {/* Icon + status dot */}
       <div className="relative">
-        <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} />
+        <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} isDark={isDark} />
         <span
           className={cn(
             "absolute -right-1 -top-1 size-2.5 rounded-full border border-card",
@@ -225,6 +237,7 @@ export function ProvidersSettingsPane({
   onProviderSecretDelete,
   onRetryProvider,
 }: ProvidersSettingsPaneProps) {
+  const isDark = useDarkMode()
   const settingsProviders = useMemo(() => orderSettingsProviders(providers), [providers])
 
   /*
@@ -293,6 +306,7 @@ export function ProvidersSettingsPane({
                 key={plugin.id}
                 plugin={plugin}
                 selected={plugin.id === selectedProvider?.id}
+                isDark={isDark}
                 onSelect={() => handleRowSelect(plugin.id)}
                 onToggle={onToggle}
                 onShow={onShow}

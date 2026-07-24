@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { invoke, isTauri } from "@tauri-apps/api/core"
 import {
   disable as disableAutostart,
@@ -25,7 +25,7 @@ import {
   loadGlobalShortcut,
   loadMenubarIconStyle,
   migrateLegacyTraySettings,
-  loadPluginSettings,
+  loadPluginSettingsRecord,
   loadResetTimerDisplayMode,
   loadStartOnLogin,
   loadSurfacePins,
@@ -80,6 +80,8 @@ export function useSettingsBootstrap({
   setErrorForPlugins,
   startBatch,
 }: UseSettingsBootstrapArgs) {
+  const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null)
+
   const applyStartOnLogin = useCallback(async (value: boolean) => {
     if (!isTauri() || import.meta.env.DEV) return
     const currentlyEnabled = await isAutostartEnabled()
@@ -104,14 +106,26 @@ export function useSettingsBootstrap({
         if (!isMounted) return
         setPluginsMeta(surfacedPlugins)
 
-        const storedSettings = await loadPluginSettings()
+        const {
+          settings: storedSettings,
+          hasStoredSettings,
+          onboardingInProgress,
+        } = await loadPluginSettingsRecord()
+        const shouldShowOnboarding = !hasStoredSettings || onboardingInProgress
         const normalized = normalizePluginSettings(storedSettings, surfacedPlugins)
         const enabledIds = getProbeEligiblePluginIds(normalized, surfacedPlugins)
         if (isMounted) {
+          setIsFirstRun(shouldShowOnboarding)
           setPluginSettings(normalized)
-          setLoadingForPlugins(enabledIds)
+          if (!shouldShowOnboarding) {
+            setLoadingForPlugins(enabledIds)
+          }
         }
-        if (!arePluginSettingsEqual(storedSettings, normalized)) {
+        if (
+          hasStoredSettings &&
+          !shouldShowOnboarding &&
+          !arePluginSettingsEqual(storedSettings, normalized)
+        ) {
           await savePluginSettings(normalized)
         }
 
@@ -208,17 +222,20 @@ export function useSettingsBootstrap({
           setMenubarIconStyle(storedMenubarIconStyle)
           setSurfacePins(storedSurfacePins)
 
-          try {
-            await startBatch(enabledIds)
-          } catch (error) {
-            console.error("Failed to start probe batch:", error)
-            if (isMounted) {
-              setErrorForPlugins(enabledIds, "Failed to start probe")
+          if (!shouldShowOnboarding) {
+            try {
+              await startBatch(enabledIds)
+            } catch (error) {
+              console.error("Failed to start probe batch:", error)
+              if (isMounted) {
+                setErrorForPlugins(enabledIds, "Failed to start probe")
+              }
             }
           }
         }
       } catch (e) {
         console.error("Failed to load plugin settings:", e)
+        if (isMounted) setIsFirstRun(false)
       }
     }
 
@@ -249,5 +266,7 @@ export function useSettingsBootstrap({
 
   return {
     applyStartOnLogin,
+    isFirstRun,
+    finishFirstRun: () => setIsFirstRun(false),
   }
 }

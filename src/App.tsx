@@ -39,6 +39,7 @@ import {
   notifyPluginSettingsUpdated,
 } from "@/lib/plugin-settings-events"
 import { listenDisplayPreferenceUpdated } from "@/lib/display-preference-events"
+import { openSettingsWindow } from "@/lib/settings-window"
 
 const TRAY_PROBE_DEBOUNCE_MS = 500
 
@@ -109,6 +110,8 @@ function App() {
   )
 
   const scheduleProbeTrayUpdateRef = useRef<() => void>(() => {})
+  const finishFirstRunRef = useRef<() => void>(() => {})
+  const catchUpProbeIdsRef = useRef<Set<string>>(new Set())
   const handleProbeResult = useCallback(() => {
     scheduleProbeTrayUpdateRef.current()
   }, [])
@@ -158,6 +161,7 @@ function App() {
     let disposed = false
 
     void listenPluginSettingsUpdated((nextSettings) => {
+      finishFirstRunRef.current()
       setPluginSettings(nextSettings)
       scheduleTrayIconUpdate("settings", 0)
     })
@@ -239,7 +243,7 @@ function App() {
     setAccentColor,
   ])
 
-  const { applyStartOnLogin } = useSettingsBootstrap({
+  const { applyStartOnLogin, isFirstRun, finishFirstRun } = useSettingsBootstrap({
     setPluginSettings,
     setPluginsMeta,
     setAutoUpdateInterval,
@@ -256,6 +260,19 @@ function App() {
     setErrorForPlugins,
     startBatch,
   })
+
+  useEffect(() => {
+    finishFirstRunRef.current = finishFirstRun
+  }, [finishFirstRun])
+
+  const didOpenFirstRunRef = useRef(false)
+  useEffect(() => {
+    if (!isFirstRun || didOpenFirstRunRef.current) return
+    didOpenFirstRunRef.current = true
+    void openSettingsWindow({ tab: "providers" }).catch((error) => {
+      console.error("Failed to open first-run onboarding:", error)
+    })
+  }, [isFirstRun])
 
   useSettingsTheme(themeMode, accentColor)
 
@@ -329,8 +346,6 @@ function App() {
   useEffect(() => {
     providerConfigsRef.current = providerConfigs
   }, [providerConfigs])
-
-  const catchUpProbeIdsRef = useRef<Set<string>>(new Set())
 
   const persistProviderConfigs = useCallback(
     async (nextConfigs: typeof providerConfigs) => {
@@ -449,7 +464,7 @@ function App() {
   )
 
   useEffect(() => {
-    if (!pluginSettings) return
+    if (!pluginSettings || isFirstRun !== false) return
 
     const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
     const idsToCatchUp = supportedEnabledIds.filter((id) => {
@@ -487,6 +502,7 @@ function App() {
       })
   }, [
     pluginSettings,
+    isFirstRun,
     pluginStates,
     pluginsMeta,
     setErrorForPlugins,
