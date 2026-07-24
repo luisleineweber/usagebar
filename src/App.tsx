@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef } from "react"
 import { useShallow } from "zustand/react/shallow"
 import { AppShell } from "@/components/app/app-shell"
 import { useAppPluginViews } from "@/hooks/app/use-app-plugin-views"
+import { useAppRefreshOrchestration } from "@/hooks/app/use-app-refresh-orchestration"
 import { useProbe } from "@/hooks/app/use-probe"
 import { useProviderStatuses } from "@/hooks/app/use-provider-statuses"
+import { useAppWindowSync } from "@/hooks/app/use-app-window-sync"
 import { useSettingsBootstrap } from "@/hooks/app/use-settings-bootstrap"
 import { useSettingsDisplayActions } from "@/hooks/app/use-settings-display-actions"
 import { useSettingsPluginActions } from "@/hooks/app/use-settings-plugin-actions"
@@ -11,34 +13,13 @@ import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-action
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { useNotificationEvents } from "@/hooks/app/use-notification-events"
-import {
-  getProbeEligiblePluginIds,
-  loadDisplayMode,
-  loadMenubarIconStyle,
-  loadResetTimerDisplayMode,
-  loadSurfacePins,
-  loadThemeMode,
-  REFRESH_COOLDOWN_MS,
-} from "@/lib/settings"
-import {
-  clearProviderSecretMetadata,
-  loadProviderConfigs,
-  saveProviderConfigs,
-  setProviderSecretMetadata,
-  updateProviderConfig,
-  type ProviderConfig,
-} from "@/lib/provider-settings"
-import { deleteProviderSecret, setProviderSecret } from "@/lib/provider-secrets"
+import { REFRESH_COOLDOWN_MS } from "@/lib/settings"
+import { useProviderConfigActions } from "@/hooks/app/use-provider-config-actions"
 import { type PluginContextAction } from "@/components/side-nav"
-import type { ActiveView } from "@/components/side-nav"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { useAppUiStore } from "@/stores/app-ui-store"
-import {
-  listenPluginSettingsUpdated,
-  notifyPluginSettingsUpdated,
-} from "@/lib/plugin-settings-events"
-import { listenDisplayPreferenceUpdated } from "@/lib/display-preference-events"
+import { notifyPluginSettingsUpdated } from "@/lib/plugin-settings-events"
 import { openSettingsWindow } from "@/lib/settings-window"
 
 const TRAY_PROBE_DEBOUNCE_MS = 500
@@ -111,7 +92,6 @@ function App() {
 
   const scheduleProbeTrayUpdateRef = useRef<() => void>(() => {})
   const finishFirstRunRef = useRef<() => void>(() => {})
-  const catchUpProbeIdsRef = useRef<Set<string>>(new Set())
   const handleProbeResult = useCallback(() => {
     scheduleProbeTrayUpdateRef.current()
   }, [])
@@ -156,93 +136,6 @@ function App() {
     }
   }, [scheduleTrayIconUpdate])
 
-  useEffect(() => {
-    let unlisten: (() => void) | undefined
-    let disposed = false
-
-    void listenPluginSettingsUpdated((nextSettings) => {
-      finishFirstRunRef.current()
-      setPluginSettings(nextSettings)
-      scheduleTrayIconUpdate("settings", 0)
-    })
-      .then((dispose) => {
-        if (disposed) {
-          dispose()
-          return
-        }
-        unlisten = dispose
-      })
-      .catch((error) => {
-        console.error("Failed to listen for plugin settings updates:", error)
-      })
-
-    return () => {
-      disposed = true
-      unlisten?.()
-    }
-  }, [scheduleTrayIconUpdate, setPluginSettings])
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined
-    let disposed = false
-
-    void listenDisplayPreferenceUpdated((update) => {
-      if (update.key === "themeMode") {
-        setThemeMode(update.value)
-        return
-      }
-      if (update.key === "accentColor") {
-        setAccentColor(update.value)
-        scheduleTrayIconUpdate("settings", 0)
-        return
-      }
-      if (update.key === "displayMode") {
-        setDisplayMode(update.value)
-        scheduleTrayIconUpdate("settings", 0)
-        return
-      }
-      if (update.key === "resetTimerDisplayMode") {
-        setResetTimerDisplayMode(update.value)
-        return
-      }
-      if (update.key === "timeFormatMode") {
-        setTimeFormatMode(update.value)
-        return
-      }
-      if (update.key === "surfacePins") {
-        setSurfacePins(update.value)
-        scheduleTrayIconUpdate("settings", 0)
-        return
-      }
-      setMenubarIconStyle(update.value)
-      scheduleTrayIconUpdate("settings", 0)
-    })
-      .then((dispose) => {
-        if (disposed) {
-          dispose()
-          return
-        }
-        unlisten = dispose
-      })
-      .catch((error) => {
-        console.error("Failed to listen for display preference updates:", error)
-      })
-
-    return () => {
-      disposed = true
-      unlisten?.()
-    }
-  }, [
-    scheduleTrayIconUpdate,
-    setDisplayMode,
-    setMenubarIconStyle,
-    setResetTimerDisplayMode,
-    setSurfacePins,
-    setTimeFormatMode,
-    setThemeMode,
-    setAccentColor,
-  ])
-
   const { applyStartOnLogin, isFirstRun, finishFirstRun } = useSettingsBootstrap({
     setPluginSettings,
     setPluginsMeta,
@@ -264,6 +157,19 @@ function App() {
   useEffect(() => {
     finishFirstRunRef.current = finishFirstRun
   }, [finishFirstRun])
+
+  useAppWindowSync({
+    finishFirstRunRef,
+    setPluginSettings,
+    scheduleTrayIconUpdate,
+    setThemeMode,
+    setAccentColor,
+    setDisplayMode,
+    setResetTimerDisplayMode,
+    setTimeFormatMode,
+    setSurfacePins,
+    setMenubarIconStyle,
+  })
 
   const didOpenFirstRunRef = useRef(false)
   useEffect(() => {
@@ -314,23 +220,8 @@ function App() {
     onPluginSettingsChange: notifyPluginSettingsUpdated,
   })
 
-  useEffect(() => {
-    let cancelled = false
-
-    loadProviderConfigs()
-      .then((configs) => {
-        if (!cancelled) {
-          setProviderConfigs(configs)
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to load provider configs:", error)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [setProviderConfigs])
+  const { handleProviderConfigChange, handleProviderSecretSave, handleProviderSecretDelete } =
+    useProviderConfigActions({ providerConfigs, setProviderConfigs })
 
   const { displayPlugins, navPlugins, selectedPlugin, resolvedSelectedPlugin, hasResolvedViews } =
     useAppPluginViews({
@@ -342,173 +233,23 @@ function App() {
       providerStatuses,
     })
 
-  const providerConfigsRef = useRef(providerConfigs)
-  useEffect(() => {
-    providerConfigsRef.current = providerConfigs
-  }, [providerConfigs])
-
-  const persistProviderConfigs = useCallback(
-    async (nextConfigs: typeof providerConfigs) => {
-      setProviderConfigs(nextConfigs)
-      await saveProviderConfigs(nextConfigs)
-    },
-    [setProviderConfigs]
-  )
-
-  const handleProviderConfigChange = useCallback(
-    async (providerId: string, patch: Partial<ProviderConfig>) => {
-      const nextConfigs = updateProviderConfig(providerConfigsRef.current, providerId, patch)
-      await persistProviderConfigs(nextConfigs)
-    },
-    [persistProviderConfigs]
-  )
-
-  const handleProviderSecretSave = useCallback(
-    async (providerId: string, secretKey: string, value: string) => {
-      try {
-        await setProviderSecret(providerId, secretKey, value)
-        const nextConfigs = setProviderSecretMetadata(
-          providerConfigsRef.current,
-          providerId,
-          secretKey
-        )
-        await persistProviderConfigs(nextConfigs)
-      } catch (error) {
-        console.error("Failed to save provider secret:", error)
-        throw error
-      }
-    },
-    [persistProviderConfigs]
-  )
-
-  const handleProviderSecretDelete = useCallback(
-    async (providerId: string, secretKey: string) => {
-      try {
-        await deleteProviderSecret(providerId, secretKey)
-        const nextConfigs = clearProviderSecretMetadata(
-          providerConfigsRef.current,
-          providerId,
-          secretKey
-        )
-        await persistProviderConfigs(nextConfigs)
-      } catch (error) {
-        console.error("Failed to delete provider secret:", error)
-        throw error
-      }
-    },
-    [persistProviderConfigs]
-  )
-
-  const handlePanelFocus = useCallback(
-    (targetView?: ActiveView) => {
-      void Promise.all([
-        loadThemeMode(),
-        loadDisplayMode(),
-        loadResetTimerDisplayMode(),
-        loadMenubarIconStyle(),
-        loadSurfacePins(pluginsMeta),
-      ])
-        .then(
-          ([
-            nextThemeMode,
-            nextDisplayMode,
-            nextResetTimerDisplayMode,
-            nextMenubarIconStyle,
-            nextSurfacePins,
-          ]) => {
-            setThemeMode(nextThemeMode)
-            setDisplayMode(nextDisplayMode)
-            setResetTimerDisplayMode(nextResetTimerDisplayMode)
-            setMenubarIconStyle(nextMenubarIconStyle)
-            setSurfacePins(nextSurfacePins)
-            scheduleTrayIconUpdate("settings", 0)
-          }
-        )
-        .catch((error) => {
-          console.error("Failed to refresh display preferences on panel focus:", error)
-        })
-
-      if (!pluginSettings) return
-      const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
-      const explicitTargetView = targetView?.trim()
-
-      const idsToRefresh =
-        explicitTargetView && explicitTargetView !== "home" && explicitTargetView !== "settings"
-          ? supportedEnabledIds.filter((id) => id === explicitTargetView)
-          : activeView !== "home" && activeView !== "settings"
-            ? supportedEnabledIds.filter((id) => id === activeView)
-            : supportedEnabledIds.filter((id) => {
-                const state = pluginStates[id]
-                if (!state) return true
-                if (state.loading) return false
-                return state.error !== null || state.data === null
-              })
-
-      for (const id of idsToRefresh) {
-        handleRetryPlugin(id)
-      }
-    },
-    [
-      activeView,
-      handleRetryPlugin,
-      pluginSettings,
-      pluginStates,
-      pluginsMeta,
-      scheduleTrayIconUpdate,
-      setDisplayMode,
-      setMenubarIconStyle,
-      setSurfacePins,
-      setResetTimerDisplayMode,
-      setThemeMode,
-    ]
-  )
-
-  useEffect(() => {
-    if (!pluginSettings || isFirstRun !== false) return
-
-    const supportedEnabledIds = getProbeEligiblePluginIds(pluginSettings, pluginsMeta)
-    const idsToCatchUp = supportedEnabledIds.filter((id) => {
-      if (catchUpProbeIdsRef.current.has(id)) return false
-      const state = pluginStates[id]
-      if (!state) return true
-      return (
-        !state.loading &&
-        state.data === null &&
-        state.error === null &&
-        state.lastSuccessAt === null
-      )
-    })
-
-    if (idsToCatchUp.length === 0) return
-
-    for (const id of idsToCatchUp) {
-      catchUpProbeIdsRef.current.add(id)
-    }
-
-    setLoadingForPlugins(idsToCatchUp)
-    startBatch(idsToCatchUp)
-      .then((startedIds) => {
-        if (startedIds && startedIds.length > 0) return
-        for (const id of idsToCatchUp) {
-          catchUpProbeIdsRef.current.delete(id)
-        }
-      })
-      .catch((error) => {
-        for (const id of idsToCatchUp) {
-          catchUpProbeIdsRef.current.delete(id)
-        }
-        console.error("Failed to start catch-up probe batch:", error)
-        setErrorForPlugins(idsToCatchUp, "Failed to start probe")
-      })
-  }, [
+  const { handlePanelFocus } = useAppRefreshOrchestration({
+    activeView,
     pluginSettings,
-    isFirstRun,
-    pluginStates,
     pluginsMeta,
-    setErrorForPlugins,
+    pluginStates,
+    isFirstRun,
+    handleRetryPlugin,
     setLoadingForPlugins,
+    setErrorForPlugins,
     startBatch,
-  ])
+    scheduleTrayIconUpdate,
+    setThemeMode,
+    setDisplayMode,
+    setResetTimerDisplayMode,
+    setMenubarIconStyle,
+    setSurfacePins,
+  })
 
   const handlePluginContextAction = useCallback(
     (pluginId: string, action: PluginContextAction) => {

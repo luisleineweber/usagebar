@@ -99,6 +99,8 @@ const defaultProps = {
   onProviderSecretSave: vi.fn(async () => undefined),
   onProviderSecretDelete: vi.fn(async () => undefined),
   onRetryProvider: vi.fn(),
+  providerConfigLoadError: null,
+  onRetryProviderConfigs: vi.fn(async () => undefined),
 }
 
 function TestHarness(overrides: Partial<typeof defaultProps> = {}) {
@@ -150,6 +152,21 @@ describe("SettingsPage", () => {
     render(<TestHarness />)
     expect(screen.getByRole("tab", { name: "General" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "Providers" })).toBeInTheDocument()
+  })
+
+  it("shows a retryable provider settings load error", async () => {
+    const onRetryProviderConfigs = vi.fn(async () => undefined)
+    render(
+      <TestHarness
+        providerConfigLoadError="Provider settings could not be loaded."
+        onRetryProviderConfigs={onRetryProviderConfigs}
+      />
+    )
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Provider settings unavailable")
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }))
+
+    expect(onRetryProviderConfigs).toHaveBeenCalledOnce()
   })
 
   it("uses responsive layout classes for narrow settings widths", () => {

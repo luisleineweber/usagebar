@@ -1,7 +1,8 @@
-import { Blocks, Settings2 } from "lucide-react"
+import { AlertCircle, Blocks, RefreshCw, Settings2 } from "lucide-react"
 import { GeneralSettingsPane } from "@/components/settings/general-settings-pane"
 import { ProvidersSettingsPane } from "@/components/settings/providers-settings-pane"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
 import type { ProviderConfig } from "@/lib/provider-settings"
@@ -51,6 +52,8 @@ interface SettingsPageProps {
   onProviderSecretSave: (providerId: string, secretKey: string, value: string) => Promise<void>
   onProviderSecretDelete: (providerId: string, secretKey: string) => Promise<void>
   onRetryProvider: (id: string) => void
+  providerConfigLoadError: string | null
+  onRetryProviderConfigs: () => Promise<void>
 }
 
 export function SettingsPage({
@@ -86,6 +89,8 @@ export function SettingsPage({
   onProviderSecretSave,
   onProviderSecretDelete,
   onRetryProvider,
+  providerConfigLoadError,
+  onRetryProviderConfigs,
 }: SettingsPageProps) {
   return (
     <Tabs
@@ -103,6 +108,30 @@ export function SettingsPage({
         <p className="mt-1 text-sm text-muted-foreground">
           Manage providers, refresh schedule, display, and system preferences.
         </p>
+
+        {providerConfigLoadError && (
+          <div
+            role="alert"
+            className="mt-4 flex items-start gap-3 rounded-md border border-destructive/35 bg-destructive/8 px-3 py-3 text-sm"
+          >
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium text-foreground">Provider settings unavailable</div>
+              <div className="mt-0.5 break-words text-muted-foreground">
+                {providerConfigLoadError}
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => void onRetryProviderConfigs()}
+            >
+              <RefreshCw className="size-3" />
+              Retry
+            </Button>
+          </div>
+        )}
 
         {/* Underline tab bar uses variant="line" so the built-in after: indicator fires on data-active */}
         <TabsList

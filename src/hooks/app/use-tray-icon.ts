@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { resolveResource } from "@tauri-apps/api/path"
 import { TrayIcon } from "@tauri-apps/api/tray"
 import type { PluginMeta } from "@/lib/plugin-types"
-import type { AccentColor, DisplayMode, MenubarIconStyle, PluginSettings, SurfacePin } from "@/lib/settings"
+import type {
+  AccentColor,
+  DisplayMode,
+  MenubarIconStyle,
+  PluginSettings,
+  SurfacePin,
+} from "@/lib/settings"
 import { getProbeEligiblePluginIds } from "@/lib/settings"
 import {
   getTrayPinnedBars,
@@ -18,7 +24,7 @@ import { formatTrayPercentText, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { PluginState } from "@/hooks/app/types"
 import type { ProviderStatus } from "@/lib/provider-status"
 
-type TrayUpdateReason = "probe" | "settings" | "init"
+export type TrayUpdateReason = "probe" | "settings" | "init"
 
 type UseTrayIconArgs = {
   pluginsMeta: PluginMeta[]
@@ -136,10 +142,7 @@ export function useTrayIcon({
     activeViewRef.current = activeView
   }, [activeView])
 
-  const scheduleTrayIconUpdate = useCallback((
-    _reason: TrayUpdateReason,
-    delayMs = 0,
-  ) => {
+  const scheduleTrayIconUpdate = useCallback((_reason: TrayUpdateReason, delayMs = 0) => {
     if (trayUpdateTimerRef.current !== null) {
       window.clearTimeout(trayUpdateTimerRef.current)
       trayUpdateTimerRef.current = null
@@ -166,12 +169,18 @@ export function useTrayIcon({
         return
       }
 
-      const maybeSetTitle = (tray as TrayIcon & { setTitle?: (value: string) => Promise<void> }).setTitle
-      const maybeSetTooltip = (tray as TrayIcon & { setTooltip?: (value: string) => Promise<void> }).setTooltip
+      const maybeSetTitle = (tray as TrayIcon & { setTitle?: (value: string) => Promise<void> })
+        .setTitle
+      const maybeSetTooltip = (tray as TrayIcon & { setTooltip?: (value: string) => Promise<void> })
+        .setTooltip
       const setTitleFn =
-        typeof maybeSetTitle === "function" ? (value: string) => maybeSetTitle.call(tray, value) : null
+        typeof maybeSetTitle === "function"
+          ? (value: string) => maybeSetTitle.call(tray, value)
+          : null
       const setTooltipFn =
-        typeof maybeSetTooltip === "function" ? (value: string) => maybeSetTooltip.call(tray, value) : null
+        typeof maybeSetTooltip === "function"
+          ? (value: string) => maybeSetTooltip.call(tray, value)
+          : null
       const supportsNativeTrayTitle = setTitleFn !== null
       const setTrayTitle = (title: string) => {
         if (setTitleFn) {
@@ -356,7 +365,14 @@ export function useTrayIcon({
   useEffect(() => {
     if (!trayReady) return
     scheduleTrayIconUpdate("settings", 0)
-  }, [activeView, menubarIconStyle, providerStatuses, scheduleTrayIconUpdate, surfacePins, trayReady])
+  }, [
+    activeView,
+    menubarIconStyle,
+    providerStatuses,
+    scheduleTrayIconUpdate,
+    surfacePins,
+    trayReady,
+  ])
 
   useEffect(() => {
     return () => {

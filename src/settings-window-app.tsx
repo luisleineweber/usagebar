@@ -14,15 +14,7 @@ import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useFirstRunOnboarding } from "@/hooks/app/use-first-run-onboarding"
 import { useTrayIcon } from "@/hooks/app/use-tray-icon"
 import { parseSettingsWindowLocation, type SettingsWindowTab } from "@/lib/settings-window"
-import {
-  clearProviderSecretMetadata,
-  loadProviderConfigs,
-  saveProviderConfigs,
-  setProviderSecretMetadata,
-  updateProviderConfig,
-  type ProviderConfig,
-} from "@/lib/provider-settings"
-import { deleteProviderSecret, setProviderSecret } from "@/lib/provider-secrets"
+import { useProviderConfigActions } from "@/hooks/app/use-provider-config-actions"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { showPanelForView } from "@/lib/panel-window"
@@ -252,23 +244,13 @@ export function SettingsWindowApp() {
     }
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-
-    loadProviderConfigs()
-      .then((configs) => {
-        if (!cancelled) {
-          setProviderConfigs(configs)
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to load provider configs:", error)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [setProviderConfigs])
+  const {
+    providerConfigLoadError,
+    retryProviderConfigs,
+    handleProviderConfigChange,
+    handleProviderSecretSave,
+    handleProviderSecretDelete,
+  } = useProviderConfigActions({ providerConfigs, setProviderConfigs })
 
   useEffect(() => {
     const target = initialTargetRef.current
@@ -302,63 +284,6 @@ export function SettingsWindowApp() {
       unlisten?.()
     }
   }, [])
-
-  const providerConfigsRef = useRef(providerConfigs)
-  useEffect(() => {
-    providerConfigsRef.current = providerConfigs
-  }, [providerConfigs])
-
-  const persistProviderConfigs = useCallback(
-    async (nextConfigs: typeof providerConfigs) => {
-      setProviderConfigs(nextConfigs)
-      await saveProviderConfigs(nextConfigs)
-    },
-    [setProviderConfigs]
-  )
-
-  const handleProviderConfigChange = useCallback(
-    async (providerId: string, patch: Partial<ProviderConfig>) => {
-      const nextConfigs = updateProviderConfig(providerConfigsRef.current, providerId, patch)
-      await persistProviderConfigs(nextConfigs)
-    },
-    [persistProviderConfigs]
-  )
-
-  const handleProviderSecretSave = useCallback(
-    async (providerId: string, secretKey: string, value: string) => {
-      try {
-        await setProviderSecret(providerId, secretKey, value)
-        const nextConfigs = setProviderSecretMetadata(
-          providerConfigsRef.current,
-          providerId,
-          secretKey
-        )
-        await persistProviderConfigs(nextConfigs)
-      } catch (error) {
-        console.error("Failed to save provider secret:", error)
-        throw error
-      }
-    },
-    [persistProviderConfigs]
-  )
-
-  const handleProviderSecretDelete = useCallback(
-    async (providerId: string, secretKey: string) => {
-      try {
-        await deleteProviderSecret(providerId, secretKey)
-        const nextConfigs = clearProviderSecretMetadata(
-          providerConfigsRef.current,
-          providerId,
-          secretKey
-        )
-        await persistProviderConfigs(nextConfigs)
-      } catch (error) {
-        console.error("Failed to delete provider secret:", error)
-        throw error
-      }
-    },
-    [persistProviderConfigs]
-  )
 
   const handleSelectedProviderChange = useCallback(
     (providerId: string, options?: SelectedProviderChangeOptions) => {
@@ -436,6 +361,8 @@ export function SettingsWindowApp() {
             onProviderSecretSave={handleProviderSecretSave}
             onProviderSecretDelete={handleProviderSecretDelete}
             onRetryProvider={handleRetryPlugin}
+            providerConfigLoadError={providerConfigLoadError}
+            onRetryProviderConfigs={retryProviderConfigs}
           />
         ) : (
           <div className="flex min-h-[624px] items-center justify-center text-sm text-muted-foreground">
