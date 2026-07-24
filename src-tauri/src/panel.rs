@@ -7,7 +7,7 @@ use tauri::{
 };
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    SetWindowPos, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOZORDER,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -559,8 +559,8 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
 #[cfg(test)]
 mod tests {
     use super::{
-        compute_panel_placement, physical_window_bounds, taskbar_panel_position, LogicalRect,
-        PhysicalWindowBounds, VerticalAnchor,
+        LogicalRect, PhysicalWindowBounds, VerticalAnchor, compute_panel_placement,
+        physical_window_bounds, taskbar_panel_position,
     };
 
     #[test]

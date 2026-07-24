@@ -12,7 +12,7 @@ use std::os::windows::process::CommandExt;
 use windows_sys::Win32::Foundation::GetLastError;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Security::Credentials::{
-    CredFree, CredReadW, CREDENTIALW, CRED_TYPE_GENERIC,
+    CRED_TYPE_GENERIC, CREDENTIALW, CredFree, CredReadW,
 };
 
 #[cfg(target_os = "windows")]

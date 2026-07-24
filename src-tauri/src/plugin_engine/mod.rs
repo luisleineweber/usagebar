@@ -26,6 +26,7 @@ pub mod browser_bridge {
 }
 pub(crate) mod env;
 pub mod host_api;
+pub(crate) mod language_server;
 pub mod manifest;
 pub mod probe_error;
 pub(crate) mod redaction;
