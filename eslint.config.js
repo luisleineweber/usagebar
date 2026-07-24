@@ -75,10 +75,14 @@ export default tseslint.config(
         {
           args: "after-used",
           argsIgnorePattern: "^_",
-          caughtErrors: "none",
+          caughtErrors: "all",
+          caughtErrorsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
         },
       ],
+      // Console output is part of the desktop error bridge and CLI diagnostics.
+      // Prefer the structured Rust logger for plugin code; keep this rule off
+      // until the frontend logger migration is complete.
       "no-console": "off",
       "no-empty": "error",
       "no-redeclare": "error",

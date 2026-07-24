@@ -6,6 +6,7 @@ const THRESHOLD = 90
 const CHANGED_FILE_THRESHOLD = 80
 const SUMMARY_PATH = path.resolve("coverage", "coverage-summary.json")
 const enforceChangedCoverage = process.env.USAGEBAR_COVERAGE_ENFORCE_CHANGED === "1"
+const reportOnly = process.env.USAGEBAR_COVERAGE_REPORT_ONLY === "1"
 
 function formatPercent(value) {
   return `${Number(value).toFixed(2)}%`
@@ -86,7 +87,8 @@ function main() {
 
   console.log("Coverage Summary")
   console.log("")
-  console.log(`Gate: ${gatePassed ? "pass" : "fail"} (${THRESHOLD}% global threshold)`)
+  const globalGateStatus = reportOnly ? "report-only" : gatePassed ? "pass" : "fail"
+  console.log(`Global gate: ${globalGateStatus} (${THRESHOLD}% threshold)`)
   for (const [label, metric] of metrics) {
     console.log(metricLine(label, metric))
   }

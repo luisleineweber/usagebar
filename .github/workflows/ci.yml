@@ -65,8 +65,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Enforce lint and formatting contract
-        run: bun run check
+      - name: Enforce frontend quality contract
+        run: bun run check:frontend
 
       - name: Build frontend
         run: bun run build:frontend
@@ -78,7 +78,6 @@ jobs:
       - name: Run frontend and plugin tests with coverage
         if: runner.os == 'Linux'
         env:
-          USAGEBAR_COVERAGE_REPORT_ONLY: "1"
           USAGEBAR_COVERAGE_ENFORCE_CHANGED: "1"
         run: bun run test:coverage:report
 
@@ -94,6 +93,9 @@ jobs:
 
       - name: Prepare CLI sidecar
         run: bun run prepare:cli-sidecar
+
+      - name: Enforce Rust formatting contract
+        run: bun run format:rust:check
 
       - name: Check Rust backend
         run: cargo check --manifest-path src-tauri/Cargo.toml --locked

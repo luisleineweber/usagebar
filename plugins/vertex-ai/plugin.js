@@ -163,7 +163,7 @@
         }),
         timeoutMs: 15000,
       })
-    } catch (e) {
+    } catch (_error) {
       throw "Vertex AI token refresh failed. Check your connection."
     }
 
@@ -218,7 +218,7 @@
         },
         timeoutMs: 30000,
       })
-    } catch (e) {
+    } catch (_error) {
       throw "Vertex AI Cloud Monitoring request failed. Check your connection."
     }
 

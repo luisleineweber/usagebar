@@ -56,7 +56,7 @@
       const defaultProfile = readObject(root.default)
       return readString(defaultProfile && defaultProfile.authToken) ||
         readString(root.authToken)
-    } catch (e) {
+    } catch (_error) {
       return null
     }
   }

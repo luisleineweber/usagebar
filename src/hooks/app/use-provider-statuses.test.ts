@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from "@testing-library/react"
+import { renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const { fetchProviderStatusMock, getProbeEligiblePluginIdsMock } = vi.hoisted(() => ({
@@ -71,9 +71,7 @@ describe("useProviderStatuses", () => {
 
     renderHook(() =>
       useProviderStatuses({
-        pluginsMeta: [
-          makePlugin({ id: "codex", name: "Codex" }),
-        ],
+        pluginsMeta: [makePlugin({ id: "codex", name: "Codex" })],
         pluginSettings: { order: ["codex"], disabled: [] },
       })
     )
@@ -92,9 +90,7 @@ describe("useProviderStatuses", () => {
 
     const { result } = renderHook(() =>
       useProviderStatuses({
-        pluginsMeta: [
-          makePlugin({ id: "codex", name: "Codex" }),
-        ],
+        pluginsMeta: [makePlugin({ id: "codex", name: "Codex" })],
         pluginSettings: { order: ["codex"], disabled: [] },
       })
     )
@@ -112,9 +108,7 @@ describe("useProviderStatuses", () => {
 
     renderHook(() =>
       useProviderStatuses({
-        pluginsMeta: [
-          makePlugin({ id: "codex", name: "Codex" }),
-        ],
+        pluginsMeta: [makePlugin({ id: "codex", name: "Codex" })],
         pluginSettings: { order: ["codex"], disabled: [] },
       })
     )
@@ -161,9 +155,7 @@ describe("useProviderStatuses", () => {
 
     renderHook(() =>
       useProviderStatuses({
-        pluginsMeta: [
-          makePlugin({ id: "codex", name: "Codex" }),
-        ],
+        pluginsMeta: [makePlugin({ id: "codex", name: "Codex" })],
         pluginSettings: { order: ["codex"], disabled: [] },
       })
     )

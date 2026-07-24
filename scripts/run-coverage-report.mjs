@@ -7,15 +7,19 @@ function run(command, args, options = {}) {
   })
 }
 
+// The global 90% threshold is intentionally report-only here while CI enforces
+// the changed-production-file ratchet in coverage-summary.mjs.
+const reportEnv = {
+  ...process.env,
+  USAGEBAR_COVERAGE_REPORT_ONLY: "1",
+}
+
 const coverageResult = run("bun", ["vitest", "run", "--coverage.enabled"], {
-  env: {
-    ...process.env,
-    USAGEBAR_COVERAGE_REPORT_ONLY: "1",
-  },
+  env: reportEnv,
 })
 
 const summaryResult = run("node", ["./scripts/coverage-summary.mjs"], {
-  env: process.env,
+  env: reportEnv,
 })
 
 if (coverageResult.status !== 0) {

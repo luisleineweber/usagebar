@@ -195,7 +195,7 @@ export const makeCtx = () => {
         if (parts.length !== 3) return null
         const decoded = ctx.base64.decode(parts[1])
         return JSON.parse(decoded)
-      } catch (e) {
+      } catch (_error) {
         return null
       }
     },
@@ -208,7 +208,7 @@ export const makeCtx = () => {
       if (!trimmed) return null
       try {
         return JSON.parse(trimmed)
-      } catch (e) {
+      } catch (_error) {
         return null
       }
     },
@@ -218,7 +218,7 @@ export const makeCtx = () => {
       if (!trimmed) return { ok: false }
       try {
         return { ok: true, value: JSON.parse(trimmed) }
-      } catch (e) {
+      } catch (_error) {
         return { ok: false }
       }
     },
