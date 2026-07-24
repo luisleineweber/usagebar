@@ -15,18 +15,35 @@ struct ServerConfig {
 }
 
 impl ServerConfig {
-    fn from_environment() -> Option<Self> {
+    fn from_environment() -> Result<Option<Self>, String> {
         let enabled = std::env::var("USAGEBAR_LOCAL_HTTP_API_ENABLED")
             .map(|value| parse_enabled_value(&value))
-            .unwrap_or(true);
+            .unwrap_or(false);
+        Self::from_values(
+            enabled,
+            optional_environment_value("USAGEBAR_LOCAL_HTTP_API_TOKEN"),
+            optional_environment_value("USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN"),
+        )
+    }
+
+    fn from_values(
+        enabled: bool,
+        bearer_token: Option<String>,
+        allowed_origin: Option<String>,
+    ) -> Result<Option<Self>, String> {
         if !enabled {
-            return None;
+            return Ok(None);
         }
 
-        Some(Self {
-            bearer_token: optional_environment_value("USAGEBAR_LOCAL_HTTP_API_TOKEN"),
-            allowed_origin: optional_environment_value("USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN"),
-        })
+        let bearer_token = bearer_token.ok_or_else(|| {
+            "USAGEBAR_LOCAL_HTTP_API_TOKEN must be set when the local HTTP API is enabled"
+                .to_string()
+        })?;
+
+        Ok(Some(Self {
+            bearer_token: Some(bearer_token),
+            allowed_origin,
+        }))
     }
 }
 
@@ -45,9 +62,18 @@ fn optional_environment_value(name: &str) -> Option<String> {
 }
 
 pub fn start_server() {
-    let Some(config) = ServerConfig::from_environment() else {
-        log::info!("local HTTP API disabled by USAGEBAR_LOCAL_HTTP_API_ENABLED");
-        return;
+    let config = match ServerConfig::from_environment() {
+        Ok(Some(config)) => config,
+        Ok(None) => {
+            log::info!(
+                "local HTTP API disabled; set USAGEBAR_LOCAL_HTTP_API_ENABLED=true to enable"
+            );
+            return;
+        }
+        Err(error) => {
+            log::warn!("local HTTP API disabled: {}", error);
+            return;
+        }
     };
 
     std::thread::spawn(move || {
@@ -137,7 +163,7 @@ fn apply_cors_headers(response: String, origin: Option<&str>, config: &ServerCon
     let (allow_origin, vary_origin) = match config.allowed_origin.as_deref() {
         Some(allowed_origin) if Some(allowed_origin) == origin => (allowed_origin, true),
         Some(_) => return response,
-        None => ("*", false),
+        None => return response,
     };
     response.replacen(
         "Connection: close\r\n",
@@ -490,11 +516,11 @@ mod tests {
     }
 
     #[test]
-    fn route_options_returns_204_with_legacy_cors() {
+    fn route_options_returns_204_without_cors_by_default() {
         let response = route("OPTIONS", "/v1/usage");
         assert!(response.starts_with("HTTP/1.1 204"));
         let response = apply_cors_headers(response, None, &ServerConfig::default());
-        assert!(response.contains("Access-Control-Allow-Origin: *"));
+        assert!(!response.contains("Access-Control-Allow-Origin"));
     }
 
     #[test]
@@ -586,13 +612,13 @@ mod tests {
     }
 
     #[test]
-    fn response_json_has_legacy_cors_headers_by_default() {
+    fn response_json_has_no_cors_headers_by_default() {
         let response = apply_cors_headers(
             response_json(200, "OK", "[]"),
             None,
             &ServerConfig::default(),
         );
-        assert!(response.contains("Access-Control-Allow-Origin: *"));
+        assert!(!response.contains("Access-Control-Allow-Origin"));
         assert!(response.contains("Content-Type: application/json; charset=utf-8"));
     }
 
@@ -665,5 +691,24 @@ mod tests {
         assert!(!parse_enabled_value(" false "));
         assert!(!parse_enabled_value("OFF"));
         assert!(parse_enabled_value("true"));
+    }
+
+    #[test]
+    fn enabled_configuration_requires_a_bearer_token() {
+        assert!(ServerConfig::from_values(true, None, None).is_err());
+        assert_eq!(ServerConfig::from_values(false, None, None).unwrap(), None);
+
+        let config = ServerConfig::from_values(
+            true,
+            Some("local-secret".to_string()),
+            Some("http://localhost:3000".to_string()),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(config.bearer_token.as_deref(), Some("local-secret"));
+        assert_eq!(
+            config.allowed_origin.as_deref(),
+            Some("http://localhost:3000")
+        );
     }
 }

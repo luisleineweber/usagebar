@@ -96,7 +96,7 @@ UsageBar is local-first. App settings, provider order, display preferences, and 
 - UsageBar does not send provider credentials, raw usage payloads, API keys, cookies, or app-owned provider secret files to UsageBar-owned services.
 - Plugin host APIs are allowlisted and capability-gated for sensitive operations such as write-capable SQLite access.
 - The WebView uses a restrictive starter content security policy.
-- The optional local HTTP API binds to `127.0.0.1:6736`.
+- The opt-in local HTTP API binds to `127.0.0.1:6736` and requires a bearer token when enabled.
 - Telemetry uses the app's analytics integration only for product diagnostics; provider usage payloads and credentials are not telemetry data.
 - Crash logs are local support artifacts under `%LOCALAPPDATA%\com.sunstory.usagebar` unless a user explicitly attaches sanitized logs to a report. Automatic crash upload is not part of the Alpha 1 promise.
 
@@ -150,7 +150,7 @@ bun run check
 bun run test -- --run
 ```
 
-`bun run check` is the default local quality gate for TypeScript, JavaScript, JSON/config formatting, ESLint, and TypeScript typechecking. Rust formatting and linting are exposed as `bun run format:rust:check` and `bun run lint:rust` while existing Rust style debt is cleaned separately.
+`bun run check` is the default local quality gate for frontend and Rust formatting, ESLint, TypeScript typechecking, and Clippy. The narrower `bun run check:frontend` and `bun run check:rust` scripts are available when working on only one side of the application.
 
 ### Local release build
 

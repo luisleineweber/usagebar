@@ -4,21 +4,21 @@ UsageBar exposes a read-only HTTP API on the loopback interface so local tools, 
 
 **Base URL:** `http://127.0.0.1:6736`
 
-The server starts automatically with the app. It only binds to `127.0.0.1`. If the port is already in use, the API is disabled for that app session and UsageBar continues running normally.
+The server is disabled by default. When explicitly enabled, it only binds to `127.0.0.1`. If the port is already in use, the API is disabled for that app session and UsageBar continues running normally.
 
 ## Hardening
 
 The API is loopback-only, but it exposes cached subscription information. It is therefore configurable before app startup:
 
-| Variable | Effect |
-| --- | --- |
-| `USAGEBAR_LOCAL_HTTP_API_ENABLED=false` | Does not start the listener. `0` and `off` have the same effect. |
-| `USAGEBAR_LOCAL_HTTP_API_TOKEN=<secret>` | Requires `Authorization: Bearer <secret>` for every `GET` request. |
-| `USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN=<origin>` | Restricts browser CORS to exactly one origin, for example `http://localhost:3000`. |
+| Variable                                          | Effect                                                                                                               |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `USAGEBAR_LOCAL_HTTP_API_ENABLED=true`            | Explicitly starts the listener. The default is disabled; `0`, `false`, and `off` disable it.                         |
+| `USAGEBAR_LOCAL_HTTP_API_TOKEN=<secret>`          | Required when the API is enabled; requests must include `Authorization: Bearer <secret>`.                            |
+| `USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN=<origin>` | Opts one exact browser origin into CORS, for example `http://localhost:3000`. Without it, no CORS header is emitted. |
 
-Without this variable, the API retains its legacy `Access-Control-Allow-Origin: *` behavior for existing browser clients. Set it to restrict browser CORS to one origin.
+The API does not start when it is enabled without a token. CORS is not an authentication mechanism: local programs can connect directly to the loopback port, so use the bearer token for every client.
 
-When a token is configured, use:
+When configured, use:
 
 ```powershell
 $headers = @{ Authorization = "Bearer $env:USAGEBAR_LOCAL_HTTP_API_TOKEN" }
@@ -129,7 +129,7 @@ The `lines` array uses the same metric line types as plugin output: `progress`, 
 
 ## CORS
 
-Browser CORS remains permissive by default for backwards compatibility. When `USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN` is set, only matching responses include:
+Browser CORS is disabled by default. When `USAGEBAR_LOCAL_HTTP_API_ALLOWED_ORIGIN` is set, only matching responses include:
 
 ```http
 Access-Control-Allow-Origin: http://localhost:3000
@@ -153,9 +153,10 @@ Possible error codes are `provider_not_found`, `not_found`, `method_not_allowed`
 ## Examples
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:6736/v1/health
-Invoke-RestMethod http://127.0.0.1:6736/v1/providers
-Invoke-RestMethod http://127.0.0.1:6736/v1/latest
-Invoke-RestMethod http://127.0.0.1:6736/v1/usage
-Invoke-RestMethod http://127.0.0.1:6736/v1/usage/codex
+$headers = @{ Authorization = "Bearer $env:USAGEBAR_LOCAL_HTTP_API_TOKEN" }
+Invoke-RestMethod http://127.0.0.1:6736/v1/health -Headers $headers
+Invoke-RestMethod http://127.0.0.1:6736/v1/providers -Headers $headers
+Invoke-RestMethod http://127.0.0.1:6736/v1/latest -Headers $headers
+Invoke-RestMethod http://127.0.0.1:6736/v1/usage -Headers $headers
+Invoke-RestMethod http://127.0.0.1:6736/v1/usage/codex -Headers $headers
 ```
