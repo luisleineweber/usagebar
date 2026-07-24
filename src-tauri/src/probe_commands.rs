@@ -1,12 +1,20 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use tauri::Emitter;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::AppState;
 use crate::local_http_api;
 use crate::plugin_engine;
+
+const MAX_CONCURRENT_PROBES: usize = 4;
+
+fn probe_semaphore() -> &'static Arc<Semaphore> {
+    static SEMAPHORE: OnceLock<Arc<Semaphore>> = OnceLock::new();
+    SEMAPHORE.get_or_init(|| Arc::new(Semaphore::new(MAX_CONCURRENT_PROBES)))
+}
 
 #[derive(Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -120,38 +128,79 @@ pub(crate) async fn start_probe_batch(
         let data_dir = app_data_dir.clone();
         let version = app_version.clone();
         let coordinator = Arc::clone(&coordinator);
+        let semaphore = Arc::clone(probe_semaphore());
+        let plugin_id = plugin.manifest.id.clone();
+        let worker_plugin_id = plugin_id.clone();
+        let join_plugin_id = plugin_id.clone();
+        let capacity_plugin_id = plugin_id.clone();
+        let worker_plugin = plugin.clone();
+        let panic_plugin = plugin.clone();
+        let join_plugin = plugin.clone();
+        let capacity_plugin = plugin.clone();
+        let worker_handle = handle.clone();
 
-        tauri::async_runtime::spawn_blocking(move || {
-            let plugin_id = plugin.manifest.id.clone();
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                plugin_engine::runtime::run_probe(&plugin, &data_dir, &version, Some(&handle))
-            }));
+        tauri::async_runtime::spawn(async move {
+            let output = match semaphore.acquire_owned().await {
+                Ok(_permit) => {
+                    match tauri::async_runtime::spawn_blocking(move || {
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            plugin_engine::runtime::run_probe(
+                                &worker_plugin,
+                                &data_dir,
+                                &version,
+                                Some(&worker_handle),
+                            )
+                        }));
 
-            let output = match result {
-                Ok(output) => {
-                    let has_error = output.lines.iter().any(|line| {
-                        matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")
-                    });
-                    if has_error {
-                        log::warn!("probe {} completed with error", plugin_id);
-                    } else {
-                        log::info!(
-                            "probe {} completed ok ({} lines)",
-                            plugin_id,
-                            output.lines.len()
-                        );
-                        local_http_api::cache_successful_output(&output);
+                        match result {
+                            Ok(output) => output,
+                            Err(_) => {
+                                log::error!("probe {} panicked", worker_plugin_id);
+                                plugin_engine::runtime::error_output(
+                                    &panic_plugin,
+                                    "provider probe panicked".to_string(),
+                                )
+                            }
+                        }
+                    })
+                    .await
+                    {
+                        Ok(output) => output,
+                        Err(error) => {
+                            log::error!("probe {} worker failed: {}", join_plugin_id, error);
+                            plugin_engine::runtime::error_output(
+                                &join_plugin,
+                                "provider probe worker failed".to_string(),
+                            )
+                        }
                     }
-                    output
                 }
-                Err(_) => {
-                    log::error!("probe {} panicked", plugin_id);
+                Err(error) => {
+                    log::error!(
+                        "probe {} could not acquire worker slot: {}",
+                        capacity_plugin_id,
+                        error
+                    );
                     plugin_engine::runtime::error_output(
-                        &plugin,
-                        "provider probe panicked".to_string(),
+                        &capacity_plugin,
+                        "provider probe capacity unavailable".to_string(),
                     )
                 }
             };
+
+            let has_error = output.lines.iter().any(|line| {
+                matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")
+            });
+            if has_error {
+                log::warn!("probe {} completed with error", plugin_id);
+            } else {
+                log::info!(
+                    "probe {} completed ok ({} lines)",
+                    plugin_id,
+                    output.lines.len()
+                );
+                local_http_api::cache_successful_output(&output);
+            }
 
             let completion = coordinator
                 .lock()

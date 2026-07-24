@@ -1,6 +1,6 @@
 [package]
 name = "usagebar"
-version = "0.1.0-alpha.6"
+version = "0.1.0-alpha.7"
 description = "UsageBar is a Windows-first desktop tracker for AI coding subscription usage"
 authors = ["Robin Ebers"]
 edition = "2024"
@@ -42,7 +42,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2.5.1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 regex-lite = "0.1.9"
 keyring = "3.6.3"
 rusqlite = { version = "0.37.0", features = ["bundled"] }
