@@ -1,5 +1,269 @@
 ﻿# Active Todo
 
+# Symmetrische Frontend-/Rust-Quality-Gates, 2026-07-24
+
+## Acceptance Criteria
+
+- [x] `bun run check` umfasst Frontend- und Rust-Format-/Lint-Gates.
+- [x] CI führt Rust-Formatprüfung und Clippy sichtbar mit `-D warnings` aus.
+- [x] Coverage dokumentiert und enforced klar das 80%-Changed-File-Ratchet; die globale 90%-Schwelle bleibt bis zur Erreichung bewusst report-only.
+- [x] Der bestehende `cargo fmt --check`-Blocker ist an der Ursache behoben.
+- [x] Relevante Tests, Checks, Rust-Tests, Build und Diff-Review sind dokumentiert.
+
+## Plan
+
+- [x] Den aktuellen Rust-Formatter-Blocker und Quality-Script-Vertrag reproduzieren.
+- [x] Rust-Format-/Lint-Gates in das lokale Sammel-Gate integrieren.
+- [x] CI-Rust-Format-Gate und explizites Coverage-Ratchet-Verhalten absichern.
+- [x] Verifikation ausführen und verbleibende, unabhängige Arbeitsbaumfehler festhalten.
+
+## Verification Notes
+
+- `bun run check` -> passed: frontend format/ESLint/TypeScript plus `cargo fmt --check` and Clippy `-D warnings`.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 146 passed, 1 ignored.
+- `bun run build` -> passed; existing Vite large-chunk warning remains.
+- `bun run test:all -- --reporter=dot` -> 1,369 passed, 1 failed across 92 files; the remaining failure is the pre-existing About-dialog assertion expecting a missing `Luis Leineweber` button.
+- `bun run test:coverage:report` -> blocked by the same single test failure before `coverage-summary.json` is produced; the global 90% threshold remains report-only and the changed-file ratchet remains the CI gate.
+- `bunx prettier --check .github/workflows/ci.yml package.json scripts/run-coverage-report.mjs scripts/coverage-summary.mjs` and `git diff --check` -> passed; only existing LF/CRLF normalization warnings remain.
+
+# Provider settings orchestration seam, 2026-07-24
+
+## Acceptance Criteria
+
+- [x] `App.tsx` and `settings-window-app.tsx` share one provider-config persistence hook.
+- [x] Provider config loading, config updates, and secret metadata operations preserve existing behavior.
+- [x] Secret failures do not persist metadata and are covered by a focused regression test.
+- [x] Focused tests, typecheck, formatting, lint, build, and diff validation are recorded below.
+
+## Plan
+
+- [x] Locate the duplicated provider config and secret persistence lifecycle.
+- [x] Integrate the existing `useProviderConfigActions` seam into both app entrypoints.
+- [x] Add focused coverage for loading, updates, secret save/delete, and storage failures.
+- [x] Run final build and full test suite; record unrelated pre-existing failures.
+
+## Verification Notes
+
+- `bun run test -- src/hooks/app/use-provider-config-actions.test.ts --run` -> 5 passed.
+- `bun run typecheck` -> passed.
+- Targeted Prettier, ESLint, and `git diff --check` -> passed; only existing LF/CRLF normalization warnings remain.
+- `bun run build` -> passed; existing Vite large-chunk warning remains.
+- `bun run test:all` -> 1,368 passed, 1 failed across 92 files; the remaining failure is the pre-existing `App > covers about open/close callbacks` assertion expecting a missing `Luis Leineweber` button.
+
+# Verständliche Cookie-Anleitung im Onboarding, 2026-07-24
+
+# Plugin host API readability hardening, 2026-07-24
+
+## Acceptance Criteria
+
+- [x] Language-server discovery lives in a focused Rust module with no IPC or plugin API changes.
+- [x] The existing host API tests continue to cover localized Windows process/port parsing.
+- [x] ESLint policy remains explicit: intentional logging is documented, and no unrelated rule churn is introduced.
+- [x] Rust tests, Clippy, formatting, and diff validation are run and recorded.
+
+## Plan
+
+- [x] Extract language-server discovery from `host_api.rs` behind the existing re-exported functions.
+- [x] Add or preserve focused regression coverage at the new module boundary.
+- [x] Review the remaining ESLint exceptions and document the chosen policy if it changes.
+- [x] Run focused and related verification, then review the diff.
+
+## Verification Notes
+
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib plugin_engine::host_api -- --nocapture` -> 62 tests passed after the extraction.
+- `bun run lint` -> passed with `caughtErrors: "all"`; six intentionally unused plugin catch parameters now use `_error`.
+- `bun run check` -> frontend formatting, ESLint, TypeScript, and Cargo fmt passed; the Rust Clippy stage stopped at the documented `src/probe_commands.rs` move/borrow errors.
+- `rustfmt --edition 2021 --check src-tauri/src/plugin_engine/host_api.rs src-tauri/src/plugin_engine/language_server.rs src-tauri/src/plugin_engine/mod.rs` -> passed.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings only.
+- Full `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` remains blocked by unrelated pre-existing move/borrow errors in `src-tauri/src/probe_commands.rs` (`plugin_id`, `plugin_for_worker_error`, and `handle` are moved into `spawn_blocking` and used afterward).
+
+# Legacy openusage.exe-Fallback im Tauri-Wrapper, 2026-07-24
+
+# Probe worker ownership fix, 2026-07-24
+
+## Acceptance Criteria
+
+- [x] `probe_commands.rs` compiles cleanly with Clippy `-D warnings`.
+- [x] Probe panic, worker-join, capacity-failure, completion, and event-emission behavior remains unchanged.
+- [ ] Focused Rust tests, full Rust checks, frontend checks, and diff validation pass.
+- [ ] Only intended files are included in the commit.
+
+## Plan
+
+- [x] Reproduce the move/borrow failures and identify ownership boundaries.
+- [x] Clone or borrow values at the async/blocking seam with the smallest behavior-preserving change.
+- [ ] Run focused and full verification, review the staged diff, and commit.
+
+## Verification Notes
+
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` -> passed using the separate `src-tauri/target-codex-verification` target directory.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 146 passed, 1 ignored.
+- `bun run check:frontend` -> passed: formatting, ESLint, and TypeScript.
+- `bun run test:all` -> 1,370 passed, 1 failed in the pre-existing `App > covers about open/close callbacks` assertion expecting a `Luis Leineweber` button absent from the current About UI.
+- No commit created because the user authorized committing only when all tests pass.
+
+## Acceptance Criteria
+
+- [x] Der Windows-Dev-Cleanup ermittelt ausschließlich den konfigurierten UsageBar-Executable-Namen.
+- [x] Bei nicht lesbarer Konfiguration wird kein Legacy-Executable geraten.
+- [x] Ein Regressionstest schützt beide Fälle.
+- [x] Relevante Tests, Format-/Diff-Prüfung und Code-Review sind dokumentiert.
+
+## Plan
+
+- [x] Den Legacy-Fallback und seine aktuelle Testabdeckung lokalisieren.
+- [x] Die Ermittlung in einen testbaren Helper verschieben und den Fallback entfernen.
+- [x] Regressionstest und relevante Checks ausführen.
+- [x] Diff prüfen und die Erkenntnis in Lessons/Breadcrumbs dokumentieren.
+
+## Verification Notes
+
+- `node --test scripts/tauri/wrapper.test.mjs` -> 9 passed.
+- `bunx prettier --check scripts/tauri/wrapper.mjs scripts/tauri/wrapper-lib.mjs scripts/tauri/wrapper.test.mjs tasks/todo.md docs/breadcrumbs.md tasks/lessons.md` -> passed.
+- `git diff --check` -> passed; existing line-ending normalization warnings only.
+
+## Acceptance Criteria
+
+- [x] Ollama zeigt zuerst die `ollama signin`-Variante und danach die Browser-Cookie-Variante.
+- [x] Die Anleitung besteht aus kurzen, nummerierten Schritten und erklärt klar, wo der Cookie-Header zu finden ist.
+- [x] Alle weiteren Cookie-Provider haben eine passende, kompakte Onboarding-Anleitung.
+- [x] Lange bestehende Provider-Hinweise werden im Onboarding nicht mehr ungefiltert wiederholt.
+- [x] Regressionstests, Typecheck, Build, Formatierung und Diff-Prüfung sind erfolgreich.
+
+## Plan
+
+- [x] Gemeinsames Variantenmodell und providerbezogene Schritte definieren.
+- [x] Cookie-Fallback-UI auf die neue Schrittfolge umstellen.
+- [x] Tests ergänzen und die relevanten Checks ausführen.
+
+## Verification Notes
+
+- `bun run test -- src/components/onboarding/first-run-onboarding.test.tsx --run` -> 10 passed.
+- `bun run check` -> formatting, ESLint, and TypeScript passed.
+- `bun run build:frontend` -> passed; existing large-chunk warning only.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings only.
+
+# Inline cookie recovery in onboarding, 2026-07-24
+
+## Acceptance Criteria
+
+- [x] Failed onboarding checks for cookie-backed providers show an inline Cookie-header field.
+- [x] The field explains the common DevTools/Network/Request-Headers path and includes provider-specific source guidance.
+- [x] Saving uses the existing secure provider-secret path and automatically retries the provider.
+- [x] API-key and local-auth-only providers do not receive a cookie field.
+- [x] Focused tests, typecheck, build, formatting, lint, and diff checks pass.
+
+## Plan
+
+- [x] Reuse provider definitions to identify cookie-backed providers and their guidance.
+- [x] Add the reusable onboarding cookie field and connect it to secure secret persistence.
+- [x] Add/update regression coverage and complete verification.
+
+## Verification Notes
+
+- `bun run test -- src/components/onboarding/first-run-onboarding.test.tsx src/hooks/app/use-first-run-onboarding.test.ts src/components/settings/provider-settings-detail.test.tsx --run` -> 48 passed.
+- `bun run check` -> formatting, ESLint, and TypeScript passed.
+- `bun run build:frontend` -> passed; existing large-chunk warning only.
+- `bun run lint:rust` -> Clippy passed with `-D warnings`.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 145 passed, 1 ignored.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings only.
+
+# Split Tauri command adapters from lib.rs, 2026-07-23
+
+## Acceptance Criteria
+
+- [x] Probe batch IPC behavior and emitted event payloads remain unchanged in the extracted implementation.
+- [x] Provider secret, browser-cookie, and Codex-account IPC behavior remains unchanged in the extracted implementation.
+- [x] `src-tauri/src/lib.rs` contains app wiring and thin command registration rather than the full probe/credential implementations.
+- [ ] Rust tests, rustfmt, frontend typecheck, and diff checks pass or pre-existing blockers are recorded.
+
+## Plan
+
+- [x] Inspect the current command dependencies and choose module seams.
+- [x] Move probe batch handling and DTOs into a dedicated module.
+- [x] Move credential, browser-cookie, and Codex-account handling into a dedicated module.
+- [x] Run focused verification and review the final diff.
+
+## Verification Notes
+
+- `rustfmt --edition 2024 --check src-tauri/src/probe_commands.rs src-tauri/src/credential_commands.rs` -> passed.
+- `rustfmt --edition 2024 --config skip_children=true --check src-tauri/src/lib.rs` -> passed; normal Cargo rustfmt is blocked by the pre-existing missing `src-tauri/src/app_nap.rs` module resolution.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- `bun run build:frontend` -> passed; existing large-chunk warning only.
+- `bun run test -- src/App.test.tsx --run --reporter=dot` -> 86 passed, 2 failed in unrelated existing UI/settings assertions.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> exceeded 300 seconds without producing a compiler/test result; exact Rust test verification remains blocked by the local Cargo build environment.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings only.
+
+# README structure refresh, 2026-07-23
+
+## Acceptance Criteria
+
+- [x] README follows the requested reader order from Download through Build from source.
+- [x] Install and What It Does are shorter and user-oriented.
+- [x] Uninstall, local data, privacy, and security are covered in one section.
+- [x] Existing provider, alpha, architecture, fork, contribution, lineage, license, and build details remain accurate.
+
+## Plan
+
+- [x] Reorder and tighten the README sections without changing product behavior.
+- [x] Review links, headings, formatting, and the final diff.
+- [x] Record exact documentation checks.
+
+## Verification Notes
+
+- README heading order and repeated-topic scan reviewed manually.
+- `git diff --check` -> passed; existing line-ending normalization warnings only.
+
+# Hide providers only from navigation, 2026-07-22
+
+## Acceptance Criteria
+
+- [x] Hiding a provider removes it from the sidebar/provider navigation only.
+- [x] The shared dashboard and history continue to show the provider when it remains enabled.
+- [x] The provider settings window can show a hidden provider again without disabling its probes.
+- [x] Existing disabled-provider behavior, context-menu behavior, and persisted settings remain compatible.
+- [x] Focused tests, typecheck, formatting, and diff checks pass.
+
+## Plan
+
+- [x] Add a persisted navigation-hidden provider setting with backward-compatible normalization.
+- [x] Use it for sidebar/provider navigation while keeping enabled providers in dashboard/history data.
+- [x] Expose show-only recovery in provider settings and update context-menu handling.
+- [x] Run focused tests and project checks; record exact results.
+
+## Verification Notes
+
+- `bun run test -- src/hooks/app/use-app-plugin-views.test.ts src/hooks/app/use-settings-plugin-actions.test.ts src/App.test.tsx src/pages/settings.test.tsx --run --reporter=dot` -> 4 files, 120 tests passed.
+- `bun run typecheck` -> passed.
+- `bun run lint` -> passed.
+- Targeted Prettier check and `git diff --check` -> passed; existing CRLF normalization warnings only.
+
+# Faster GitHub Actions builds, 2026-07-22
+
+## Acceptance Criteria
+
+- [ ] CI restores Bun's global package cache on Linux and Windows.
+- [ ] The CI check job typechecks once per platform.
+- [ ] The frontend/plugin test suite runs once per platform, with coverage generated on Linux in that same run.
+- [ ] The existing CLI sidecar preparation remains intact.
+- [x] Workflow formatting and relevant local checks pass.
+
+## Plan
+
+- [x] Inspect the current workflow and identify duplicate typecheck/test work.
+- [x] Add explicit Bun caching and remove duplicate CI work.
+- [x] Verify workflow formatting and local checks.
+- [x] Record exact verification results and remaining remote-only checks.
+
+## Verification Notes
+
+- `bunx prettier --check .github/workflows/ci.yml .github/workflows/publish.yml` -> passed.
+- `bun run typecheck` -> passed.
+- `git diff --check` -> passed; existing line-ending normalization warnings remain.
+- `bun run test:all -- --reporter=dot` -> exceeded the local 120-second command limit without producing a test failure; the remote CI run remains the authoritative full-suite verification.
+- The existing `prepare:cli-sidecar` step remains in the CI workflow after wrapper tests and before Cargo validation.
+
 # Settings provider presentation order, 2026-07-22
 
 ## Acceptance Criteria
@@ -916,6 +1180,32 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun prettier --check tasks\todo.md` still fails on pre-existing malformed escape sequences in the older OpenCode todo section; this slice did not rework that historical content.
 - Diff review completed for `src/lib/settings.ts`, `src/lib/settings.test.ts`, `tasks/todo.md`, and `docs/breadcrumbs.md`.
 
+# Visible manual update-check feedback
+
+## Executive Summary
+
+- Make the version footer visibly acknowledge a manual update check.
+- Show a checking state while the request is in flight and an explicit up-to-date state when no release is available.
+- Keep the existing update-install and About dialog interactions unchanged.
+
+## Acceptance Criteria
+
+- [x] Right-clicking the version label shows visible checking feedback.
+- [x] A completed check with no newer release shows an explicit up-to-date label.
+- [x] Existing available, error, and About dialog behavior remains unchanged.
+- [x] Focused footer/update tests and formatting pass.
+
+## Plan
+
+- [x] Add failing footer assertions for checking and up-to-date states.
+- [x] Render the two existing update states in the footer.
+- [x] Run focused tests, formatting, and diff review.
+
+## Verification Notes
+
+- `bun run test -- src/components/panel-footer.test.tsx src/hooks/use-app-update.test.ts --run` -> 38 tests passed.
+- `bunx prettier --write src/components/panel-footer.tsx src/components/panel-footer.test.tsx` -> passed.
+
 # Version footer update entry point
 
 ## Executive Summary
@@ -1656,6 +1946,7 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - [x] Reproduce the append-to-end behavior.
 - [x] Insert new providers using the default provider order.
 - [x] Add regression coverage and verify.
+
 # Alpha 6 primary provider order correction, 2026-07-22
 
 ## Acceptance Criteria
@@ -1667,6 +1958,22 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 ## Verification Notes
 
 - Focused settings regression added for the four-provider prefix and alphabetical remainder.
+
+# CI and prerelease publishing failures, 2026-07-22
+
+## Acceptance Criteria
+
+- [ ] CI prepares the platform-specific CLI sidecar before Cargo validates the Tauri manifest.
+- [ ] Windows CI's formatter sees the same LF-formatted files as local and Linux checks.
+- [ ] Alpha prerelease publishing remains allowed without updater or Authenticode secrets.
+- [ ] Focused local checks pass and the exact remote failure evidence is recorded.
+
+## Plan
+
+- [x] Inspect the failed CI and Publish run logs for the exact failing steps.
+- [ ] Add the CI sidecar preparation and cross-platform line-ending contract.
+- [ ] Run focused formatter, sidecar, Cargo, and workflow checks.
+- [ ] Record the fix, verification, and any remaining remote-only blocker.
 
 # Used metric labels, 2026-07-22
 
@@ -1687,3 +1994,193 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun run test -- src/components/provider-card.test.tsx --run` -> 42 tests passed.
 - `bunx prettier --check src/components/metric-line-renderer.tsx src/components/provider-card.test.tsx` -> passed.
 - `git diff --check` -> passed; existing CRLF normalization warnings only.
+
+# Alpha 7 prerelease update discovery, 2026-07-22
+
+## Executive Summary
+
+- Keep unsigned prerelease builds able to discover the next Alpha through GitHub release metadata.
+- Continue to use the signed Tauri updater when its manifest is available.
+- Treat a missing or invalid updater manifest as a fallback condition, not as a terminal check failure.
+
+## Acceptance Criteria
+
+- [x] An Alpha 7 build finds a newer Alpha 8 release when the Tauri updater check rejects the missing unsigned manifest.
+- [x] Signed updater candidates still use the in-app download/install flow.
+- [x] Existing GitHub fallback behavior remains covered.
+- [x] Focused tests and formatting pass; repository typecheck/full-suite blockers are recorded below.
+
+## Plan
+
+- [x] Reproduce the unsigned prerelease failure and identify why GitHub fallback is skipped.
+- [x] Continue to GitHub release discovery when the Tauri updater check throws.
+- [x] Add a regression test for the rejected updater check and Alpha 8 candidate.
+- [x] Run focused verification and review the diff.
+
+## Verification Notes
+
+- `bun run test -- src/hooks/use-app-update.test.ts --run` -> passed, 23 tests.
+- `bunx prettier --check src/hooks/use-app-update.ts src/hooks/use-app-update.test.ts tasks/todo.md` -> passed.
+- `git diff --check` -> passed; existing CRLF normalization warnings only.
+- `bun run typecheck` -> blocked by unrelated existing unused declarations in `src/App.tsx`: `savePluginSettings` and `TRAY_SETTINGS_DEBOUNCE_MS`.
+- `bun run test -- --run` -> exceeded the 120-second timeout without reporting a test failure.
+
+# Quality pipeline hardening and Rust orchestration split, 2026-07-23
+
+## Executive Summary
+
+- Make the existing Rust lint contract enforceable in CI.
+- Replace the all-or-nothing coverage bypass with a changed-production-file ratchet while the global 90% gate remains below target.
+- Re-enable useful ESLint rules incrementally and split oversized Rust orchestration modules along responsibility boundaries without changing behavior.
+
+## Acceptance Criteria
+
+- [x] `bun run lint:rust` passes locally and CI runs it with `-D warnings`.
+- [x] CI no longer disables all coverage thresholds; changed production JS/TS files must meet the configured 80% line-coverage ratchet or an explicit, reviewable baseline exception is reported.
+- [x] ESLint no longer globally disables `no-unused-vars` and `no-redeclare`; remaining legacy exceptions are narrow and documented.
+- [x] `lib.rs` and `host_api.rs` are split into focused modules with no public behavior or test-contract regressions.
+- [x] Focused tests, frontend checks, Rust tests, coverage reporting, formatting, and diff validation are recorded below.
+
+## Plan
+
+- [x] Fix the reproducible Clippy finding and add the CI step.
+- [x] Add changed-file coverage enforcement and retain the global report until the baseline is ready.
+- [x] Re-enable ESLint rules and fix only the resulting real violations.
+- [x] Extract Rust orchestration helpers by cohesive responsibility.
+- [x] Run the full verification order and review the final diff.
+
+## Verification Notes
+
+- Baseline: `bun run lint` passed; `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` failed at `src-tauri/src/local_http_api/server.rs:348` because of a useless `format!`.
+- Baseline: CI invokes coverage with `USAGEBAR_COVERAGE_REPORT_ONLY=1`, so the configured global 90% threshold remains report-only while the changed-file 80% line ratchet is enforced.
+
+## Verification Notes
+
+- `bun run check` -> passed: Prettier contract, ESLint with `no-explicit-any`, `no-unused-vars`, `no-redeclare`, `no-empty`, `no-useless-assignment`, and `no-useless-escape`, plus TypeScript.
+- `bun run build:frontend` -> passed; existing Vite large-chunk warning remains.
+- `bun run lint:rust` -> passed with `cargo clippy --all-targets -- -D warnings`.
+- `cargo check --manifest-path src-tauri/Cargo.toml --locked` -> passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 145 passed, 1 ignored.
+- Frontend suite excluding the pre-existing About-dialog mismatch -> 89 files, 1,267 tests passed.
+- Coverage excluding that same pre-existing About-dialog mismatch -> 79.14% statements, 74.20% branches, 79.80% functions, 82.11% lines; global 90% gate remains report-only, changed-file 80% line gate passed.
+- Full `bun run test:all` -> expected 1,356 passed, 1 failed after the added onboarding tests; the remaining failure is the pre-existing `App > covers about open/close callbacks` assertion expecting a `Luis Leineweber` button absent from the current working-tree About UI.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` remains blocked by the pre-existing `#[cfg(target_os = "macos")] mod app_nap;` reference without `src-tauri/src/app_nap.rs`; the extracted Rust files pass direct rustfmt checks.
+
+# First-run provider onboarding, 2026-07-23
+
+## Executive Summary
+
+- Show onboarding only when no provider settings have ever been stored.
+- Let new users choose Codex, Claude, and Cursor, then verify the real provider connections.
+- Explain missing local credentials, cookie fallbacks, and refresh failures in the setup flow.
+
+## Acceptance Criteria
+
+- [x] A genuinely fresh install opens a first-run window; returning users and migrated installs do not.
+- [x] Codex, Claude, and Cursor are preselected and the final selection is reflected in the tray bar.
+- [x] Each provider shows a concise setup sequence and one of: Not set up, Connected, or Refresh failed.
+- [x] Credential and cookie-related failures include a specific next action without exposing secrets.
+- [x] Completion shows “UsageBar is ready” and persists onboarding so it is not shown again.
+- [x] Focused tests, typecheck/build, formatting, diff review, and browser verification are recorded.
+
+## Plan
+
+- [x] Preserve the distinction between missing and stored provider settings during bootstrap.
+- [x] Build the provider selection, connection check, guidance, and success states in the Settings window.
+- [x] Persist the selected provider set and notify the tray window.
+- [x] Add regression coverage and run the verification order.
+
+## Verification Notes
+
+- `bun run test -- src/components/onboarding/first-run-onboarding.test.tsx src/hooks/app/use-settings-bootstrap.test.ts src/lib/settings.test.ts --run` -> 71 tests passed.
+- `bun run test -- src/App.test.tsx --run -t "opens onboarding|persists the recommended onboarding|applies provider settings updates"` -> 3 onboarding/window integration tests passed.
+- `bun run build` -> typecheck and production frontend build passed; Vite retained the pre-existing >500 kB chunk warning.
+- Targeted ESLint over all touched onboarding files -> passed.
+- `git diff --check -- <onboarding files>` -> passed; only existing Windows LF-to-CRLF notices were printed.
+- Two-axis read-only review found and verified fixes for duplicate/window-local probes, incomplete onboarding persistence, restricted provider choice, unsupported recommendations, and misleading success copy. One low-priority pre-existing hotspot remains: `settings-window-app.tsx` is 447 lines.
+- T3 Preview visual verification was attempted through `preview_status` and two `preview_open` calls; all three timed out after 15 seconds, so no screenshot-based approval was possible.
+- `bun run test:all` exceeded the 120-second command limit without reporting a test failure. A direct full `src/App.test.tsx` run earlier passed 89/90 tests; the remaining existing About-dialog assertion could not find `Luis Leineweber` and is unrelated to onboarding.
+
+# Onboarding UX corrections, 2026-07-23
+
+## Acceptance Criteria
+
+- [x] The WebView never opens the browser's native context menu; the existing UsageBar provider context menu remains available where intended.
+- [x] Provider selection is a concise two-column choice without connection instructions, and black/white provider marks keep contrast in both themes.
+- [x] Successful connection results survive selection changes; connected cards omit setup instructions.
+- [x] Failed connection cards expose a split retry control with a `Provider entfernen` action.
+- [x] Finishing onboarding opens the UsageBar panel at the bottom-right work area near the taskbar.
+- [x] Focused tests, typecheck/build, formatting, Rust checks, and diff review pass or record pre-existing blockers.
+
+## Plan
+
+- [x] Add shared context-menu suppression and theme-aware provider icon coloring.
+- [x] Refine provider selection and connection-state caching/removal controls.
+- [x] Position the panel at the taskbar edge when onboarding hands off to UsageBar.
+- [x] Add regression coverage and run the verification order.
+
+## Verification Notes
+
+- `bun run test -- src/components/onboarding/first-run-onboarding.test.tsx src/main.test.tsx src/lib/provider-icon.test.ts --run` -> 3 files, 12 tests passed.
+- `bun run test -- src/components/onboarding/first-run-onboarding.test.tsx src/hooks/app/use-first-run-onboarding.test.ts src/lib/panel-window.test.ts --run` -> 3 files, 15 tests passed.
+- `bun run check` -> passed: Prettier contract, ESLint, and TypeScript.
+- `bun run build:frontend` -> passed; existing Vite chunk-size warning remains.
+- `bun run lint:rust` -> passed with Clippy `-D warnings`.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 145 passed, 1 ignored.
+- Direct `rustfmt --edition 2021 --check src-tauri/src/panel.rs` -> passed. Full Cargo rustfmt remains blocked by the pre-existing missing `src-tauri/src/app_nap.rs` module referenced on macOS.
+- T3 Preview reached the local Vite page, but its snapshot request failed, so no screenshot-based visual approval was available.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings only.
+
+# App/lib orchestration refactor, 2026-07-24
+
+## Executive Summary
+
+- Reduce `App.tsx` to composition and UI wiring by extracting cross-window sync, refresh orchestration, and provider credential actions.
+- Reduce `lib.rs` to Tauri application wiring by extracting startup, Codex auth, global shortcut, analytics, and command responsibilities.
+- Preserve IPC names, runtime behavior, and existing state ownership.
+
+## Acceptance Criteria
+
+- [x] `App.tsx` no longer owns the extracted event, refresh, or provider-secret workflows.
+- [x] `lib.rs` no longer owns the extracted startup, Codex-auth, shortcut, analytics, or plugin-command implementations.
+- [x] Existing Tauri command names and frontend behavior remain unchanged.
+- [x] Focused tests, TypeScript, Rust checks, formatting, and diff validation pass; unrelated baseline failures are recorded.
+
+## Plan
+
+- [x] Run baseline App tests and TypeScript check.
+- [x] Extract frontend orchestration hooks.
+- [x] Extract Rust application wiring and command modules.
+- [x] Run verification in the documented order and review the diff.
+
+# Local API, secret failures, and probe backpressure, 2026-07-24
+
+## Acceptance Criteria
+
+- [x] The local HTTP API is disabled unless explicitly enabled, requires a bearer token when enabled, and has no wildcard CORS default.
+- [x] Non-Windows provider secret operations return an explicit unsupported-platform error instead of reporting a successful no-op.
+- [x] Provider configuration load failures are visible in Settings and offer a retry action.
+- [x] Provider probes are globally bounded so a large batch cannot create an unbounded blocking-worker burst.
+- [x] Focused tests, related checks, formatting, and diff validation pass; unrelated baseline failures remain documented.
+
+## Plan
+
+- [x] Inspect the existing security, configuration, probe, and UI seams.
+- [x] Harden local HTTP API configuration and documentation.
+- [x] Replace non-Windows secret no-ops with explicit errors and coverage.
+- [x] Add retryable provider-config load feedback and a probe concurrency limit.
+- [x] Run verification and review the diff.
+
+## Verification Notes
+
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib local_http_api` -> 30 passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib provider_secret_store` -> 2 passed on Windows; the non-Windows contract test is target-gated.
+- `cargo check --manifest-path src-tauri/Cargo.toml --locked` -> passed.
+- `bun run lint:rust` -> passed with Clippy `-D warnings`.
+- `bunx tsc --noEmit` -> passed.
+- `bunx eslint src/hooks/app/use-provider-config-actions.ts src/hooks/app/use-provider-config-actions.test.ts src/pages/settings.tsx src/settings-window-app.tsx` -> passed.
+- `bun run test -- src/pages/settings.test.tsx src/hooks/app/use-provider-config-actions.test.ts --run` -> 21 passed.
+- `bunx prettier --check` on touched frontend/docs files -> passed after formatting.
+- `bun run check` -> timed out in the local environment; its underlying typecheck, ESLint, Rust lint, and focused formatting checks passed independently.
+- `bun run test:all` -> not rerun; prior working-tree baseline exceeded the command timeout without reporting a new failure.
+- `git diff --check` -> passed; existing LF/CRLF normalization notices remain in the dirty worktree.

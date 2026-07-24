@@ -1,5 +1,44 @@
 # Lessons
 
+## 2026-07-24
+
+- A local quality command can claim frontend coverage while Rust gates remain separate and CI can silently downgrade global coverage to reporting. Fix: make `bun run check` aggregate frontend and Rust format/lint checks, name CI coverage as a changed-file ratchet, and expose Rust formatting as a CI step. Prevention: every documented quality gate needs an executable local aggregate and a visibly named CI call site.
+
+- Localhost is not an authentication boundary, and CORS is not access control. Fix: make the local API opt-in, require a bearer token, and allow only explicitly configured browser origins. Prevention: security review must test default startup and direct loopback clients separately.
+
+- Platform-specific secure storage must not report success when no implementation exists. Fix: return an explicit unsupported-platform error for non-Windows provider secrets. Prevention: test the contract on each target or gate platform-specific tests and verify the fallback branch in cross-target CI.
+
+## 2026-07-24
+
+- Large plugin host files hide platform-specific behavior and make lint policy harder to assess. Fix: extract language-server discovery into a sibling module, keep the host API facade stable, and enforce unused caught-error checks with explicit `_error` names. Prevention: split host capabilities by responsibility before adding more orchestration or broad lint exceptions.
+
+## 2026-07-24
+
+- Async probe workers moved plugin data into `spawn_blocking` while the outer task still needed it for join/capacity errors and completion events. Fix: give worker, panic, join, and capacity paths explicit owned clones. Prevention: map ownership per closure before adding async/blocking boundaries.
+
+## 2026-07-24
+
+- Legacy-Executable-Namen im Dev-Wrapper verlängern die Diagnosepfade und können fremde Prozesse adressieren. Fix: Prozessnamen ausschließlich aus der aktuellen Tauri-Konfiguration ableiten und bei fehlender Konfiguration nichts erraten. Prevention: Wrapper-Fallbacks auf historische Produktnamen mit einem Test gegen die aktuelle Produktidentität absichern.
+
+- Long provider hints made onboarding harder to scan, especially when local sign-in and browser-cookie recovery were mixed together. Fix: model recovery as short ordered variants, with Ollama's local `ollama signin` path first and the browser path second. Prevention: onboarding copy should use task steps and variants instead of rendering settings prose verbatim.
+
+## 2026-07-24
+
+- A missing cookie in onboarding only pointed users to later Provider Settings, even though the provider definition already had the secret field and source hint. Fix: render a generic Cookie-header recovery field for every `cookieHeader` definition, save through the existing vault path, and retry immediately. Prevention: when an onboarding failure has an existing editable credential definition, expose the minimal recovery action at the failure point.
+
+## 2026-07-23
+
+- Onboarding ran inside a desktop WebView but still exposed browser context actions, and panel handoff used the cursor when no tray anchor existed. Fix: suppress native context menus at the app entry and use the monitor work area's bottom-right edge for the handoff. Prevention: treat every WebView as a desktop surface and test first-run handoff without a prior tray click.
+- Provider onboarding re-ran already successful checks after returning from selection. Fix: cache successful provider IDs for the current onboarding session and only probe new or unresolved selections. Prevention: preserve successful state across navigation within multi-step setup flows.
+
+## 2026-07-23
+
+- Quality gates that exist only as local scripts do not protect CI. Fix: add the Rust lint command to CI and enforce a changed-file coverage ratchet while the global baseline is still below target. Prevention: every repository quality script needs one CI call site or an explicit documented reason.
+
+## 2026-07-22
+
+- Provider-Ausblenden muss Navigation und Dashboard getrennt behandeln. Fix: `hidden` wird separat von `disabled` gespeichert; Hide erscheint nur bei eindeutigem Provider-Kontext (Sidebar-Icon oder Provider-Seite), während das gemeinsame Dashboard aktivierte Provider weiterzeigt. Prevention: Kontextmenüs auf implizite Provider-Fallbacks prüfen.
+
 ## 2026-07-22
 
 - Settings provider presentation was coupled to the persisted tray order and exposed the same drag interaction; the first decoupling also dropped the established primary-provider prefix, then pinned legacy `opencode` (OpenCode Zen) instead of visible `opencode-go` (OpenCode). Fix: keep Codex, Claude, Cursor, and `opencode-go` first in Settings, alphabetize the remainder, and keep reordering solely in tray navigation. Prevention: distinguish provider display names from stable IDs and regression-test the real manifest IDs for the complete Settings prefix.
@@ -29,6 +68,11 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - Alpha 6 dev isolation separated the app-data directory from installed Alpha 5 without a migration, so local preferences and provider secrets appeared reset. Fix: perform a one-time, read-only-source migration from the release sibling directory before startup settings access. Prevention: every new app identifier requires an explicit data migration decision and regression test.
 
 ## Current Prevention Rules
+
+- Prerelease updater checks: a missing unsigned `latest.json` makes Tauri `check()` reject before GitHub discovery runs. Catch updater-manifest failures, then query the GitHub release API; only report an error when both sources fail. Add a regression test for the next alpha candidate.
+
+- Update checks must render their transient `checking` and `up-to-date` states; otherwise a successful manual check looks like a no-op. Prevention: add footer assertions for every user-visible `UpdateStatus` variant.
+- A nested version-button context-menu handler must stop propagation before the panel's provider menu handler runs. Prevention: test the footer inside a parent `onContextMenu` boundary.
 
 - Frontend About assets: verify every absolute image URL has a tracked Vite `public` asset; a missing favicon silently renders as a broken image in the dialog.
 

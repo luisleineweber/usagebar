@@ -28,6 +28,7 @@
 - Preserve unrelated user changes. Stop and ask only when an unrecognized change directly conflicts with the requested work.
 - Do not delete, reset, clean, restore, or overwrite user data without explicit approval. Use `trash` for approved deletes and `mv`/`cp` for moves/copies.
 - Do not create commits, change branches, push, or publish unless explicitly requested.
+- commit format: `type(scope): short imperative description`
 - After three failed attempts at the same test/build/lint/blocker, stop and report the blocker with a recommended alternative.
 
 ## Communication
