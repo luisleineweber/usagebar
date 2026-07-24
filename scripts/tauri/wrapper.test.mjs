@@ -17,6 +17,7 @@ import {
   findStaleDebugBuildMetadata,
   getDevConfigArgs,
   getTauriChildEnv,
+  getWindowsDevExeNames,
 } from "./wrapper-lib.mjs"
 
 function createRepoFixture() {
@@ -48,7 +49,7 @@ test("cleanupStaleDebugBuildMetadata removes copied debug metadata from another 
   mkdirSync(packageDir, { recursive: true })
   writeFileSync(
     path.join(packageDir, "root-output"),
-    "D:\\UsageBar\\openusage\\src-tauri\\target\\debug\\build\\tauri-stale\\out"
+    "D:\\PreviousCheckout\\usagebar\\src-tauri\\target\\debug\\build\\tauri-stale\\out"
   )
 
   const result = cleanupStaleDebugBuildMetadata(repoRoot)
@@ -62,6 +63,24 @@ test("cleanupStaleDebugBuildMetadata removes copied debug metadata from another 
 test("getTauriChildEnv marks only local dev launches", () => {
   assert.equal(getTauriChildEnv(["dev"], {}).USAGEBAR_TAURI_DEV, "1")
   assert.equal(getTauriChildEnv(["build"], {}).USAGEBAR_TAURI_DEV, undefined)
+})
+
+test("Windows dev cleanup uses only the configured UsageBar executable", () => {
+  const { repoRoot } = createRepoFixture()
+  const actualRepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+
+  assert.deepEqual(getWindowsDevExeNames(repoRoot), [])
+  assert.deepEqual(getWindowsDevExeNames(actualRepoRoot), ["usagebar.exe"])
+  assert.deepEqual(
+    getWindowsDevExeNames(repoRoot, () => '{"productName":"UsageBar"}'),
+    ["usagebar.exe"]
+  )
+  assert.deepEqual(
+    getWindowsDevExeNames(repoRoot, () => {
+      throw new Error("missing config")
+    }),
+    []
+  )
 })
 
 test("getDevConfigArgs applies the isolated dev config last", () => {

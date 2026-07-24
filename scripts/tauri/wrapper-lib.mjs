@@ -76,6 +76,21 @@ export function getTauriChildEnv(args, baseEnv = process.env) {
   }
 }
 
+export function getWindowsDevExeNames(repoRoot, readConfig = readFileSync) {
+  const configPath = path.join(repoRoot, "src-tauri", "tauri.conf.json")
+
+  try {
+    const config = JSON.parse(readConfig(configPath, "utf8"))
+    if (typeof config.productName === "string" && config.productName.trim()) {
+      return [`${config.productName.trim().toLowerCase().replace(/\s+/g, "-")}.exe`]
+    }
+  } catch {
+    // Do not guess an executable name when the product configuration is unavailable.
+  }
+
+  return []
+}
+
 export function getDevConfigArgs(args, repoRoot) {
   if (args[0] !== "dev") {
     return []
