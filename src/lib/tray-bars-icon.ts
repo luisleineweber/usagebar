@@ -339,7 +339,11 @@ export function makeTrayBarsSvg(args: {
   return parts.join("")
 }
 
-async function rasterizeSvgToRgba(svg: string, widthPx: number, heightPx: number): Promise<Uint8Array> {
+export async function rasterizeSvgToRgba(
+  svg: string,
+  widthPx: number,
+  heightPx: number
+): Promise<Uint8Array> {
   const blob = new Blob([svg], { type: "image/svg+xml" })
   const url = URL.createObjectURL(blob)
   try {
@@ -372,6 +376,15 @@ async function rasterizeSvgToRgba(svg: string, widthPx: number, heightPx: number
   }
 }
 
+export async function renderSvgToImage(
+  svg: string,
+  widthPx: number,
+  heightPx: number
+): Promise<Image> {
+  const rgba = await rasterizeSvgToRgba(svg, widthPx, heightPx)
+  return await Image.new(rgba, widthPx, heightPx)
+}
+
 export async function renderTrayBarsIcon(args: {
   bars: TrayPrimaryBar[]
   sizePx: number
@@ -397,8 +410,7 @@ export async function renderTrayBarsIcon(args: {
     style,
     percentText: text,
   })
-  const rgba = await rasterizeSvgToRgba(svg, layout.width, layout.height)
-  return await Image.new(rgba, layout.width, layout.height)
+  return renderSvgToImage(svg, layout.width, layout.height)
 }
 
 export function getTrayIconSizePx(devicePixelRatio: number | undefined): number {

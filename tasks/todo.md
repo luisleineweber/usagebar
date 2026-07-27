@@ -1,5 +1,58 @@
 ﻿# Active Todo
 
+# Alpha-7-Release-Dokumentation, 2026-07-27
+
+## Acceptance Criteria
+
+- [x] `CHANGELOG.md` contains a `0.1.0-alpha.7` section with highlights and known release notes.
+- [x] README and release documentation use Alpha 7 for the current version and preflight examples.
+- [x] Historical release references remain intact, and the release preflight passes for `v0.1.0-alpha.7`.
+
+## Plan
+
+- [x] Confirm the existing Alpha 7 metadata and identify stale current-release references.
+- [x] Add the Alpha 7 changelog section and synchronize README/release documentation.
+- [x] Run release preflight, formatting/diff checks, and record the results.
+
+## Verification Notes
+
+- `bun run release:check -- --release-tag v0.1.0-alpha.7` -> passed; 34 bundled plugin manifests detected.
+- `bunx prettier --check CHANGELOG.md tasks/todo.md tasks/lessons.md` -> passed.
+- `bunx prettier --check README.md docs/releasing.md` -> reports pre-existing formatting differences in both long-form documents.
+- `rg` found no remaining Alpha 6/Alpha 2 references in `README.md` or `docs/releasing.md`.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings only.
+
+# Windows-Tray-Zahl und Ringmarke, 2026-07-24
+
+## Acceptance Criteria
+
+- [x] Windows-`provider`-Stil zeigt ausschließlich `0–99`, `–` oder `!`; `bars`, `merged` und `donut` bleiben als alternative Tray-Stile verfügbar, ohne Providerlogo im Zahlmodus.
+- [x] Tray-Wert bedeutet verbleibende Nutzung unabhängig von `displayMode`; Home wählt den niedrigsten aktuellen Wert mit stabiler Providerreihenfolge.
+- [x] Aktuelle Probe-Fehler haben Vorrang vor retained Data; unbekannte Daten werden nicht als null dargestellt.
+- [x] Tooltip enthält Provider, Metrik, exakten verbleibenden Wert und Reset-Zeit.
+- [x] Windows ruft weder `setTitle` noch `setIconAsTemplate` auf; Settings ist kein zweiter nativer Tray-Schreiber.
+- [x] App-/Fenster-/About-Assets verwenden die flache Ringmarke; Windows-Startzustand verwendet ein dediziertes Unknown-Asset.
+- [x] Fokussierte Tests, Frontend-/Rust-Gates und Build wurden ausgeführt; die bekannte unabhängige About-Testabweichung bleibt separat dokumentiert.
+
+## Plan
+
+- [x] Semantischen Tray-State und Windows-Glyphen-Renderer implementieren.
+- [x] Tooltip, nativen Hook und Settings-Vorschau auf die neue Plattformsemantik umstellen.
+- [x] Ringmarken- und Windows-Unknown-Assets erzeugen und Tauri-Ressourcen synchronisieren.
+- [x] Fokussierte Tests, Gesamtchecks, Build und Diff-Review ausführen.
+
+## Verification Notes
+
+- Baseline: bestehende Tray-Tests 27/27 und TypeScript-Typecheck erfolgreich.
+- Fokussierte neue/benachbarte Tests: 43/43 Tray-Tests; Settings-/Pin-Regressionen 21/21. Die kombinierte betroffene Suite besteht mit 111/112 Tests; der einzige Fehler ist der bekannte About-Dialog-Test.
+- `bun run check` -> erfolgreich: Prettier, ESLint, TypeScript, Cargo fmt und Clippy `-D warnings`.
+- `bun run build` -> erfolgreich; bestehende Vite-Warnung zum großen JavaScript-Chunk bleibt bestehen.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 146 bestanden, 1 ignoriert.
+- `bun run test:all -- --reporter=dot` -> 1 verbleibender Fehler im bekannten About-Dialog-Test `App > covers about open/close callbacks`; die Tray-/Settings-Regressionen bestehen.
+- `git diff --check` -> erfolgreich; nur bestehende LF/CRLF-Normalisierungswarnungen.
+- Asset-Validierung: Ring-PNGs in 32/128/256/512 px, `tray-unknown.png` in 32 px, `public/favicon.png` bytegleich zu `icon.png`.
+- Nicht ausgeführt: installierte Windows-DPI-QA bei 100/125/150/200 % und signierter NSIS-Packaged-Smoke; dafür ist ein realer installierter Windows-Build erforderlich.
+
 # Symmetrische Frontend-/Rust-Quality-Gates, 2026-07-24
 
 ## Acceptance Criteria
@@ -2183,4 +2236,25 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bunx prettier --check` on touched frontend/docs files -> passed after formatting.
 - `bun run check` -> timed out in the local environment; its underlying typecheck, ESLint, Rust lint, and focused formatting checks passed independently.
 - `bun run test:all` -> not rerun; prior working-tree baseline exceeded the command timeout without reporting a new failure.
+
+# Settings provider icon clipping, 2026-07-27
+
+## Acceptance Criteria
+
+- [x] Provider logos in the Settings list are rendered without a rounded clipping container.
+- [x] The provider detail header uses the same unclipped icon treatment.
+- [x] Focused Settings regression tests and frontend formatting/type checks pass.
+
+## Plan
+
+- [x] Reproduce the clipping source in the shared Settings icon renderers.
+- [x] Remove only the decorative border-radius from the masked icon elements.
+- [x] Add regression coverage and run focused verification.
+
+## Verification Notes
+
+- `bun run test -- src/pages/settings.test.tsx --run` -> 16 tests passed.
+- `bunx prettier --check src/components/settings/providers-settings-pane.tsx src/components/settings/provider-settings-detail.tsx src/pages/settings.test.tsx tasks/todo.md docs/breadcrumbs.md` -> passed.
+- `bunx tsc --noEmit` -> passed.
+- T3 Preview visual verification was attempted with `preview_status` and `preview_open`; no automation host was available in the environment.
 - `git diff --check` -> passed; existing LF/CRLF normalization notices remain in the dirty worktree.

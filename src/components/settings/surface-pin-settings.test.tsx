@@ -119,7 +119,7 @@ describe("SurfacePinSettings", () => {
     )
     const widget = screen.getByLabelText("Pinned metric widget preview")
 
-    expect(within(widget).getByText("--%")).toBeInTheDocument()
+    expect(within(widget).getByText("–")).toBeInTheDocument()
     expect(within(widget).getByText("73%")).toBeInTheDocument()
   })
 })

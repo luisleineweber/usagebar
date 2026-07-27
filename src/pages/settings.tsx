@@ -4,7 +4,7 @@ import { ProvidersSettingsPane } from "@/components/settings/providers-settings-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
-import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
+import type { TraySettingsPreview } from "@/lib/tray-preview"
 import type { ProviderConfig } from "@/lib/provider-settings"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import type {

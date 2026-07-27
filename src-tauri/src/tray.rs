@@ -12,6 +12,7 @@ use crate::settings_window;
 
 const LOG_LEVEL_STORE_KEY: &str = "logLevel";
 const TEMPLATE_TRAY_ICON_RESOURCE: &str = "icons/tray-icon.png";
+const WINDOWS_UNKNOWN_TRAY_ICON_RESOURCE: &str = "icons/tray-unknown.png";
 const COLORED_TRAY_ICON_RESOURCE: &str = "icons/icon.png";
 
 fn get_stored_log_level(app_handle: &AppHandle) -> log::LevelFilter {
@@ -51,6 +52,8 @@ fn set_stored_log_level(app_handle: &AppHandle, level: log::LevelFilter) {
 pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
     let tray_icon_resource = if cfg!(target_os = "macos") {
         TEMPLATE_TRAY_ICON_RESOURCE
+    } else if cfg!(target_os = "windows") {
+        WINDOWS_UNKNOWN_TRAY_ICON_RESOURCE
     } else {
         COLORED_TRAY_ICON_RESOURCE
     };

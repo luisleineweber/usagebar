@@ -7,7 +7,7 @@ The next stranger-facing milestone should be an alpha, not a full release, unles
 Current alpha label:
 
 ```text
-v0.1.0-alpha.6
+v0.1.0-alpha.7
 ```
 
 If the repo stays on the existing beta line instead, document the reason in `CHANGELOG.md` and release notes before tagging.
@@ -17,7 +17,7 @@ If the repo stays on the existing beta line instead, document the reason in `CHA
 Before cutting a tag:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-alpha.2 --require-clean
+bun run release:check -- --release-tag v0.1.0-alpha.7 --require-clean
 ```
 
 The preflight currently verifies:
@@ -38,7 +38,7 @@ bun run build:release -- --bundles nsis
 
 If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local builds can still complete without Tauri updater signatures. Windows installer builds require Authenticode material by default. When that material is configured, the helper signs the final NSIS/MSI artifact after the build so the setup executable has a real publisher.
 
-Alpha 6 exception: unsigned Windows prerelease installers are allowed as technical-preview artifacts while Authenticode signing is deferred. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local unsigned builds. GitHub prerelease publishes set this automatically for tags that contain a prerelease suffix such as `v0.1.0-alpha.6`. These artifacts can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and must be described as unsigned in release notes.
+Alpha 7 exception: unsigned Windows prerelease installers are allowed as technical-preview artifacts while Authenticode signing is deferred. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local unsigned builds. GitHub prerelease publishes set this automatically for tags that contain a prerelease suffix such as `v0.1.0-alpha.7`. These artifacts can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and must be described as unsigned in release notes.
 
 ## Windows Code Signing
 
@@ -63,7 +63,7 @@ The publish workflow lives in [.github/workflows/publish.yml](../.github/workflo
 
 You can publish in two ways:
 
-1. Push a `v*` tag, for example `v0.1.0-alpha.2`
+1. Push a `v*` tag, for example `v0.1.0-alpha.7`
 2. Trigger `Publish` manually with `workflow_dispatch` and provide `release_tag`
 
 The workflow runs the same release preflight, builds platform artifacts, and verifies that the GitHub release contains:
@@ -80,7 +80,7 @@ Current updater channel note:
 
 ## Alpha Gate
 
-Before publishing Alpha 6, verify and record:
+Before publishing Alpha 7, verify and record:
 
 - Windows installer exists as a GitHub release asset or local NSIS artifact.
 - If the installer is unsigned, release notes must say `Unknown publisher` / SmartScreen warnings are expected for this technical preview.

@@ -61,7 +61,12 @@
       "icons/icon.ico"
     ],
     "externalBin": ["binaries/usagebar-cli"],
-    "resources": ["resources/bundled_plugins/**/*", "icons/tray-icon.png", "icons/icon.png"],
+    "resources": [
+      "resources/bundled_plugins/**/*",
+      "icons/tray-icon.png",
+      "icons/tray-unknown.png",
+      "icons/icon.png"
+    ],
     "windows": {
       "signCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/sign-windows.ps1 -TargetPath %1",
       "nsis": {

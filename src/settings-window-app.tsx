@@ -12,7 +12,7 @@ import { useSettingsPluginList } from "@/hooks/app/use-settings-plugin-list"
 import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-actions"
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useFirstRunOnboarding } from "@/hooks/app/use-first-run-onboarding"
-import { useTrayIcon } from "@/hooks/app/use-tray-icon"
+import { buildTraySettingsPreview } from "@/lib/tray-preview"
 import { parseSettingsWindowLocation, type SettingsWindowTab } from "@/lib/settings-window"
 import { useProviderConfigActions } from "@/hooks/app/use-provider-config-actions"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
@@ -115,13 +115,12 @@ export function SettingsWindowApp() {
     autoUpdateInterval,
   })
 
-  const { scheduleTrayIconUpdate, traySettingsPreview } = useTrayIcon({
+  const scheduleTrayIconUpdate = useCallback(() => {}, [])
+  const { preview: traySettingsPreview } = buildTraySettingsPreview({
     pluginsMeta,
     pluginSettings,
     pluginStates,
     displayMode,
-    accentColor,
-    menubarIconStyle,
     surfacePins,
     activeView: "home",
   })

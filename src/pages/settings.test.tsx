@@ -89,7 +89,7 @@ const defaultProps = {
   traySettingsPreview: {
     bars: [],
     providerBars: [],
-    providerPercentText: "--%",
+    providerPercentText: "–",
   },
   globalShortcut: null,
   onGlobalShortcutChange: vi.fn(),
@@ -198,13 +198,15 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
   })
 
-  it("changes the tray icon style from the general settings", async () => {
+  it("keeps all tray style controls available on Windows", async () => {
     const user = userEvent.setup()
     const onMenubarIconStyleChange = vi.fn()
     render(<TestHarness onMenubarIconStyleChange={onMenubarIconStyleChange} />)
 
+    expect(screen.getByRole("radio", { name: "Bars" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Merged" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
     await user.click(screen.getByRole("radio", { name: "Bars" }))
-
     expect(onMenubarIconStyleChange).toHaveBeenCalledWith("bars")
   })
 
@@ -271,6 +273,17 @@ describe("SettingsPage", () => {
     )
     expect(codexRow.querySelector(".cursor-grab")).not.toBeInTheDocument()
     expect(openCodeRow.querySelector(".cursor-grab")).not.toBeInTheDocument()
+  })
+
+  it("does not clip provider icons with rounded containers", async () => {
+    const { container } = render(<TestHarness />)
+    await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
+
+    const providerIcons = container.querySelectorAll('[data-testid="provider-icon"]')
+    expect(providerIcons.length).toBeGreaterThan(0)
+    providerIcons.forEach((icon) => {
+      expect(icon.className).not.toMatch(/rounded/)
+    })
   })
 
   it("toggles providers from the Providers tab", async () => {

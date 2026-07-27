@@ -63,7 +63,8 @@ function ProviderIconMask({
   return (
     <span
       aria-hidden
-      className="inline-block size-5 shrink-0 rounded-md bg-foreground/85"
+      data-testid="provider-icon"
+      className="inline-block size-5 shrink-0 bg-foreground/85"
       style={{
         backgroundColor: getProviderIconColor(brandColor, isDark),
         WebkitMaskImage: `url(${iconUrl})`,

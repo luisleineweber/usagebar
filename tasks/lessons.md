@@ -1,5 +1,17 @@
 # Lessons
 
+## 2026-07-27
+
+- Release metadata can be aligned while release documentation still points at an older alpha, causing preflight or operator commands to target the wrong version. Prevention: update the current version label, changelog section, README command, and release-gate references together and run the tagged preflight.
+
+- Masked provider logos must not use rounded wrapper elements: the CSS radius clips artwork that reaches the icon bounds. Fix: keep the mask as a plain, fixed-size element and use a separate status dot when needed. Prevention: Settings icon regressions should assert the masked element has no clipping radius.
+
+## 2026-07-24
+
+- Ein optionales Tray-`fraction` kann unbekannte Daten, aktuelle Fehler und retained Data nicht sicher unterscheiden. Fix: semantischen Tray-State vor dem Renderer einführen und genau einen nativen Tray-Schreiber behalten. Prevention: Status-, Auswahl- und Rasterlogik an einer expliziten Zustandsgrenze testen.
+
+- Eine kompakte Windows-Standardglyphe darf bestehende Tray-Stile und Pin-Konfigurationen nicht aus der Settings-Oberfläche entfernen. Fix: `provider` rendert die Zahl, `bars`/`merged`/`donut` bleiben auswählbar und Pin-Vorschauen werden über `providerId:metricLabel` geprüft. Prevention: jede Anzeigeoption und zwei gespeicherte Metriken als Settings-Regression testen.
+
 ## 2026-07-24
 
 - A local quality command can claim frontend coverage while Rust gates remain separate and CI can silently downgrade global coverage to reporting. Fix: make `bun run check` aggregate frontend and Rust format/lint checks, name CI coverage as a changed-file ratchet, and expose Rust formatting as a CI step. Prevention: every documented quality gate needs an executable local aggregate and a visibly named CI call site.

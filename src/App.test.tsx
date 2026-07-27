@@ -43,6 +43,7 @@ const state = vi.hoisted(() => ({
   autostartDisableMock: vi.fn(),
   autostartIsEnabledMock: vi.fn(),
   renderTrayBarsIconMock: vi.fn(),
+  renderTrayNumberIconMock: vi.fn(),
   probeHandlers: null as null | {
     onResult: (output: unknown) => void
     onBatchComplete: () => void
@@ -51,6 +52,7 @@ const state = vi.hoisted(() => ({
   traySetIconMock: vi.fn(),
   traySetIconAsTemplateMock: vi.fn(),
   traySetTitleMock: vi.fn(),
+  traySetTooltipMock: vi.fn(),
   resolveResourceMock: vi.fn(),
 }))
 
@@ -256,6 +258,15 @@ vi.mock("@/lib/tray-bars-icon", async () => {
   }
 })
 
+vi.mock("@/lib/tray-number-icon", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/tray-number-icon")>("@/lib/tray-number-icon")
+  return {
+    ...actual,
+    getWindowsTrayIconSizePx: () => 32,
+    renderTrayNumberIcon: state.renderTrayNumberIconMock,
+  }
+})
+
 vi.mock("@/hooks/use-probe-events", () => ({
   useProbeEvents: (handlers: {
     onResult: (output: unknown) => void
@@ -388,10 +399,12 @@ describe("App", () => {
     state.autostartDisableMock.mockReset()
     state.autostartIsEnabledMock.mockReset()
     state.renderTrayBarsIconMock.mockReset()
+    state.renderTrayNumberIconMock.mockReset()
     state.trayGetByIdMock.mockReset()
     state.traySetIconMock.mockReset()
     state.traySetIconAsTemplateMock.mockReset()
     state.traySetTitleMock.mockReset()
+    state.traySetTooltipMock.mockReset()
     state.resolveResourceMock.mockReset()
     menuState.iconMenuItemConfigs.length = 0
     menuState.iconMenuItemNewMock.mockReset()
@@ -442,6 +455,7 @@ describe("App", () => {
     state.autostartDisableMock.mockResolvedValue(undefined)
     state.autostartIsEnabledMock.mockResolvedValue(false)
     state.renderTrayBarsIconMock.mockResolvedValue({})
+    state.renderTrayNumberIconMock.mockResolvedValue({})
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
       configurable: true,
       get() {
@@ -455,6 +469,7 @@ describe("App", () => {
       setIcon: state.traySetIconMock.mockResolvedValue(undefined),
       setIconAsTemplate: state.traySetIconAsTemplateMock.mockResolvedValue(undefined),
       setTitle: state.traySetTitleMock.mockResolvedValue(undefined),
+      setTooltip: state.traySetTooltipMock.mockResolvedValue(undefined),
     })
     state.resolveResourceMock.mockResolvedValue("/resource/icons/icon.png")
     state.invokeMock.mockImplementation(async (cmd: string) => {
@@ -865,7 +880,7 @@ describe("App", () => {
     await screen.findByText("Now")
   })
 
-  it("renders provider tray icon on probe results while updating tooltip/title", async () => {
+  it("renders the Windows tray number and tooltip on probe results", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
@@ -904,19 +919,23 @@ describe("App", () => {
     })
 
     await waitFor(() =>
-      expect(state.renderTrayBarsIconMock).toHaveBeenLastCalledWith(
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          bars: [{ id: "a", fraction: 0.5 }],
-          percentText: "50%",
-          providerIconUrl: "icon-a",
-          style: "provider",
+          value: 50,
+          sizePx: 32,
+          state: expect.objectContaining({ kind: "value", providerId: "a" }),
         })
       )
     )
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("50%"))
+    expect(state.traySetTitleMock).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(state.traySetTooltipMock).toHaveBeenCalledWith(
+        expect.stringContaining("Remaining: 50%")
+      )
+    )
   })
 
-  it("renders an empty provider tray icon on launch before probe data", async () => {
+  it("renders an unknown Windows tray glyph on launch before probe data", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
@@ -947,18 +966,17 @@ describe("App", () => {
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
 
     await waitFor(() =>
-      expect(state.renderTrayBarsIconMock).toHaveBeenCalledWith(
+      expect(state.renderTrayNumberIconMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          bars: [{ id: "a", fraction: undefined }],
-          percentText: "--%",
-          style: "provider",
+          value: "unknown",
+          state: expect.objectContaining({ kind: "unknown" }),
         })
       )
     )
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("--%"))
+    expect(state.traySetTitleMock).not.toHaveBeenCalled()
   })
 
-  it("applies persisted menubar icon style to native tray icon art", async () => {
+  it("renders the selected Windows bars style instead of the number glyph", async () => {
     state.loadMenubarIconStyleMock.mockResolvedValue("bars")
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
@@ -993,6 +1011,7 @@ describe("App", () => {
         expect.objectContaining({ style: "bars" })
       )
     )
+    expect(state.renderTrayNumberIconMock).not.toHaveBeenCalled()
   })
 
   it("omits tray title when native title is unavailable", async () => {
@@ -1004,7 +1023,7 @@ describe("App", () => {
     render(<App />)
     await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
 
-    await waitFor(() => expect(state.renderTrayBarsIconMock).toHaveBeenCalled())
+    await waitFor(() => expect(state.renderTrayNumberIconMock).toHaveBeenCalled())
     expect(state.traySetTitleMock).not.toHaveBeenCalled()
   })
 
@@ -1070,25 +1089,30 @@ describe("App", () => {
     await userEvent.click(screen.getByRole("button", { name: "Beta" }))
 
     await waitFor(() =>
-      expect(state.renderTrayBarsIconMock).toHaveBeenLastCalledWith(
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          providerIconUrl: "icon-b",
-          percentText: "70%",
+          value: 70,
+          state: expect.objectContaining({ kind: "value", providerId: "b" }),
         })
       )
     )
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"))
+    expect(state.traySetTitleMock).not.toHaveBeenCalled()
 
     await userEvent.click(screen.getByRole("button", { name: "Home" }))
-    expect(state.renderTrayBarsIconMock).toHaveBeenCalled()
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"))
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: 50,
+          state: expect.objectContaining({ kind: "value", providerId: "a" }),
+        })
+      )
+    )
 
     const settingsButtons = await screen.findAllByRole("button", {
       name: "Settings",
     })
     await userEvent.click(settingsButtons[0])
-    expect(state.renderTrayBarsIconMock).toHaveBeenCalled()
-    await waitFor(() => expect(state.traySetTitleMock).toHaveBeenCalledWith("70%"))
+    expect(state.renderTrayNumberIconMock).toHaveBeenCalled()
   })
 
   it("covers about open/close callbacks", async () => {
@@ -1112,11 +1136,18 @@ describe("App", () => {
     expect(state.saveDisplayModeMock).toHaveBeenCalledWith("used")
   })
 
-  it("renders menubar icon style controls in settings", async () => {
+  it("keeps Windows tray style controls and explains the compact plugin mode", async () => {
     renderSettingsWindow()
     expect(await screen.findByText("Tray Icon")).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
+    expect(screen.getByText(/Plugin zeigt unter Windows die kompakte Zahl/)).toBeInTheDocument()
+  })
+
+  it("keeps the Settings window from acquiring the native tray handle", async () => {
+    renderSettingsWindow()
+    await screen.findByText("Tray Icon")
+    expect(state.trayGetByIdMock).not.toHaveBeenCalled()
   })
 
   it("logs when saving display mode fails", async () => {
@@ -2572,15 +2603,15 @@ describe("App", () => {
 
     render(<App />)
     await waitFor(() => expect(state.trayGetByIdMock).toHaveBeenCalled())
-    expect(state.resolveResourceMock).toHaveBeenCalledWith("icons/icon.png")
+    expect(state.resolveResourceMock).toHaveBeenCalledWith("icons/tray-unknown.png")
     expect(state.traySetIconMock).not.toHaveBeenCalled()
 
     resolveResourcePath?.("/resource/icons/icon.png")
 
     await waitFor(() => expect(state.traySetIconMock).toHaveBeenCalledWith({}))
-    expect(state.traySetIconAsTemplateMock).toHaveBeenCalledWith(false)
-    expect(state.renderTrayBarsIconMock).toHaveBeenCalled()
-    expect(state.traySetTitleMock).toHaveBeenCalledWith("--%")
+    expect(state.traySetIconAsTemplateMock).not.toHaveBeenCalled()
+    expect(state.renderTrayNumberIconMock).toHaveBeenCalled()
+    expect(state.traySetTitleMock).not.toHaveBeenCalled()
   })
 
   it("clears pending tray timer on unmount", async () => {
@@ -2684,7 +2715,7 @@ describe("App", () => {
       await vi.advanceTimersByTimeAsync(600)
 
       expect(rafSpy).not.toHaveBeenCalled()
-      expect(state.traySetIconMock).toHaveBeenCalled()
+      expect(state.renderTrayNumberIconMock).toHaveBeenCalled()
     } finally {
       window.requestAnimationFrame = originalRaf
       vi.useRealTimers()

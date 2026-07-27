@@ -69,13 +69,13 @@ You can also read cached usage locally through the [HTTP API](docs/local-http-ap
 
 ## Alpha Readiness And Current Limitations
 
-UsageBar is still pre-release. Alpha 6 is intended to let Windows users install from GitHub, enable supported providers, refresh usage, inspect local history/reporting, manage credentials, and configure local quota notifications. The installer is unsigned; Authenticode signing is deferred.
+UsageBar is still pre-release. Alpha 7 is intended to let Windows users install from GitHub, enable supported providers, refresh usage, inspect local history/reporting, manage credentials, and configure local quota notifications. The installer is unsigned; Authenticode signing is deferred.
 
 - Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
 - Prerelease auto-updates are intentionally conservative because GitHub's `releases/latest` alias does not resolve prereleases. Prerelease builds may open the matching GitHub release page instead of installing in-app.
-- Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations are full-release work, not an Alpha 6 promise.
+- Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations are full-release work, not an Alpha 7 promise.
 
 ## Architecture
 
@@ -154,16 +154,16 @@ bun run test -- --run
 
 ### Local release build
 
-For a Windows beta-style build on this machine:
+For a Windows prerelease build on this machine:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-alpha.2
+bun run release:check -- --release-tag v0.1.0-alpha.7
 bun run build:release -- --bundles nsis
 ```
 
 If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so the local build can skip Tauri updater signatures. Windows installer builds require Authenticode material by default: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, `WINDOWS_CERTIFICATE`, or `WINDOWS_CERTIFICATE_THUMBPRINT`. The helper signs the final setup executable after the build so the Windows launch prompt can show the certificate publisher. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
 
-For Alpha 2 unsigned technical-preview builds, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; those installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Stable/public-confidence Windows builds should be Authenticode-signed; see [docs/releasing.md](docs/releasing.md).
+For Alpha 7 unsigned technical-preview builds, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; those installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Stable/public-confidence Windows builds should be Authenticode-signed; see [docs/releasing.md](docs/releasing.md).
 
 Before pushing a release tag, run the same preflight with `--require-clean` so the tag is cut from a clean worktree.
 

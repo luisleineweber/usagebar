@@ -1,5 +1,7 @@
 import { makeTrayBarsSvg, TRAY_BRAND_FOREGROUND } from "@/lib/tray-bars-icon"
-import type { TraySettingsPreview } from "@/hooks/app/use-tray-icon"
+import { shouldUseTemplateTrayIcon } from "@/hooks/app/use-tray-icon"
+import { makeTrayNumberSvg } from "@/lib/tray-number-icon"
+import type { TraySettingsPreview } from "@/lib/tray-preview"
 import type { PluginMeta } from "@/lib/plugin-types"
 import { MAX_SURFACE_PINS, type MenubarIconStyle, type SurfacePin } from "@/lib/settings"
 import { cn } from "@/lib/utils"
@@ -23,7 +25,7 @@ function getPinKey(pin: Pick<SurfacePin, "providerId" | "metricLabel">): string 
 }
 
 function formatPercent(fraction: number | undefined): string {
-  return typeof fraction === "number" ? `${Math.round(fraction * 100)}%` : "--%"
+  return typeof fraction === "number" ? `${Math.round(fraction * 100)}%` : "–"
 }
 
 export function SurfacePinSettings({
@@ -48,14 +50,27 @@ export function SurfacePinSettings({
     menubarIconStyle === "provider" || menubarIconStyle === "donut"
       ? preview.providerBars
       : preview.bars
-  const traySvg = makeTrayBarsSvg({
-    bars: trayBars,
-    sizePx: 36,
-    style: menubarIconStyle,
-    percentText: menubarIconStyle === "provider" ? preview.providerPercentText : undefined,
-    providerIconUrl: preview.providerIconUrl,
-    foregroundColor: TRAY_BRAND_FOREGROUND,
-  })
+  const useWindowsNumberPreview = !shouldUseTemplateTrayIcon() && menubarIconStyle === "provider"
+  const traySvg = useWindowsNumberPreview
+    ? makeTrayNumberSvg({
+        value:
+          preview.state?.kind === "value"
+            ? Math.round(preview.state.remainingPercentExact)
+            : preview.state?.kind === "error"
+              ? "error"
+              : "unknown",
+        sizePx: 36,
+        scheme: "dark",
+        state: preview.state,
+      })
+    : makeTrayBarsSvg({
+        bars: trayBars,
+        sizePx: 36,
+        style: menubarIconStyle,
+        percentText: menubarIconStyle === "provider" ? preview.providerPercentText : undefined,
+        providerIconUrl: preview.providerIconUrl,
+        foregroundColor: TRAY_BRAND_FOREGROUND,
+      })
   const trayPreviewUrl = `data:image/svg+xml,${encodeURIComponent(traySvg)}`
   const previewBarsById = new Map(preview.bars.map((bar) => [bar.id, bar]))
 

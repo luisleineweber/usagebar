@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0-alpha.7
+
+### Highlights
+
+- Added a Windows-first tray state that shows remaining usage numerically and distinguishes unknown data from current provider errors.
+- Kept the bars, merged, and donut tray styles available while aligning saved metric pins and Settings previews with the selected display mode.
+- Added flat ring branding and a dedicated unknown-data tray asset for the app and Windows startup states.
+- Hardened local API authentication defaults, provider probe concurrency, provider configuration persistence, and frontend/Rust quality gates.
+- Aligned package, Tauri, and Cargo metadata to `0.1.0-alpha.7`.
+
+### Notes
+
+- Alpha 7 is an unsigned Windows technical preview. Windows may show `Unknown publisher` or SmartScreen warnings.
+- No Tauri updater signing key is configured for this prerelease, so updater signature assets are intentionally omitted and prerelease updater checks remain disabled.
+- The NSIS installer is the supported prerelease artifact; MSI remains skipped because WiX rejects semver prerelease versions.
+
 ## 0.1.0-alpha.6
 
 ### Highlights

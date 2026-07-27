@@ -8,21 +8,27 @@ import type {
   MenubarIconStyle,
   PluginSettings,
   SurfacePin,
+  TimeFormatMode,
 } from "@/lib/settings"
-import { getProbeEligiblePluginIds } from "@/lib/settings"
 import {
-  getTrayPinnedBars,
-  getTrayPrimaryBars,
-  type TrayPrimaryBar,
-} from "@/lib/tray-primary-progress"
+  buildTraySettingsPreview,
+  EMPTY_TRAY_SETTINGS_PREVIEW,
+  type TraySettingsPreview,
+} from "@/lib/tray-preview"
 import {
   getTrayIconSizePx,
   renderTrayBarsIcon,
   TRAY_TEMPLATE_FOREGROUND,
 } from "@/lib/tray-bars-icon"
-import { formatTrayPercentText, formatTrayTooltip } from "@/lib/tray-tooltip"
+import {
+  getSystemTrayColorScheme,
+  getTrayNumberColor,
+  getWindowsTrayIconSizePx,
+  renderTrayNumberIcon,
+} from "@/lib/tray-number-icon"
+import { formatTrayNativeTitle, formatTrayTooltip } from "@/lib/tray-tooltip"
+import type { TrayState } from "@/lib/tray-state"
 import type { PluginState } from "@/hooks/app/types"
-import type { ProviderStatus } from "@/lib/provider-status"
 
 export type TrayUpdateReason = "probe" | "settings" | "init"
 
@@ -35,21 +41,10 @@ type UseTrayIconArgs = {
   menubarIconStyle: MenubarIconStyle
   surfacePins?: SurfacePin[]
   activeView: string
-  providerStatuses?: Record<string, ProviderStatus>
+  timeFormatMode?: TimeFormatMode
 }
 
-export type TraySettingsPreview = {
-  bars: TrayPrimaryBar[]
-  providerBars: TrayPrimaryBar[]
-  providerIconUrl?: string
-  providerPercentText: string
-}
-
-const EMPTY_TRAY_SETTINGS_PREVIEW: TraySettingsPreview = {
-  bars: [],
-  providerBars: [],
-  providerPercentText: "--%",
-}
+export type { TraySettingsPreview } from "@/lib/tray-preview"
 
 export function shouldUseTemplateTrayIcon(): boolean {
   const platform = navigator.platform.toLowerCase()
@@ -73,6 +68,12 @@ function isSameTraySettingsPreview(a: TraySettingsPreview, b: TraySettingsPrevie
   return true
 }
 
+function getTrayStateValue(state: TrayState): string {
+  if (state.kind === "error") return "error"
+  if (state.kind === "unknown") return "unknown"
+  return String(Math.round(state.remainingPercentExact))
+}
+
 export function useTrayIcon({
   pluginsMeta,
   pluginSettings,
@@ -82,7 +83,7 @@ export function useTrayIcon({
   menubarIconStyle,
   surfacePins = [],
   activeView,
-  providerStatuses = {},
+  timeFormatMode = "auto",
 }: UseTrayIconArgs) {
   const trayRef = useRef<TrayIcon | null>(null)
   const trayGaugeIconPathRef = useRef<string | null>(null)
@@ -100,47 +101,42 @@ export function useTrayIcon({
   const displayModeRef = useRef(displayMode)
   const accentColorRef = useRef(accentColor)
   const menubarIconStyleRef = useRef(menubarIconStyle)
-  const providerStatusesRef = useRef(providerStatuses)
   const surfacePinsRef = useRef(surfacePins)
   const activeViewRef = useRef(activeView)
-  const lastTrayProviderIdRef = useRef<string | null>(null)
+  const timeFormatModeRef = useRef(timeFormatMode)
   const useTemplateIconRef = useRef(shouldUseTemplateTrayIcon())
+  const lastIconKeyRef = useRef<string | null>(null)
+  const lastTooltipRef = useRef<string | null>(null)
+  const lastTitleRef = useRef<string | null>(null)
+  const lastTemplateRef = useRef<boolean | null>(null)
 
   useEffect(() => {
     pluginsMetaRef.current = pluginsMeta
   }, [pluginsMeta])
-
   useEffect(() => {
     pluginSettingsRef.current = pluginSettings
   }, [pluginSettings])
-
   useEffect(() => {
     pluginStatesRef.current = pluginStates
   }, [pluginStates])
-
   useEffect(() => {
     displayModeRef.current = displayMode
   }, [displayMode])
-
   useEffect(() => {
     accentColorRef.current = accentColor
   }, [accentColor])
-
   useEffect(() => {
     menubarIconStyleRef.current = menubarIconStyle
   }, [menubarIconStyle])
-
-  useEffect(() => {
-    providerStatusesRef.current = providerStatuses
-  }, [providerStatuses])
-
   useEffect(() => {
     surfacePinsRef.current = surfacePins
   }, [surfacePins])
-
   useEffect(() => {
     activeViewRef.current = activeView
   }, [activeView])
+  useEffect(() => {
+    timeFormatModeRef.current = timeFormatMode
+  }, [timeFormatMode])
 
   const scheduleTrayIconUpdate = useCallback((_reason: TrayUpdateReason, delayMs = 0) => {
     if (trayUpdateTimerRef.current !== null) {
@@ -173,152 +169,150 @@ export function useTrayIcon({
         .setTitle
       const maybeSetTooltip = (tray as TrayIcon & { setTooltip?: (value: string) => Promise<void> })
         .setTooltip
-      const setTitleFn =
-        typeof maybeSetTitle === "function"
-          ? (value: string) => maybeSetTitle.call(tray, value)
-          : null
-      const setTooltipFn =
-        typeof maybeSetTooltip === "function"
-          ? (value: string) => maybeSetTooltip.call(tray, value)
-          : null
-      const supportsNativeTrayTitle = setTitleFn !== null
-      const setTrayTitle = (title: string) => {
-        if (setTitleFn) {
-          return setTitleFn(title)
+      const setTooltipIfChanged = (tooltip: string) => {
+        if (lastTooltipRef.current === tooltip || typeof maybeSetTooltip !== "function") {
+          return Promise.resolve()
         }
-        return Promise.resolve()
+        lastTooltipRef.current = tooltip
+        return maybeSetTooltip.call(tray, tooltip)
       }
-      const setTrayTooltip = (tooltip: string) => {
-        if (setTooltipFn) {
-          return setTooltipFn(tooltip)
+      const setTitleIfChanged = (title: string) => {
+        if (!useTemplateIconRef.current || lastTitleRef.current === title || typeof maybeSetTitle !== "function") {
+          return Promise.resolve()
         }
-        return Promise.resolve()
+        lastTitleRef.current = title
+        return maybeSetTitle.call(tray, title)
       }
-
-      const setStableTrayIcon = (tooltip = "UsageBar", title = "") => {
+      const setTemplateIfChanged = (isTemplate: boolean) => {
+        if (!useTemplateIconRef.current) return Promise.resolve()
+        if (lastTemplateRef.current === isTemplate) return Promise.resolve()
+        lastTemplateRef.current = isTemplate
+        return tray.setIconAsTemplate(isTemplate)
+      }
+      const setIconIfChanged = (key: string, icon: Parameters<TrayIcon["setIcon"]>[0]) => {
+        if (lastIconKeyRef.current === key) return Promise.resolve()
+        lastIconKeyRef.current = key
+        return tray.setIcon(icon)
+      }
+      const setStableTrayIcon = (tooltip: string, title: string) => {
         const gaugePath = trayGaugeIconPathRef.current
-        if (gaugePath) {
-          Promise.all([
-            tray.setIcon(gaugePath),
-            tray.setIconAsTemplate(useTemplateIconRef.current),
-            setTrayTitle(title),
-            setTrayTooltip(tooltip),
-          ])
-            .catch((e) => {
-              console.error("Failed to update stable tray icon:", e)
-            })
-            .finally(() => {
-              finalizeUpdate()
-            })
-        } else {
+        if (!gaugePath) {
           finalizeUpdate()
+          return
         }
+        void Promise.all([
+          setIconIfChanged(`stable:${gaugePath}`, gaugePath),
+          setTemplateIfChanged(useTemplateIconRef.current),
+          setTitleIfChanged(title),
+          setTooltipIfChanged(tooltip),
+        ])
+          .catch((error) => console.error("Failed to update stable tray icon:", error))
+          .finally(finalizeUpdate)
       }
 
       const currentSettings = pluginSettingsRef.current
+      const currentMeta = pluginsMetaRef.current
+      const currentStates = pluginStatesRef.current
       if (!currentSettings) {
         setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
-        setStableTrayIcon()
+        setStableTrayIcon("UsageBar\nRemaining: –\nReset: Unknown", "–")
         return
       }
 
-      const enabledPluginIds = getProbeEligiblePluginIds(currentSettings, pluginsMetaRef.current)
-      if (enabledPluginIds.length === 0) {
-        setTraySettingsPreview(EMPTY_TRAY_SETTINGS_PREVIEW)
-        setStableTrayIcon()
-        return
-      }
-
-      const nextActiveView = activeViewRef.current
-      const activeProviderId = nextActiveView !== "home" ? nextActiveView : null
-
-      let trayProviderId: string | null = null
-      if (activeProviderId && enabledPluginIds.includes(activeProviderId)) {
-        trayProviderId = activeProviderId
-      } else if (
-        lastTrayProviderIdRef.current &&
-        enabledPluginIds.includes(lastTrayProviderIdRef.current)
-      ) {
-        trayProviderId = lastTrayProviderIdRef.current
-      } else {
-        trayProviderId = enabledPluginIds[0] ?? null
-      }
-
-      const pinnedBars = getTrayPinnedBars({
-        pins: surfacePinsRef.current,
+      const { state: trayState, preview: nextPreview } = buildTraySettingsPreview({
+        pluginsMeta: currentMeta,
         pluginSettings: currentSettings,
-        pluginStates: pluginStatesRef.current,
+        pluginStates: currentStates,
         displayMode: displayModeRef.current,
+        surfacePins: surfacePinsRef.current,
+        activeView: activeViewRef.current,
       })
-      const barsForPreview =
-        pinnedBars.length > 0
-          ? pinnedBars
-          : getTrayPrimaryBars({
-              pluginsMeta: pluginsMetaRef.current,
-              pluginSettings: currentSettings,
-              pluginStates: pluginStatesRef.current,
-              maxBars: 4,
-              displayMode: displayModeRef.current,
-            })
-
-      const providerBars = trayProviderId
-        ? getTrayPrimaryBars({
-            pluginsMeta: pluginsMetaRef.current,
-            pluginSettings: currentSettings,
-            pluginStates: pluginStatesRef.current,
-            maxBars: 1,
-            displayMode: displayModeRef.current,
-            pluginId: trayProviderId,
-          })
-        : []
-
-      const providerIconUrl = trayProviderId
-        ? pluginsMetaRef.current.find((plugin) => plugin.id === trayProviderId)?.iconUrl
-        : undefined
-      const providerPercentText = formatTrayPercentText(providerBars[0]?.fraction)
-
-      const nextPreview: TraySettingsPreview = {
-        bars: barsForPreview,
-        providerBars,
-        providerIconUrl,
-        providerPercentText,
-      }
-      const tooltipText = formatTrayTooltip(barsForPreview, pluginsMetaRef.current)
-      setTraySettingsPreview((prev) =>
-        isSameTraySettingsPreview(prev, nextPreview) ? prev : nextPreview
+      const providerId = trayState.providerId
+      setTraySettingsPreview((previous) =>
+        isSameTraySettingsPreview(previous, nextPreview) ? previous : nextPreview
       )
 
-      if (!trayProviderId) {
-        setStableTrayIcon(tooltipText)
+      const tooltipText = formatTrayTooltip(trayState, {
+        timeFormatMode: timeFormatModeRef.current,
+      })
+      const isTemplate = useTemplateIconRef.current
+      const style = menubarIconStyleRef.current
+      if (!isTemplate && style !== "provider") {
+        const renderBars = style === "donut" ? nextPreview.providerBars : nextPreview.bars
+        void renderTrayBarsIcon({
+          bars: renderBars,
+          sizePx: getTrayIconSizePx(window.devicePixelRatio),
+          style,
+          providerIconUrl: style === "donut" ? nextPreview.providerIconUrl : undefined,
+          foregroundColor: accentColorRef.current,
+        })
+          .then((image) =>
+            Promise.all([
+              setIconIfChanged(
+                `windows:${style}:${providerId ?? "none"}:${JSON.stringify(renderBars)}:${accentColorRef.current}`,
+                image
+              ),
+              setTooltipIfChanged(tooltipText),
+            ])
+          )
+          .catch((error) => console.error("Failed to render Windows tray bars:", error))
+          .finally(finalizeUpdate)
         return
       }
-      lastTrayProviderIdRef.current = trayProviderId
 
-      const style = menubarIconStyleRef.current
-      const renderBars = style === "provider" || style === "donut" ? providerBars : barsForPreview
-      const statusIndicator = providerStatusesRef.current[trayProviderId]?.indicator
+      if (!isTemplate) {
+        const scheme = getSystemTrayColorScheme()
+        const numberColor =
+          trayState.kind === "value"
+            ? getTrayNumberColor({
+                kind: "value",
+                remainingPercentExact: trayState.remainingPercentExact,
+                scheme,
+              })
+            : getTrayNumberColor({ kind: trayState.kind, scheme })
+        void renderTrayNumberIcon({
+          value: trayState.kind === "value" ? Math.round(trayState.remainingPercentExact) : trayState.kind,
+          sizePx: getWindowsTrayIconSizePx(window.devicePixelRatio),
+          scheme,
+          state: trayState,
+        })
+          .then((image) =>
+            Promise.all([
+              setIconIfChanged(`number:${getTrayStateValue(trayState)}:${scheme}:${numberColor}`, image),
+              setTooltipIfChanged(tooltipText),
+            ])
+          )
+          .catch((error) => console.error("Failed to render Windows tray number:", error))
+          .finally(finalizeUpdate)
+        return
+      }
+
+      if (trayState.kind !== "value" || !providerId) {
+        setStableTrayIcon(tooltipText, formatTrayNativeTitle(trayState))
+        return
+      }
+
+      const renderBars = style === "provider" || style === "donut" ? nextPreview.providerBars : nextPreview.bars
       void renderTrayBarsIcon({
         bars: renderBars,
         sizePx: getTrayIconSizePx(window.devicePixelRatio),
         style,
-        percentText: style === "provider" ? providerPercentText : undefined,
-        providerIconUrl,
-        statusIndicator,
-        foregroundColor: useTemplateIconRef.current
-          ? TRAY_TEMPLATE_FOREGROUND
-          : accentColorRef.current,
+        percentText: style === "provider" ? nextPreview.providerPercentText : undefined,
+        providerIconUrl: nextPreview.providerIconUrl,
+        foregroundColor: TRAY_TEMPLATE_FOREGROUND,
       })
         .then((image) =>
           Promise.all([
-            tray.setIcon(image),
-            tray.setIconAsTemplate(useTemplateIconRef.current),
-            setTrayTitle(supportsNativeTrayTitle ? providerPercentText : ""),
-            setTrayTooltip(tooltipText),
+            setIconIfChanged(
+              `mac:${style}:${providerId}:${trayState.remainingPercentExact}:${nextPreview.providerIconUrl ?? ""}`,
+              image
+            ),
+            setTemplateIfChanged(true),
+            setTitleIfChanged(formatTrayNativeTitle(trayState)),
+            setTooltipIfChanged(tooltipText),
           ])
         )
-        .catch((error) => {
-          console.error("Failed to render tray icon:", error)
-        })
+        .catch((error) => console.error("Failed to render macOS tray icon:", error))
         .finally(finalizeUpdate)
     }, delayMs)
   }, [])
@@ -337,16 +331,16 @@ export function useTrayIcon({
 
         try {
           trayGaugeIconPathRef.current = await resolveResource(
-            useTemplateIconRef.current ? "icons/tray-icon.png" : "icons/icon.png"
+            useTemplateIconRef.current ? "icons/tray-icon.png" : "icons/tray-unknown.png"
           )
-        } catch (e) {
-          console.error("Failed to resolve tray gauge icon resource:", e)
+        } catch (error) {
+          console.error("Failed to resolve tray fallback resource:", error)
         }
 
         if (cancelled) return
         setTrayReady(true)
-      } catch (e) {
-        console.error("Failed to load tray icon handle:", e)
+      } catch (error) {
+        console.error("Failed to load tray icon handle:", error)
       }
     })()
 
@@ -368,9 +362,9 @@ export function useTrayIcon({
   }, [
     activeView,
     menubarIconStyle,
-    providerStatuses,
     scheduleTrayIconUpdate,
     surfacePins,
+    timeFormatMode,
     trayReady,
   ])
 

@@ -65,6 +65,7 @@ function App() {
     setSurfacePins,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
+    timeFormatMode,
     setTimeFormatMode,
     setGlobalShortcut,
     setStartOnLogin,
@@ -84,6 +85,7 @@ function App() {
       setSurfacePins: state.setSurfacePins,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       setResetTimerDisplayMode: state.setResetTimerDisplayMode,
+      timeFormatMode: state.timeFormatMode,
       setTimeFormatMode: state.setTimeFormatMode,
       setGlobalShortcut: state.setGlobalShortcut,
       setStartOnLogin: state.setStartOnLogin,
@@ -127,7 +129,7 @@ function App() {
     menubarIconStyle,
     surfacePins,
     activeView,
-    providerStatuses,
+    timeFormatMode,
   })
 
   useEffect(() => {
