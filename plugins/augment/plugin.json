@@ -6,6 +6,7 @@
   "entry": "plugin.js",
   "icon": "Augment_Code_idmreFUtWy_1.svg",
   "brandColor": "#6366F1",
+  "defaultPlan": "Trial",
   "platformSupport": {
     "windows": {
       "state": "experimental",

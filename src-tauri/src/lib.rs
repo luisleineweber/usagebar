@@ -278,6 +278,7 @@ mod tests {
             entry: "plugin.js".to_string(),
             icon: "icon.svg".to_string(),
             brand_color: None,
+            default_plan: None,
             lines: Vec::new(),
             links: Vec::new(),
             platform_support: PlatformSupport {

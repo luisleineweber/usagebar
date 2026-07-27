@@ -6,6 +6,7 @@
   "entry": "plugin.js",
   "icon": "openrouter.svg",
   "brandColor": "#6F42C1",
+  "defaultPlan": "Free",
   "platformSupport": {
     "windows": {
       "state": "experimental",

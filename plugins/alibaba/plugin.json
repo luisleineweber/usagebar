@@ -6,6 +6,7 @@
   "entry": "plugin.js",
   "icon": "alibabacloud-color.svg",
   "brandColor": "#FF6A00",
+  "defaultPlan": "Free",
   "platformSupport": {
     "windows": {
       "state": "experimental",

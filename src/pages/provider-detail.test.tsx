@@ -27,6 +27,32 @@ describe("ProviderDetailPage", () => {
     expect(screen.getAllByText("Alpha").length).toBeGreaterThan(0)
   })
 
+  it("uses the manifest fallback plan when provider data is unavailable", () => {
+    render(
+      <ProviderDetailPage
+        displayMode="used"
+        resetTimerDisplayMode="relative"
+        plugin={{
+          meta: {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "",
+            defaultPlan: "Free",
+            lines: [],
+            primaryCandidates: [],
+          },
+          data: null,
+          loading: false,
+          error: "Not connected",
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
+      />
+    )
+
+    expect(screen.getByText("Free")).toBeInTheDocument()
+  })
+
   it("renders quick links when provided by plugin meta", () => {
     render(
       <ProviderDetailPage

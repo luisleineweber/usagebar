@@ -49,7 +49,7 @@ export function OverviewPage({
           key={plugin.meta.id}
           name={plugin.meta.name}
           iconUrl={plugin.meta.iconUrl}
-          plan={plugin.data?.plan ?? plugin.lastSettledData?.plan}
+          plan={plugin.data?.plan ?? plugin.lastSettledData?.plan ?? plugin.meta.defaultPlan}
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}
           error={plugin.error}

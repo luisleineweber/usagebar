@@ -73,7 +73,7 @@ export function ProviderDetailPage({
       <ProviderCard
         name={plugin.meta.name}
         iconUrl={plugin.meta.iconUrl}
-        plan={plugin.data?.plan ?? plugin.lastSettledData?.plan}
+        plan={plugin.data?.plan ?? plugin.lastSettledData?.plan ?? plugin.meta.defaultPlan}
         links={plugin.meta.links}
         showSeparator={false}
         loading={plugin.loading}

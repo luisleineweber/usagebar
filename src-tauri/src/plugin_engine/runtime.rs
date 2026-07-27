@@ -200,7 +200,8 @@ pub fn run_probe(
         let plan: Option<String> = result
             .get::<_, String>("plan")
             .ok()
-            .filter(|s| !s.is_empty());
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| plugin.manifest.default_plan.clone());
 
         let lines = match parse_lines(&result) {
             Ok(lines) if !lines.is_empty() => lines,
@@ -729,7 +730,7 @@ fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput 
     PluginOutput {
         provider_id: plugin.manifest.id.clone(),
         display_name: plugin.manifest.name.clone(),
-        plan: None,
+        plan: plugin.manifest.default_plan.clone(),
         lines: vec![error_line(error.message.clone())],
         icon_url: plugin.icon_data_url.clone(),
         error: Some(error),
@@ -806,6 +807,7 @@ mod tests {
                 entry: "plugin.js".to_string(),
                 icon: "icon.svg".to_string(),
                 brand_color: None,
+                default_plan: None,
                 lines: vec![],
                 links: vec![],
                 platform_support: PlatformSupport::default(),
@@ -971,6 +973,34 @@ mod tests {
         );
         assert_eq!(json["history"]["entries"][0]["costUsd"], 1.25);
         assert!(json["history"]["entries"][0].get("cost_usd").is_none());
+    }
+
+    #[test]
+    fn run_probe_uses_manifest_plan_only_when_plugin_does_not_report_one() {
+        let mut plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return { lines: [{ type: "text", label: "Status", value: "ok" }] };
+                }
+            };
+            "#,
+        );
+        plugin.manifest.default_plan = Some("Free".to_string());
+
+        let output = run_probe(&plugin, &temp_app_dir("default-plan"), "0.0.0", None);
+        assert_eq!(output.plan.as_deref(), Some("Free"));
+
+        plugin.entry_script = r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return { plan: "Pro", lines: [{ type: "text", label: "Status", value: "ok" }] };
+                }
+            };
+        "#
+        .to_string();
+        let output = run_probe(&plugin, &temp_app_dir("reported-plan"), "0.0.0", None);
+        assert_eq!(output.plan.as_deref(), Some("Pro"));
     }
 
     #[test]

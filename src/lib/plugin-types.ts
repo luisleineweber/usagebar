@@ -93,6 +93,7 @@ export type PluginMeta = {
   name: string
   iconUrl: string
   brandColor?: string
+  defaultPlan?: string
   supportState?: PluginSupportState
   supportMessage?: string | null
   isSurfaced?: boolean

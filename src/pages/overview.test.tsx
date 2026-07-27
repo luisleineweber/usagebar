@@ -39,6 +39,26 @@ describe("OverviewPage", () => {
     expect(screen.getByText("Alpha")).toBeInTheDocument();
   });
 
+  it("shows the manifest fallback plan until provider data reports a plan", () => {
+    render(
+      <OverviewPage
+        plugins={[
+          {
+            meta: { id: "a", name: "Alpha", iconUrl: "icon", defaultPlan: "Free", lines: [] },
+            data: null,
+            loading: true,
+            error: null,
+            lastManualRefreshAt: null,
+          },
+        ]}
+        displayMode="used"
+        resetTimerDisplayMode="relative"
+      />,
+    );
+
+    expect(screen.getByText("Free")).toBeInTheDocument();
+  });
+
   it("only shows overview-scoped lines", () => {
     const plugins = [
       {

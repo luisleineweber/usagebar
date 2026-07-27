@@ -139,6 +139,8 @@ pub struct PluginManifest {
     pub entry: String,
     pub icon: String,
     pub brand_color: Option<String>,
+    #[serde(default)]
+    pub default_plan: Option<String>,
     pub lines: Vec<ManifestLine>,
     #[serde(default)]
     pub links: Vec<PluginLink>,
@@ -384,6 +386,26 @@ mod tests {
         assert_eq!(manifest.links.len(), 2);
         assert_eq!(manifest.links[0].label, "Status");
         assert_eq!(manifest.links[1].url, "https://example.com/billing");
+    }
+
+    #[test]
+    fn default_plan_is_parsed_when_present() {
+        let manifest = parse_manifest(
+            r#"
+            {
+              "schemaVersion": 1,
+              "id": "x",
+              "name": "X",
+              "version": "0.0.1",
+              "entry": "plugin.js",
+              "icon": "icon.svg",
+              "defaultPlan": "Free",
+              "lines": []
+            }
+            "#,
+        );
+
+        assert_eq!(manifest.default_plan.as_deref(), Some("Free"));
     }
 
     #[test]

@@ -6,6 +6,7 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#38BDF8",
+  "defaultPlan": "Free",
   "platformSupport": {
     "windows": {
       "state": "experimental",

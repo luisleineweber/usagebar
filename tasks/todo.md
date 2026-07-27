@@ -1,5 +1,33 @@
 ﻿# Active Todo
 
+# Provider plan badges, 2026-07-27
+
+## Acceptance Criteria
+
+- [x] Every non-mock provider manifest declares a researched fallback plan label.
+- [x] A provider-reported runtime plan always overrides the fallback label.
+- [x] Overview and provider detail show the plan badge even before successful usage data when a fallback exists.
+- [x] Provider plan names and authoritative source links are documented; unknown account state is not presented as a confirmed subscription.
+- [x] Source and bundled plugin manifests stay synchronized and focused checks pass.
+
+## Plan
+
+- [x] Add manifest/runtime support for a fallback plan label.
+- [x] Research and populate the plan catalog for every provider.
+- [x] Add regression coverage for fallback precedence and badge rendering.
+- [x] Bundle plugins and run focused/full verification.
+
+## Verification Notes
+
+- `bun run check` -> passed: Prettier, ESLint, TypeScript, Cargo fmt, and Clippy `-D warnings`.
+- `bun run test -- plugins --run` -> 710 tests passed across 34 provider plugin files.
+- `bun run test -- src/pages/overview.test.tsx src/pages/provider-detail.test.tsx --run` -> 11 tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 148 passed, 1 ignored live Edge smoke test.
+- `bun run build:frontend` -> passed; existing Vite large-chunk warning remains.
+- `bun run test:all -- --reporter=dot` -> 1,391 passed, 1 failed; the unrelated pre-existing `App > covers about open/close callbacks` failure still expects a missing `Luis Leineweber` button.
+- `bun run bundle:plugins` -> bundled 34 plugins; source and bundled manifests each contain 34 non-empty fallback plans.
+- `bunx prettier --check docs/provider-plans.md tasks/todo.md` and `git diff --check` -> passed; Git reports existing LF/CRLF normalization notices only.
+
 # Alpha-7-Release-Dokumentation, 2026-07-27
 
 ## Acceptance Criteria
