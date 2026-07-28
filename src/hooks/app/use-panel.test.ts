@@ -2,12 +2,7 @@ import { act, render, renderHook, waitFor } from "@testing-library/react"
 import { createElement } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const {
-  currentMonitorMock,
-  invokeMock,
-  isTauriMock,
-  listenMock,
-} = vi.hoisted(() => ({
+const { currentMonitorMock, invokeMock, isTauriMock, listenMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
   isTauriMock: vi.fn(),
   listenMock: vi.fn(),
@@ -67,10 +62,12 @@ describe("usePanel", () => {
     const setShowAbout = vi.fn()
     const callbacks = new Map<string, (event: { payload: unknown }) => void>()
 
-    listenMock.mockImplementation(async (event: string, callback: (event: { payload: unknown }) => void) => {
-      callbacks.set(event, callback)
-      return vi.fn()
-    })
+    listenMock.mockImplementation(
+      async (event: string, callback: (event: { payload: unknown }) => void) => {
+        callbacks.set(event, callback)
+        return vi.fn()
+      }
+    )
 
     renderHook(() =>
       usePanel({
@@ -133,14 +130,12 @@ describe("usePanel", () => {
     const unlistenShowAbout = vi.fn()
     let resolveShowAbout: ((value: () => void) => void) | null = null
 
-    listenMock
-      .mockResolvedValueOnce(unlistenNavigate)
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveShowAbout = resolve
-          })
-      )
+    listenMock.mockResolvedValueOnce(unlistenNavigate).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveShowAbout = resolve
+        })
+    )
 
     const { unmount } = renderHook(() =>
       usePanel({
@@ -218,10 +213,12 @@ describe("usePanel", () => {
     vi.useFakeTimers()
     const callbacks = new Map<string, (event: { payload: unknown }) => void>()
 
-    listenMock.mockImplementation(async (event: string, callback: (event: { payload: unknown }) => void) => {
-      callbacks.set(event, callback)
-      return vi.fn()
-    })
+    listenMock.mockImplementation(
+      async (event: string, callback: (event: { payload: unknown }) => void) => {
+        callbacks.set(event, callback)
+        return vi.fn()
+      }
+    )
 
     try {
       renderHook(() =>
@@ -348,10 +345,12 @@ describe("usePanel", () => {
     const onPanelFocus = vi.fn()
     const callbacks = new Map<string, (event: { payload: unknown }) => void>()
 
-    listenMock.mockImplementation(async (event: string, callback: (event: { payload: unknown }) => void) => {
-      callbacks.set(event, callback)
-      return vi.fn()
-    })
+    listenMock.mockImplementation(
+      async (event: string, callback: (event: { payload: unknown }) => void) => {
+        callbacks.set(event, callback)
+        return vi.fn()
+      }
+    )
 
     renderHook(() =>
       usePanel({
@@ -394,8 +393,9 @@ describe("usePanel", () => {
   })
 
   it("keeps a minimum height for the nav icon stack", () => {
-    expect(panelMinHeightForNav(0)).toBe(100)
-    expect(panelMinHeightForNav(4)).toBe(276)
+    expect(panelMinHeightForNav(0)).toBe(144)
+    expect(panelMinHeightForNav(4)).toBe(320)
+    expect(panelMinHeightForNav(0, false)).toBe(100)
   })
 
   it("syncs the measured panel height back to Rust", async () => {
@@ -408,13 +408,7 @@ describe("usePanel", () => {
     } as unknown as typeof ResizeObserver
 
     function Harness() {
-      const {
-        containerRef,
-        contentColumnRef,
-        scrollRef,
-        contentMeasureRef,
-        footerRef,
-      } = usePanel({
+      const { containerRef, contentColumnRef, scrollRef, contentMeasureRef, footerRef } = usePanel({
         activeView: "home",
         setActiveView: vi.fn(),
         showAbout: false,
@@ -464,13 +458,7 @@ describe("usePanel", () => {
     } as unknown as typeof ResizeObserver
 
     function Harness() {
-      const {
-        containerRef,
-        contentColumnRef,
-        scrollRef,
-        contentMeasureRef,
-        footerRef,
-      } = usePanel({
+      const { containerRef, contentColumnRef, scrollRef, contentMeasureRef, footerRef } = usePanel({
         activeView: "home",
         setActiveView: vi.fn(),
         showAbout: false,
@@ -528,13 +516,7 @@ describe("usePanel", () => {
     })
 
     function Harness() {
-      const {
-        containerRef,
-        contentColumnRef,
-        scrollRef,
-        contentMeasureRef,
-        footerRef,
-      } = usePanel({
+      const { containerRef, contentColumnRef, scrollRef, contentMeasureRef, footerRef } = usePanel({
         activeView: "home",
         setActiveView: vi.fn(),
         showAbout: false,
@@ -569,7 +551,9 @@ describe("usePanel", () => {
       rerender(createElement(Harness))
       await vi.runAllTimersAsync()
 
-      const applyCalls = invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
+      const applyCalls = invokeMock.mock.calls.filter(
+        ([command]) => command === "apply_panel_bounds"
+      )
       expect(applyCalls.length).toBeGreaterThan(1)
     } finally {
       globalThis.ResizeObserver = OriginalResizeObserver
@@ -604,13 +588,7 @@ describe("usePanel", () => {
     })
 
     function Harness() {
-      const {
-        containerRef,
-        contentColumnRef,
-        scrollRef,
-        contentMeasureRef,
-        footerRef,
-      } = usePanel({
+      const { containerRef, contentColumnRef, scrollRef, contentMeasureRef, footerRef } = usePanel({
         activeView: "home",
         setActiveView: vi.fn(),
         showAbout: false,
@@ -645,7 +623,9 @@ describe("usePanel", () => {
       rerender(createElement(Harness))
       await vi.runAllTimersAsync()
 
-      const applyCalls = invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
+      const applyCalls = invokeMock.mock.calls.filter(
+        ([command]) => command === "apply_panel_bounds"
+      )
       expect(applyCalls).toHaveLength(1)
     } finally {
       globalThis.ResizeObserver = OriginalResizeObserver

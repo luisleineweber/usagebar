@@ -50,9 +50,10 @@ export function panelPreferredMinHeightForView(activeView: ActiveView): number {
   return DETAIL_PANEL_BASE_HEIGHT_PX
 }
 
-export function panelMinHeightForNav(providerCount: number): number {
+export function panelMinHeightForNav(providerCount: number, showHistoryInBar = true): number {
   const normalizedProviderCount = Math.max(0, Math.floor(providerCount))
-  const buttonCount = SIDE_NAV_STATIC_BUTTON_COUNT + normalizedProviderCount
+  const buttonCount =
+    SIDE_NAV_STATIC_BUTTON_COUNT + normalizedProviderCount + (showHistoryInBar ? 1 : 0)
   return SIDE_NAV_TOP_PADDING_PX + buttonCount * SIDE_NAV_BUTTON_HEIGHT_PX
 }
 
@@ -63,6 +64,7 @@ type UsePanelArgs = {
   setShowAbout: (value: boolean) => void
   displayPlugins: unknown[]
   navPluginCount: number
+  showHistoryInBar?: boolean
   onPanelFocus?: (view?: ActiveView) => void
 }
 
@@ -73,6 +75,7 @@ export function usePanel({
   setShowAbout,
   displayPlugins,
   navPluginCount,
+  showHistoryInBar = true,
   onPanelFocus,
 }: UsePanelArgs) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -353,7 +356,7 @@ export function usePanel({
         1,
         contentHeightLogical + footerHeightLogical + paddingTopLogical + paddingBottomLogical
       )
-      const navMinHeightLogical = panelMinHeightForNav(navPluginCount)
+      const navMinHeightLogical = panelMinHeightForNav(navPluginCount, showHistoryInBar)
       const viewMinHeightLogical = panelPreferredMinHeightForView(activeView)
       const panelMaxHeightPx = panelMaxHeightForView(activeView)
 
@@ -432,7 +435,7 @@ export function usePanel({
       }
       observer.disconnect()
     }
-  }, [activeView, displayPlugins, navPluginCount])
+  }, [activeView, displayPlugins, navPluginCount, showHistoryInBar])
 
   useEffect(() => {
     const el = scrollRef.current

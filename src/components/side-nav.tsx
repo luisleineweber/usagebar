@@ -55,6 +55,7 @@ interface SideNavProps {
   activeView: ActiveView
   onViewChange: (view: ActiveView) => void
   plugins: NavPlugin[]
+  showHistoryInBar?: boolean
   onOpenSettings?: () => void
   onReorder?: (orderedIds: string[]) => void
   arrangeMode?: boolean
@@ -188,6 +189,7 @@ export function SideNav({
   activeView,
   onViewChange,
   plugins,
+  showHistoryInBar = true,
   onOpenSettings,
   onReorder,
   arrangeMode = false,
@@ -244,13 +246,15 @@ export function SideNav({
         <GaugeIcon className="size-6 text-page-accent" />
       </NavButton>
 
-      <NavButton
-        isActive={activeView === "history"}
-        onClick={() => onViewChange("history")}
-        aria-label="History"
-      >
-        <BarChart3 className="size-5" />
-      </NavButton>
+      {showHistoryInBar ? (
+        <NavButton
+          isActive={activeView === "history"}
+          onClick={() => onViewChange("history")}
+          aria-label="History"
+        >
+          <BarChart3 className="size-5" />
+        </NavButton>
+      ) : null}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div data-testid="provider-list" className="min-h-0 flex-1 overflow-y-auto scrollbar-none">

@@ -5,6 +5,7 @@ import {
   loadMenubarIconStyle,
   loadResetTimerDisplayMode,
   loadSurfacePins,
+  loadShowHistoryInBar,
   loadThemeMode,
   type PluginSettings,
   type SurfacePin,
@@ -34,6 +35,7 @@ type UseAppRefreshOrchestrationArgs = {
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
   setSurfacePins: (value: SurfacePin[]) => void
+  setShowHistoryInBar: (value: boolean) => void
 }
 
 export function useAppRefreshOrchestration({
@@ -52,6 +54,7 @@ export function useAppRefreshOrchestration({
   setResetTimerDisplayMode,
   setMenubarIconStyle,
   setSurfacePins,
+  setShowHistoryInBar,
 }: UseAppRefreshOrchestrationArgs) {
   const catchUpProbeIdsRef = useRef<Set<string>>(new Set())
 
@@ -63,6 +66,7 @@ export function useAppRefreshOrchestration({
         loadResetTimerDisplayMode(),
         loadMenubarIconStyle(),
         loadSurfacePins(pluginsMeta),
+        loadShowHistoryInBar(),
       ])
         .then(
           ([
@@ -71,12 +75,14 @@ export function useAppRefreshOrchestration({
             nextResetTimerDisplayMode,
             nextMenubarIconStyle,
             nextSurfacePins,
+            nextShowHistoryInBar,
           ]) => {
             setThemeMode(nextThemeMode)
             setDisplayMode(nextDisplayMode)
             setResetTimerDisplayMode(nextResetTimerDisplayMode)
             setMenubarIconStyle(nextMenubarIconStyle)
             setSurfacePins(nextSurfacePins)
+            setShowHistoryInBar(nextShowHistoryInBar)
             scheduleTrayIconUpdate("settings", 0)
           }
         )
@@ -115,6 +121,7 @@ export function useAppRefreshOrchestration({
       setMenubarIconStyle,
       setResetTimerDisplayMode,
       setSurfacePins,
+      setShowHistoryInBar,
       setThemeMode,
     ]
   )

@@ -45,6 +45,7 @@ const DISPLAY_MODE_KEY = "displayMode"
 const RESET_TIMER_DISPLAY_MODE_KEY = "resetTimerDisplayMode"
 const TIME_FORMAT_MODE_KEY = "timeFormatMode"
 const MENUBAR_ICON_STYLE_KEY = "menubarIconStyle"
+const SHOW_HISTORY_IN_BAR_KEY = "showHistoryInBar"
 const SURFACE_PINS_KEY = "surfacePins"
 const LEGACY_TRAY_ICON_STYLE_KEY = "trayIconStyle"
 const LEGACY_TRAY_SHOW_PERCENTAGE_KEY = "trayShowPercentage"
@@ -58,6 +59,7 @@ export const DEFAULT_DISPLAY_MODE: DisplayMode = "left"
 export const DEFAULT_RESET_TIMER_DISPLAY_MODE: ResetTimerDisplayMode = "relative"
 export const DEFAULT_TIME_FORMAT_MODE: TimeFormatMode = "auto"
 export const DEFAULT_MENUBAR_ICON_STYLE: MenubarIconStyle = "provider"
+export const DEFAULT_SHOW_HISTORY_IN_BAR = true
 export const DEFAULT_SURFACE_PINS: SurfacePin[] = []
 export const MAX_SURFACE_PINS = 2
 export const DEFAULT_GLOBAL_SHORTCUT: GlobalShortcut = null
@@ -366,6 +368,17 @@ export async function loadMenubarIconStyle(): Promise<MenubarIconStyle> {
 
 export async function saveMenubarIconStyle(style: MenubarIconStyle): Promise<void> {
   await store.set(MENUBAR_ICON_STYLE_KEY, style)
+  await store.save()
+}
+
+export async function loadShowHistoryInBar(): Promise<boolean> {
+  const stored = await store.get<unknown>(SHOW_HISTORY_IN_BAR_KEY)
+  if (typeof stored === "boolean") return stored
+  return DEFAULT_SHOW_HISTORY_IN_BAR
+}
+
+export async function saveShowHistoryInBar(value: boolean): Promise<void> {
+  await store.set(SHOW_HISTORY_IN_BAR_KEY, value)
   await store.save()
 }
 

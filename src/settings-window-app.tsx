@@ -70,6 +70,8 @@ export function SettingsWindowApp() {
     setMenubarIconStyle,
     surfacePins,
     setSurfacePins,
+    showHistoryInBar,
+    setShowHistoryInBar,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
     timeFormatMode,
@@ -92,6 +94,8 @@ export function SettingsWindowApp() {
       setMenubarIconStyle: state.setMenubarIconStyle,
       surfacePins: state.surfacePins,
       setSurfacePins: state.setSurfacePins,
+      showHistoryInBar: state.showHistoryInBar,
+      setShowHistoryInBar: state.setShowHistoryInBar,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       setResetTimerDisplayMode: state.setResetTimerDisplayMode,
       timeFormatMode: state.timeFormatMode,
@@ -134,6 +138,7 @@ export function SettingsWindowApp() {
     setDisplayMode,
     setMenubarIconStyle,
     setSurfacePins,
+    setShowHistoryInBar,
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setGlobalShortcut,
@@ -153,6 +158,7 @@ export function SettingsWindowApp() {
     handleTimeFormatModeChange,
     handleMenubarIconStyleChange,
     handleSurfacePinsChange,
+    handleShowHistoryInBarChange,
   } = useSettingsDisplayActions({
     setThemeMode,
     setAccentColor,
@@ -162,6 +168,7 @@ export function SettingsWindowApp() {
     setTimeFormatMode,
     setMenubarIconStyle,
     setSurfacePins,
+    setShowHistoryInBar,
     scheduleTrayIconUpdate,
   })
 
@@ -351,6 +358,8 @@ export function SettingsWindowApp() {
             onMenubarIconStyleChange={handleMenubarIconStyleChange}
             surfacePins={surfacePins}
             onSurfacePinsChange={handleSurfacePinsChange}
+            showHistoryInBar={showHistoryInBar}
+            onShowHistoryInBarChange={handleShowHistoryInBarChange}
             traySettingsPreview={traySettingsPreview}
             globalShortcut={globalShortcut}
             onGlobalShortcutChange={handleGlobalShortcutChange}

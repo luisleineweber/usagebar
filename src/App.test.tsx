@@ -29,6 +29,8 @@ const state = vi.hoisted(() => ({
   saveMenubarIconStyleMock: vi.fn(),
   loadSurfacePinsMock: vi.fn(),
   saveSurfacePinsMock: vi.fn(),
+  loadShowHistoryInBarMock: vi.fn(),
+  saveShowHistoryInBarMock: vi.fn(),
   migrateLegacyTraySettingsMock: vi.fn(),
   loadGlobalShortcutMock: vi.fn(),
   saveGlobalShortcutMock: vi.fn(),
@@ -303,6 +305,8 @@ vi.mock("@/lib/settings", async () => {
     saveMenubarIconStyle: state.saveMenubarIconStyleMock,
     loadSurfacePins: state.loadSurfacePinsMock,
     saveSurfacePins: state.saveSurfacePinsMock,
+    loadShowHistoryInBar: state.loadShowHistoryInBarMock,
+    saveShowHistoryInBar: state.saveShowHistoryInBarMock,
     migrateLegacyTraySettings: state.migrateLegacyTraySettingsMock,
     loadGlobalShortcut: state.loadGlobalShortcutMock,
     saveGlobalShortcut: state.saveGlobalShortcutMock,
@@ -444,6 +448,8 @@ describe("App", () => {
     state.saveMenubarIconStyleMock.mockResolvedValue(undefined)
     state.loadSurfacePinsMock.mockResolvedValue([])
     state.saveSurfacePinsMock.mockResolvedValue(undefined)
+    state.loadShowHistoryInBarMock.mockResolvedValue(true)
+    state.saveShowHistoryInBarMock.mockResolvedValue(undefined)
     state.migrateLegacyTraySettingsMock.mockResolvedValue(undefined)
     state.loadGlobalShortcutMock.mockResolvedValue(null)
     state.saveGlobalShortcutMock.mockResolvedValue(undefined)
@@ -1920,6 +1926,7 @@ describe("App", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
     await userEvent.click(await screen.findByRole("radio", { name: "Used" }))
     await userEvent.click(await screen.findByRole("radio", { name: /Absolute/ }))
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Show History in bar" }))
 
     await waitFor(() =>
       expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
@@ -1934,6 +1941,10 @@ describe("App", () => {
     expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
       key: "resetTimerDisplayMode",
       value: "absolute",
+    })
+    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
+      key: "showHistoryInBar",
+      value: false,
     })
     expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
   })
@@ -1957,6 +1968,9 @@ describe("App", () => {
         payload: { key: "resetTimerDisplayMode", value: "absolute" },
       })
       eventState.handlers.get("display-preferences:updated")?.({
+        payload: { key: "showHistoryInBar", value: false },
+      })
+      eventState.handlers.get("display-preferences:updated")?.({
         payload: { key: "menubarIconStyle", value: "donut" },
       })
       eventState.handlers.get("display-preferences:updated")?.({
@@ -1970,6 +1984,7 @@ describe("App", () => {
     await waitFor(() => expect(document.documentElement.classList.contains("dark")).toBe(false))
     await waitFor(() => expect(useAppPreferencesStore.getState().displayMode).toBe("used"))
     expect(useAppPreferencesStore.getState().resetTimerDisplayMode).toBe("absolute")
+    expect(useAppPreferencesStore.getState().showHistoryInBar).toBe(false)
     expect(useAppPreferencesStore.getState().menubarIconStyle).toBe("donut")
     expect(useAppPreferencesStore.getState().surfacePins).toEqual([
       { providerId: "a", metricLabel: "Session", presentation: "bar" },

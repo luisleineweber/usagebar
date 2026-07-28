@@ -154,6 +154,16 @@ describe("SideNav", () => {
     expect(invoke).not.toHaveBeenCalled()
   })
 
+  it("omits History when it is disabled in bar settings", () => {
+    render(
+      <SideNav activeView="home" onViewChange={() => {}} showHistoryInBar={false} plugins={[]} />
+    )
+
+    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument()
+  })
+
   it("keeps Settings pinned when the provider list exceeds the panel height", () => {
     render(
       <SideNav

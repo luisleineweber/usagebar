@@ -6,6 +6,7 @@ import {
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
+  DEFAULT_SHOW_HISTORY_IN_BAR,
   DEFAULT_START_ON_LOGIN,
   DEFAULT_SURFACE_PINS,
   DEFAULT_THEME_MODE,
@@ -32,6 +33,7 @@ type AppPreferencesStore = {
   startOnLogin: boolean
   menubarIconStyle: MenubarIconStyle
   surfacePins: SurfacePin[]
+  showHistoryInBar: boolean
   setAutoUpdateInterval: (value: AutoUpdateIntervalMinutes) => void
   setThemeMode: (value: ThemeMode) => void
   setAccentColor: (value: AccentColor) => void
@@ -42,6 +44,7 @@ type AppPreferencesStore = {
   setStartOnLogin: (value: boolean) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
   setSurfacePins: (value: SurfacePin[]) => void
+  setShowHistoryInBar: (value: boolean) => void
   resetState: () => void
 }
 
@@ -56,6 +59,7 @@ const initialState = {
   startOnLogin: DEFAULT_START_ON_LOGIN,
   menubarIconStyle: DEFAULT_MENUBAR_ICON_STYLE,
   surfacePins: DEFAULT_SURFACE_PINS,
+  showHistoryInBar: DEFAULT_SHOW_HISTORY_IN_BAR,
 }
 
 export const useAppPreferencesStore = create<AppPreferencesStore>((set) => ({
@@ -70,5 +74,6 @@ export const useAppPreferencesStore = create<AppPreferencesStore>((set) => ({
   setStartOnLogin: (value) => set({ startOnLogin: value }),
   setMenubarIconStyle: (value) => set({ menubarIconStyle: value }),
   setSurfacePins: (value) => set({ surfacePins: value }),
+  setShowHistoryInBar: (value) => set({ showHistoryInBar: value }),
   resetState: () => set(initialState),
 }))

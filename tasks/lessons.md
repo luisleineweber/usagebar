@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-07-28
+
+- Static History navigation was always rendered and the panel minimum-height calculation undercounted it. Fix: persist an explicit History visibility preference, hide the nav item with a Home fallback, and count Home, optional History, and Settings separately. Prevention: when adding fixed navigation items, test both visibility states and their geometry.
+
 ## 2026-07-27
 
 - Release metadata can be aligned while release documentation still points at an older alpha, causing preflight or operator commands to target the wrong version. Prevention: update the current version label, changelog section, README command, and release-gate references together and run the tagged preflight.

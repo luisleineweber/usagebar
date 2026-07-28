@@ -7,12 +7,14 @@ const {
   saveResetTimerDisplayModeMock,
   saveThemeModeMock,
   saveTimeFormatModeMock,
+  saveShowHistoryInBarMock,
 } = vi.hoisted(() => ({
   saveThemeModeMock: vi.fn(),
   saveDisplayModeMock: vi.fn(),
   saveResetTimerDisplayModeMock: vi.fn(),
   saveTimeFormatModeMock: vi.fn(),
   saveMenubarIconStyleMock: vi.fn(),
+  saveShowHistoryInBarMock: vi.fn(),
 }))
 
 vi.mock("@/lib/settings", () => ({
@@ -21,6 +23,7 @@ vi.mock("@/lib/settings", () => ({
   saveResetTimerDisplayMode: saveResetTimerDisplayModeMock,
   saveTimeFormatMode: saveTimeFormatModeMock,
   saveMenubarIconStyle: saveMenubarIconStyleMock,
+  saveShowHistoryInBar: saveShowHistoryInBarMock,
 }))
 
 import { useSettingsDisplayActions } from "@/hooks/app/use-settings-display-actions"
@@ -32,11 +35,13 @@ describe("useSettingsDisplayActions", () => {
     saveResetTimerDisplayModeMock.mockReset()
     saveTimeFormatModeMock.mockReset()
     saveMenubarIconStyleMock.mockReset()
+    saveShowHistoryInBarMock.mockReset()
     saveThemeModeMock.mockResolvedValue(undefined)
     saveDisplayModeMock.mockResolvedValue(undefined)
     saveResetTimerDisplayModeMock.mockResolvedValue(undefined)
     saveTimeFormatModeMock.mockResolvedValue(undefined)
     saveMenubarIconStyleMock.mockResolvedValue(undefined)
+    saveShowHistoryInBarMock.mockResolvedValue(undefined)
   })
 
   it("applies display-related setting changes", () => {
@@ -181,6 +186,29 @@ describe("useSettingsDisplayActions", () => {
     expect(setMenubarIconStyle).toHaveBeenCalledWith("donut")
     expect(scheduleTrayIconUpdate).toHaveBeenCalledWith("settings", 0)
     expect(saveMenubarIconStyleMock).toHaveBeenCalledWith("donut")
+  })
+
+  it("persists History visibility changes", () => {
+    const setShowHistoryInBar = vi.fn()
+
+    const { result } = renderHook(() =>
+      useSettingsDisplayActions({
+        setThemeMode: vi.fn(),
+        setDisplayMode: vi.fn(),
+        resetTimerDisplayMode: "relative",
+        setResetTimerDisplayMode: vi.fn(),
+        setTimeFormatMode: vi.fn(),
+        setShowHistoryInBar,
+        scheduleTrayIconUpdate: vi.fn(),
+      })
+    )
+
+    act(() => {
+      result.current.handleShowHistoryInBarChange(false)
+    })
+
+    expect(setShowHistoryInBar).toHaveBeenCalledWith(false)
+    expect(saveShowHistoryInBarMock).toHaveBeenCalledWith(false)
   })
 
   it("logs time format save failures", async () => {

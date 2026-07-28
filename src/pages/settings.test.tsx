@@ -76,6 +76,8 @@ const defaultProps = {
   onAutoUpdateIntervalChange: vi.fn(),
   themeMode: "system" as const,
   onThemeModeChange: vi.fn(),
+  accentColor: "#86c5ff" as const,
+  onAccentColorChange: vi.fn(),
   displayMode: "used" as const,
   onDisplayModeChange: vi.fn(),
   resetTimerDisplayMode: "relative" as const,
@@ -86,6 +88,8 @@ const defaultProps = {
   onMenubarIconStyleChange: vi.fn(),
   surfacePins: [],
   onSurfacePinsChange: vi.fn(),
+  showHistoryInBar: true,
+  onShowHistoryInBarChange: vi.fn(),
   traySettingsPreview: {
     bars: [],
     providerBars: [],
@@ -194,8 +198,19 @@ describe("SettingsPage", () => {
   it("renders global settings on the General tab", () => {
     render(<TestHarness />)
     expect(screen.getByText("Auto Refresh")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Navigation" })).toBeInTheDocument()
+    expect(screen.getByRole("checkbox", { name: /show history in bar/i })).toBeChecked()
     expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
+  })
+
+  it("updates History visibility from the Navigation section", async () => {
+    const onShowHistoryInBarChange = vi.fn()
+    render(<TestHarness onShowHistoryInBarChange={onShowHistoryInBarChange} />)
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /show history in bar/i }))
+
+    expect(onShowHistoryInBarChange).toHaveBeenCalledWith(false)
   })
 
   it("keeps all tray style controls available on Windows", async () => {

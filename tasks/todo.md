@@ -1,5 +1,33 @@
 ﻿# Active Todo
 
+# History visibility setting in the bar, 2026-07-28
+
+## Acceptance Criteria
+
+- [x] General Settings exposes a persisted “Show History in bar” option with `true` as the default.
+- [x] Turning the option off removes History from the tray navigation and returns an active History view to Home.
+- [x] Turning the option on restores the History navigation item without affecting provider navigation.
+- [x] Settings remain grouped in a task-oriented order, with the new navigation option placed beside tray presentation controls.
+- [x] Focused tests, typecheck, formatting, and diff validation pass.
+
+## Plan
+
+- [x] Add the persisted preference, cross-window synchronization, and default handling.
+- [x] Wire the preference into bar navigation, active-view fallback, and panel sizing.
+- [x] Add regression coverage and review the resulting Settings order.
+- [x] Run focused verification and record exact outcomes below.
+
+## Verification Notes
+
+- Baseline: `bun run test -- src/pages/settings.test.tsx src/lib/settings.test.ts src/hooks/app/use-app-plugin-views.test.ts --run` -> 85 tests passed.
+- `bun run test -- src/pages/settings.test.tsx src/lib/settings.test.ts src/hooks/app/use-settings-bootstrap.test.ts src/hooks/app/use-settings-display-actions.test.ts src/components/side-nav.test.tsx src/hooks/app/use-panel.test.ts src/hooks/app/use-app-plugin-views.test.ts --run` -> 127 tests passed.
+- `bun run test -- src/App.test.tsx --run -t "publishes display preference changes|applies display preference updates"` -> 2 tests passed.
+- `bun run check:frontend` -> passed: Prettier, ESLint, and TypeScript.
+- `bun run build` -> passed: typecheck and frontend production build; the existing Vite large-chunk warning remains.
+- `git diff --check` -> passed; Git reports existing LF/CRLF normalization notices only.
+- T3 Preview opened the local Vite page, but both snapshot attempts timed out; no screenshot-based visual approval was available.
+- `bun run test:all -- --reporter=dot` -> timed out after 120 seconds; no feature-specific failure was reported before Vitest's dot reporter hit an EPIPE. The existing full-suite baseline also contains the unrelated About-dialog assertion expecting a missing “Luis Leineweber” button.
+
 # Provider plan badges, 2026-07-27
 
 ## Acceptance Criteria

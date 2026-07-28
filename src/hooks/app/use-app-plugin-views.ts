@@ -14,6 +14,7 @@ type UseAppPluginViewsArgs = {
   pluginsMeta: PluginMeta[]
   pluginStates: Record<string, PluginState>
   providerStatuses?: Record<string, ProviderStatus>
+  showHistoryInBar?: boolean
 }
 
 export function useAppPluginViews({
@@ -23,6 +24,7 @@ export function useAppPluginViews({
   pluginsMeta,
   pluginStates,
   providerStatuses = {},
+  showHistoryInBar = true,
 }: UseAppPluginViewsArgs) {
   const lastResolvedNavPluginsRef = useRef<NavPlugin[]>([])
   const lastResolvedSelectedPluginRef = useRef<DisplayPluginState | null>(null)
@@ -91,6 +93,10 @@ export function useAppPluginViews({
   }, [navPlugins])
 
   useEffect(() => {
+    if (activeView === "history" && !showHistoryInBar) {
+      setActiveView("home")
+      return
+    }
     if (activeView === "home") return
     if (!pluginSettings) return
     const isKnownPlugin = pluginsMeta.some((plugin) => plugin.id === activeView)
@@ -99,7 +105,15 @@ export function useAppPluginViews({
     if (!isStillVisible) {
       setActiveView("home")
     }
-  }, [activeView, enabledSupportedPlugins, navPlugins, pluginSettings, pluginsMeta, setActiveView])
+  }, [
+    activeView,
+    enabledSupportedPlugins,
+    navPlugins,
+    pluginSettings,
+    pluginsMeta,
+    setActiveView,
+    showHistoryInBar,
+  ])
 
   const selectedPlugin = useMemo(() => {
     if (activeView === "home") return null

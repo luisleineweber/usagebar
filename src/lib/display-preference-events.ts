@@ -20,9 +20,12 @@ export type DisplayPreferenceUpdate =
   | { key: "resetTimerDisplayMode"; value: ResetTimerDisplayMode }
   | { key: "timeFormatMode"; value: TimeFormatMode }
   | { key: "menubarIconStyle"; value: MenubarIconStyle }
+  | { key: "showHistoryInBar"; value: boolean }
   | { key: "surfacePins"; value: SurfacePin[] }
 
-export async function notifyDisplayPreferenceUpdated(update: DisplayPreferenceUpdate): Promise<void> {
+export async function notifyDisplayPreferenceUpdated(
+  update: DisplayPreferenceUpdate
+): Promise<void> {
   if (!isTauri()) return
   await emit(DISPLAY_PREFERENCES_UPDATED_EVENT, update)
 }

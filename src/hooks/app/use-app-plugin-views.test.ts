@@ -186,6 +186,25 @@ describe("useAppPluginViews", () => {
     })
   })
 
+  it("falls back to home when History is hidden from the bar", async () => {
+    const setActiveView = vi.fn()
+
+    renderHook(() =>
+      useAppPluginViews({
+        activeView: "history",
+        setActiveView,
+        showHistoryInBar: false,
+        pluginSettings: { order: ["codex"], disabled: [] },
+        pluginsMeta: [createPluginMeta("codex", "Codex")],
+        pluginStates: {},
+      })
+    )
+
+    await waitFor(() => {
+      expect(setActiveView).toHaveBeenCalledWith("home")
+    })
+  })
+
   it("does not fall back while plugin settings are still loading", async () => {
     const setActiveView = vi.fn()
     const pluginsMeta = [createPluginMeta("codex", "Codex")]

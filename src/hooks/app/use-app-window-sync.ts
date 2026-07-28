@@ -24,6 +24,7 @@ type UseAppWindowSyncArgs = {
   setTimeFormatMode: (value: TimeFormatMode) => void
   setSurfacePins: (value: SurfacePin[]) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setShowHistoryInBar: (value: boolean) => void
 }
 
 export function useAppWindowSync({
@@ -37,6 +38,7 @@ export function useAppWindowSync({
   setTimeFormatMode,
   setSurfacePins,
   setMenubarIconStyle,
+  setShowHistoryInBar,
 }: UseAppWindowSyncArgs) {
   useEffect(() => {
     let unlisten: (() => void) | undefined
@@ -96,6 +98,10 @@ export function useAppWindowSync({
         scheduleTrayIconUpdate("settings", 0)
         return
       }
+      if (update.key === "showHistoryInBar") {
+        setShowHistoryInBar(update.value)
+        return
+      }
       setMenubarIconStyle(update.value)
       scheduleTrayIconUpdate("settings", 0)
     })
@@ -121,6 +127,7 @@ export function useAppWindowSync({
     setMenubarIconStyle,
     setResetTimerDisplayMode,
     setSurfacePins,
+    setShowHistoryInBar,
     setThemeMode,
     setTimeFormatMode,
   ])

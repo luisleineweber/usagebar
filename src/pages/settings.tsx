@@ -43,6 +43,8 @@ interface SettingsPageProps {
   onMenubarIconStyleChange: (value: MenubarIconStyle) => void
   surfacePins: SurfacePin[]
   onSurfacePinsChange: (value: SurfacePin[]) => void
+  showHistoryInBar: boolean
+  onShowHistoryInBarChange: (value: boolean) => void
   traySettingsPreview: TraySettingsPreview
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
@@ -80,6 +82,8 @@ export function SettingsPage({
   onMenubarIconStyleChange,
   surfacePins,
   onSurfacePinsChange,
+  showHistoryInBar,
+  onShowHistoryInBarChange,
   traySettingsPreview,
   globalShortcut,
   onGlobalShortcutChange,
@@ -168,6 +172,8 @@ export function SettingsPage({
           onMenubarIconStyleChange={onMenubarIconStyleChange}
           surfacePins={surfacePins}
           onSurfacePinsChange={onSurfacePinsChange}
+          showHistoryInBar={showHistoryInBar}
+          onShowHistoryInBarChange={onShowHistoryInBarChange}
           traySettingsPreview={traySettingsPreview}
           plugins={providers.map((provider) => provider.meta)}
           globalShortcut={globalShortcut}

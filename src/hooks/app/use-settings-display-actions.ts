@@ -7,6 +7,7 @@ import {
   saveThemeMode,
   saveTimeFormatMode,
   saveSurfacePins,
+  saveShowHistoryInBar,
   type DisplayMode,
   type AccentColor,
   type MenubarIconStyle,
@@ -28,6 +29,7 @@ type UseSettingsDisplayActionsArgs = {
   setTimeFormatMode: (value: TimeFormatMode) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
   setSurfacePins: (value: SurfacePin[]) => void
+  setShowHistoryInBar: (value: boolean) => void
   scheduleTrayIconUpdate: ScheduleTrayIconUpdate
 }
 
@@ -40,6 +42,7 @@ export function useSettingsDisplayActions({
   setTimeFormatMode,
   setMenubarIconStyle,
   setSurfacePins,
+  setShowHistoryInBar,
   scheduleTrayIconUpdate,
 }: UseSettingsDisplayActionsArgs) {
   const handleThemeModeChange = useCallback((mode: ThemeMode) => {
@@ -121,6 +124,16 @@ export function useSettingsDisplayActions({
     })
   }, [scheduleTrayIconUpdate, setSurfacePins])
 
+  const handleShowHistoryInBarChange = useCallback((value: boolean) => {
+    setShowHistoryInBar(value)
+    void notifyDisplayPreferenceUpdated({ key: "showHistoryInBar", value }).catch((error) => {
+      console.error("Failed to publish history visibility update:", error)
+    })
+    void saveShowHistoryInBar(value).catch((error) => {
+      console.error("Failed to save history visibility:", error)
+    })
+  }, [setShowHistoryInBar])
+
   return {
     handleThemeModeChange,
     handleAccentColorChange,
@@ -130,5 +143,6 @@ export function useSettingsDisplayActions({
     handleTimeFormatModeChange,
     handleMenubarIconStyleChange,
     handleSurfacePinsChange,
+    handleShowHistoryInBarChange,
   }
 }

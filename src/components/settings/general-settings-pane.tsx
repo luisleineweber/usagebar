@@ -52,6 +52,8 @@ type GeneralSettingsPaneProps = {
   onMenubarIconStyleChange: (value: MenubarIconStyle) => void
   surfacePins: SurfacePin[]
   onSurfacePinsChange: (value: SurfacePin[]) => void
+  showHistoryInBar: boolean
+  onShowHistoryInBarChange: (value: boolean) => void
   traySettingsPreview: TraySettingsPreview
   plugins: PluginMeta[]
   globalShortcut: GlobalShortcut
@@ -77,6 +79,8 @@ export function GeneralSettingsPane({
   onMenubarIconStyleChange,
   surfacePins,
   onSurfacePinsChange,
+  showHistoryInBar,
+  onShowHistoryInBarChange,
   traySettingsPreview,
   plugins,
   globalShortcut,
@@ -244,7 +248,8 @@ export function GeneralSettingsPane({
           })}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Plugin zeigt unter Windows die kompakte Zahl; Bars, Merged und Donut bleiben als alternative Tray-Ansichten verfügbar.
+          Plugin zeigt unter Windows die kompakte Zahl; Bars, Merged und Donut bleiben als
+          alternative Tray-Ansichten verfügbar.
         </p>
         <SurfacePinSettings
           plugins={plugins}
@@ -253,6 +258,27 @@ export function GeneralSettingsPane({
           menubarIconStyle={menubarIconStyle}
           preview={traySettingsPreview}
         />
+      </section>
+
+      <section className={SETTINGS_SECTION_CLASS}>
+        <h3 className="mb-0 text-base font-semibold">Navigation</h3>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Choose which pages are available in the tray panel.
+        </p>
+        <label className="flex select-none items-start gap-2 text-sm text-foreground">
+          <Checkbox
+            key={`show-history-in-bar-${showHistoryInBar}`}
+            aria-label="Show History in bar"
+            checked={showHistoryInBar}
+            onCheckedChange={(checked) => onShowHistoryInBarChange(checked === true)}
+          />
+          <span>
+            <span className="block">Show History in bar</span>
+            <span className="block text-xs text-muted-foreground">
+              Add the History page to the tray panel navigation.
+            </span>
+          </span>
+        </label>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>

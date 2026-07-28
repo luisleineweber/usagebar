@@ -14,6 +14,7 @@ import {
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
+  DEFAULT_SHOW_HISTORY_IN_BAR,
   DEFAULT_START_ON_LOGIN,
   DEFAULT_SURFACE_PINS,
   DEFAULT_THEME_MODE,
@@ -27,6 +28,7 @@ import {
   migrateLegacyTraySettings,
   loadPluginSettingsRecord,
   loadResetTimerDisplayMode,
+  loadShowHistoryInBar,
   loadStartOnLogin,
   loadSurfacePins,
   loadThemeMode,
@@ -58,6 +60,7 @@ type UseSettingsBootstrapArgs = {
   setStartOnLogin: (value: boolean) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
   setSurfacePins: (value: SurfacePin[]) => void
+  setShowHistoryInBar: (value: boolean) => void
   setLoadingForPlugins: (ids: string[]) => void
   setErrorForPlugins: (ids: string[], error: string) => void
   startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
@@ -76,6 +79,7 @@ export function useSettingsBootstrap({
   setStartOnLogin,
   setMenubarIconStyle,
   setSurfacePins,
+  setShowHistoryInBar,
   setLoadingForPlugins,
   setErrorForPlugins,
   startBatch,
@@ -210,6 +214,13 @@ export function useSettingsBootstrap({
           console.error("Failed to load surface pins:", error)
         }
 
+        let storedShowHistoryInBar = DEFAULT_SHOW_HISTORY_IN_BAR
+        try {
+          storedShowHistoryInBar = await loadShowHistoryInBar()
+        } catch (error) {
+          console.error("Failed to load history visibility:", error)
+        }
+
         if (isMounted) {
           setAutoUpdateInterval(storedInterval)
           setThemeMode(storedThemeMode)
@@ -221,6 +232,7 @@ export function useSettingsBootstrap({
           setStartOnLogin(storedStartOnLogin)
           setMenubarIconStyle(storedMenubarIconStyle)
           setSurfacePins(storedSurfacePins)
+          setShowHistoryInBar(storedShowHistoryInBar)
 
           if (!shouldShowOnboarding) {
             try {
@@ -253,6 +265,7 @@ export function useSettingsBootstrap({
     setLoadingForPlugins,
     setMenubarIconStyle,
     setSurfacePins,
+    setShowHistoryInBar,
     migrateLegacyTraySettings,
     setPluginSettings,
     setPluginsMeta,

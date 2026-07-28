@@ -63,6 +63,8 @@ function App() {
     setMenubarIconStyle,
     surfacePins,
     setSurfacePins,
+    showHistoryInBar,
+    setShowHistoryInBar,
     resetTimerDisplayMode,
     setResetTimerDisplayMode,
     timeFormatMode,
@@ -83,6 +85,8 @@ function App() {
       setMenubarIconStyle: state.setMenubarIconStyle,
       surfacePins: state.surfacePins,
       setSurfacePins: state.setSurfacePins,
+      showHistoryInBar: state.showHistoryInBar,
+      setShowHistoryInBar: state.setShowHistoryInBar,
       resetTimerDisplayMode: state.resetTimerDisplayMode,
       setResetTimerDisplayMode: state.setResetTimerDisplayMode,
       timeFormatMode: state.timeFormatMode,
@@ -147,6 +151,7 @@ function App() {
     setDisplayMode,
     setMenubarIconStyle,
     setSurfacePins,
+    setShowHistoryInBar,
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setGlobalShortcut,
@@ -170,6 +175,7 @@ function App() {
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setSurfacePins,
+    setShowHistoryInBar,
     setMenubarIconStyle,
   })
 
@@ -199,6 +205,7 @@ function App() {
     setTimeFormatMode,
     setMenubarIconStyle,
     setSurfacePins,
+    setShowHistoryInBar,
     scheduleTrayIconUpdate,
   })
 
@@ -233,6 +240,7 @@ function App() {
       pluginsMeta,
       pluginStates,
       providerStatuses,
+      showHistoryInBar,
     })
 
   const { handlePanelFocus } = useAppRefreshOrchestration({
@@ -251,6 +259,7 @@ function App() {
     setResetTimerDisplayMode,
     setMenubarIconStyle,
     setSurfacePins,
+    setShowHistoryInBar,
   })
 
   const handlePluginContextAction = useCallback(
@@ -311,6 +320,7 @@ function App() {
         onGlobalShortcutChange: handleGlobalShortcutChange,
         onStartOnLoginChange: handleStartOnLoginChange,
       }}
+      showHistoryInBar={showHistoryInBar}
     />
   )
 }

@@ -7,6 +7,7 @@ import {
   DEFAULT_MENUBAR_ICON_STYLE,
   DEFAULT_PLUGIN_SETTINGS,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
+  DEFAULT_SHOW_HISTORY_IN_BAR,
   DEFAULT_START_ON_LOGIN,
   DEFAULT_THEME_MODE,
   DEFAULT_TIME_FORMAT_MODE,
@@ -22,6 +23,7 @@ import {
   loadResetTimerDisplayMode,
   loadStartOnLogin,
   loadSurfacePins,
+  loadShowHistoryInBar,
   migrateLegacyTraySettings,
   loadThemeMode,
   loadTimeFormatMode,
@@ -37,6 +39,7 @@ import {
   saveResetTimerDisplayMode,
   saveStartOnLogin,
   saveSurfacePins,
+  saveShowHistoryInBar,
   saveThemeMode,
   saveTimeFormatMode,
 } from "@/lib/settings"
@@ -523,6 +526,14 @@ describe("settings", () => {
   it("falls back to default for invalid menubar icon style", async () => {
     storeState.set("menubarIconStyle", "invalid")
     await expect(loadMenubarIconStyle()).resolves.toBe(DEFAULT_MENUBAR_ICON_STYLE)
+  })
+
+  it("loads and saves History visibility with an enabled default", async () => {
+    await expect(loadShowHistoryInBar()).resolves.toBe(DEFAULT_SHOW_HISTORY_IN_BAR)
+
+    await saveShowHistoryInBar(false)
+
+    await expect(loadShowHistoryInBar()).resolves.toBe(false)
   })
 
   it("skips legacy tray migration when keys are absent", async () => {

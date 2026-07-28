@@ -33,6 +33,7 @@ type AppShellProps = {
   isPluginRefreshAvailable: (pluginId: string) => boolean
   onNavReorder: (orderedIds: string[]) => void
   appContentProps: AppContentActionProps
+  showHistoryInBar: boolean
 }
 
 const CONTEXT_MENU_WIDTH_PX = 224
@@ -52,6 +53,7 @@ export function AppShell({
   isPluginRefreshAvailable,
   onNavReorder,
   appContentProps,
+  showHistoryInBar,
 }: AppShellProps) {
   const { activeView, setActiveView, showAbout, setShowAbout } = useAppUiStore(
     useShallow((state) => ({
@@ -79,6 +81,7 @@ export function AppShell({
     setShowAbout,
     displayPlugins,
     navPluginCount: navPlugins.length,
+    showHistoryInBar,
     onPanelFocus,
   })
 
@@ -201,6 +204,7 @@ export function AppShell({
           <SideNav
             activeView={activeView}
             onViewChange={setActiveView}
+            showHistoryInBar={showHistoryInBar}
             plugins={navPlugins}
             onOpenSettings={() => {
               void openSettingsWindow({ tab: "general" }).catch(console.error)

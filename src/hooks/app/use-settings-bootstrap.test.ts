@@ -18,6 +18,7 @@ const {
   loadResetTimerDisplayModeMock,
   loadStartOnLoginMock,
   loadSurfacePinsMock,
+  loadShowHistoryInBarMock,
   loadThemeModeMock,
   loadTimeFormatModeMock,
   migrateLegacyTraySettingsMock,
@@ -40,6 +41,7 @@ const {
   loadResetTimerDisplayModeMock: vi.fn(),
   loadStartOnLoginMock: vi.fn(),
   loadSurfacePinsMock: vi.fn(),
+  loadShowHistoryInBarMock: vi.fn(),
   loadThemeModeMock: vi.fn(),
   loadTimeFormatModeMock: vi.fn(),
   migrateLegacyTraySettingsMock: vi.fn(),
@@ -65,6 +67,7 @@ vi.mock("@/lib/settings", () => ({
   DEFAULT_DISPLAY_MODE: "left",
   DEFAULT_GLOBAL_SHORTCUT: null,
   DEFAULT_MENUBAR_ICON_STYLE: "provider",
+  DEFAULT_SHOW_HISTORY_IN_BAR: true,
   DEFAULT_RESET_TIMER_DISPLAY_MODE: "relative",
   DEFAULT_START_ON_LOGIN: false,
   DEFAULT_SURFACE_PINS: [],
@@ -80,6 +83,7 @@ vi.mock("@/lib/settings", () => ({
   loadResetTimerDisplayMode: loadResetTimerDisplayModeMock,
   loadStartOnLogin: loadStartOnLoginMock,
   loadSurfacePins: loadSurfacePinsMock,
+  loadShowHistoryInBar: loadShowHistoryInBarMock,
   loadThemeMode: loadThemeModeMock,
   loadTimeFormatMode: loadTimeFormatModeMock,
   migrateLegacyTraySettings: migrateLegacyTraySettingsMock,
@@ -103,6 +107,7 @@ function createArgs() {
     setStartOnLogin: vi.fn(),
     setMenubarIconStyle: vi.fn(),
     setSurfacePins: vi.fn(),
+    setShowHistoryInBar: vi.fn(),
     setLoadingForPlugins: vi.fn(),
     setErrorForPlugins: vi.fn(),
     startBatch: vi.fn().mockResolvedValue(undefined),
@@ -128,6 +133,7 @@ describe("useSettingsBootstrap", () => {
     loadResetTimerDisplayModeMock.mockReset()
     loadStartOnLoginMock.mockReset()
     loadSurfacePinsMock.mockReset()
+    loadShowHistoryInBarMock.mockReset()
     loadThemeModeMock.mockReset()
     loadTimeFormatModeMock.mockReset()
     migrateLegacyTraySettingsMock.mockReset()
@@ -163,6 +169,7 @@ describe("useSettingsBootstrap", () => {
     loadMenubarIconStyleMock.mockResolvedValue("provider")
     loadStartOnLoginMock.mockResolvedValue(true)
     loadSurfacePinsMock.mockResolvedValue([])
+    loadShowHistoryInBarMock.mockResolvedValue(true)
     migrateLegacyTraySettingsMock.mockResolvedValue(undefined)
     savePluginSettingsMock.mockResolvedValue(undefined)
     getProbeEligiblePluginIdsMock.mockReturnValue(["codex"])
@@ -254,6 +261,7 @@ describe("useSettingsBootstrap", () => {
 
     await waitFor(() => {
       expect(args.setStartOnLogin).toHaveBeenCalledWith(true)
+      expect(args.setShowHistoryInBar).toHaveBeenCalledWith(true)
     })
   })
 
