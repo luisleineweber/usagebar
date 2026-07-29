@@ -3,6 +3,44 @@ import { describe, expect, it, vi } from "vitest"
 import { useProbeState } from "@/hooks/app/use-probe-state"
 
 describe("useProbeState", () => {
+  it("retains provider activity history when a later successful probe omits it", () => {
+    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
+    const history = {
+      version: 1 as const,
+      source: "ccusage",
+      timeZone: "system-local",
+      entries: [
+        {
+          periodStart: "2026-07-28T22:00:00.000Z",
+          periodEnd: "2026-07-29T22:00:00.000Z",
+          totalTokens: 42,
+        },
+      ],
+    }
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "/codex.svg",
+        lines: [{ type: "progress", label: "Session", used: 7, limit: 100, format: "percent" }],
+        history,
+      })
+    })
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "/codex.svg",
+        lines: [{ type: "progress", label: "Session", used: 8, limit: 100, format: "percent" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex.data?.history).toEqual(history)
+    expect(result.current.pluginStates.codex.lastSettledData?.history).toEqual(history)
+  })
+
   it("preserves settled data while a loaded provider refreshes", () => {
     const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
 

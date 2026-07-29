@@ -125,10 +125,24 @@ pub fn init(app_data_dir: &Path, known_plugin_ids: Vec<String>) {
     state.known_plugin_ids = known_plugin_ids;
 }
 
-pub fn cache_successful_output(output: &PluginOutput) {
+fn retain_cached_history(
+    output: &mut PluginOutput,
+    snapshots: &HashMap<String, CachedPluginSnapshot>,
+) {
+    if output.history.is_none() {
+        output.history = snapshots
+            .get(&output.provider_id)
+            .and_then(|snapshot| snapshot.history.clone());
+    }
+}
+
+pub fn cache_successful_output(output: &mut PluginOutput) {
     let fetched_at = time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap_or_default();
+
+    let mut state = cache_state().lock().expect("cache state poisoned");
+    retain_cached_history(output, &state.snapshots);
 
     let snapshot = CachedPluginSnapshot {
         provider_id: output.provider_id.clone(),
@@ -139,7 +153,6 @@ pub fn cache_successful_output(output: &PluginOutput) {
         fetched_at,
     };
 
-    let mut state = cache_state().lock().expect("cache state poisoned");
     state.snapshots.insert(output.provider_id.clone(), snapshot);
     save_cache(&state.app_data_dir, &state.snapshots);
 }
@@ -263,7 +276,7 @@ pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginS
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_engine::runtime::ProgressFormat;
+    use crate::plugin_engine::runtime::{ProgressFormat, UsageHistoryEntry};
 
     fn temp_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -285,6 +298,51 @@ mod tests {
             history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
         }
+    }
+
+    fn make_history() -> UsageHistory {
+        UsageHistory {
+            version: 1,
+            source: "ccusage".to_string(),
+            time_zone: "system-local".to_string(),
+            entries: vec![UsageHistoryEntry {
+                period_start: "2026-07-28T22:00:00Z".to_string(),
+                period_end: "2026-07-29T22:00:00Z".to_string(),
+                model: None,
+                project: None,
+                account: None,
+                cost_usd: None,
+                requests: None,
+                input_tokens: None,
+                output_tokens: None,
+                cache_read_tokens: None,
+                cache_creation_tokens: None,
+                reasoning_tokens: None,
+                total_tokens: Some(42.0),
+            }],
+        }
+    }
+
+    #[test]
+    fn successful_output_without_history_retains_cached_provider_history() {
+        let mut snapshot = make_snapshot("codex", "Codex");
+        snapshot.history = Some(make_history());
+        let snapshots = HashMap::from([("codex".to_string(), snapshot)]);
+        let mut output = PluginOutput {
+            provider_id: "codex".to_string(),
+            display_name: "Codex".to_string(),
+            plan: Some("Plus".to_string()),
+            lines: vec![],
+            icon_url: "codex.svg".to_string(),
+            error: None,
+            history: None,
+        };
+
+        retain_cached_history(&mut output, &snapshots);
+
+        let history = output.history.expect("cached history should be retained");
+        assert_eq!(history.source, "ccusage");
+        assert_eq!(history.entries.len(), 1);
     }
 
     #[test]

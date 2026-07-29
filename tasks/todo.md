@@ -2341,3 +2341,31 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bunx tsc --noEmit` -> passed.
 - T3 Preview visual verification was attempted with `preview_status` and `preview_open`; no automation host was available in the environment.
 - `git diff --check` -> passed; existing LF/CRLF normalization notices remain in the dirty worktree.
+
+# Alpha 6 intermittent missing Codex history chart, 2026-07-29
+
+## Executive Summary
+
+- Determine why a loaded Codex provider card can intermittently omit its history chart.
+- Audit the history cache lifecycle, including startup restore, refresh replacement, and failure retention.
+- Diagnose first; do not change runtime behavior until the exact failure is reproduced.
+
+## Acceptance Criteria
+
+- [x] A focused deterministic check reproduces the missing-chart state through the real history data path.
+- [x] The cache behavior and the root cause are documented from local evidence.
+- [x] A smallest root-cause fix and regression-test seam are identified.
+
+## Plan
+
+- [x] Trace Codex history from plugin response through normalization, state, cache, and rendering.
+- [x] Add or identify a focused red-capable regression check for the exact symptom.
+- [x] Test ranked hypotheses and record the diagnosis and recommended fix.
+
+## Verification Notes
+
+- Red repro: `bun run test -- src/hooks/app/use-probe-state.test.ts --run` failed because a successful Codex refresh without `history` replaced the previously settled output and removed its chart data.
+- Focused frontend suite: `bun run test -- src/hooks/app/use-probe-state.test.ts src/components/usage-report.test.tsx --run` -> 2 files, 10 tests passed.
+- Rust cache suite: `cargo test --manifest-path src-tauri/Cargo.toml --lib local_http_api::cache::tests` -> 9 passed.
+- `bun run check` -> passed: frontend formatting, ESLint, TypeScript, Rust formatting, and Clippy with `-D warnings`.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings only.

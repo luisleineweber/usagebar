@@ -103,16 +103,25 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
       setPluginStates((prev) => {
         const existing = prev[output.providerId]
         const capturedAt = Date.now()
+        const settledOutput =
+          !errorMessage && !output.history
+            ? {
+                ...output,
+                history: existing?.data?.history ?? existing?.lastSettledData?.history,
+              }
+            : output
         return {
           ...prev,
           [output.providerId]: {
-            data: errorMessage ? (existing?.data ?? existing?.lastSettledData ?? null) : output,
+            data: errorMessage
+              ? (existing?.data ?? existing?.lastSettledData ?? null)
+              : settledOutput,
             lastSettledData: errorMessage
               ? (existing?.lastSettledData ?? existing?.data ?? null)
-              : output,
+              : settledOutput,
             history: errorMessage
               ? existing?.history
-              : appendUsageHistory(existing?.history, output, capturedAt),
+              : appendUsageHistory(existing?.history, settledOutput, capturedAt),
             loading: false,
             error: errorMessage,
             errorCategory: errorMessage ? (output.error?.category ?? "unknown") : null,

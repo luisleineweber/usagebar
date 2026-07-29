@@ -2,6 +2,8 @@
 
 ## 2026-07-29
 
+- A successful provider refresh can still omit optional history when its secondary local-history runner fails; replacing the whole settled output then removes a valid chart and overwrites the disk snapshot. Fix: retain the last authoritative provider history when a successful refresh has no replacement history. Prevention: refresh-state and snapshot-cache tests must cover partial success independently from full probe errors.
+
 - Provider incident state was attached only to sidebar navigation, so a legitimate Statuspage dot had no matching explanation in the open provider card and appeared random. In addition, ambiguous `unknown` Statuspage responses were treated as incidents. Fix: carry `providerStatuses[id]` through the shared provider view model and only flag authoritative incident indicators. Prevention: status UI regressions must assert both the indicator surface and the provider detail/dashboard surface, including unknown input.
 
 ## 2026-07-28

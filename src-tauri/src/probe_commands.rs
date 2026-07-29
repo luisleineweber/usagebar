@@ -140,7 +140,7 @@ pub(crate) async fn start_probe_batch(
         let worker_handle = handle.clone();
 
         tauri::async_runtime::spawn(async move {
-            let output = match semaphore.acquire_owned().await {
+            let mut output = match semaphore.acquire_owned().await {
                 Ok(_permit) => {
                     match tauri::async_runtime::spawn_blocking(move || {
                         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -199,7 +199,7 @@ pub(crate) async fn start_probe_batch(
                     plugin_id,
                     output.lines.len()
                 );
-                local_http_api::cache_successful_output(&output);
+                local_http_api::cache_successful_output(&mut output);
             }
 
             let completion = coordinator
