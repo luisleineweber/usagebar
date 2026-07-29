@@ -53,13 +53,14 @@ export function useAppPluginViews({
         return {
           meta,
           ...state,
+          ...(providerStatuses[meta.id] ? { status: providerStatuses[meta.id] } : {}),
           data: state.data,
           loading: state.loading,
           error: state.error,
         }
       })
       .filter((plugin): plugin is DisplayPluginState => Boolean(plugin))
-  }, [pluginSettings, pluginStates, pluginsMeta])
+  }, [pluginSettings, pluginStates, pluginsMeta, providerStatuses])
 
   const displayPlugins = useMemo<DisplayPluginState[]>(
     () =>

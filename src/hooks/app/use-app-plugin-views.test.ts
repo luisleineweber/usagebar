@@ -65,6 +65,35 @@ describe("useAppPluginViews", () => {
     ])
   })
 
+  it("keeps a provider incident attached to the matching card view", () => {
+    const status = {
+      indicator: "minor" as const,
+      description: "Partially degraded service",
+      updatedAt: 1,
+      checkedAt: 2,
+    }
+
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "cursor",
+        setActiveView: vi.fn(),
+        pluginSettings: { order: ["cursor"], disabled: [] },
+        pluginsMeta: [createPluginMeta("cursor", "Cursor")],
+        pluginStates: {
+          cursor: {
+            ...defaultPluginState(),
+            data: { providerId: "cursor", displayName: "Cursor", lines: [], iconUrl: "/cursor.svg" },
+          },
+        },
+        providerStatuses: { cursor: status },
+      })
+    )
+
+    expect(result.current.navPlugins[0]?.status).toEqual(status)
+    expect(result.current.displayPlugins[0]?.status).toEqual(status)
+    expect(result.current.selectedPlugin?.status).toEqual(status)
+  })
+
   it("does not treat settings as a special active view anymore", () => {
     const pluginSettings: PluginSettings = {
       order: ["codex"],

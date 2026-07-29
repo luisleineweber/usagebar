@@ -21,7 +21,7 @@ type StatusPageResponse = {
 
 export function hasProviderStatusIssue(status: ProviderStatus | undefined): boolean {
   if (!status) return false
-  return status.indicator !== "none"
+  return status.indicator === "minor" || status.indicator === "major" || status.indicator === "maintenance"
 }
 
 export function providerStatusLabel(status: ProviderStatus | undefined): string | null {

@@ -78,8 +78,8 @@ describe("hasProviderStatusIssue", () => {
     expect(hasProviderStatusIssue({ indicator: "maintenance", description: null, updatedAt: null, checkedAt: 1 })).toBe(true)
   })
 
-  it("returns true for unknown indicator", () => {
-    expect(hasProviderStatusIssue({ indicator: "unknown", description: null, updatedAt: null, checkedAt: 1 })).toBe(true)
+  it("does not report an incident for an unknown indicator", () => {
+    expect(hasProviderStatusIssue({ indicator: "unknown", description: null, updatedAt: null, checkedAt: 1 })).toBe(false)
   })
 })
 

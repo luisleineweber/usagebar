@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-07-29
+
+- Provider incident state was attached only to sidebar navigation, so a legitimate Statuspage dot had no matching explanation in the open provider card and appeared random. In addition, ambiguous `unknown` Statuspage responses were treated as incidents. Fix: carry `providerStatuses[id]` through the shared provider view model and only flag authoritative incident indicators. Prevention: status UI regressions must assert both the indicator surface and the provider detail/dashboard surface, including unknown input.
+
 ## 2026-07-28
 
 - Static History navigation was always rendered and the panel minimum-height calculation undercounted it. Fix: persist an explicit History visibility preference, hide the nav item with a Home fallback, and count Home, optional History, and Settings separately. Prevention: when adding fixed navigation items, test both visibility states and their geometry.

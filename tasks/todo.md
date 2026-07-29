@@ -1,5 +1,32 @@
 ﻿# Active Todo
 
+# Provider incident dots are not explained consistently, 2026-07-29
+
+## Acceptance Criteria
+
+- [x] A provider status shown by the sidebar dot is propagated to the matching provider card/detail view.
+- [x] A current `minor`, `major`, or `maintenance` status remains visible with its provider; normal or unknown status renders no dot.
+- [x] A regression test reproduces the sidebar/card mismatch before the fix and passes after it.
+- [x] Focused tests, frontend checks, and diff validation pass; live Statuspage results are recorded separately from fixture coverage.
+
+## Plan
+
+- [x] Trace status-page fetching, provider-ID mapping, and sidebar/card rendering.
+- [x] Add a red regression test at the provider-view derivation seam.
+- [x] Propagate the status through the shared provider view model with the smallest fix.
+- [x] Run focused verification, frontend checks, and review the diff; record the lesson and breadcrumb.
+
+## Verification Notes
+
+- Red test before fix: `bun run test -- src/hooks/app/use-app-plugin-views.test.ts --run -t "keeps a provider incident attached"` -> failed because `displayPlugins[0].status` was `undefined` while the sidebar status was present.
+- Green regression test: same command -> 1 passed.
+- Red/green unknown-status regression: `bun run test -- src/lib/provider-status.test.ts --run -t "unknown indicator"` failed before the helper change and passes after it; ambiguous status data no longer creates a red dot.
+- Focused related suite: `bun run test -- src/hooks/app/use-app-plugin-views.test.ts src/lib/provider-status.test.ts src/hooks/app/use-provider-statuses.test.ts src/components/side-nav.test.tsx src/pages/overview.test.tsx src/pages/provider-detail.test.tsx --run` -> 65 passed.
+- `bun run check:frontend` -> passed: Prettier, ESLint, and TypeScript.
+- `bun run build` -> passed; existing Vite large-chunk warning remains.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings only.
+- Live Statuspage check: Cursor returned `minor` / `Partially Degraded Service`; the red dot is current provider status, not an arbitrary local state. Other checked Statuspage providers returned normal or unavailable responses.
+
 # History visibility setting in the bar, 2026-07-28
 
 ## Acceptance Criteria
