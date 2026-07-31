@@ -5,7 +5,7 @@ const CCUSAGE_LEGACY_VERSION: &str = "18.0.11";
 const CCUSAGE_LEGACY_CLAUDE_PACKAGE_NAME: &str = "ccusage";
 const CCUSAGE_LEGACY_CODEX_PACKAGE_NAME: &str = "@ccusage/codex";
 const CCUSAGE_LEGACY_CODEX_BIN_NAME: &str = "ccusage-codex";
-const CCUSAGE_TIMEOUT_SECS: u64 = 15;
+const CCUSAGE_TIMEOUT_SECS: u64 = 30;
 const CCUSAGE_POLL_INTERVAL_MS: u64 = 100;
 
 #[derive(Default, serde::Deserialize)]
@@ -240,6 +240,12 @@ fn ccusage_runner_candidates(kind: CcusageRunnerKind) -> Vec<String> {
             }
         }
         CcusageRunnerKind::PnpmDlx => {
+            #[cfg(target_os = "windows")]
+            candidates.extend(ccusage_windows_launcher_candidates(
+                "pnpm",
+                std::env::var_os("APPDATA").as_deref().map(Path::new),
+                std::env::var_os("PATH").as_deref(),
+            ));
             candidates.extend(
                 ["/opt/homebrew/bin/pnpm", "/usr/local/bin/pnpm", "pnpm"]
                     .into_iter()
@@ -247,6 +253,12 @@ fn ccusage_runner_candidates(kind: CcusageRunnerKind) -> Vec<String> {
             );
         }
         CcusageRunnerKind::YarnDlx => {
+            #[cfg(target_os = "windows")]
+            candidates.extend(ccusage_windows_launcher_candidates(
+                "yarn",
+                std::env::var_os("APPDATA").as_deref().map(Path::new),
+                std::env::var_os("PATH").as_deref(),
+            ));
             candidates.extend(
                 ["/opt/homebrew/bin/yarn", "/usr/local/bin/yarn", "yarn"]
                     .into_iter()
@@ -254,6 +266,12 @@ fn ccusage_runner_candidates(kind: CcusageRunnerKind) -> Vec<String> {
             );
         }
         CcusageRunnerKind::NpmExec => {
+            #[cfg(target_os = "windows")]
+            candidates.extend(ccusage_windows_launcher_candidates(
+                "npm",
+                std::env::var_os("APPDATA").as_deref().map(Path::new),
+                std::env::var_os("PATH").as_deref(),
+            ));
             candidates.extend(
                 ["/opt/homebrew/bin/npm", "/usr/local/bin/npm", "npm"]
                     .into_iter()
@@ -261,6 +279,12 @@ fn ccusage_runner_candidates(kind: CcusageRunnerKind) -> Vec<String> {
             );
         }
         CcusageRunnerKind::Npx => {
+            #[cfg(target_os = "windows")]
+            candidates.extend(ccusage_windows_launcher_candidates(
+                "npx",
+                std::env::var_os("APPDATA").as_deref().map(Path::new),
+                std::env::var_os("PATH").as_deref(),
+            ));
             candidates.extend(
                 ["/opt/homebrew/bin/npx", "/usr/local/bin/npx", "npx"]
                     .into_iter()
@@ -277,6 +301,36 @@ fn ccusage_runner_candidates(kind: CcusageRunnerKind) -> Vec<String> {
         unique.push(candidate);
     }
     unique
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn ccusage_windows_launcher_candidates(
+    command: &str,
+    app_data_dir: Option<&Path>,
+    search_path: Option<&OsStr>,
+) -> Vec<String> {
+    let mut directories = Vec::new();
+    if let Some(app_data_dir) = app_data_dir {
+        directories.push(app_data_dir.join("npm"));
+    }
+    if let Some(search_path) = search_path {
+        directories.extend(std::env::split_paths(search_path));
+    }
+
+    let mut candidates = Vec::new();
+    for directory in directories {
+        for extension in ["exe", "cmd", "bat"] {
+            let candidate = directory.join(format!("{command}.{extension}"));
+            if !candidate.is_file() {
+                continue;
+            }
+            let candidate = candidate.to_string_lossy().to_string();
+            if !candidates.contains(&candidate) {
+                candidates.push(candidate);
+            }
+        }
+    }
+    candidates
 }
 
 fn nvm_default_bin_path(home: &Path) -> Option<PathBuf> {

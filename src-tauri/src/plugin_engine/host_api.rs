@@ -2240,6 +2240,45 @@ mod tests {
     }
 
     #[test]
+    fn ccusage_windows_launcher_candidates_find_cmd_files() {
+        let test_dir = std::env::temp_dir().join(format!(
+            "usagebar-ccusage-windows-launchers-{}",
+            std::process::id()
+        ));
+        let app_data_dir = test_dir.join("app-data");
+        let npm_dir = app_data_dir.join("npm");
+        let path_dir = test_dir.join("path-bin");
+        let _ = std::fs::remove_dir_all(&test_dir);
+        std::fs::create_dir_all(&npm_dir).expect("create app data npm dir");
+        std::fs::create_dir_all(&path_dir).expect("create path dir");
+        let app_data_launcher = npm_dir.join("npx.cmd");
+        let path_launcher = path_dir.join("npx.cmd");
+        std::fs::write(&app_data_launcher, "@echo off\r\n").expect("write app data launcher");
+        std::fs::write(&path_launcher, "@echo off\r\n").expect("write path launcher");
+        let search_path = std::env::join_paths([&path_dir]).expect("join search path");
+
+        let candidates = ccusage_windows_launcher_candidates(
+            "npx",
+            Some(&app_data_dir),
+            Some(search_path.as_os_str()),
+        );
+
+        let _ = std::fs::remove_dir_all(&test_dir);
+        assert_eq!(
+            candidates,
+            vec![
+                app_data_launcher.to_string_lossy().to_string(),
+                path_launcher.to_string_lossy().to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn ccusage_timeout_allows_a_bounded_cold_package_start() {
+        const { assert!(CCUSAGE_TIMEOUT_SECS >= 30) };
+    }
+
+    #[test]
     fn ccusage_runner_args_include_expected_non_interactive_flags() {
         let opts = CcusageQueryOpts {
             provider: None,
