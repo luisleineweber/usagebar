@@ -1816,6 +1816,7 @@ describe("App", () => {
       })
 
       expect(state.hideWindowMock).toHaveBeenCalled()
+      expect(eventState.emitMock).toHaveBeenCalledWith("settings:closed")
     } finally {
       vi.useRealTimers()
     }

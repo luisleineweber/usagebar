@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { notifyPluginSettingsUpdated } from "@/lib/plugin-settings-events"
 import { showPanelForView } from "@/lib/panel-window"
 import { saveOnboardingInProgress, savePluginSettings, type PluginSettings } from "@/lib/settings"
+import { notifySettingsWindowClosed } from "@/lib/settings-window"
 
 type UseFirstRunOnboardingArgs = {
   pluginSettings: PluginSettings | null
@@ -68,6 +69,7 @@ export function useFirstRunOnboarding({
 
     try {
       await getCurrentWindow().hide()
+      await notifySettingsWindowClosed()
     } catch (error) {
       console.error("Failed to hide onboarding window:", error)
     }

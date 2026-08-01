@@ -3,6 +3,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const SETTINGS_WINDOW_LABEL: &str = "settings";
 const SETTINGS_OPEN_EVENT: &str = "settings:open";
+const SETTINGS_CLOSED_EVENT: &str = "settings:closed";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,7 +45,7 @@ pub fn open(
 
     if let Some(window) = app_handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
         app_handle
-            .emit_to(SETTINGS_WINDOW_LABEL, SETTINGS_OPEN_EVENT, payload)
+            .emit(SETTINGS_OPEN_EVENT, payload.clone())
             .map_err(|error| format!("failed to retarget settings window: {}", error))?;
         window
             .show()
@@ -68,10 +69,21 @@ pub fn open(
         .build()
         .map_err(|error| format!("failed to build settings window: {}", error))?;
 
+        let close_event_app_handle = app_handle.clone();
+        window.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                let _ = close_event_app_handle.emit(SETTINGS_CLOSED_EVENT, ());
+            }
+        });
+
         let _ = window.center();
         window
             .set_focus()
             .map_err(|error| format!("failed to focus settings window: {}", error))?;
+
+        app_handle
+            .emit(SETTINGS_OPEN_EVENT, payload)
+            .map_err(|error| format!("failed to announce settings window: {}", error))?;
     }
 
     Ok(())

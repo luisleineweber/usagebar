@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { currentMonitor } from "@tauri-apps/api/window"
 import type { ActiveView } from "@/components/side-nav"
+import { SETTINGS_WINDOW_CLOSED_EVENT, SETTINGS_WINDOW_OPEN_EVENT } from "@/lib/settings-window"
 
 const HOME_PANEL_MAX_HEIGHT_PX = 720
 const DETAIL_PANEL_MAX_HEIGHT_PX = 860
@@ -96,6 +97,7 @@ export function usePanel({
   const scheduledMeasureFrameRef = useRef<number | null>(null)
   const autoHideTimerRef = useRef<number | null>(null)
   const scheduleAutoHideRef = useRef<() => void>(() => {})
+  const settingsWindowOpenRef = useRef(false)
   const tweenTimeoutsRef = useRef<number[]>([])
   const onPanelFocusRef = useRef(onPanelFocus)
 
@@ -143,6 +145,7 @@ export function usePanel({
 
     const scheduleAutoHide = () => {
       clearAutoHideTimer()
+      if (settingsWindowOpenRef.current) return
       autoHideTimerRef.current = window.setTimeout(() => {
         autoHideTimerRef.current = null
         void invoke("hide_panel").catch((error) => {
@@ -232,6 +235,26 @@ export function usePanel({
         return
       }
       unlisteners.push(u2)
+
+      const u3 = await listen(SETTINGS_WINDOW_OPEN_EVENT, () => {
+        settingsWindowOpenRef.current = true
+        scheduleAutoHideRef.current()
+      })
+      if (cancelled) {
+        u3()
+        return
+      }
+      unlisteners.push(u3)
+
+      const u4 = await listen(SETTINGS_WINDOW_CLOSED_EVENT, () => {
+        settingsWindowOpenRef.current = false
+        scheduleAutoHideRef.current()
+      })
+      if (cancelled) {
+        u4()
+        return
+      }
+      unlisteners.push(u4)
     }
 
     void setup()

@@ -13,7 +13,12 @@ import { useSettingsSystemActions } from "@/hooks/app/use-settings-system-action
 import { useSettingsTheme } from "@/hooks/app/use-settings-theme"
 import { useFirstRunOnboarding } from "@/hooks/app/use-first-run-onboarding"
 import { buildTraySettingsPreview } from "@/lib/tray-preview"
-import { parseSettingsWindowLocation, type SettingsWindowTab } from "@/lib/settings-window"
+import {
+  notifySettingsWindowClosed,
+  parseSettingsWindowLocation,
+  SETTINGS_WINDOW_OPEN_EVENT,
+  type SettingsWindowTab,
+} from "@/lib/settings-window"
 import { useProviderConfigActions } from "@/hooks/app/use-provider-config-actions"
 import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
@@ -220,6 +225,7 @@ export function SettingsWindowApp() {
         autoCloseTimerRef.current = null
         void getCurrentWindow()
           .hide()
+          .then(() => notifySettingsWindowClosed())
           .catch((error) => {
             console.error("Failed to auto-close settings window:", error)
           })
@@ -271,7 +277,7 @@ export function SettingsWindowApp() {
   useEffect(() => {
     let unlisten: (() => void) | undefined
 
-    void listen<SettingsOpenPayload>("settings:open", (event) => {
+    void listen<SettingsOpenPayload>(SETTINGS_WINDOW_OPEN_EVENT, (event) => {
       scheduleAutoCloseRef.current()
       const nextTab = event.payload.tab === "providers" ? "providers" : "general"
       setSettingsTab(nextTab)
@@ -298,6 +304,7 @@ export function SettingsWindowApp() {
         void (async () => {
           try {
             await getCurrentWindow().hide()
+            await notifySettingsWindowClosed()
           } catch (error) {
             console.error("Failed to hide settings window before tray handoff:", error)
           }

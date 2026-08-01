@@ -1,4 +1,8 @@
 import { invoke } from "@tauri-apps/api/core"
+import { emit } from "@tauri-apps/api/event"
+
+export const SETTINGS_WINDOW_OPEN_EVENT = "settings:open"
+export const SETTINGS_WINDOW_CLOSED_EVENT = "settings:closed"
 
 export type SettingsWindowTab = "general" | "providers"
 
@@ -26,4 +30,8 @@ export async function openSettingsWindow(target: SettingsWindowTarget = {}): Pro
     tab: target.tab ?? "general",
     providerId: target.providerId ?? null,
   })
+}
+
+export async function notifySettingsWindowClosed(): Promise<void> {
+  await emit(SETTINGS_WINDOW_CLOSED_EVENT)
 }
