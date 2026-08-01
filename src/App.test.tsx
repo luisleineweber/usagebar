@@ -261,7 +261,8 @@ vi.mock("@/lib/tray-bars-icon", async () => {
 })
 
 vi.mock("@/lib/tray-number-icon", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/tray-number-icon")>("@/lib/tray-number-icon")
+  const actual =
+    await vi.importActual<typeof import("@/lib/tray-number-icon")>("@/lib/tray-number-icon")
   return {
     ...actual,
     getWindowsTrayIconSizePx: () => 32,
@@ -1142,12 +1143,14 @@ describe("App", () => {
     expect(state.saveDisplayModeMock).toHaveBeenCalledWith("used")
   })
 
-  it("keeps Windows tray style controls and explains the compact plugin mode", async () => {
+  it("keeps Windows tray style controls and explains the compact mode", async () => {
     renderSettingsWindow()
     expect(await screen.findByText("Tray Icon")).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: "Bars" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Compact" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Stacked bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
-    expect(screen.getByText(/Plugin zeigt unter Windows die kompakte Zahl/)).toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "Merged" })).not.toBeInTheDocument()
+    expect(screen.getByText(/Compact shows remaining usage as a number/)).toBeInTheDocument()
   })
 
   it("keeps the Settings window from acquiring the native tray handle", async () => {

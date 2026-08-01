@@ -256,7 +256,7 @@ describe("useSettingsDisplayActions", () => {
     )
 
     act(() => {
-      result.current.handleMenubarIconStyleChange("merged")
+      result.current.handleMenubarIconStyleChange("bars")
     })
 
     await waitFor(() => {

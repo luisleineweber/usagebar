@@ -508,6 +508,15 @@ describe("settings", () => {
     await expect(loadMenubarIconStyle()).resolves.toBe("bars")
   })
 
+  it("migrates the removed merged menubar style to stacked bars", async () => {
+    storeState.set("menubarIconStyle", "merged")
+
+    await expect(loadMenubarIconStyle()).resolves.toBe("bars")
+
+    expect(storeState.get("menubarIconStyle")).toBe("bars")
+    expect(storeSaveMock).toHaveBeenCalledOnce()
+  })
+
   it("saves menubar icon style", async () => {
     await saveMenubarIconStyle("bars")
     await expect(loadMenubarIconStyle()).resolves.toBe("bars")

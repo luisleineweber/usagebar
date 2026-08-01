@@ -213,15 +213,16 @@ describe("SettingsPage", () => {
     expect(onShowHistoryInBarChange).toHaveBeenCalledWith(false)
   })
 
-  it("keeps all tray style controls available on Windows", async () => {
+  it("keeps the current tray style controls available on Windows", async () => {
     const user = userEvent.setup()
     const onMenubarIconStyleChange = vi.fn()
     render(<TestHarness onMenubarIconStyleChange={onMenubarIconStyleChange} />)
 
-    expect(screen.getByRole("radio", { name: "Bars" })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: "Merged" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Compact" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Stacked bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
-    await user.click(screen.getByRole("radio", { name: "Bars" }))
+    expect(screen.queryByRole("radio", { name: "Merged" })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("radio", { name: "Stacked bars" }))
     expect(onMenubarIconStyleChange).toHaveBeenCalledWith("bars")
   })
 

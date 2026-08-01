@@ -25,7 +25,7 @@ export type ResetTimerDisplayMode = "relative" | "absolute"
 
 export type TimeFormatMode = "auto" | "12h" | "24h"
 
-export type MenubarIconStyle = "provider" | "merged" | "bars" | "donut"
+export type MenubarIconStyle = "provider" | "bars" | "donut"
 
 export type SurfacePin = {
   providerId: string
@@ -71,13 +71,12 @@ const ACCENT_COLORS: AccentColor[] = ["#bfff00", "#86c5ff", "#c1121f", "#eb4600"
 const DISPLAY_MODES: DisplayMode[] = ["used", "left"]
 const RESET_TIMER_DISPLAY_MODES: ResetTimerDisplayMode[] = ["relative", "absolute"]
 const TIME_FORMAT_MODES: TimeFormatMode[] = ["auto", "12h", "24h"]
-const MENUBAR_ICON_STYLES: MenubarIconStyle[] = ["provider", "merged", "donut", "bars"]
+const MENUBAR_ICON_STYLES: MenubarIconStyle[] = ["provider", "bars", "donut"]
 
 export const MENUBAR_ICON_STYLE_OPTIONS: { value: MenubarIconStyle; label: string }[] = [
-  { value: "provider", label: "Plugin" },
-  { value: "merged", label: "Merged" },
+  { value: "provider", label: "Compact" },
+  { value: "bars", label: "Stacked bars" },
   { value: "donut", label: "Donut" },
-  { value: "bars", label: "Bars" },
 ]
 
 export const AUTO_UPDATE_OPTIONS: { value: AutoUpdateIntervalMinutes; label: string }[] =
@@ -362,6 +361,11 @@ function isMenubarIconStyle(value: unknown): value is MenubarIconStyle {
 
 export async function loadMenubarIconStyle(): Promise<MenubarIconStyle> {
   const stored = await store.get<unknown>(MENUBAR_ICON_STYLE_KEY)
+  if (stored === "merged") {
+    await store.set(MENUBAR_ICON_STYLE_KEY, "bars")
+    await store.save()
+    return "bars"
+  }
   if (isMenubarIconStyle(stored)) return stored
   return DEFAULT_MENUBAR_ICON_STYLE
 }

@@ -70,7 +70,10 @@ function getVisualBarFraction(fraction: number): number {
   return clamped
 }
 
-export function getBarFillLayout(trackW: number, fraction: number): {
+export function getBarFillLayout(
+  trackW: number,
+  fraction: number
+): {
   fillW: number
   remainderDrawW: number
   dividerX: number | null
@@ -104,11 +107,7 @@ function estimateTextWidthPx(text: string, fontSize: number): number {
   return Math.ceil(text.length * fontSize * 0.62 + fontSize * 0.2)
 }
 
-function getSvgLayout(args: {
-  sizePx: number
-  style: MenubarIconStyle
-  percentText?: string
-}): {
+function getSvgLayout(args: { sizePx: number; style: MenubarIconStyle; percentText?: string }): {
   width: number
   height: number
   pad: number
@@ -175,7 +174,7 @@ export function makeTrayBarsSvg(args: {
 }): string {
   const { bars, sizePx, style = "provider", percentText, providerIconUrl } = args
   const foregroundColor = escapeXmlText(args.foregroundColor ?? TRAY_TEMPLATE_FOREGROUND)
-  const barsForStyle = style === "bars" || style === "merged" ? bars : bars.slice(0, 1)
+  const barsForStyle = style === "bars" ? bars : bars.slice(0, 1)
   // Intentionally render a single empty track when bars mode has no data yet
   // so the tray icon keeps a stable shape during loading/initialization.
   const n = Math.max(1, Math.min(4, barsForStyle.length || 1))
@@ -197,7 +196,10 @@ export function makeTrayBarsSvg(args: {
 
   if (style === "provider") {
     const hasText = typeof text === "string" && text.length > 0
-    const iconSize = Math.max(6, Math.round(sizePx - 2 * layout.pad * 0.5) - (hasText ? PROVIDER_ICON_SHRINK_PX : 0))
+    const iconSize = Math.max(
+      6,
+      Math.round(sizePx - 2 * layout.pad * 0.5) - (hasText ? PROVIDER_ICON_SHRINK_PX : 0)
+    )
     const x = layout.barsX
     const y = Math.round((height - iconSize) / 2) + (hasText ? PROVIDER_ICON_VERTICAL_NUDGE_PX : 0)
     const href = typeof providerIconUrl === "string" ? providerIconUrl.trim() : ""
@@ -255,7 +257,7 @@ export function makeTrayBarsSvg(args: {
       )
     }
   } else {
-    // style === "bars" | "merged"
+    // style === "bars"
     const trackOpacity = BARS_TRACK_OPACITY
     const remainderOpacity = BARS_REMAINDER_OPACITY
     const fillOpacity = BARS_FILL_OPACITY
@@ -298,7 +300,9 @@ export function makeTrayBarsSvg(args: {
               leftRadius: rx,
               rightRadius: movingEdgeRadius,
             })
-            parts.push(`<path d="${fillPath}" fill="${foregroundColor}" opacity="${fillOpacity}" />`)
+            parts.push(
+              `<path d="${fillPath}" fill="${foregroundColor}" opacity="${fillOpacity}" />`
+            )
           }
         }
 
@@ -312,7 +316,9 @@ export function makeTrayBarsSvg(args: {
             leftRadius: Math.max(0, Math.floor(rx * 0.2)),
             rightRadius: rx,
           })
-          parts.push(`<path d="${remainderPath}" fill="${foregroundColor}" opacity="${remainderOpacity}" />`)
+          parts.push(
+            `<path d="${remainderPath}" fill="${foregroundColor}" opacity="${remainderOpacity}" />`
+          )
         }
       }
     }
@@ -330,7 +336,9 @@ export function makeTrayBarsSvg(args: {
     const cy = height - r - 1
     parts.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${foregroundColor}" opacity="1" />`)
     if (args.statusIndicator === "major" || args.statusIndicator === "unknown") {
-      parts.push(`<rect x="${cx - 0.7}" y="${cy - r + 1.5}" width="1.4" height="${Math.max(2, r)}" rx="0.7" fill="white" opacity="0.95" />`)
+      parts.push(
+        `<rect x="${cx - 0.7}" y="${cy - r + 1.5}" width="1.4" height="${Math.max(2, r)}" rx="0.7" fill="white" opacity="0.95" />`
+      )
       parts.push(`<circle cx="${cx}" cy="${cy + r - 2}" r="0.8" fill="white" opacity="0.95" />`)
     }
   }
@@ -394,7 +402,15 @@ export async function renderTrayBarsIcon(args: {
   statusIndicator?: ProviderStatusIndicator
   foregroundColor?: string
 }): Promise<Image> {
-  const { bars, sizePx, style = "provider", percentText, providerIconUrl, statusIndicator, foregroundColor } = args
+  const {
+    bars,
+    sizePx,
+    style = "provider",
+    percentText,
+    providerIconUrl,
+    statusIndicator,
+    foregroundColor,
+  } = args
   const text = normalizePercentText(percentText)
   const svg = makeTrayBarsSvg({
     bars,

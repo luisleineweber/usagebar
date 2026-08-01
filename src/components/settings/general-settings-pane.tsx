@@ -248,8 +248,8 @@ export function GeneralSettingsPane({
           })}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Plugin zeigt unter Windows die kompakte Zahl; Bars, Merged und Donut bleiben als
-          alternative Tray-Ansichten verfügbar.
+          On Windows, Compact shows remaining usage as a number. Stacked bars compare multiple
+          providers, while Donut combines a provider icon with its usage.
         </p>
         <SurfacePinSettings
           plugins={plugins}
