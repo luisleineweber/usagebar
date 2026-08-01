@@ -36,7 +36,7 @@ export function OnboardingCookieField({
   const saveCookie = async () => {
     const value = cookieHeader.trim()
     if (!value) {
-      setSaveError("Bitte füge den vollständigen Cookie-Header ein.")
+      setSaveError("Enter the complete Cookie header.")
       return
     }
 
@@ -48,7 +48,7 @@ export function OnboardingCookieField({
       onRetry()
     } catch (error) {
       console.error(`Failed to save ${providerName} onboarding cookie:`, error)
-      setSaveError(getErrorMessage(error, "Der Cookie konnte nicht gespeichert werden."))
+      setSaveError(getErrorMessage(error, "Unable to save the Cookie header."))
     } finally {
       setIsSaving(false)
     }
@@ -57,9 +57,9 @@ export function OnboardingCookieField({
   return (
     <div className="mt-3 space-y-3 rounded-md border border-border/70 bg-muted/20 p-3">
       <div>
-        <p className="text-sm font-medium">So stellst du die Verbindung her</p>
+        <p className="text-sm font-medium">Connect this provider</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Wähle eine Variante. Die Schritte zeigen dir genau, welchen Wert du einfügen musst.
+          Choose one option. The steps show which value to enter.
         </p>
       </div>
       <div className="space-y-3">
@@ -103,7 +103,7 @@ export function OnboardingCookieField({
       ) : null}
       <Button type="button" size="xs" onClick={() => void saveCookie()} disabled={isSaving}>
         <KeyRound className="size-3" />
-        {isSaving ? "Cookie wird gespeichert…" : "Cookie speichern und erneut prüfen"}
+        {isSaving ? "Saving Cookie header…" : "Save Cookie header and check again"}
       </Button>
     </div>
   )

@@ -655,12 +655,12 @@ describe("App", () => {
     renderSettingsWindow()
 
     expect(
-      await screen.findByRole("heading", { name: "Was möchtest du verbinden?" })
+      await screen.findByRole("heading", { name: "What do you want to connect?" })
     ).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByRole("checkbox", { name: "Codex auswählen" })).toBeChecked()
+      expect(screen.getByRole("checkbox", { name: "Select Codex" })).toBeChecked()
     })
-    await userEvent.click(screen.getByRole("button", { name: "Verbindungen prüfen" }))
+    await userEvent.click(screen.getByRole("button", { name: "Check connections" }))
 
     expect(state.savePluginSettingsMock).toHaveBeenCalledWith({
       order: ["codex", "claude", "cursor"],
@@ -683,8 +683,8 @@ describe("App", () => {
         })
       })
     }
-    await userEvent.click(screen.getByRole("button", { name: "Einrichtung abschließen" }))
-    await userEvent.click(screen.getByRole("button", { name: "UsageBar öffnen" }))
+    await userEvent.click(screen.getByRole("button", { name: "Complete setup" }))
+    await userEvent.click(screen.getByRole("button", { name: "Open UsageBar" }))
 
     expect(eventState.emitMock).toHaveBeenCalledWith("plugin-settings:updated", {
       order: ["codex", "claude", "cursor"],

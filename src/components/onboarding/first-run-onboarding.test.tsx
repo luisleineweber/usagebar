@@ -55,20 +55,22 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    expect(screen.getByRole("heading", { name: "Was möchtest du verbinden?" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "What do you want to connect?" })
+    ).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getByRole("checkbox", { name: "Codex auswählen" })).toBeChecked()
-      expect(screen.getByRole("checkbox", { name: "Claude auswählen" })).toBeChecked()
-      expect(screen.getByRole("checkbox", { name: "Cursor auswählen" })).toBeChecked()
+      expect(screen.getByRole("checkbox", { name: "Select Codex" })).toBeChecked()
+      expect(screen.getByRole("checkbox", { name: "Select Claude" })).toBeChecked()
+      expect(screen.getByRole("checkbox", { name: "Select Cursor" })).toBeChecked()
     })
 
-    await userEvent.click(screen.getByRole("button", { name: "Verbindungen prüfen" }))
+    await userEvent.click(screen.getByRole("button", { name: "Check connections" }))
 
     expect(onConnect).toHaveBeenCalledWith(
       ["codex", "claude", "cursor"],
       ["codex", "claude", "cursor"]
     )
-    expect(await screen.findAllByText("Noch nicht eingerichtet")).toHaveLength(3)
+    expect(await screen.findAllByText("Not set up")).toHaveLength(3)
   })
 
   it("offers other supported providers without selecting them by default", async () => {
@@ -81,9 +83,7 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    expect(
-      await screen.findByRole("checkbox", { name: "GitHub Copilot auswählen" })
-    ).not.toBeChecked()
+    expect(await screen.findByRole("checkbox", { name: "Select GitHub Copilot" })).not.toBeChecked()
   })
 
   it("explains the Claude cookie fallback after a missing-credential failure", async () => {
@@ -97,9 +97,9 @@ describe("FirstRunOnboarding", () => {
       />
     )
     await waitFor(() =>
-      expect(screen.getByRole("checkbox", { name: "Claude auswählen" })).toBeChecked()
+      expect(screen.getByRole("checkbox", { name: "Select Claude" })).toBeChecked()
     )
-    await userEvent.click(screen.getByRole("button", { name: "Verbindungen prüfen" }))
+    await userEvent.click(screen.getByRole("button", { name: "Check connections" }))
 
     rerender(
       <FirstRunOnboarding
@@ -117,8 +117,8 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    expect(screen.getByText("Aktualisierung fehlgeschlagen")).toBeInTheDocument()
-    expect(screen.getByText(/importiere den claude\.ai-Cookie aus Edge/)).toBeInTheDocument()
+    expect(screen.getByText("Refresh failed")).toBeInTheDocument()
+    expect(screen.getByText(/import the claude\.ai Cookie header from Edge/)).toBeInTheDocument()
   })
 
   it("shows the final success moment and opens UsageBar", async () => {
@@ -142,14 +142,14 @@ describe("FirstRunOnboarding", () => {
     )
 
     await waitFor(() =>
-      expect(screen.getByRole("checkbox", { name: "Codex auswählen" })).toBeChecked()
+      expect(screen.getByRole("checkbox", { name: "Select Codex" })).toBeChecked()
     )
-    await userEvent.click(screen.getByRole("button", { name: "Verbindungen prüfen" }))
-    expect(screen.queryByText(/Öffne ein Terminal/)).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole("button", { name: "Einrichtung abschließen" }))
+    await userEvent.click(screen.getByRole("button", { name: "Check connections" }))
+    expect(screen.queryByText(/Open a terminal/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Complete setup" }))
 
-    expect(screen.getByRole("heading", { name: "UsageBar ist bereit" })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole("button", { name: "UsageBar öffnen" }))
+    expect(screen.getByRole("heading", { name: "UsageBar is ready" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Open UsageBar" }))
     expect(onFinish).toHaveBeenCalledTimes(1)
   })
 
@@ -164,7 +164,7 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    await userEvent.click(await screen.findByRole("button", { name: /Verbindungen pr.fen/ }))
+    await userEvent.click(await screen.findByRole("button", { name: /Check connections/ }))
     rerender(
       <FirstRunOnboarding
         providers={providers.map((item) =>
@@ -185,8 +185,8 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    await userEvent.click(screen.getByRole("button", { name: "Auswahl ändern" }))
-    await userEvent.click(screen.getByRole("button", { name: /Verbindungen pr.fen/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Change selection" }))
+    await userEvent.click(screen.getByRole("button", { name: /Check connections/ }))
 
     expect(onConnect).toHaveBeenNthCalledWith(
       2,
@@ -213,9 +213,9 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    await userEvent.click(await screen.findByRole("button", { name: /Verbindungen pr.fen/ }))
-    await userEvent.click(screen.getByRole("button", { name: "Claude weitere Aktionen" }))
-    await userEvent.click(screen.getByRole("menuitem", { name: "Provider entfernen" }))
+    await userEvent.click(await screen.findByRole("button", { name: /Check connections/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Claude more actions" }))
+    await userEvent.click(screen.getByRole("menuitem", { name: "Remove provider" }))
 
     expect(screen.queryByText("Claude credentials not found")).not.toBeInTheDocument()
     expect(onConnect).toHaveBeenLastCalledWith(["codex", "cursor"], [])
@@ -243,11 +243,11 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    await userEvent.click(await screen.findByRole("button", { name: /Verbindungen pr.fen/ }))
+    await userEvent.click(await screen.findByRole("button", { name: /Check connections/ }))
 
-    expect(screen.getByText("So stellst du die Verbindung her")).toBeInTheDocument()
-    expect(screen.getByText("Variante 1: Mit Ollama anmelden (empfohlen)")).toBeInTheDocument()
-    expect(screen.getByText("Variante 2: Cookie aus dem Browser")).toBeInTheDocument()
+    expect(screen.getByText("Connect this provider")).toBeInTheDocument()
+    expect(screen.getByText("Option 1: Sign in to Ollama (recommended)")).toBeInTheDocument()
+    expect(screen.getByText("Option 2: Copy the Cookie header from a browser")).toBeInTheDocument()
     expect(screen.getByText(/ollama\.com\/settings/)).toBeInTheDocument()
     expect(screen.getByText(/ollama signin/)).toBeInTheDocument()
 
@@ -256,7 +256,7 @@ describe("FirstRunOnboarding", () => {
       "session=abc;"
     )
     await userEvent.click(
-      screen.getByRole("button", { name: "Cookie speichern und erneut prüfen" })
+      screen.getByRole("button", { name: "Save Cookie header and check again" })
     )
 
     expect(onSecretSave).toHaveBeenCalledWith("ollama", "cookieHeader", "session=abc;")
@@ -283,9 +283,9 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    await userEvent.click(await screen.findByRole("button", { name: /Verbindungen pr.fen/ }))
+    await userEvent.click(await screen.findByRole("button", { name: /Check connections/ }))
 
-    expect(screen.queryByText("Cookie als Fallback speichern")).not.toBeInTheDocument()
+    expect(screen.queryByText("Connect this provider")).not.toBeInTheDocument()
   })
 
   it("shows a recoverable selection error", async () => {
@@ -301,11 +301,9 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    await userEvent.click(await screen.findByRole("button", { name: /Verbindungen pr.fen/ }))
+    await userEvent.click(await screen.findByRole("button", { name: /Check connections/ }))
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Die Auswahl konnte nicht gespeichert werden."
-    )
+    expect(await screen.findByRole("alert")).toHaveTextContent("Unable to save the selection.")
   })
 
   it("shows a recoverable finish error", async () => {
@@ -321,12 +319,10 @@ describe("FirstRunOnboarding", () => {
       />
     )
 
-    await userEvent.click(await screen.findByRole("button", { name: /Verbindungen pr.fen/ }))
-    await userEvent.click(screen.getByRole("button", { name: /Einrichtung abschlie.en/ }))
-    await userEvent.click(screen.getByRole("button", { name: /UsageBar .ffnen/ }))
+    await userEvent.click(await screen.findByRole("button", { name: /Check connections/ }))
+    await userEvent.click(screen.getByRole("button", { name: /Complete setup/ }))
+    await userEvent.click(screen.getByRole("button", { name: /Open UsageBar/ }))
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Der Abschluss konnte nicht gespeichert werden."
-    )
+    expect(await screen.findByRole("alert")).toHaveTextContent("Unable to save the setup.")
   })
 })

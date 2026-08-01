@@ -35,13 +35,13 @@ export function ProviderRetryAction({ providerName, onRetry, onRemove }: Provide
       <div className="inline-flex">
         <Button variant="outline" size="sm" className="rounded-r-none border-r-0" onClick={onRetry}>
           <RefreshCw />
-          Erneut prüfen
+          Check again
         </Button>
         <Button
           variant="outline"
           size="sm"
           className="rounded-l-none px-2"
-          aria-label={`${providerName} weitere Aktionen`}
+          aria-label={`${providerName} more actions`}
           aria-haspopup="menu"
           aria-expanded={isOpen}
           onClick={() => setIsOpen((current) => !current)}
@@ -52,7 +52,7 @@ export function ProviderRetryAction({ providerName, onRetry, onRemove }: Provide
       {isOpen ? (
         <div
           role="menu"
-          aria-label={`${providerName} Aktionen`}
+          aria-label={`${providerName} actions`}
           className="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
         >
           <button
@@ -64,7 +64,7 @@ export function ProviderRetryAction({ providerName, onRetry, onRemove }: Provide
               onRemove()
             }}
           >
-            Provider entfernen
+            Remove provider
           </button>
         </div>
       ) : null}

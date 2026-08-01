@@ -29,32 +29,31 @@ const PROVIDER_GUIDANCE: Record<string, ProviderOnboardingGuidance> = {
   codex: {
     recommended: true,
     steps: [
-      "Öffne ein Terminal und führe codex login aus.",
-      "Melde dich mit dem ChatGPT-Konto an, dessen Limits du sehen möchtest.",
-      "UsageBar liest die lokale Codex-Anmeldung und prüft die Verbindung.",
+      "Open a terminal and run `codex login`.",
+      "Sign in with the ChatGPT account that you want to track.",
+      "UsageBar reads the local Codex sign-in and checks the connection.",
     ],
     credentialHelp:
-      "Führe codex login aus und versuche es erneut. Ein ChatGPT-Cookie ist nur für zusätzliche Dashboard-Historie nötig, nicht für die grundlegenden Limits.",
+      "Run `codex login`, then try again. A ChatGPT Cookie header is only needed for extra dashboard history. It is not needed for basic limits.",
   },
   claude: {
     recommended: true,
     steps: [
-      "Starte Claude Code im Terminal mit claude.",
-      "Folge beim ersten Start der Anmeldung im Browser. Nutze in Claude Code bei Bedarf /login.",
-      "Falls lokale Zugangsdaten nicht lesbar sind, kannst du später einen claude.ai-Cookie importieren.",
+      "Start Claude Code in a terminal with `claude`.",
+      "Follow the browser sign-in steps on first start. If needed, run `/login` in Claude Code.",
+      "If UsageBar cannot read the local credentials, you can import a claude.ai Cookie header later.",
     ],
     credentialHelp:
-      "Starte Claude Code mit claude und nutze dort /login. Wenn die lokale Anmeldung nicht gelesen werden kann, öffne später die Provider-Einstellungen und importiere den claude.ai-Cookie aus Edge oder trage den Cookie-Header manuell ein.",
+      "Start Claude Code and run `/login`. If UsageBar cannot read the local sign-in, open Provider Settings later and import the claude.ai Cookie header from Edge, or enter the header manually.",
   },
   cursor: {
     recommended: true,
     steps: [
-      "Öffne Cursor und melde dich mit deinem Konto an.",
-      "Lass Cursor einmal vollständig starten, damit die lokale Sitzung gespeichert ist.",
-      "UsageBar erkennt die Desktop- oder CLI-Anmeldung automatisch.",
+      "Open Cursor and sign in.",
+      "Leave Cursor open until it saves the local session.",
+      "UsageBar detects the desktop or CLI sign-in.",
     ],
-    credentialHelp:
-      "Melde dich in Cursor Desktop oder über die Cursor CLI an, starte Cursor einmal neu und versuche es erneut.",
+    credentialHelp: "Sign in to Cursor Desktop or the Cursor CLI. Restart Cursor, then try again.",
   },
 }
 
@@ -66,12 +65,12 @@ function getProviderGuidance(provider: SettingsPluginState): ProviderOnboardingG
     recommended: false,
     steps: [
       definition.connectHint ?? definition.statusHint,
-      `Aktiviere ${provider.name} und starte die Verbindungsprüfung.`,
-      "Weitere Zugangsdaten kannst du später in den Provider-Einstellungen ergänzen.",
+      `Enable ${provider.name}, then start the connection check.`,
+      "Add more credentials later in Provider Settings.",
     ],
     credentialHelp:
       definition.connectHint ??
-      "Öffne die Provider-Einstellungen, ergänze die benötigten Zugangsdaten und versuche es erneut.",
+      "Open Provider Settings, add the required credentials, then try again.",
   }
 }
 
@@ -92,16 +91,16 @@ function getFailureHelp(providerId: string, category?: ProbeErrorCategory | null
   ) {
     return (
       PROVIDER_GUIDANCE[providerId]?.credentialHelp ??
-      "Öffne die Provider-Einstellungen, ergänze die benötigten Zugangsdaten und versuche es erneut."
+      "Open Provider Settings, add the required credentials, then try again."
     )
   }
   if (category === "credentialExpired" || category === "credentialInvalid") {
-    return "Die gespeicherte Anmeldung ist abgelaufen oder ungültig. Melde dich beim Provider erneut an und wiederhole die Prüfung."
+    return "The saved sign-in has expired or is not valid. Sign in to the provider again, then check the connection."
   }
   if (category === "providerResponse") {
-    return "Der Provider hat die Anfrage abgelehnt oder unerwartet beantwortet. Prüfe die Internetverbindung und den Provider-Status, dann versuche es erneut."
+    return "The provider rejected the request or returned an unexpected response. Check your internet connection and the provider status, then try again."
   }
-  return "Die Aktualisierung ist fehlgeschlagen. Deine Auswahl bleibt gespeichert; du kannst die Verbindung jetzt erneut prüfen oder später in den Provider-Einstellungen fortfahren."
+  return "The refresh failed. Your selection is saved. Check the connection again now or continue in Provider Settings later."
 }
 
 function ProviderIcon({ provider, isDark }: { provider: SettingsPluginState; isDark: boolean }) {
@@ -129,7 +128,7 @@ function StatusLabel({ status }: { status: SetupStatus }) {
     return (
       <span className="flex items-center gap-1.5 text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" />
-        Verbindung wird geprüft
+        Checking connection
       </span>
     )
   }
@@ -137,7 +136,7 @@ function StatusLabel({ status }: { status: SetupStatus }) {
     return (
       <span className="flex items-center gap-1.5 text-green-700 dark:text-green-500">
         <CheckCircle2 className="size-3.5" />
-        Verbunden
+        Connected
       </span>
     )
   }
@@ -145,14 +144,14 @@ function StatusLabel({ status }: { status: SetupStatus }) {
     return (
       <span className="flex items-center gap-1.5 text-destructive">
         <AlertCircle className="size-3.5" />
-        Aktualisierung fehlgeschlagen
+        Refresh failed
       </span>
     )
   }
   return (
     <span className="flex items-center gap-1.5 text-muted-foreground">
       <Circle className="size-3.5" />
-      Noch nicht eingerichtet
+      Not set up
     </span>
   )
 }
@@ -237,7 +236,7 @@ export function FirstRunOnboarding({
       setStep("connect")
     } catch (error) {
       console.error("Failed to save onboarding provider selection:", error)
-      setSubmitError("Die Auswahl konnte nicht gespeichert werden. Bitte versuche es erneut.")
+      setSubmitError("Unable to save the selection. Try again.")
     }
   }
 
@@ -254,7 +253,7 @@ export function FirstRunOnboarding({
       setSelectedIds(nextSelectedIds)
     } catch (error) {
       console.error("Failed to remove onboarding provider:", error)
-      setSubmitError("Der Provider konnte nicht entfernt werden. Bitte versuche es erneut.")
+      setSubmitError("Unable to remove the provider. Try again.")
     }
   }
 
@@ -264,7 +263,7 @@ export function FirstRunOnboarding({
       await onFinish()
     } catch (error) {
       console.error("Failed to finish onboarding:", error)
-      setFinishError("Der Abschluss konnte nicht gespeichert werden. Bitte versuche es erneut.")
+      setFinishError("Unable to save the setup. Try again.")
     }
   }
 
@@ -272,27 +271,29 @@ export function FirstRunOnboarding({
     <main className="mx-auto flex min-h-[624px] w-full max-w-3xl flex-col" aria-live="polite">
       <header className="border-b border-border pb-5">
         <div className="mb-3 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <span className={step === "select" ? "text-foreground" : undefined}>Provider wählen</span>
-          <ChevronRight className="size-3.5" />
-          <span className={step === "connect" ? "text-foreground" : undefined}>
-            Verbindung prüfen
+          <span className={step === "select" ? "text-foreground" : undefined}>
+            Choose providers
           </span>
           <ChevronRight className="size-3.5" />
-          <span className={step === "success" ? "text-foreground" : undefined}>Fertig</span>
+          <span className={step === "connect" ? "text-foreground" : undefined}>
+            Check connections
+          </span>
+          <ChevronRight className="size-3.5" />
+          <span className={step === "success" ? "text-foreground" : undefined}>Done</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-balance">
           {step === "select"
-            ? "Was möchtest du verbinden?"
+            ? "What do you want to connect?"
             : step === "connect"
-              ? "Verbindungen prüfen"
-              : "UsageBar ist bereit"}
+              ? "Check connections"
+              : "UsageBar is ready"}
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground text-pretty">
           {step === "select"
-            ? "Wähle die Provider, die direkt in deiner Bar erscheinen sollen. Die empfohlenen lokalen Integrationen sind bereits ausgewählt."
+            ? "Choose the providers to show in your bar. Recommended local integrations are already selected."
             : step === "connect"
-              ? "UsageBar prüft deine vorhandenen lokalen Anmeldungen. Fehlende Zugangsdaten kannst du direkt beim jeweiligen Provider nachholen."
-              : "Deine ausgewählten Provider erscheinen jetzt in der Bar. UsageBar aktualisiert ihre Daten automatisch."}
+              ? "UsageBar checks your existing local sign-ins. You can add missing credentials on each provider card."
+              : "Your selected providers now appear in the bar. UsageBar updates their data automatically."}
         </p>
       </header>
 
@@ -311,7 +312,7 @@ export function FirstRunOnboarding({
                     <Checkbox
                       checked={checked}
                       onCheckedChange={() => toggleProvider(provider.id)}
-                      aria-label={`${provider.name} auswählen`}
+                      aria-label={`Select ${provider.name}`}
                       className="mt-1"
                     />
                     <ProviderIcon provider={provider} isDark={isDark} />
@@ -320,7 +321,7 @@ export function FirstRunOnboarding({
                         <span className="font-medium">{provider.name}</span>
                         {guidance.recommended ? (
                           <Badge variant="outline" className="text-[0.68rem]">
-                            Empfohlen
+                            Recommended
                           </Badge>
                         ) : null}
                       </span>
@@ -337,13 +338,13 @@ export function FirstRunOnboarding({
           </div>
           <footer className="flex items-center justify-between border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
-              Die Auswahl kann später unter Einstellungen geändert werden.
+              You can change your selection later in Settings.
             </p>
             <Button
               onClick={() => void connectProviders()}
               disabled={selectedProviders.length === 0}
             >
-              Verbindungen prüfen
+              Check connections
               <ChevronRight />
             </Button>
           </footer>
@@ -374,7 +375,7 @@ export function FirstRunOnboarding({
                     ) : status === "idle" ? (
                       <Button variant="outline" size="sm" onClick={() => onRetry(provider.id)}>
                         <RefreshCw />
-                        Erneut prüfen
+                        Check again
                       </Button>
                     ) : null}
                   </div>
@@ -410,13 +411,13 @@ export function FirstRunOnboarding({
           </div>
           <footer className="flex items-center justify-between border-t border-border pt-4">
             <Button variant="ghost" onClick={() => setStep("select")} disabled={isChecking}>
-              Auswahl ändern
+              Change selection
             </Button>
             <Button
               onClick={() => setStep("success")}
               disabled={isChecking || selectedProviders.length === 0}
             >
-              Einrichtung abschließen
+              Complete setup
               <Check />
             </Button>
           </footer>
@@ -428,11 +429,10 @@ export function FirstRunOnboarding({
           <span className="mb-5 grid size-14 place-items-center rounded-full bg-green-500/15 text-green-700 dark:text-green-500">
             <Check className="size-7" />
           </span>
-          <p className="text-xl font-semibold">Auswahl gespeichert</p>
+          <p className="text-xl font-semibold">Selection saved</p>
           <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            {connectedCount} von {selectedProviders.length} Providern sind verbunden. Provider mit
-            fehlgeschlagener Aktualisierung bleiben in der Bar sichtbar und können später erneut
-            geprüft werden.
+            {connectedCount} of {selectedProviders.length} providers are connected. Providers with
+            failed refresh remain visible in the bar. You can check them again later.
           </p>
           {finishError ? (
             <p role="alert" className="mt-4 text-sm text-destructive">
@@ -440,7 +440,7 @@ export function FirstRunOnboarding({
             </p>
           ) : null}
           <Button className="mt-6" onClick={() => void finishOnboarding()}>
-            UsageBar öffnen
+            Open UsageBar
             <ChevronRight />
           </Button>
         </div>
