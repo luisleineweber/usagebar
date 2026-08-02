@@ -2573,3 +2573,59 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` -> passed.
 - `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` and focused Prettier checks -> passed.
 - `bun run check` -> passed: Prettier, ESLint, TypeScript, Rust formatting, and Clippy.
+
+# Alpha 6 right-click update-check diagnosis, 2026-08-02
+
+## Executive Summary
+
+- Determine whether Alpha 6's version-footer right-click update check was invoked and why it appeared inert.
+- Correlate the installed Alpha 6 runtime log with the exact tagged frontend/updater implementation.
+- Diagnose only; no runtime code changes in this investigation.
+
+## Acceptance Criteria
+
+- [x] Alpha 6 log evidence is located and correlated with updater behavior.
+- [x] The right-click event path and updater failure path are verified from the Alpha 6 tag.
+- [x] The diagnosis and post-Alpha-6 fixes are recorded with focused verification results.
+
+## Plan
+
+- [x] Inspect app logs, release metadata, updater endpoint, and Alpha 6 source.
+- [x] Compare Alpha 6 with Alpha 7 updater/footer changes.
+- [x] Run the focused updater/footer regression suite and record the verdict.
+
+## Verification Notes
+
+- `%LOCALAPPDATA%\\com.sunstory.usagebar\\logs\\UsageBar.log` contains Alpha 6 sessions through 2026-08-02 and repeated `update endpoint did not respond with a successful status code` entries. The endpoint currently returns HTTP 404 because only prerelease releases exist and unsigned updater artifacts are omitted.
+- Alpha 6's `panel-footer.tsx` did call `onUpdateCheck()` from `contextmenu`, but omitted `stopPropagation()` and had no `checking`/`up-to-date` cases, so manual success or failure looked like the normal version button. Alpha 6's `use-app-update.ts` called `check()` without catching its expected unsigned-prerelease failure, so GitHub release discovery was unreachable.
+- Fix commits after the Alpha 6 tag: `1853d0bd` adds the GitHub fallback; `d288f2c2` adds visible manual-check feedback. Both are present in Alpha 7.
+- `bun run test -- src/components/panel-footer.test.tsx src/hooks/use-app-update.test.ts --run` -> 2 files, 41 tests passed on the current fixed source.
+
+# Settings taskbar icon matches app logo, 2026-08-02
+
+## Executive Summary
+
+- Make the standalone Settings window use the same ring logo as the app and title bar on Windows.
+- Keep the hidden tray panel and dynamic tray icon behavior unchanged.
+
+## Acceptance Criteria
+
+- [x] Settings taskbar/window icon is explicitly loaded from the bundled `icons/icon.png` app logo.
+- [x] Existing settings-window behavior and IPC events remain unchanged.
+- [x] Focused Rust checks, formatting, and diff validation pass.
+
+## Plan
+
+- [x] Trace the differing icon to the standalone Settings `WebviewWindowBuilder`.
+- [x] Assign the bundled app icon when creating the Settings window.
+- [x] Run verification and review the diff.
+
+## Verification Notes
+
+- Baseline: `cargo check --manifest-path src-tauri/Cargo.toml --locked` -> passed.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` -> passed.
+- `cargo check --manifest-path src-tauri/Cargo.toml --locked` -> passed after the icon change.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 151 passed, 1 ignored.
+- `bun run test -- src/hooks/use-app-update.test.ts --run` -> 24 passed; this includes unrelated concurrent updater edits already present in the working tree.
+- `bunx prettier --check src-tauri/tauri.conf.json tasks/todo.md tasks/lessons.md docs/breadcrumbs.md` -> passed.
+- `git diff --check` -> passed; existing LF/CRLF normalization warnings remain.

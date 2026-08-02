@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-02
+
+- A standalone Tauri window can inherit a different Windows taskbar icon even when the main app bundle and title bar use the correct logo. Fix: explicitly assign the shared bundled app icon in each taskbar-visible `WebviewWindowBuilder`. Prevention: verify title-bar and taskbar branding for every native window created outside the static Tauri config.
+
 ## 2026-08-01
 
 - The tray panel's inactivity timer continued while the standalone Settings window was visible, so it hid behind an active settings workflow. Fix: publish explicit Settings open/closed lifecycle events and pause/resume the panel timer across backend and frontend hide paths. Prevention: cross-window UI state changes need lifecycle tests for open, native close, inactivity hide, and handoff hide.

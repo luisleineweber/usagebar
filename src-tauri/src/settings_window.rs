@@ -1,9 +1,12 @@
 use serde::Serialize;
+use tauri::image::Image;
+use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 const SETTINGS_WINDOW_LABEL: &str = "settings";
 const SETTINGS_OPEN_EVENT: &str = "settings:open";
 const SETTINGS_CLOSED_EVENT: &str = "settings:closed";
+const APP_ICON_RESOURCE: &str = "icons/icon.png";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,6 +58,12 @@ pub fn open(
             .map_err(|error| format!("failed to focus settings window: {}", error))?;
     } else {
         let path = build_settings_window_path(&normalized_tab, normalized_provider_id.as_deref());
+        let app_icon_path = app_handle
+            .path()
+            .resolve(APP_ICON_RESOURCE, BaseDirectory::Resource)
+            .map_err(|error| format!("failed to resolve app icon: {}", error))?;
+        let app_icon = Image::from_path(app_icon_path)
+            .map_err(|error| format!("failed to load app icon: {}", error))?;
         let window = WebviewWindowBuilder::new(
             app_handle,
             SETTINGS_WINDOW_LABEL,
@@ -66,6 +75,8 @@ pub fn open(
         .min_inner_size(960.0, 720.0)
         .resizable(false)
         .visible(true)
+        .icon(app_icon)
+        .map_err(|error| format!("failed to set app icon: {}", error))?
         .build()
         .map_err(|error| format!("failed to build settings window: {}", error))?;
 
