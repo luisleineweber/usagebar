@@ -175,6 +175,27 @@ describe("useAppUpdate", () => {
     })
   })
 
+  it("stays up-to-date when GitHub confirms an unsigned prerelease is current", async () => {
+    getVersionMock.mockResolvedValue("0.1.0-alpha.7")
+    checkMock.mockRejectedValueOnce(new Error("latest.json returned 404"))
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          draft: false,
+          prerelease: true,
+          tag_name: "v0.1.0-alpha.7",
+          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.7",
+        },
+      ],
+    } as Response)
+
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+    await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
+
+    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
+  })
+
   it("clears a pending up-to-date timeout on re-check", async () => {
     vi.useFakeTimers()
     const clearTimeoutSpy = vi.spyOn(window, "clearTimeout")
@@ -324,6 +345,7 @@ describe("useAppUpdate", () => {
 
   it("transitions to error when check throws", async () => {
     checkMock.mockRejectedValue(new Error("network error"))
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("GitHub unavailable"))
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await act(() => Promise.resolve())
     await act(() => Promise.resolve())

@@ -294,10 +294,8 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
         return
       }
 
-      if (signedUpdaterError) {
-        throw signedUpdaterError
-      }
-
+      // A successful GitHub response is authoritative even when the signed
+      // updater could not load prerelease metadata.
       setUpToDateThenIdle()
     } catch (err) {
       inFlightRef.current.checking = false
