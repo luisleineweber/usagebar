@@ -1,5 +1,17 @@
 # Lessons
 
+## 2026-08-01
+
+- The tray panel's inactivity timer continued while the standalone Settings window was visible, so it hid behind an active settings workflow. Fix: publish explicit Settings open/closed lifecycle events and pause/resume the panel timer across backend and frontend hide paths. Prevention: cross-window UI state changes need lifecycle tests for open, native close, inactivity hide, and handoff hide.
+
+- First-run onboarding copy had a complete German surface even though the product language is Simplified Technical English. Fix: translate headings, statuses, actions, errors, accessibility labels, and provider-specific cookie recovery guidance together. Prevention: when onboarding copy changes, scan every rendered string and its accessible name for mixed-language leftovers.
+
+## 2026-07-31
+
+- Extensionless package-runner probes did not discover Windows npm `.cmd` launchers, and the only detected Bun fallback could exceed the 15-second budget, leaving retained provider history stale. Fix: resolve executable Windows launchers from npm app data and `PATH`, keep the ccusage package version pinned in every argument set, and allow a bounded 30-second cold start. Prevention: runner bumps must verify exact production arguments, Windows launcher discovery, a cold invocation, and returned newest-day data together.
+
+- User-facing tray style names outlived a renderer change: `Plugin` described a Windows number glyph, and `Merged` duplicated `Bars`. Fix: use `Compact`, `Stacked bars`, and `Donut`, and migrate persisted `merged` values to `bars`. Prevention: whenever tray rendering semantics change, verify option labels, accessible names, explanatory copy, and persisted-value migration together.
+
 ## 2026-07-29
 
 - A successful provider refresh can still omit optional history when its secondary local-history runner fails; replacing the whole settled output then removes a valid chart and overwrites the disk snapshot. Fix: retain the last authoritative provider history when a successful refresh has no replacement history. Prevention: refresh-state and snapshot-cache tests must cover partial success independently from full probe errors.

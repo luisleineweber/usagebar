@@ -1,5 +1,100 @@
 ﻿# Active Todo
 
+# ASD-STE100 whole-project audit, 2026-08-01
+
+## Acceptance Criteria
+
+- [x] Active UI and accessibility text is checked for mixed-language copy, contractions, American spelling, sentence length, punctuation, and direct recovery guidance.
+- [x] Maintained README, contributing, design, product, security, provider, API, and release documentation is checked with archived reports separated from current documentation.
+- [x] Findings cite exact files and lines, distinguish confirmed rule violations from review candidates, and include complete replacement wording for actionable copy.
+- [x] Baseline checks and scan commands are recorded; no product behavior changes are made by this audit.
+
+## Plan
+
+- [x] Read the repository instructions, lessons, existing task notes, and writing guidance.
+- [x] Run the frontend baseline and repository-wide language candidate scans.
+- [x] Validate confirmed findings against ASD-STE100 Issue 9 and report the prioritized result.
+
+## Verification Notes
+
+- `bun run check:frontend` -> passed: formatting, ESLint, and TypeScript.
+- Repository-wide `rg` scans checked runtime UI, accessibility labels, plugin messages, maintained documentation, task notes, reports, and archives. Historical/internal German text was separated from active user-facing copy.
+- Confirmed active findings: 5 residual German occurrences across 3 unique runtime messages, contractions in runtime and maintained technical copy, 2 non-American spellings, semicolon-separated prose in maintained docs and plugin messages, and multi-instruction setup/error copy exceeding STE sentence guidance.
+- Standard reference: ASD-STE100 Issue 9, January 2025. No product behavior or provider logic changed.
+
+# Keep the UsageBar panel open while Settings is visible, 2026-08-01
+
+## Acceptance Criteria
+
+- [x] Opening the Settings window prevents the UsageBar panel from auto-hiding.
+- [x] Closing or hiding Settings resumes the normal 30-second panel auto-hide timer.
+- [x] Native Settings close behavior remains unchanged.
+- [x] Focused regression tests, frontend checks, formatting, and diff validation pass.
+
+## Plan
+
+- [x] Reproduce the panel auto-hide while the Settings window is open at the cross-window event seam.
+- [x] Add explicit Settings open/closed lifecycle events and pause/resume the panel timer.
+- [x] Add regression coverage for open, close, and native-close lifecycle behavior.
+- [x] Run verification in the documented order and review the diff.
+
+## Verification Notes
+
+- Red test: `bun run test -- src/hooks/app/use-panel.test.ts --run -t "does not auto-hide while the settings window is open"` failed because the existing timer called `hide_panel` at 30 seconds.
+- Green focused suite: `bun run test -- src/hooks/app/use-panel.test.ts src/App.test.tsx --run -t "auto-hide|settings window|auto-closes the settings|resets settings auto-close|does not intercept"` -> 2 files, 12 passed.
+- Final regression checks: `bun run test -- src/hooks/app/use-panel.test.ts --run` -> 18 passed; Settings lifecycle selection -> 3 passed; onboarding hook -> 5 passed.
+- `bun run check:frontend` -> passed: formatting, ESLint, and TypeScript.
+- `cargo check --manifest-path src-tauri/Cargo.toml --locked` -> passed.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` and `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` -> passed.
+- `git diff --check` -> passed; existing LF/CRLF normalization notices only.
+- The complete `src/App.test.tsx` file retains the unrelated baseline failure `covers about open/close callbacks`, which expects a missing `Luis Leineweber` button.
+
+# Simplified Technical English onboarding copy, 2026-08-01
+
+## Acceptance Criteria
+
+- [x] First-run onboarding contains no German user-facing copy.
+- [x] Headings, status labels, buttons, accessibility labels, errors, and cookie recovery guidance use concise Simplified Technical English.
+- [x] Existing provider selection, retry, removal, and cookie-save behavior remains unchanged.
+- [x] Focused onboarding tests, frontend checks, formatting, and diff validation pass.
+
+## Plan
+
+- [x] Inspect onboarding copy and identify all German strings in the first-run flow.
+- [x] Replace the copy with consistent, direct English wording.
+- [x] Update regression expectations and run the verification order.
+
+## Verification Notes
+
+- `bun run test -- src/components/onboarding/first-run-onboarding.test.tsx --run` -> 10 tests passed.
+- `bun run test -- src/components/onboarding/first-run-onboarding.test.tsx src/App.test.tsx --run -t "preselects the recommended providers|shows the final success moment|opens onboarding|persists the recommended onboarding"` -> 4 tests passed, 97 skipped.
+- `bun run check:frontend` -> passed: Prettier, ESLint, and TypeScript.
+- `rg` scans found no remaining German onboarding strings or German accessibility labels in `src`.
+- `bunx prettier --check` on all touched source/test and task files -> passed.
+- `git diff --check` -> passed; only existing LF-to-CRLF normalization notices were printed.
+- Final diff review -> limited to onboarding copy, its test expectations, and the required lesson/todo entries; no provider logic or IPC behavior changed.
+
+# Clarify tray icon style names, 2026-07-31
+
+## Acceptance Criteria
+
+- [x] Settings show `Compact`, `Stacked bars`, and `Donut` as the only tray style choices.
+- [x] A persisted legacy `merged` style loads and persists as `bars`.
+- [x] The tray style explanation uses consistent, current English copy.
+- [x] Focused tests, typecheck, formatting, and diff validation pass.
+
+## Plan
+
+- [x] Confirm the current style semantics and identify the duplicate `merged` renderer.
+- [x] Rename the visible options and normalize the removed legacy value.
+- [x] Update regression coverage and verify the affected frontend surface.
+
+## Verification Notes
+
+- `bun run test -- src/lib/settings.test.ts src/lib/tray-bars-icon.test.ts src/pages/settings.test.tsx src/hooks/app/use-settings-display-actions.test.ts --run` -> 101 passed.
+- `bun run test -- src/App.test.tsx --run -t "keeps Windows tray style controls"` -> 1 passed, 90 skipped.
+- The full selected suite also retains the pre-existing unrelated About-dialog failure: `App > covers about open/close callbacks` cannot find `Luis Leineweber`.
+
 # Provider incident dots are not explained consistently, 2026-07-29
 
 ## Acceptance Criteria
@@ -2369,3 +2464,59 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - Rust cache suite: `cargo test --manifest-path src-tauri/Cargo.toml --lib local_http_api::cache::tests` -> 9 passed.
 - `bun run check` -> passed: frontend formatting, ESLint, TypeScript, Rust formatting, and Clippy with `-D warnings`.
 - `git diff --check` -> passed; existing LF/CRLF normalization warnings only.
+
+# Codex history stops before newest local data, 2026-07-31
+
+## Executive Summary
+
+- Diagnose why the 30-day Codex chart ends on July 27 although newer local usage data exists.
+- Trace the newest source date through ccusage, plugin normalization, cache, and chart filtering.
+- Diagnose only; do not change runtime behavior until the exact symptom is reproducible.
+
+## Acceptance Criteria
+
+- [x] A fast deterministic check proves where dates newer than July 27 are lost or excluded.
+- [x] The root cause is supported by local source/cache/output evidence.
+- [x] The smallest appropriate fix and regression-test seam are identified.
+
+## Plan
+
+- [x] Inspect the real local Codex data and ccusage output for their newest dates.
+- [x] Replay or test that output through the plugin/history/chart path.
+- [x] Rank and falsify the likely causes, then record the diagnosis and verification.
+
+## Verification Notes
+
+- Local Codex session files and both `ccusage@20.0.18` via `npx.cmd` and `@ccusage/codex@18.0.11` via Bun report activity through `2026-07-31`.
+- The dev snapshot was fetched on July 31 but its retained Codex history ends at local calendar day `2026-07-27`, matching the chart exactly.
+- Red repro: the Bun legacy fallback did not finish within the host's fixed 15-second timeout; complete manual runs took about 21–29 seconds and returned July 31.
+- The pinned current package fails through the only discovered Windows Bun runner with `Cannot find module ...\\ccusage\\src\\cli.js`. The working npm-family launchers exist locally as `.cmd`/`.ps1`, while the host only probes extensionless `pnpm`, `npm`, and `npx` candidates.
+- A direct `npx.cmd` run returned all 23 days through July 31; after the npm cache was warm it completed in 4.3 seconds.
+- `bun run test -- plugins/codex/plugin.test.js src/lib/usage-history.test.ts src/components/usage-report.test.tsx --run` -> 3 files, 75 tests passed, confirming the loss is before plugin normalization/chart filtering.
+- Recommended fix seam: Windows runner discovery and timeout/process-tree behavior in `ccusage_host_api.rs`, covered beside the existing runner-order/fallback tests in `host_api.rs`.
+
+# Reliable Windows ccusage execution, 2026-07-31
+
+## Acceptance Criteria
+
+- [x] UsageBar discovers installed Windows npm-family `.cmd` launchers without requiring a global ccusage installation.
+- [x] UsageBar continues to invoke its exact pinned ccusage package version.
+- [x] A normal cold package start is not discarded by the previous 15-second timeout.
+- [x] Focused Rust runner tests and the real local Codex query return history through July 31.
+- [x] Related Rust/frontend checks, formatting, and diff review pass without disturbing unrelated user changes.
+
+## Plan
+
+- [x] Add a failing regression test for Windows launcher discovery and preserve exact package arguments.
+- [x] Implement explicit Windows launcher resolution and a bounded cold-start budget.
+- [x] Verify runner, plugin, history, formatting, lint, and the real local query path.
+
+## Verification Notes
+
+- Red test: `cargo test --manifest-path src-tauri/Cargo.toml --lib ccusage_windows_launcher_candidates_find_cmd_files -- --nocapture` failed with `cannot find function ccusage_windows_launcher_candidates` before the host fix.
+- Focused Rust: `cargo test --manifest-path src-tauri/Cargo.toml --lib ccusage -- --nocapture` -> 29 passed.
+- Real Windows query: `npx.cmd --yes ccusage@20.0.18 codex daily --json --order desc --since 20260701` -> exit 0 in 16.6 seconds, 23 days, newest day `2026-07-31`, within the new 30-second host budget.
+- Frontend/plugin seam: `bun run test -- plugins/codex/plugin.test.js src/lib/usage-history.test.ts src/components/usage-report.test.tsx --run` -> 3 files, 75 passed.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` -> passed.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` and focused Prettier checks -> passed.
+- `bun run check` -> passed: Prettier, ESLint, TypeScript, Rust formatting, and Clippy.
