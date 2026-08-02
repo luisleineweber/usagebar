@@ -1,5 +1,30 @@
 ﻿# Active Todo
 
+# Publish Alpha 7 GitHub release, 2026-08-02
+
+## Acceptance Criteria
+
+- [x] The clean Alpha 7 release commit is pushed to `origin/main`.
+- [x] Annotated tag `v0.1.0-alpha.7` is pushed and the Publish workflow completes successfully.
+- [x] GitHub contains a non-draft prerelease with the structured Alpha 7 notes and full changelog link.
+- [x] The release contains the Windows NSIS setup executable.
+
+## Plan
+
+- [x] Commit the release-preparation record and pass the clean release preflight.
+- [x] Push `main` and the Alpha 7 tag to the UsageBar repository.
+- [x] Monitor the Windows Publish workflow and verify release assets.
+- [x] Add the final release notes and verify the published artifact download.
+
+## Verification Notes
+
+- `git push origin main` -> pushed `main` through `369c04f8`.
+- `git push origin v0.1.0-alpha.7` -> pushed annotated tag `v0.1.0-alpha.7`.
+- `gh run watch 30760750883 --repo luisleineweber/usagebar --interval 30 --exit-status` -> passed in 19m23s; release preflight, Tauri Windows build, upload, and setup-executable verification passed.
+- `gh release edit v0.1.0-alpha.7 --repo luisleineweber/usagebar --notes ...` -> added `What's Changed`, `Alpha Notes`, `New Contributors`, and `Full Changelog` sections.
+- `gh release view v0.1.0-alpha.7 --repo luisleineweber/usagebar --json ...` -> confirmed non-draft prerelease published at GitHub with the expected notes and `UsageBar_0.1.0-alpha.7_x64-setup.exe`.
+- `gh release download v0.1.0-alpha.7 --repo luisleineweber/usagebar --pattern '*setup.exe'` -> downloaded the 8,390,925-byte Windows installer successfully.
+
 # Prepare Alpha 7 release, 2026-08-02
 
 ## Acceptance Criteria
