@@ -1,5 +1,33 @@
 ﻿# Active Todo
 
+# Prepare Alpha 7 release, 2026-08-02
+
+## Acceptance Criteria
+
+- [x] Alpha 7 version metadata, changelog, README, release documentation, and updater policy are aligned for `0.1.0-alpha.7`.
+- [x] Release preflight passes for `v0.1.0-alpha.7`, with all 34 bundled plugins present and synchronized.
+- [x] Frontend and Rust quality checks pass.
+- [ ] Full coverage gate passes without the known stale About-dialog integration assertion.
+- [ ] A local unsigned Windows NSIS installer is generated and inspected.
+- [x] No tag, commit, push, or GitHub release is created during preparation.
+
+## Plan
+
+- [x] Inspect current Alpha 7 metadata, release conventions, and repository state.
+- [x] Run Alpha 7 preflight, plugin synchronization, and release quality gates.
+- [x] Attempt the documented unsigned Windows NSIS release build.
+- [x] Record verification results and review the final worktree.
+
+## Verification Notes
+
+- `bun run release:check -- --release-tag v0.1.0-alpha.7` -> passed; version metadata agrees and 34 bundled plugins were detected.
+- `bun run bundle:plugins` -> passed; 34 plugins bundled and no worktree changes produced.
+- `bun run check` -> passed: Prettier, ESLint, TypeScript, Cargo fmt, and Clippy with `-D warnings`.
+- `bun run test:coverage` -> 95 files, 1,400 passed, 1 failed. The known unrelated failure is `src/App.test.tsx > App > covers about open/close callbacks`, which still expects a `Luis Leineweber` button from the App integration path; dedicated About-dialog and panel-footer tests cover the current behavior.
+- `$env:USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER='1'; bun run build:release -- --bundles nsis` -> timed out twice after 604 seconds during Rust/Tauri release compilation; no NSIS installer was generated. The CLI sidecar was produced at `src-tauri/target/release/usagebar-cli.exe`. Orphaned build processes were terminated after each timeout.
+- `git diff --check` -> passed; `git status --short --branch` remains clean on `main`.
+- `gh release view v0.1.0-alpha.6 --json body,tagName,name,isPrerelease,isDraft,publishedAt,url` -> no GitHub release found, so no prior GitHub release body was available to mirror.
+
 # ASD-STE100 whole-project audit, 2026-08-01
 
 ## Acceptance Criteria
