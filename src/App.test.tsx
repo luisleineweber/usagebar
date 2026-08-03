@@ -250,6 +250,14 @@ vi.mock("@tauri-apps/plugin-autostart", () => ({
   isEnabled: state.autostartIsEnabledMock,
 }))
 
+vi.mock("@/hooks/use-app-update", () => ({
+  useAppUpdate: () => ({
+    updateStatus: { status: "idle" },
+    triggerInstall: vi.fn(),
+    checkForUpdates: vi.fn(),
+  }),
+}))
+
 vi.mock("@/lib/tray-bars-icon", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/tray-bars-icon")>("@/lib/tray-bars-icon")

@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-03
+
+- CI tests that format local times must not inherit the runner timezone, and integration tests must isolate unrelated mount-time effects such as updater polling. Fix: inject an optional timezone into reset/tray formatting for deterministic fixtures and mock updater state in the About interaction test. Prevention: run time-sensitive tests under UTC and keep cross-feature integration tests’ external hooks mocked.
+
 ## 2026-08-02
 
 - A standalone Tauri window can inherit a different Windows taskbar icon even when the main app bundle and title bar use the correct logo. Fix: explicitly assign the shared bundled app icon in each taskbar-visible `WebviewWindowBuilder`. Prevention: verify title-bar and taskbar branding for every native window created outside the static Tauri config.

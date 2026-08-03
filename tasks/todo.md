@@ -2629,3 +2629,66 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun run test -- src/hooks/use-app-update.test.ts --run` -> 24 passed; this includes unrelated concurrent updater edits already present in the working tree.
 - `bunx prettier --check src-tauri/tauri.conf.json tasks/todo.md tasks/lessons.md docs/breadcrumbs.md` -> passed.
 - `git diff --check` -> passed; existing LF/CRLF normalization warnings remain.
+
+# CI runs 30760744689 and 30761562918 diagnosis, 2026-08-03
+
+## Executive Summary
+
+- Diagnose the repeated Alpha 7 CI failures across Ubuntu and Windows.
+- Confirm whether the failures are runner instability, coverage configuration, or deterministic test defects.
+- Diagnose only; no code changes were requested or made.
+
+## Acceptance Criteria
+
+- [x] Both supplied runs and all failing jobs are inspected from GitHub Actions logs.
+- [x] The common failing tests and first failing CI step are identified.
+- [x] Each failure is reproduced or explained from local source and environment evidence.
+- [x] The smallest appropriate fix seams and remaining scope are documented.
+
+## Plan
+
+- [x] Verify repository target and GitHub Actions access.
+- [x] Inspect run metadata and filtered failure logs for both operating systems.
+- [x] Reproduce the focused failures locally, including UTC timezone behavior.
+- [x] Record diagnosis and report the focused fix direction without implementing it.
+
+## Verification Notes
+
+- `gh auth status` -> authenticated as `luisleineweber` with `repo` and `workflow` scopes.
+- `gh -R luisleineweber/usagebar run view 30760744689 --json ...` and `30761562918` -> both failed in the test step after frontend quality/build passed; Ubuntu failed coverage wrapper after Vitest, Windows failed the normal Vitest step.
+- `gh -R luisleineweber/usagebar run view <run> --log-failed` -> both runs and both OS jobs report the same 3 failures: `src/App.test.tsx:1130`, `src/lib/tray-tooltip.test.ts:22`, and `src/lib/tray-tooltip.test.ts:55`; 1,398/1,401 tests passed.
+- `bun run test -- src/App.test.tsx -t "covers about open/close callbacks" --run` -> reproduces the About failure locally.
+- `bun run test -- src/lib/tray-tooltip.test.ts --run` -> 3 passed in the local W. Europe timezone.
+- `TZ=UTC bun run test -- src/lib/tray-tooltip.test.ts --run` -> 2 failures reproduced: expected `20:00`, received `18:00`.
+- Worktree remains clean before this note-only update; no runtime or test implementation changes were made.
+
+# CI run fixes, 2026-08-03
+
+## Executive Summary
+
+- Make the failed Alpha 7 CI tests deterministic on UTC runners.
+- Keep production reset labels in the user’s local timezone.
+- Prevent unrelated updater auto-check state from racing the About interaction test.
+
+## Acceptance Criteria
+
+- [x] Tray tooltip tests pass under `TZ=UTC` and retain explicit Berlin expectations.
+- [x] The About callback test is isolated from mount-time updater behavior.
+- [x] Full frontend tests and aggregate quality checks pass.
+- [x] The regression lesson and exact verification commands are recorded.
+
+## Plan
+
+- [x] Add optional timezone injection to reset/tray formatting with local timezone as the default.
+- [x] Pass an explicit `Europe/Berlin` timezone from deterministic tray tests.
+- [x] Mock `useAppUpdate` in `App.test.tsx` so the About test only exercises About behavior.
+- [x] Run focused tests, full tests, frontend checks, Rust checks, formatting, and diff review.
+
+## Verification Notes
+
+- `TZ=UTC bun run test -- src/lib/tray-tooltip.test.ts src/lib/reset-tooltip.test.ts --run` -> 2 files, 11 tests passed.
+- `bun run test -- src/App.test.tsx -t "covers about open/close callbacks" --run` -> 1 passed.
+- `bun run test -- src/components/panel-footer.test.tsx src/hooks/use-app-update.test.ts --run` -> 2 files, 42 tests passed.
+- `bun run test:all` -> 96 files, 1,402 tests passed.
+- `bun run check` -> passed frontend formatting/ESLint/TypeScript plus Rust formatting/Clippy.
+- `bunx prettier --check` and `git diff --check` -> passed; only existing LF/CRLF normalization warnings remain.

@@ -17,7 +17,7 @@ describe("formatTrayTooltip", () => {
           remainingPercentExact: 36.42,
           resetsAt,
         },
-        { nowMs, timeFormatMode: "24h" }
+        { nowMs, timeFormatMode: "24h", timeZone: "Europe/Berlin" }
       )
     ).toBe("UsageBar\nAlpha — Session\nRemaining: 36.42%\nResets today at 20:00")
   })
@@ -50,7 +50,7 @@ describe("formatTrayTooltip", () => {
           lastKnownRemainingPercentExact: 36.4,
           lastKnownResetsAt: resetsAt,
         },
-        { nowMs, timeFormatMode: "24h" }
+        { nowMs, timeFormatMode: "24h", timeZone: "Europe/Berlin" }
       )
     ).toBe(
       "UsageBar\nAlpha — Session\nUpdate failed\nLast known: 36.4% remaining\nLast known reset: Resets today at 20:00"

@@ -4,7 +4,10 @@ import type { TrayState } from "@/lib/tray-state"
 
 function formatExactPercent(value: number | null): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "–"
-  return value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")
+  return value
+    .toFixed(2)
+    .replace(/\.00$/, "")
+    .replace(/(\.\d)0$/, "$1")
 }
 
 export function formatTrayPercentText(fraction: number | undefined): string {
@@ -25,11 +28,13 @@ export function formatTrayTooltip(
     title?: string
     nowMs?: number
     timeFormatMode?: TimeFormatMode
+    timeZone?: string
   } = {}
 ): string {
   const title = options.title ?? "UsageBar"
   const nowMs = options.nowMs ?? Date.now()
   const timeFormatMode = options.timeFormatMode ?? "auto"
+  const timeZone = options.timeZone
   const lines = [title]
 
   if (state.kind === "unknown") {
@@ -45,10 +50,12 @@ export function formatTrayTooltip(
   if (state.kind === "error") {
     lines.push("Update failed")
     if (state.lastKnownRemainingPercentExact !== null) {
-      lines.push(`Last known: ${formatExactPercent(state.lastKnownRemainingPercentExact)}% remaining`)
+      lines.push(
+        `Last known: ${formatExactPercent(state.lastKnownRemainingPercentExact)}% remaining`
+      )
     }
     const resetText = state.lastKnownResetsAt
-      ? formatResetAbsoluteLabel(nowMs, state.lastKnownResetsAt, timeFormatMode)
+      ? formatResetAbsoluteLabel(nowMs, state.lastKnownResetsAt, timeFormatMode, timeZone)
       : null
     lines.push(`Last known reset: ${resetText ?? "Unknown"}`)
     return lines.join("\n")
@@ -56,7 +63,7 @@ export function formatTrayTooltip(
 
   lines.push(`Remaining: ${formatExactPercent(state.remainingPercentExact)}%`)
   const resetText = state.resetsAt
-    ? formatResetAbsoluteLabel(nowMs, state.resetsAt, timeFormatMode)
+    ? formatResetAbsoluteLabel(nowMs, state.resetsAt, timeFormatMode, timeZone)
     : null
   lines.push(resetText ?? "Reset: Unknown")
   return lines.join("\n")
