@@ -70,6 +70,26 @@ describe("resolveTrayState", () => {
     })
   })
 
+  it("does not borrow a provider quota while History is active", () => {
+    const result = resolveTrayState({
+      pluginsMeta,
+      pluginSettings: { order: ["alpha", "beta"], disabled: [] },
+      pluginStates: {
+        alpha: state(output("alpha", 25)),
+        beta: state(output("beta", 100)),
+      },
+      activeView: "history",
+    })
+
+    expect(result).toMatchObject({
+      kind: "unknown",
+      providerId: null,
+      providerName: null,
+      metricLabel: null,
+      reason: "non-provider-view",
+    })
+  })
+
   it("chooses the lowest current remaining value on Home with stable order tie-breaks", () => {
     const result = resolveTrayState({
       pluginsMeta,

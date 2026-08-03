@@ -69,4 +69,22 @@ describe("buildTraySettingsPreview", () => {
       { id: "claude:Weekly", fraction: 0.3 },
     ])
   })
+
+  it("does not select a provider quota for the History view", () => {
+    const result = buildTraySettingsPreview({
+      pluginsMeta,
+      pluginSettings: { order: ["codex", "claude"], disabled: [] },
+      pluginStates,
+      displayMode: "left",
+      activeView: "history",
+    })
+
+    expect(result.state).toMatchObject({
+      kind: "unknown",
+      providerId: null,
+      reason: "non-provider-view",
+    })
+    expect(result.preview.providerBars).toEqual([])
+    expect(result.preview.providerIconUrl).toBeUndefined()
+  })
 })

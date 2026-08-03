@@ -7,6 +7,7 @@ export type TrayUnknownReason =
   | "no-data"
   | "no-primary-metric"
   | "invalid-limit"
+  | "non-provider-view"
 
 export type TrayValueState = {
   kind: "value"
@@ -214,6 +215,16 @@ export function resolveTrayState(args: {
       providerName: null,
       metricLabel: null,
       reason: "no-provider",
+    }
+  }
+
+  if (activeView === "history") {
+    return {
+      kind: "unknown",
+      providerId: null,
+      providerName: null,
+      metricLabel: null,
+      reason: "non-provider-view",
     }
   }
 

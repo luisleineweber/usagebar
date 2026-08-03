@@ -2,6 +2,8 @@
 
 ## 2026-08-03
 
+- History is a non-provider view, but tray state treated it as an unselected Home view and borrowed the lowest provider quota; a valid zero from OpenCode Go therefore appeared as the History icon value. Fix: return an explicit non-provider unknown state and cover the tray preview. Prevention: define tray semantics for every navigation route and test non-provider views with a valid zero quota elsewhere.
+
 - CI tests that format local times must not inherit the runner timezone, and integration tests must isolate unrelated mount-time effects such as updater polling. Fix: inject an optional timezone into reset/tray formatting for deterministic fixtures and mock updater state in the About interaction test. Prevention: run time-sensitive tests under UTC and keep cross-feature integration tests’ external hooks mocked.
 
 ## 2026-08-02

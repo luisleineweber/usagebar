@@ -1,5 +1,31 @@
 ﻿# Active Todo
 
+# History view shows zero in the Windows taskbar icon, 2026-08-03
+
+## Acceptance Criteria
+
+- [x] Opening the History view does not make the Windows taskbar/tray icon display an incorrect `0` when provider quota data is available.
+- [x] The taskbar/tray icon keeps its existing provider quota behavior on Home and provider views.
+- [x] A regression test covers the History-view icon state and passes with the smallest root-cause fix.
+- [x] Focused tests, frontend checks, formatting, and diff review pass; local Windows visual verification is recorded separately.
+
+## Plan
+
+- [x] Reproduce the History-view/taskbar-icon mismatch at the tray state/rendering seam.
+- [x] Trace the selected view, provider quota state, and icon renderer to identify the root cause.
+- [x] Add the red regression test before applying the smallest fix.
+- [x] Run focused verification, related checks, and review the final diff.
+
+## Verification Notes
+
+- `bun run test -- src/lib/tray-state.test.ts src/lib/tray-preview.test.ts src/hooks/app/use-tray-icon.test.ts src/App.test.tsx --run` (baseline) -> 4 files, 102 passed; the two new regression tests were then red before the fix.
+- `bun run test -- src/lib/tray-state.test.ts src/lib/tray-preview.test.ts --run` (red before fix) -> both new tests failed because History selected a provider value; after the fix -> 2 files, 11 passed.
+- `bun run test -- src/lib/tray-state.test.ts src/lib/tray-preview.test.ts src/hooks/app/use-tray-icon.test.ts src/App.test.tsx --run` -> 4 files, 104 passed.
+- `bun run test:all` -> 96 files, 1,404 passed.
+- `bun run check` -> Prettier, ESLint, TypeScript, Rust format, and Clippy passed.
+- `git diff --check` -> passed; Git reported existing LF-to-CRLF normalization notices only.
+- Local cache evidence: `opencode-go` was `483 / 200`, so its valid `0%` remaining was incorrectly borrowed by History before the fix. Packaged Windows visual verification was not available in this session; the tray preview regression covers the native icon input state.
+
 # Publish Alpha 7 GitHub release, 2026-08-02
 
 ## Acceptance Criteria
