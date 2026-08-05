@@ -1728,9 +1728,10 @@ mod tests {
     }
 
     #[test]
-    fn ls_parse_netstat_ports_accepts_localized_windows_listen_rows() {
+    fn ls_parse_netstat_ports_uses_locale_stable_windows_listen_columns() {
         let output = "\
   TCP    127.0.0.1:58393        127.0.0.1:9222         HERGESTELLT     9984\n\
+  TCP    127.0.0.1:58394        127.0.0.1:9223         LISTENING       9984\n\
   TCP    127.0.0.1:63347        0.0.0.0:0              ABH\u{00D6}REN         9984\n\
   TCP    127.0.0.1:63348        0.0.0.0:0              ABH\u{00D6}REN         9984\n\
   TCP    127.0.0.1:63354        0.0.0.0:0              ABH\u{00D6}REN         9984\n\

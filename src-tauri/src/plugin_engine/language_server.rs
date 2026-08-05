@@ -390,12 +390,9 @@ pub(crate) fn parse_netstat_ports(output: &str, process_pid: i32) -> Vec<i32> {
             continue;
         }
 
-        let state_index = columns.len() - 2;
         let pid_index = columns.len() - 1;
         let foreign_address = columns[2];
-        let is_listen_row = columns[state_index] == "LISTENING"
-            || foreign_address == "0.0.0.0:0"
-            || foreign_address == "[::]:0";
+        let is_listen_row = foreign_address == "0.0.0.0:0" || foreign_address == "[::]:0";
         if columns[pid_index] != pid_text || !is_listen_row {
             continue;
         }
