@@ -13,6 +13,10 @@
       "message": "Experimental on Windows. Save a Perplexity Cookie header or set PERPLEXITY_COOKIE_HEADER before probing."
     }
   },
+  "links": [{ "label": "Status", "url": "https://status.perplexity.com/" }],
+  "status": {
+    "kind": "html"
+  },
   "lines": [
     {
       "type": "progress",
@@ -63,8 +67,6 @@
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "www.perplexity.ai"
-    ]
+    "httpDomains": ["www.perplexity.ai"]
   }
 }

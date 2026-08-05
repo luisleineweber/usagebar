@@ -12,6 +12,7 @@
       "state": "experimental"
     }
   },
+  "links": [{ "label": "Status", "url": "https://www.githubstatus.com/" }],
   "lines": [
     {
       "type": "progress",

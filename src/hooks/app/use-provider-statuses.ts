@@ -18,7 +18,10 @@ export function useProviderStatuses({
   const statusPlugins = useMemo(() => {
     if (!pluginSettings) return []
     const eligible = new Set(getProbeEligiblePluginIds(pluginSettings, pluginsMeta))
-    return pluginsMeta.filter((plugin) => eligible.has(plugin.id) && Boolean(plugin.statusPageUrl))
+    return pluginsMeta.filter(
+      (plugin) =>
+        eligible.has(plugin.id) && Boolean(plugin.statusPageUrl || plugin.status?.endpoint)
+    )
   }, [pluginSettings, pluginsMeta])
 
   useEffect(() => {

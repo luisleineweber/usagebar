@@ -15,6 +15,10 @@
   },
   "links": [
     {
+      "label": "Status",
+      "url": "https://status.zed.dev/"
+    },
+    {
       "label": "Dashboard",
       "url": "https://dashboard.zed.dev/account"
     },
@@ -23,6 +27,10 @@
       "url": "https://zed.dev/docs"
     }
   ],
+  "status": {
+    "kind": "zedSummaryV3",
+    "endpoint": "https://status.zed.dev/v3/summary.json"
+  },
   "lines": [
     {
       "type": "badge",
@@ -93,9 +101,6 @@
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "cloud.zed.dev",
-      "dashboard.zed.dev"
-    ]
+    "httpDomains": ["cloud.zed.dev", "dashboard.zed.dev"]
   }
 }

@@ -23,6 +23,10 @@
       "url": "https://status.cloud.google.com"
     }
   ],
+  "status": {
+    "kind": "html",
+    "endpoint": "https://status.cloud.google.com/"
+  },
   "lines": [
     {
       "type": "badge",
@@ -53,9 +57,6 @@
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "oauth2.googleapis.com",
-      "monitoring.googleapis.com"
-    ]
+    "httpDomains": ["oauth2.googleapis.com", "monitoring.googleapis.com"]
   }
 }

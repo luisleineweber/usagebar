@@ -21,6 +21,24 @@ pub struct PluginLink {
     pub url: String,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum StatusSourceKind {
+    StatuspageV2,
+    Html,
+    Rss,
+    ZedSummaryV3,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginStatus {
+    pub kind: StatusSourceKind,
+    pub endpoint: Option<String>,
+    #[serde(default)]
+    pub component_names: Vec<String>,
+}
+
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum WindowsSupportState {
@@ -144,6 +162,8 @@ pub struct PluginManifest {
     pub lines: Vec<ManifestLine>,
     #[serde(default)]
     pub links: Vec<PluginLink>,
+    #[serde(default)]
+    pub status: Option<PluginStatus>,
     #[serde(default)]
     pub platform_support: PlatformSupport,
     #[serde(default)]
@@ -293,6 +313,7 @@ mod tests {
         assert_eq!(manifest.lines.len(), 1);
         assert!(manifest.lines[0].primary_order.is_none());
         assert!(manifest.links.is_empty());
+        assert!(manifest.status.is_none());
         assert!(manifest.capabilities.http);
         assert!(manifest.capabilities.sqlite_read);
         assert!(!manifest.capabilities.sqlite_write);
@@ -386,6 +407,36 @@ mod tests {
         assert_eq!(manifest.links.len(), 2);
         assert_eq!(manifest.links[0].label, "Status");
         assert_eq!(manifest.links[1].url, "https://example.com/billing");
+    }
+
+    #[test]
+    fn status_source_is_parsed_when_present() {
+        let manifest = parse_manifest(
+            r#"
+            {
+              "schemaVersion": 1,
+              "id": "x",
+              "name": "X",
+              "version": "0.0.1",
+              "entry": "plugin.js",
+              "icon": "icon.svg",
+              "lines": [],
+              "status": {
+                "kind": "statuspageV2",
+                "endpoint": "https://status.example.com/api/v2/summary.json",
+                "componentNames": ["API", "Chat"]
+              }
+            }
+            "#,
+        );
+
+        let status = manifest.status.expect("status source");
+        assert_eq!(status.kind, StatusSourceKind::StatuspageV2);
+        assert_eq!(
+            status.endpoint.as_deref(),
+            Some("https://status.example.com/api/v2/summary.json")
+        );
+        assert_eq!(status.component_names, vec!["API", "Chat"]);
     }
 
     #[test]

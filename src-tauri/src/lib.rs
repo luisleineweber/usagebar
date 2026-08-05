@@ -281,6 +281,7 @@ mod tests {
             default_plan: None,
             lines: Vec::new(),
             links: Vec::new(),
+            status: None,
             platform_support: PlatformSupport {
                 windows: WindowsSupportConfig {
                     state: windows_state,

@@ -14,16 +14,19 @@
     }
   },
   "links": [
-    { "label": "Usage", "url": "https://grok.com/?_s=usage" }
+    { "label": "Usage", "url": "https://grok.com/?_s=usage" },
+    { "label": "Status", "url": "https://status.x.ai/" }
   ],
+  "status": {
+    "kind": "rss",
+    "endpoint": "https://status.x.ai/feed.xml"
+  },
   "lines": [
     { "type": "progress", "label": "Credits used", "scope": "overview", "primaryOrder": 1 },
     { "type": "badge", "label": "Pay as you go", "scope": "detail" }
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "cli-chat-proxy.grok.com"
-    ]
+    "httpDomains": ["cli-chat-proxy.grok.com"]
   }
 }

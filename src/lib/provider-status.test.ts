@@ -63,23 +63,58 @@ describe("hasProviderStatusIssue", () => {
   })
 
   it("returns false for none indicator", () => {
-    expect(hasProviderStatusIssue({ indicator: "none", description: null, updatedAt: null, checkedAt: 1 })).toBe(false)
+    expect(
+      hasProviderStatusIssue({
+        indicator: "none",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe(false)
   })
 
   it("returns true for minor indicator", () => {
-    expect(hasProviderStatusIssue({ indicator: "minor", description: null, updatedAt: null, checkedAt: 1 })).toBe(true)
+    expect(
+      hasProviderStatusIssue({
+        indicator: "minor",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe(true)
   })
 
   it("returns true for major indicator", () => {
-    expect(hasProviderStatusIssue({ indicator: "major", description: null, updatedAt: null, checkedAt: 1 })).toBe(true)
+    expect(
+      hasProviderStatusIssue({
+        indicator: "major",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe(true)
   })
 
   it("returns true for maintenance indicator", () => {
-    expect(hasProviderStatusIssue({ indicator: "maintenance", description: null, updatedAt: null, checkedAt: 1 })).toBe(true)
+    expect(
+      hasProviderStatusIssue({
+        indicator: "maintenance",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe(true)
   })
 
   it("does not report an incident for an unknown indicator", () => {
-    expect(hasProviderStatusIssue({ indicator: "unknown", description: null, updatedAt: null, checkedAt: 1 })).toBe(false)
+    expect(
+      hasProviderStatusIssue({
+        indicator: "unknown",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe(false)
   })
 })
 
@@ -89,61 +124,75 @@ describe("providerStatusLabel", () => {
   })
 
   it("returns null for none indicator", () => {
-    expect(providerStatusLabel({ indicator: "none", description: null, updatedAt: null, checkedAt: 1 })).toBeNull()
+    expect(
+      providerStatusLabel({ indicator: "none", description: null, updatedAt: null, checkedAt: 1 })
+    ).toBeNull()
   })
 
   it("returns null for none indicator with description", () => {
-    expect(providerStatusLabel({
-      indicator: "none",
-      description: "All systems operational",
-      updatedAt: null,
-      checkedAt: 1,
-    })).toBeNull()
+    expect(
+      providerStatusLabel({
+        indicator: "none",
+        description: "All systems operational",
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBeNull()
   })
 
   it("returns maintenance label for maintenance indicator without description", () => {
-    expect(providerStatusLabel({
-      indicator: "maintenance",
-      description: null,
-      updatedAt: null,
-      checkedAt: 1,
-    })).toBe("Maintenance in progress")
+    expect(
+      providerStatusLabel({
+        indicator: "maintenance",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe("Maintenance in progress")
   })
 
   it("returns major incident label", () => {
-    expect(providerStatusLabel({
-      indicator: "major",
-      description: null,
-      updatedAt: null,
-      checkedAt: 1,
-    })).toBe("Major incident")
+    expect(
+      providerStatusLabel({
+        indicator: "major",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe("Major incident")
   })
 
   it("returns minor incident label", () => {
-    expect(providerStatusLabel({
-      indicator: "minor",
-      description: null,
-      updatedAt: null,
-      checkedAt: 1,
-    })).toBe("Minor incident")
+    expect(
+      providerStatusLabel({
+        indicator: "minor",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe("Minor incident")
   })
 
   it("returns unknown label for unknown indicator", () => {
-    expect(providerStatusLabel({
-      indicator: "unknown",
-      description: null,
-      updatedAt: null,
-      checkedAt: 1,
-    })).toBe("Status unknown")
+    expect(
+      providerStatusLabel({
+        indicator: "unknown",
+        description: null,
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe("Status unknown")
   })
 
   it("returns trimmed description when present", () => {
-    expect(providerStatusLabel({
-      indicator: "maintenance",
-      description: "  Planned downtime  ",
-      updatedAt: null,
-      checkedAt: 1,
-    })).toBe("Planned downtime")
+    expect(
+      providerStatusLabel({
+        indicator: "maintenance",
+        description: "  Planned downtime  ",
+        updatedAt: null,
+        checkedAt: 1,
+      })
+    ).toBe("Planned downtime")
   })
 })
 
@@ -175,15 +224,16 @@ describe("fetchProviderStatus", () => {
   it("fetches and normalizes a successful status response", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        status: {
-          indicator: "minor",
-          description: "Elevated error rates",
-        },
-        page: {
-          updated_at: "2026-05-24T11:00:00Z",
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          status: {
+            indicator: "minor",
+            description: "Elevated error rates",
+          },
+          page: {
+            updated_at: "2026-05-24T11:00:00Z",
+          },
+        }),
     })
     vi.stubGlobal("fetch", mockFetch)
 
@@ -194,10 +244,10 @@ describe("fetchProviderStatus", () => {
     expect(result!.description).toBe("Elevated error rates")
     expect(result!.checkedAt).toBe(Date.now())
     expect(result!.updatedAt).not.toBeNull()
-    expect(mockFetch).toHaveBeenCalledWith(
-      "https://status.example.com/api/v2/status.json",
-      { headers: { accept: "application/json" }, cache: "no-store" }
-    )
+    expect(mockFetch).toHaveBeenCalledWith("https://status.example.com/api/v2/status.json", {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    })
 
     vi.unstubAllGlobals()
   })
@@ -205,12 +255,13 @@ describe("fetchProviderStatus", () => {
   it("normalizes unknown indicator to unknown", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        status: {
-          indicator: "degraded_performance",
-          description: null,
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          status: {
+            indicator: "degraded_performance",
+            description: null,
+          },
+        }),
     })
     vi.stubGlobal("fetch", mockFetch)
 
@@ -239,12 +290,13 @@ describe("fetchProviderStatus", () => {
   it("handles missing page.updated_at", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        status: {
-          indicator: "none",
-          description: "All systems operational",
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          status: {
+            indicator: "none",
+            description: "All systems operational",
+          },
+        }),
     })
     vi.stubGlobal("fetch", mockFetch)
 
@@ -258,15 +310,16 @@ describe("fetchProviderStatus", () => {
   it("handles null page.updated_at", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        status: {
-          indicator: "none",
-          description: null,
-        },
-        page: {
-          updated_at: null,
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          status: {
+            indicator: "none",
+            description: null,
+          },
+          page: {
+            updated_at: null,
+          },
+        }),
     })
     vi.stubGlobal("fetch", mockFetch)
 
@@ -274,6 +327,104 @@ describe("fetchProviderStatus", () => {
 
     expect(result!.updatedAt).toBeNull()
 
+    vi.unstubAllGlobals()
+  })
+
+  it("only evaluates configured statuspage components", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          status: { indicator: "major", description: "Unrelated service outage" },
+          components: [
+            { name: "Netlify API", status: "major_outage" },
+            { name: "Cascade", status: "operational" },
+          ],
+        }),
+    })
+    vi.stubGlobal("fetch", mockFetch)
+
+    const result = await fetchProviderStatus({
+      statusPageUrl: "https://status.windsurf.com",
+      status: { kind: "statuspageV2", componentNames: ["Cascade"] },
+    })
+
+    expect(result).toMatchObject({ indicator: "none", description: null })
+    vi.unstubAllGlobals()
+  })
+
+  it("reads xAI active incidents from its RSS feed", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () =>
+        Promise.resolve(`
+        <rss><channel>
+          <item>
+            <title>API requests have increased latency</title>
+            <description><![CDATA[<h3>Status: INVESTIGATING</h3>]]></description>
+            <pubDate>Sun, 24 May 2026 11:00:00 GMT</pubDate>
+          </item>
+        </channel></rss>
+      `),
+    })
+    vi.stubGlobal("fetch", mockFetch)
+
+    const result = await fetchProviderStatus({
+      statusPageUrl: "https://status.x.ai",
+      status: { kind: "rss", endpoint: "https://status.x.ai/feed.xml" },
+    })
+
+    expect(result).toMatchObject({
+      indicator: "minor",
+      description: "API requests have increased latency",
+    })
+    vi.unstubAllGlobals()
+  })
+
+  it("reads the Zed summary endpoint", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ page: { status: "DOWN" } }),
+    })
+    vi.stubGlobal("fetch", mockFetch)
+
+    const result = await fetchProviderStatus({
+      statusPageUrl: "https://status.zed.dev",
+      status: { kind: "zedSummaryV3", endpoint: "https://status.zed.dev/v3/summary.json" },
+    })
+
+    expect(result).toMatchObject({ indicator: "major", description: "Zed: DOWN" })
+    vi.unstubAllGlobals()
+  })
+
+  it("reads current status from HTML status pages", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve("<html><body><h2>All Systems Operational</h2></body></html>"),
+    })
+    vi.stubGlobal("fetch", mockFetch)
+
+    const result = await fetchProviderStatus({
+      statusPageUrl: "https://status.openrouter.ai",
+      status: { kind: "html" },
+    })
+
+    expect(result).toMatchObject({ indicator: "none", description: null })
+    vi.unstubAllGlobals()
+  })
+
+  it("accepts Google Cloud's no-incident status banner", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve("<html><body><div>No broad severe incidents</div></body></html>"),
+    })
+    vi.stubGlobal("fetch", mockFetch)
+
+    const result = await fetchProviderStatus({
+      status: { kind: "html", endpoint: "https://status.cloud.google.com/" },
+    })
+
+    expect(result).toMatchObject({ indicator: "none", description: null })
     vi.unstubAllGlobals()
   })
 })

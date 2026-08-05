@@ -28,6 +28,12 @@ export type PluginLink = {
   url: string
 }
 
+export type PluginStatusSource = {
+  kind: "statuspageV2" | "html" | "rss" | "zedSummaryV3"
+  endpoint?: string | null
+  componentNames?: string[]
+}
+
 export type ProbeErrorCategory =
   | "credentialMissing"
   | "credentialUnavailable"
@@ -112,6 +118,7 @@ export type PluginMeta = {
   supportMessage?: string | null
   isSurfaced?: boolean
   statusPageUrl?: string | null
+  status?: PluginStatusSource | null
   lines: ManifestLine[]
   links?: PluginLink[]
   /** Ordered list of primary metric candidates. Frontend picks first available. */

@@ -857,6 +857,7 @@ mod tests {
                 default_plan: None,
                 lines: vec![],
                 links: vec![],
+                status: None,
                 platform_support: PlatformSupport::default(),
                 capabilities: HostCapabilities::default(),
                 source_provenance: None,

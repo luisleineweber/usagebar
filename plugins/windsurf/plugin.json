@@ -12,6 +12,12 @@
       "state": "experimental"
     }
   },
+  "links": [{ "label": "Status", "url": "https://status.windsurf.com/" }],
+  "status": {
+    "kind": "statuspageV2",
+    "endpoint": "https://status.windsurf.com/api/v2/summary.json",
+    "componentNames": ["Cascade", "Windsurf Tab"]
+  },
   "lines": [
     {
       "type": "progress",
@@ -42,8 +48,6 @@
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "server.self-serve.windsurf.com"
-    ]
+    "httpDomains": ["server.self-serve.windsurf.com"]
   }
 }

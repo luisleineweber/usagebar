@@ -17,6 +17,10 @@
     {
       "label": "Usage dashboard",
       "url": "https://platform.openai.com/usage"
+    },
+    {
+      "label": "Status",
+      "url": "https://status.openai.com/"
     }
   ],
   "settings": [

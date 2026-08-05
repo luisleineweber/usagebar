@@ -56,6 +56,11 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
     }
   },
   "links": [{ "label": "Status", "url": "https://status.example.com" }],
+  "status": {
+    "kind": "statuspageV2",
+    "endpoint": "https://status.example.com/api/v2/summary.json",
+    "componentNames": ["API"]
+  },
   "sourceProvenance": "officialApi",
   "capabilities": {
     "http": true,
@@ -71,19 +76,20 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 }
 ```
 
-| Field           | Type   | Required | Description                                |
-| --------------- | ------ | -------- | ------------------------------------------ |
-| `schemaVersion` | number | Yes      | Always `1`                                 |
-| `id`            | string | Yes      | Unique identifier (kebab-case recommended) |
-| `name`          | string | Yes      | Display name shown in UI                   |
-| `version`       | string | Yes      | Semver version                             |
-| `entry`         | string | Yes      | Relative path to JS entry file             |
-| `icon`          | string | Yes      | Relative path to SVG icon file             |
-| `platformSupport` | object | No     | Optional per-platform support/surfacing metadata |
-| `links`         | array  | No       | Optional quick links shown on detail page  |
-| `sourceProvenance` | string | No    | Provider source class: `officialApi`, `officialLocalSource`, `privateEndpoint`, `cookieReplay`, or `htmlScrape` |
-| `capabilities`  | object | No       | Optional host API allowlist; omitted fields keep legacy defaults |
-| `lines`         | array  | Yes      | Output shape used for loading skeletons    |
+| Field              | Type   | Required | Description                                                                                                     |
+| ------------------ | ------ | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `schemaVersion`    | number | Yes      | Always `1`                                                                                                      |
+| `id`               | string | Yes      | Unique identifier (kebab-case recommended)                                                                      |
+| `name`             | string | Yes      | Display name shown in UI                                                                                        |
+| `version`          | string | Yes      | Semver version                                                                                                  |
+| `entry`            | string | Yes      | Relative path to JS entry file                                                                                  |
+| `icon`             | string | Yes      | Relative path to SVG icon file                                                                                  |
+| `platformSupport`  | object | No       | Optional per-platform support/surfacing metadata                                                                |
+| `links`            | array  | No       | Optional quick links shown on detail page                                                                       |
+| `status`           | object | No       | Optional machine-readable provider status source                                                                |
+| `sourceProvenance` | string | No       | Provider source class: `officialApi`, `officialLocalSource`, `privateEndpoint`, `cookieReplay`, or `htmlScrape` |
+| `capabilities`     | object | No       | Optional host API allowlist; omitted fields keep legacy defaults                                                |
+| `lines`            | array  | Yes      | Output shape used for loading skeletons                                                                         |
 
 Validation rules:
 
@@ -93,38 +99,48 @@ Validation rules:
 - `icon` must be relative and point to an SVG file (use `fill="currentColor"` for theme compatibility)
 - `links[].url` (if provided) must be an `http://` or `https://` URL
 
+### Provider status source (Optional)
+
+The status source drives the incident badge in the provider card. The `Status` link remains the user-facing page.
+
+| Field            | Type                                             | Description                                                                                    |
+| ---------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `kind`           | `statuspageV2`, `html`, `rss`, or `zedSummaryV3` | Parser for the endpoint                                                                        |
+| `endpoint`       | string                                           | Optional machine-readable or page endpoint. Statuspage V2 uses the `Status` link when omitted. |
+| `componentNames` | string array                                     | Optional exact component names. The status uses only these components.                         |
+
 ### Source Provenance (Optional)
 
 `sourceProvenance` classifies the provider data source so the UI, docs, and release notes can distinguish stable official contracts from compatibility paths.
 
-| Value | Meaning |
-|-------|---------|
-| `officialApi` | Official remote provider API intended for this usage/status data |
+| Value                 | Meaning                                                                   |
+| --------------------- | ------------------------------------------------------------------------- |
+| `officialApi`         | Official remote provider API intended for this usage/status data          |
 | `officialLocalSource` | Official local file, CLI, database, or app state produced by the provider |
-| `privateEndpoint` | Provider-owned endpoint that is not documented as a public usage API |
-| `cookieReplay` | Session or cookie reuse against web-backed endpoints |
-| `htmlScrape` | HTML parsing or scraping |
+| `privateEndpoint`     | Provider-owned endpoint that is not documented as a public usage API      |
+| `cookieReplay`        | Session or cookie reuse against web-backed endpoints                      |
+| `htmlScrape`          | HTML parsing or scraping                                                  |
 
 ### Host Capabilities (Optional)
 
 `capabilities` narrows the host surface injected into `ctx.host`. For existing plugins, omitted fields keep the previous permissive defaults except SQLite writes, which default to disabled. New plugins should declare only the APIs and domains they need.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `fs` | boolean | `true` | Expose `ctx.host.fs` |
-| `crypto` | boolean | `true` | Expose `ctx.host.crypto` |
-| `env` | boolean | `true` | Expose whitelisted environment lookup |
-| `providerConfig` | boolean | `true` | Expose provider config helpers |
-| `http` | boolean | `true` | Expose `ctx.host.http` |
-| `httpDomains` | string[] | `[]` | HTTP hostname allowlist. Empty or omitted means all plugin HTTP requests are blocked. Supports exact hosts and `*.example.com`. |
-| `browser` | boolean | `true` | Expose browser/session bridge helpers |
-| `keychain` | boolean | `true` | Expose generic credential helpers |
-| `gh` | boolean | `true` | Expose GitHub auth helper |
-| `providerSecrets` | boolean | `true` | Expose app-owned provider secret storage |
-| `sqliteRead` | boolean | `true` | Expose read-only SQLite query access |
-| `sqliteWrite` | boolean | `false` | Enable SQLite write access; denied and logged unless explicitly true |
-| `ls` | boolean | `true` | Expose local language-server discovery |
-| `ccusage` | boolean | `true` | Expose ccusage runner integration |
+| Field             | Type     | Default | Description                                                                                                                     |
+| ----------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `fs`              | boolean  | `true`  | Expose `ctx.host.fs`                                                                                                            |
+| `crypto`          | boolean  | `true`  | Expose `ctx.host.crypto`                                                                                                        |
+| `env`             | boolean  | `true`  | Expose whitelisted environment lookup                                                                                           |
+| `providerConfig`  | boolean  | `true`  | Expose provider config helpers                                                                                                  |
+| `http`            | boolean  | `true`  | Expose `ctx.host.http`                                                                                                          |
+| `httpDomains`     | string[] | `[]`    | HTTP hostname allowlist. Empty or omitted means all plugin HTTP requests are blocked. Supports exact hosts and `*.example.com`. |
+| `browser`         | boolean  | `true`  | Expose browser/session bridge helpers                                                                                           |
+| `keychain`        | boolean  | `true`  | Expose generic credential helpers                                                                                               |
+| `gh`              | boolean  | `true`  | Expose GitHub auth helper                                                                                                       |
+| `providerSecrets` | boolean  | `true`  | Expose app-owned provider secret storage                                                                                        |
+| `sqliteRead`      | boolean  | `true`  | Expose read-only SQLite query access                                                                                            |
+| `sqliteWrite`     | boolean  | `false` | Enable SQLite write access; denied and logged unless explicitly true                                                            |
+| `ls`              | boolean  | `true`  | Expose local language-server discovery                                                                                          |
+| `ccusage`         | boolean  | `true`  | Expose ccusage runner integration                                                                                               |
 
 ### Platform Support (Optional)
 
@@ -142,11 +158,11 @@ Validation rules:
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `state` | string | No | One of `supported`, `experimental`, `blocked` |
-| `surfaced` | boolean | No | Whether the provider should appear in the UI on Windows; defaults to `true` |
-| `message` | string | No | Optional Windows-specific setup/support note shown in the UI |
+| Field      | Type    | Required | Description                                                                 |
+| ---------- | ------- | -------- | --------------------------------------------------------------------------- |
+| `state`    | string  | No       | One of `supported`, `experimental`, `blocked`                               |
+| `surfaced` | boolean | No       | Whether the provider should appear in the UI on Windows; defaults to `true` |
+| `message`  | string  | No       | Optional Windows-specific setup/support note shown in the UI                |
 
 Windows behavior:
 
@@ -157,9 +173,9 @@ Windows behavior:
 
 ### Links Array (Optional)
 
-| Field   | Type   | Required | Description |
-|---------|--------|----------|-------------|
-| `label` | string | Yes      | Link text shown in the provider detail quick-actions row |
+| Field   | Type   | Required | Description                                                    |
+| ------- | ------ | -------- | -------------------------------------------------------------- |
+| `label` | string | Yes      | Link text shown in the provider detail quick-actions row       |
 | `url`   | string | Yes      | External destination opened in the browser (`http/https` only) |
 
 ## Output Shape Declaration
@@ -169,12 +185,12 @@ loading skeletons instantly while probes execute asynchronously.
 
 ### Lines Array
 
-| Field     | Type    | Required | Description                                       |
-|-----------|---------|----------|---------------------------------------------------|
-| `type`    | string  | Yes      | One of: `text`, `progress`, `badge`               |
-| `label`   | string  | Yes      | Static label shown in the UI for this line        |
-| `scope`   | string  | Yes      | `"overview"` or `"detail"` - where line appears   |
-| `primaryOrder` | number | No    | Lower number = higher tray-primary priority among progress lines |
+| Field          | Type   | Required | Description                                                      |
+| -------------- | ------ | -------- | ---------------------------------------------------------------- |
+| `type`         | string | Yes      | One of: `text`, `progress`, `badge`                              |
+| `label`        | string | Yes      | Static label shown in the UI for this line                       |
+| `scope`        | string | Yes      | `"overview"` or `"detail"` - where line appears                  |
+| `primaryOrder` | number | No       | Lower number = higher tray-primary priority among progress lines |
 
 - `"overview"` - shown on both Overview tab and plugin detail pages
 - `"detail"` - shown only on plugin detail pages
@@ -184,6 +200,7 @@ loading skeletons instantly while probes execute asynchronously.
 Plugins can optionally rank progress lines with `primaryOrder`. The lowest numbered progress line present in runtime data becomes the tray-primary metric.
 
 Rules:
+
 - Only `type: "progress"` lines can set `primaryOrder` (the value is ignored on other types)
 - Lower numbers win (`1` before `2`)
 - Up to 4 enabled plugins with primary progress are shown in the tray (in plugin order)
@@ -227,17 +244,14 @@ globalThis.__openusage_plugin = {
 type MetricLine =
   | { type: "text"; label: string; value: string; color?: string; subtitle?: string }
   | {
-      type: "progress";
-      label: string;
-      used: number;
-      limit: number;
-      format:
-        | { kind: "percent" }
-        | { kind: "dollars" }
-        | { kind: "count"; suffix: string };
-      resetsAt?: string; // ISO timestamp
-      periodDurationMs?: number; // period length in ms for pace tracking
-      color?: string;
+      type: "progress"
+      label: string
+      used: number
+      limit: number
+      format: { kind: "percent" } | { kind: "dollars" } | { kind: "count"; suffix: string }
+      resetsAt?: string // ISO timestamp
+      periodDurationMs?: number // period length in ms for pace tracking
+      color?: string
     }
   | { type: "badge"; label: string; text: string; color?: string; subtitle?: string }
 ```
@@ -283,20 +297,25 @@ Status indicator with colored border.
 
 ```javascript
 ctx.line.badge({ label: "Plan", text: "Pro", color: "#000000" })
-ctx.line.badge({ label: "Status", text: "Connected", color: "#22c55e", subtitle: "Last sync 5m ago" })
+ctx.line.badge({
+  label: "Status",
+  text: "Connected",
+  color: "#22c55e",
+  subtitle: "Last sync 5m ago",
+})
 ```
 
 ## Error Handling
 
-| Condition                  | Result                                        |
-| -------------------------- | --------------------------------------------- |
-| Plugin throws a string     | Error badge with that string                  |
-| Plugin throws non-string   | Error badge with a generic fallback message   |
-| Promise rejects            | Error badge                                   |
-| Promise never resolves     | Error badge (timeout)                         |
-| Invalid line type          | Error badge                                   |
-| Missing `lines` array      | Error badge                                   |
-| Invalid progress values    | Error badge (line-specific validation error)  |
+| Condition                | Result                                       |
+| ------------------------ | -------------------------------------------- |
+| Plugin throws a string   | Error badge with that string                 |
+| Plugin throws non-string | Error badge with a generic fallback message  |
+| Promise rejects          | Error badge                                  |
+| Promise never resolves   | Error badge (timeout)                        |
+| Invalid line type        | Error badge                                  |
+| Missing `lines` array    | Error badge                                  |
+| Invalid progress values  | Error badge (line-specific validation error) |
 
 Prefer throwing short, actionable strings (not `Error` objects).
 
@@ -325,7 +344,7 @@ A complete, working plugin that fetches data and displays all three line types.
 **`plugin.js`:**
 
 ```javascript
-(function () {
+;(function () {
   globalThis.__openusage_plugin = {
     id: "minimal",
     probe: function (ctx) {

@@ -66,6 +66,7 @@ pub struct PluginMeta {
     pub support_message: Option<String>,
     pub is_surfaced: bool,
     pub status_page_url: Option<String>,
+    pub status: Option<PluginStatusDto>,
     pub lines: Vec<ManifestLineDto>,
     pub links: Vec<PluginLinkDto>,
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
@@ -89,6 +90,15 @@ pub struct ManifestLineDto {
 pub struct PluginLinkDto {
     pub label: String,
     pub url: String,
+}
+
+#[cfg(not(test))]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginStatusDto {
+    pub kind: crate::plugin_engine::manifest::StatusSourceKind,
+    pub endpoint: Option<String>,
+    pub component_names: Vec<String>,
 }
 
 #[cfg(not(test))]
@@ -130,6 +140,11 @@ pub(crate) fn list_plugins(state: tauri::State<'_, Mutex<crate::AppState>>) -> V
                     .iter()
                     .find(|link| link.label.eq_ignore_ascii_case("status"))
                     .map(|link| link.url.clone()),
+                status: plugin.manifest.status.map(|status| PluginStatusDto {
+                    kind: status.kind,
+                    endpoint: status.endpoint,
+                    component_names: status.component_names,
+                }),
                 lines: plugin
                     .manifest
                     .lines

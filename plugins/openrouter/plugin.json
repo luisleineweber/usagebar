@@ -13,6 +13,10 @@
       "message": "Windows experimental. Use a stored OpenRouter management key or OPENROUTER_API_KEY to fetch credits and key-rate data."
     }
   },
+  "links": [{ "label": "Status", "url": "https://status.openrouter.ai/" }],
+  "status": {
+    "kind": "html"
+  },
   "lines": [
     {
       "type": "progress",
@@ -33,8 +37,6 @@
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "openrouter.ai"
-    ]
+    "httpDomains": ["openrouter.ai"]
   }
 }

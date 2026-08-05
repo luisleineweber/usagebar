@@ -12,6 +12,16 @@
       "state": "experimental"
     }
   },
+  "links": [
+    {
+      "label": "Status",
+      "url": "https://status.cloud.google.com/"
+    }
+  ],
+  "status": {
+    "kind": "html",
+    "endpoint": "https://status.cloud.google.com/"
+  },
   "lines": [
     {
       "type": "progress",
