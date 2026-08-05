@@ -6,7 +6,12 @@ import { fileURLToPath } from "node:url"
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, "..")
 const fixtureRoot = path.join(repoRoot, "tests", "fixtures", "ccusage")
-const version = "20.0.19"
+const hostSource = readFileSync(
+  path.join(repoRoot, "src-tauri", "src", "plugin_engine", "ccusage_host_api.rs"),
+  "utf8"
+)
+const version = hostSource.match(/const CCUSAGE_VERSION: &str = "(\d+\.\d+\.\d+)";/)?.[1]
+if (!version) throw new Error("could not read CCUSAGE_VERSION from ccusage_host_api.rs")
 const since = "20260801"
 const until = "20260804"
 const runner = process.platform === "win32" ? process.env.ComSpec || "cmd.exe" : "npx"

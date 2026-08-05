@@ -27,7 +27,7 @@
     "test:coverage": "vitest run --coverage.enabled",
     "test:coverage:report": "node ./scripts/run-coverage-report.mjs",
     "test:coverage:summary": "node ./scripts/coverage-summary.mjs",
-    "test:release": "bun run check && bun run test:coverage && bun run release:check",
+    "test:release": "bun run check && bun run test:ccusage-fixtures && bun run test:coverage && bun run release:check",
     "tauri": "node ./scripts/tauri/wrapper.mjs",
     "typecheck": "tsc --noEmit",
     "format:rust:check": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check"

@@ -2814,23 +2814,32 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 
 ## Acceptance Criteria
 
-- [ ] Pin the current ccusage runner to 20.0.19 while preserving the 18.0.11 Claude/Codex fallback.
-- [ ] Preserve the 30-second Windows cold-start policy and exact runner arguments.
-- [ ] Add mandatory sanitized fixtures covering Codex duplicate/multi-tick replay bursts, authoritative reasoning totals, and OpenCode SQLite/JSON rows before, inside, and after `since`/`until`.
-- [ ] Compare the exact normalized daily output from the pinned package against checked-in expectations.
-- [ ] Verify source tests, bundled resources, documentation, and a real packaged Windows run.
+- [x] Pin the current ccusage runner to 20.0.19 while preserving the 18.0.11 Claude/Codex fallback.
+- [x] Preserve the 30-second Windows cold-start policy and exact runner arguments.
+- [x] Add mandatory sanitized fixtures covering Codex duplicate/multi-tick replay bursts, authoritative reasoning totals, and OpenCode SQLite/JSON rows before, inside, and after `since`/`until`.
+- [x] Compare the exact normalized daily output from the pinned package against checked-in expectations.
+- [x] Verify source tests, bundled resources, documentation, and a real packaged Windows run.
 
 ## Plan
 
-- [ ] Inspect ccusage v20.0.19 fixture-compatible source shapes and establish a deterministic red/green fixture gate.
-- [ ] Add fixtures, exact normalized daily expectations, and a cross-platform verification command.
-- [ ] Bump only the current pin/docs, update runner regressions, and synchronize bundled plugins.
-- [ ] Run focused tests, related suites, full checks, formatting, and diff review.
-- [ ] Build and run the packaged Windows application against the real provider runner.
+- [x] Inspect ccusage v20.0.19 fixture-compatible source shapes and establish a deterministic red/green fixture gate.
+- [x] Add fixtures, exact normalized daily expectations, and a cross-platform verification command.
+- [x] Bump only the current pin/docs, update runner regressions, and synchronize bundled plugins.
+- [x] Run focused tests, related suites, full checks, formatting, and diff review.
+- [x] Build and run the packaged Windows application against the real provider runner.
 
 ## Verification Notes
 
-- Pending implementation.
+- `bun run ccusage:bump -- 20.0.19` -> passed after correcting the helper path to `ccusage_host_api.rs`.
+- `test:release` now includes `test:ccusage-fixtures`, and the gate reads the pinned Rust source-of-truth version so future bumps cannot silently test an older package.
+- `bun run test:ccusage-fixtures` -> Codex and OpenCode exact normalized daily outputs passed through published `npx.cmd` `ccusage@20.0.19`; fixtures include sanitized Codex replay/duplicate/reasoning data and OpenCode SQLite/JSON before/in/after rows.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib ccusage -- --nocapture` -> 29 passed.
+- `bun run test -- plugins/codex/plugin.test.js plugins/opencode/plugin.test.js --run` -> 2 files, 74 passed.
+- `bun run check` -> passed frontend formatting/ESLint/TypeScript plus Rust formatting/Clippy.
+- `bun run build:release -- --bundles nsis` -> produced `src-tauri/target/release/bundle/nsis/UsageBar_0.1.0-alpha.7_x64-setup.exe` (unsigned smoke build allowed by `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`).
+- Packaged Windows smoke -> silent install succeeded in a workspace-local directory; installed `usagebar.exe` started and stopped cleanly, installed `usagebar-cli.exe --version` returned `usagebar-cli 0.1.0-alpha.7`, and the packaged binary contains the 20.0.19 and 18.0.11 pins.
+- `bun run test:all` -> 1,386 passed, 30 failed in pre-existing/concurrent `src/App.test.tsx` behavior unrelated to ccusage; failures are recorded rather than changed in this slice.
+- `git diff --check` -> pre-existing `AGENTS.md:98` extra blank line warning; other touched-file diff checks have only existing line-ending normalization warnings.
 
 # Provider account instance identity, 2026-08-05
 
