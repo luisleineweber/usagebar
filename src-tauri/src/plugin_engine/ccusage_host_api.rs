@@ -1,4 +1,4 @@
-const CCUSAGE_VERSION: &str = "20.0.18";
+const CCUSAGE_VERSION: &str = "20.0.19";
 const CCUSAGE_PACKAGE_NAME: &str = "ccusage";
 const CCUSAGE_BIN_NAME: &str = "ccusage";
 const CCUSAGE_LEGACY_VERSION: &str = "18.0.11";

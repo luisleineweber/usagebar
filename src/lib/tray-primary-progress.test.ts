@@ -305,6 +305,35 @@ describe("getTrayPrimaryBars", () => {
 })
 
 describe("getTrayPinnedBars", () => {
+  it("does not apply an account-specific pin to another provider instance", () => {
+    const bars = getTrayPinnedBars({
+      pins: [
+        {
+          providerId: "a",
+          instanceRef: { providerId: "a", instanceId: "profile-a" },
+          metricLabel: "Weekly",
+          presentation: "bar",
+        },
+      ],
+      pluginSettings: { order: ["a"], disabled: [] },
+      pluginStates: {
+        a: {
+          loading: false,
+          error: null,
+          data: {
+            providerId: "a",
+            instanceRef: { providerId: "a", instanceId: "profile-b" },
+            displayName: "A",
+            iconUrl: "",
+            lines: [{ type: "progress", label: "Weekly", used: 42, limit: 100, format: "percent" }],
+          },
+        },
+      },
+    })
+
+    expect(bars).toEqual([{ id: "a:profile-a:Weekly", fraction: undefined }])
+  })
+
   it("selects exact pinned metrics in saved order", () => {
     const bars = getTrayPinnedBars({
       pins: [
@@ -321,8 +350,20 @@ describe("getTrayPinnedBars", () => {
             displayName: "Alpha",
             iconUrl: "",
             lines: [
-              { type: "progress", label: "Session", used: 20, limit: 100, format: { kind: "percent" } },
-              { type: "progress", label: "Weekly", used: 75, limit: 100, format: { kind: "percent" } },
+              {
+                type: "progress",
+                label: "Session",
+                used: 20,
+                limit: 100,
+                format: { kind: "percent" },
+              },
+              {
+                type: "progress",
+                label: "Weekly",
+                used: 75,
+                limit: 100,
+                format: { kind: "percent" },
+              },
             ],
           },
         },
@@ -336,4 +377,3 @@ describe("getTrayPinnedBars", () => {
     ])
   })
 })
-

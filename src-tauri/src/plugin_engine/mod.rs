@@ -25,6 +25,7 @@ pub mod browser_bridge {
     }
 }
 pub(crate) mod env;
+pub mod freshness;
 pub mod host_api;
 pub(crate) mod language_server;
 pub mod manifest;

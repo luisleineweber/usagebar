@@ -60,4 +60,24 @@ describe("SurfacePinWidget", () => {
       "58"
     )
   })
+
+  it("does not resolve an account-specific pin against another account", () => {
+    const accountA: DisplayPluginState = {
+      ...plugins[0]!,
+      data: {
+        ...plugins[0]!.data!,
+        instanceRef: { providerId: "codex", instanceId: "profile-a" },
+      },
+    }
+    const accountBPin: SurfacePin = {
+      providerId: "codex",
+      instanceRef: { providerId: "codex", instanceId: "profile-b" },
+      metricLabel: "Session",
+      presentation: "bar",
+    }
+
+    expect(
+      resolveSurfacePins({ pins: [accountBPin], plugins: [accountA], displayMode: "used" })
+    ).toEqual([{ pin: accountBPin, providerName: "Codex", percent: null }])
+  })
 })

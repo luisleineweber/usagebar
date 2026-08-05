@@ -10,6 +10,10 @@ import {
 } from "@/lib/provider-settings"
 import { deleteProviderSecret, setProviderSecret } from "@/lib/provider-secrets"
 import { getErrorMessage } from "@/lib/error-utils"
+import {
+  listenProviderConfigsUpdated,
+  notifyProviderConfigsUpdated,
+} from "@/lib/provider-config-events"
 
 type UseProviderConfigActionsArgs = {
   providerConfigs: ProviderConfigs
@@ -45,16 +49,27 @@ export function useProviderConfigActions({
 
   useEffect(() => {
     void reloadProviderConfigs()
+    let unlisten: (() => void) | undefined
+    void listenProviderConfigsUpdated((configs) => {
+      providerConfigsRef.current = configs
+      setProviderConfigs(configs)
+    }).then((dispose) => {
+      if (!mountedRef.current) dispose()
+      else unlisten = dispose
+    })
 
     return () => {
       mountedRef.current = false
+      unlisten?.()
     }
-  }, [reloadProviderConfigs])
+  }, [reloadProviderConfigs, setProviderConfigs])
 
   const persistProviderConfigs = useCallback(
     async (nextConfigs: ProviderConfigs) => {
+      providerConfigsRef.current = nextConfigs
       setProviderConfigs(nextConfigs)
       await saveProviderConfigs(nextConfigs)
+      await notifyProviderConfigsUpdated(nextConfigs)
     },
     [setProviderConfigs]
   )

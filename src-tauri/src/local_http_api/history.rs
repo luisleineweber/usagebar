@@ -1,4 +1,5 @@
 use super::cache::CachedPluginSnapshot;
+use crate::plugin_engine::freshness::DataFreshnessGroups;
 use crate::plugin_engine::runtime::UsageHistoryEntry;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
@@ -91,6 +92,8 @@ pub struct ProviderHistory {
     source: String,
     time_zone: String,
     entries: Vec<UsageHistoryEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    freshness: Option<DataFreshnessGroups>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -284,6 +287,14 @@ pub fn build_history_response(
             source: history.source,
             time_zone: history.time_zone,
             entries,
+            freshness: snapshot
+                .freshness
+                .as_ref()
+                .map(|freshness| DataFreshnessGroups {
+                    quota: None,
+                    cost: None,
+                    history: freshness.history.clone(),
+                }),
         });
     }
 
@@ -332,6 +343,7 @@ mod tests {
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
             provider_id: "claude".to_string(),
+            instance_ref: None,
             display_name: "Claude".to_string(),
             plan: None,
             lines: vec![],
@@ -345,6 +357,7 @@ mod tests {
                 ],
             }),
             fetched_at: "2026-07-10T12:00:00Z".to_string(),
+            freshness: None,
         }
     }
 

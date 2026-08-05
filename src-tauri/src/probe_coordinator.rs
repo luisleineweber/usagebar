@@ -1,8 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::plugin_engine::runtime::ProviderInstanceRef;
+
 #[derive(Debug, Default)]
 pub struct ProbeCoordinator {
-    waiting_batches_by_provider: HashMap<String, HashSet<String>>,
+    waiting_batches_by_instance: HashMap<ProviderInstanceRef, HashSet<String>>,
     remaining_providers_by_batch: HashMap<String, usize>,
 }
 
@@ -16,35 +18,35 @@ impl ProbeCoordinator {
     pub fn reserve_batch(
         &mut self,
         batch_id: String,
-        provider_ids: &[String],
-    ) -> Result<Vec<String>, String> {
+        instances: &[ProviderInstanceRef],
+    ) -> Result<Vec<ProviderInstanceRef>, String> {
         if self.remaining_providers_by_batch.contains_key(&batch_id) {
             return Err(format!("probe batch '{}' is already active", batch_id));
         }
-        if provider_ids.is_empty() {
+        if instances.is_empty() {
             return Ok(Vec::new());
         }
 
         self.remaining_providers_by_batch
-            .insert(batch_id.clone(), provider_ids.len());
-        let mut providers_to_start = Vec::new();
-        for provider_id in provider_ids {
+            .insert(batch_id.clone(), instances.len());
+        let mut instances_to_start = Vec::new();
+        for instance in instances {
             let waiters = self
-                .waiting_batches_by_provider
-                .entry(provider_id.clone())
+                .waiting_batches_by_instance
+                .entry(instance.clone())
                 .or_default();
             if waiters.is_empty() {
-                providers_to_start.push(provider_id.clone());
+                instances_to_start.push(instance.clone());
             }
             waiters.insert(batch_id.clone());
         }
-        Ok(providers_to_start)
+        Ok(instances_to_start)
     }
 
-    pub fn complete_provider(&mut self, provider_id: &str) -> ProbeCompletion {
+    pub fn complete_instance(&mut self, instance: &ProviderInstanceRef) -> ProbeCompletion {
         let mut result_batch_ids: Vec<String> = self
-            .waiting_batches_by_provider
-            .remove(provider_id)
+            .waiting_batches_by_instance
+            .remove(instance)
             .unwrap_or_default()
             .into_iter()
             .collect();
@@ -75,9 +77,16 @@ impl ProbeCoordinator {
 #[cfg(test)]
 mod tests {
     use super::ProbeCoordinator;
+    use crate::plugin_engine::runtime::ProviderInstanceRef;
 
-    fn ids(values: &[&str]) -> Vec<String> {
-        values.iter().map(|value| (*value).to_string()).collect()
+    fn instances(values: &[&str]) -> Vec<ProviderInstanceRef> {
+        values
+            .iter()
+            .map(|value| ProviderInstanceRef {
+                provider_id: (*value).to_string(),
+                instance_id: None,
+            })
+            .collect()
     }
 
     #[test]
@@ -86,36 +95,70 @@ mod tests {
 
         assert_eq!(
             coordinator
-                .reserve_batch("first".to_string(), &ids(&["cursor", "claude"]))
+                .reserve_batch("first".to_string(), &instances(&["cursor", "claude"]))
                 .unwrap(),
-            ids(&["cursor", "claude"])
+            instances(&["cursor", "claude"])
         );
         assert_eq!(
             coordinator
-                .reserve_batch("second".to_string(), &ids(&["cursor"]))
+                .reserve_batch("second".to_string(), &instances(&["cursor"]))
                 .unwrap(),
-            Vec::<String>::new()
+            Vec::<ProviderInstanceRef>::new()
         );
 
-        let cursor = coordinator.complete_provider("cursor");
-        assert_eq!(cursor.result_batch_ids, ids(&["first", "second"]));
-        assert_eq!(cursor.completed_batch_ids, ids(&["second"]));
+        let cursor = coordinator.complete_instance(&instances(&["cursor"])[0]);
+        assert_eq!(cursor.result_batch_ids, ["first", "second"]);
+        assert_eq!(cursor.completed_batch_ids, ["second"]);
 
-        let claude = coordinator.complete_provider("claude");
-        assert_eq!(claude.result_batch_ids, ids(&["first"]));
-        assert_eq!(claude.completed_batch_ids, ids(&["first"]));
+        let claude = coordinator.complete_instance(&instances(&["claude"])[0]);
+        assert_eq!(claude.result_batch_ids, ["first"]);
+        assert_eq!(claude.completed_batch_ids, ["first"]);
     }
 
     #[test]
     fn duplicate_active_batch_ids_are_rejected() {
         let mut coordinator = ProbeCoordinator::default();
         coordinator
-            .reserve_batch("same".to_string(), &ids(&["cursor"]))
+            .reserve_batch("same".to_string(), &instances(&["cursor"]))
             .unwrap();
 
         let error = coordinator
-            .reserve_batch("same".to_string(), &ids(&["claude"]))
+            .reserve_batch("same".to_string(), &instances(&["claude"]))
             .unwrap_err();
         assert!(error.contains("already active"));
+    }
+
+    #[test]
+    fn different_instances_do_not_share_provider_work() {
+        let mut coordinator = ProbeCoordinator::default();
+        let profile_a = ProviderInstanceRef {
+            provider_id: "codex".to_string(),
+            instance_id: Some("profile-a".to_string()),
+        };
+        let profile_b = ProviderInstanceRef {
+            provider_id: "codex".to_string(),
+            instance_id: Some("profile-b".to_string()),
+        };
+
+        assert_eq!(
+            coordinator
+                .reserve_batch("first".to_string(), std::slice::from_ref(&profile_a))
+                .unwrap(),
+            vec![profile_a.clone()]
+        );
+        assert_eq!(
+            coordinator
+                .reserve_batch("second".to_string(), std::slice::from_ref(&profile_b))
+                .unwrap(),
+            vec![profile_b.clone()]
+        );
+        assert_eq!(
+            coordinator.complete_instance(&profile_a).result_batch_ids,
+            ["first"]
+        );
+        assert_eq!(
+            coordinator.complete_instance(&profile_b).result_batch_ids,
+            ["second"]
+        );
     }
 }

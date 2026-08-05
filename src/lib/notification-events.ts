@@ -1,4 +1,5 @@
-import type { MetricLine, PluginOutput } from "@/lib/plugin-types"
+import type { MetricLine, PluginOutput, ProviderInstanceRef } from "@/lib/plugin-types"
+import { sameProviderInstance } from "@/lib/provider-instance"
 import type { ProviderStatus } from "@/lib/provider-status"
 
 export type UsageEventType = "quota" | "incident" | "incidentResolved" | "reset"
@@ -7,6 +8,7 @@ export type UsageEvent = {
   id: string
   type: UsageEventType
   providerId: string
+  instanceRef?: ProviderInstanceRef
   title: string
   body: string
   createdAt: number
@@ -42,7 +44,15 @@ function progressLines(output: PluginOutput | undefined): ProgressLine[] {
 }
 
 function eventPart(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, "-")
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+}
+
+function eventIdentity(providerId: string, output: PluginOutput | undefined): string {
+  const instanceId = output?.instanceRef?.instanceId
+  return instanceId ? `${providerId}:${eventPart(instanceId)}` : providerId
 }
 
 export function normalizeNotificationPreferences(value: unknown): NotificationPreferences {
@@ -50,8 +60,11 @@ export function normalizeNotificationPreferences(value: unknown): NotificationPr
   const raw = value as Partial<NotificationPreferences>
   const quiet = raw.quietHours
   const thresholds = Array.isArray(raw.quotaThresholds)
-    ? [...new Set(raw.quotaThresholds.filter((item) => Number.isFinite(item) && item > 0 && item < 100))]
-        .sort((a, b) => a - b)
+    ? [
+        ...new Set(
+          raw.quotaThresholds.filter((item) => Number.isFinite(item) && item > 0 && item < 100)
+        ),
+      ].sort((a, b) => a - b)
     : DEFAULT_NOTIFICATION_PREFERENCES.quotaThresholds
   return {
     enabled: raw.enabled === true,
@@ -66,10 +79,7 @@ export function normalizeNotificationPreferences(value: unknown): NotificationPr
   }
 }
 
-export function isQuietHours(
-  preferences: NotificationPreferences,
-  now = new Date()
-): boolean {
+export function isQuietHours(preferences: NotificationPreferences, now = new Date()): boolean {
   if (!preferences.quietHours.enabled) return false
   const minutes = now.getHours() * 60 + now.getMinutes()
   const parse = (value: string) => {
@@ -102,6 +112,7 @@ export function deriveUsageEvents({
   for (const [providerId, output] of Object.entries(outputs)) {
     const previous = previousOutputs[providerId]
     if (!output || !previous) continue
+    if (!sameProviderInstance(output.instanceRef, previous.instanceRef)) continue
     const previousByLabel = new Map(progressLines(previous).map((line) => [line.label, line]))
     for (const line of progressLines(output)) {
       const oldLine = previousByLabel.get(line.label)
@@ -111,9 +122,10 @@ export function deriveUsageEvents({
       for (const threshold of preferences.quotaThresholds) {
         if (before < threshold && current >= threshold) {
           events.push({
-            id: `quota:${providerId}:${eventPart(line.label)}:${threshold}:${line.resetsAt ?? "none"}`,
+            id: `quota:${eventIdentity(providerId, output)}:${eventPart(line.label)}:${threshold}:${line.resetsAt ?? "none"}`,
             type: "quota",
             providerId,
+            ...(output.instanceRef ? { instanceRef: output.instanceRef } : {}),
             title: `${output.displayName} quota warning`,
             body: `${line.label} reached ${Math.round(current)}% used (threshold ${threshold}%).`,
             createdAt: now,
@@ -121,12 +133,15 @@ export function deriveUsageEvents({
         }
       }
       const resetAdvanced =
-        oldLine.resetsAt && line.resetsAt && Date.parse(line.resetsAt) > Date.parse(oldLine.resetsAt)
+        oldLine.resetsAt &&
+        line.resetsAt &&
+        Date.parse(line.resetsAt) > Date.parse(oldLine.resetsAt)
       if (preferences.resets && current + 5 < before && resetAdvanced) {
         events.push({
-          id: `reset:${providerId}:${eventPart(line.label)}:${line.resetsAt}`,
+          id: `reset:${eventIdentity(providerId, output)}:${eventPart(line.label)}:${line.resetsAt}`,
           type: "reset",
           providerId,
+          ...(output.instanceRef ? { instanceRef: output.instanceRef } : {}),
           title: `${output.displayName} quota reset`,
           body: `${line.label} is available again.`,
           createdAt: now,
@@ -143,19 +158,23 @@ export function deriveUsageEvents({
       const hasIssue = status.indicator !== "none"
       const hadIssue = previous ? previous.indicator !== "none" : false
       if (hasIssue && (!previous || !hadIssue || previous.indicator !== status.indicator)) {
+        const output = outputs[providerId]
         events.push({
-          id: `incident:${providerId}:${status.indicator}:${status.updatedAt ?? status.checkedAt}`,
+          id: `incident:${eventIdentity(providerId, output)}:${status.indicator}:${status.updatedAt ?? status.checkedAt}`,
           type: "incident",
           providerId,
+          ...(output?.instanceRef ? { instanceRef: output.instanceRef } : {}),
           title: `${displayName} service incident`,
           body: status.description?.trim() || `${status.indicator} provider status`,
           createdAt: now,
         })
       } else if (!hasIssue && hadIssue) {
+        const output = outputs[providerId]
         events.push({
-          id: `resolved:${providerId}:${status.updatedAt ?? status.checkedAt}`,
+          id: `resolved:${eventIdentity(providerId, output)}:${status.updatedAt ?? status.checkedAt}`,
           type: "incidentResolved",
           providerId,
+          ...(output?.instanceRef ? { instanceRef: output.instanceRef } : {}),
           title: `${displayName} incident resolved`,
           body: "Provider status returned to normal.",
           createdAt: now,

@@ -1,5 +1,6 @@
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import type { DisplayMode, SurfacePin } from "@/lib/settings"
+import { sameProviderInstance } from "@/lib/provider-instance"
 
 type SurfacePinWidgetProps = {
   pins: readonly SurfacePin[]
@@ -23,9 +24,13 @@ export function resolveSurfacePins({
   return pins.flatMap((pin) => {
     const plugin = pluginsById.get(pin.providerId)
     if (!plugin) return []
-    const lines = plugin.data?.lines ?? plugin.lastSettledData?.lines ?? []
+    const output = plugin.data ?? plugin.lastSettledData
+    const lines = output?.lines ?? []
     const line = lines.find(
-      (candidate) => candidate.type === "progress" && candidate.label === pin.metricLabel
+      (candidate) =>
+        candidate.type === "progress" &&
+        candidate.label === pin.metricLabel &&
+        (!pin.instanceRef || sameProviderInstance(output?.instanceRef, pin.instanceRef))
     )
     const fraction =
       line && line.type === "progress" && line.limit > 0

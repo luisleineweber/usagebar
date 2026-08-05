@@ -37,8 +37,14 @@ export type ProbeErrorCategory =
   | "providerResponse"
   | "unknown"
 
+export type ProviderInstanceRef = {
+  providerId: string
+  instanceId?: string
+}
+
 export type PluginOutput = {
   providerId: string
+  instanceRef?: ProviderInstanceRef
   displayName: string
   plan?: string
   lines: MetricLine[]
@@ -48,7 +54,15 @@ export type PluginOutput = {
     message: string
   }
   history?: UsageHistory
+  freshness?: DataFreshnessGroups
 }
+
+export type DataFreshness = {
+  state: "fresh" | "retained"
+  observedAt: string
+}
+
+export type DataFreshnessGroups = Partial<Record<"quota" | "cost" | "history", DataFreshness>>
 
 export type UsageHistoryEntry = {
   periodStart: string

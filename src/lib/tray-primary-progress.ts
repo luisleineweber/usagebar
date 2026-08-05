@@ -2,6 +2,7 @@ import type { PluginMeta, PluginOutput } from "@/lib/plugin-types"
 import type { PluginSettings, SurfacePin } from "@/lib/settings"
 import { DEFAULT_DISPLAY_MODE, type DisplayMode } from "@/lib/settings"
 import { clamp01 } from "@/lib/utils"
+import { sameProviderInstance } from "@/lib/provider-instance"
 
 type PluginState = {
   data: PluginOutput | null
@@ -43,16 +44,14 @@ export function getTrayPrimaryBars(args: {
 
   const metaById = new Map(pluginsMeta.map((p) => [p.id, p]))
   const disabled = new Set(pluginSettings.disabled)
-  const orderedIds = pluginId
-    ? [pluginId]
-    : pluginSettings.order
+  const orderedIds = pluginId ? [pluginId] : pluginSettings.order
 
   const out: TrayPrimaryBar[] = []
   for (const id of orderedIds) {
     if (disabled.has(id)) continue
     const meta = metaById.get(id)
     if (!meta) continue
-    
+
     // Skip if no primary candidates defined
     if (!meta.primaryCandidates || meta.primaryCandidates.length === 0) continue
 
@@ -67,14 +66,11 @@ export function getTrayPrimaryBars(args: {
       )
       if (primaryLabel) {
         const primaryLine = data.lines.find(
-          (line): line is ProgressLine =>
-            isProgressLine(line) && line.label === primaryLabel
+          (line): line is ProgressLine => isProgressLine(line) && line.label === primaryLabel
         )
         if (primaryLine && primaryLine.limit > 0) {
           const shownAmount =
-            displayMode === "used"
-              ? primaryLine.used
-              : primaryLine.limit - primaryLine.used
+            displayMode === "used" ? primaryLine.used : primaryLine.limit - primaryLine.used
           fraction = clamp01(shownAmount / primaryLine.limit)
         }
       }
@@ -93,12 +89,7 @@ export function getTrayPinnedBars(args: {
   pluginStates: Record<string, PluginState | undefined>
   displayMode?: DisplayMode
 }): TrayPrimaryBar[] {
-  const {
-    pins,
-    pluginSettings,
-    pluginStates,
-    displayMode = DEFAULT_DISPLAY_MODE,
-  } = args
+  const { pins, pluginSettings, pluginStates, displayMode = DEFAULT_DISPLAY_MODE } = args
   if (!pluginSettings) return []
   const disabled = new Set(pluginSettings.disabled)
 
@@ -107,15 +98,18 @@ export function getTrayPinnedBars(args: {
     .map((pin) => {
       const line = pluginStates[pin.providerId]?.data?.lines.find(
         (candidate): candidate is ProgressLine =>
-          isProgressLine(candidate) && candidate.label === pin.metricLabel
+          isProgressLine(candidate) &&
+          candidate.label === pin.metricLabel &&
+          (!pin.instanceRef ||
+            sameProviderInstance(pluginStates[pin.providerId]?.data?.instanceRef, pin.instanceRef))
       )
       const fraction =
         line && line.limit > 0
-          ? clamp01(
-              (displayMode === "used" ? line.used : line.limit - line.used) / line.limit
-            )
+          ? clamp01((displayMode === "used" ? line.used : line.limit - line.used) / line.limit)
           : undefined
-      return { id: `${pin.providerId}:${pin.metricLabel}`, fraction }
+      return {
+        id: `${pin.providerId}${pin.instanceRef?.instanceId ? `:${pin.instanceRef.instanceId}` : ""}:${pin.metricLabel}`,
+        fraction,
+      }
     })
 }
-

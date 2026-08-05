@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::AppState;
 use crate::local_http_api;
 use crate::plugin_engine;
+use crate::plugin_engine::runtime::ProviderInstanceRef;
 
 const MAX_CONCURRENT_PROBES: usize = 4;
 
@@ -21,6 +22,7 @@ fn probe_semaphore() -> &'static Arc<Semaphore> {
 pub(crate) struct ProbeBatchStarted {
     pub batch_id: String,
     pub plugin_ids: Vec<String>,
+    pub instance_refs: Vec<ProviderInstanceRef>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -42,6 +44,7 @@ pub(crate) async fn start_probe_batch(
     state: tauri::State<'_, std::sync::Mutex<AppState>>,
     batch_id: Option<String>,
     plugin_ids: Option<Vec<String>>,
+    instance_refs: Option<Vec<ProviderInstanceRef>>,
 ) -> Result<ProbeBatchStarted, String> {
     let batch_id = batch_id
         .and_then(|id| {
@@ -107,6 +110,7 @@ pub(crate) async fn start_probe_batch(
         return Ok(ProbeBatchStarted {
             batch_id,
             plugin_ids: response_plugin_ids,
+            instance_refs: Vec::new(),
         });
     }
 
@@ -114,26 +118,35 @@ pub(crate) async fn start_probe_batch(
         let locked = state.lock().map_err(|e| e.to_string())?;
         Arc::clone(&locked.probe_coordinator)
     };
-    let providers_to_start = coordinator
+    let instance_refs = resolve_instance_refs(&app_data_dir, &response_plugin_ids, instance_refs);
+    let instances_to_start = coordinator
         .lock()
         .map_err(|e| e.to_string())?
-        .reserve_batch(batch_id.clone(), &response_plugin_ids)?;
-    let providers_to_start: HashSet<String> = providers_to_start.into_iter().collect();
+        .reserve_batch(batch_id.clone(), &instance_refs)?;
+    let instances_to_start: HashSet<ProviderInstanceRef> = instances_to_start.into_iter().collect();
 
-    for plugin in selected_plugins
-        .into_iter()
-        .filter(|plugin| providers_to_start.contains(&plugin.manifest.id))
-    {
+    for plugin in selected_plugins.into_iter().filter(|plugin| {
+        instance_refs
+            .iter()
+            .find(|instance| instance.provider_id == plugin.manifest.id)
+            .is_some_and(|instance| instances_to_start.contains(instance))
+    }) {
         let handle = app_handle.clone();
         let data_dir = app_data_dir.clone();
         let version = app_version.clone();
         let coordinator = Arc::clone(&coordinator);
         let semaphore = Arc::clone(probe_semaphore());
         let plugin_id = plugin.manifest.id.clone();
+        let instance_ref = instance_refs
+            .iter()
+            .find(|instance| instance.provider_id == plugin_id)
+            .cloned()
+            .expect("every selected plugin has an instance ref");
         let worker_plugin_id = plugin_id.clone();
         let join_plugin_id = plugin_id.clone();
         let capacity_plugin_id = plugin_id.clone();
         let worker_plugin = plugin.clone();
+        let worker_instance_ref = instance_ref.clone();
         let panic_plugin = plugin.clone();
         let join_plugin = plugin.clone();
         let capacity_plugin = plugin.clone();
@@ -144,11 +157,12 @@ pub(crate) async fn start_probe_batch(
                 Ok(_permit) => {
                     match tauri::async_runtime::spawn_blocking(move || {
                         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            plugin_engine::runtime::run_probe(
+                            plugin_engine::runtime::run_probe_for_instance(
                                 &worker_plugin,
                                 &data_dir,
                                 &version,
                                 Some(&worker_handle),
+                                &worker_instance_ref,
                             )
                         }));
 
@@ -191,6 +205,7 @@ pub(crate) async fn start_probe_batch(
             let has_error = output.lines.iter().any(|line| {
                 matches!(line, plugin_engine::runtime::MetricLine::Badge { label, .. } if label == "Error")
             });
+            output.instance_ref = Some(instance_ref.clone());
             if has_error {
                 log::warn!("probe {} completed with error", plugin_id);
             } else {
@@ -205,7 +220,7 @@ pub(crate) async fn start_probe_batch(
             let completion = coordinator
                 .lock()
                 .expect("probe coordinator lock poisoned")
-                .complete_provider(&plugin_id);
+                .complete_instance(&instance_ref);
             for result_batch_id in &completion.result_batch_ids {
                 let _ = handle.emit(
                     "probe:result",
@@ -230,5 +245,67 @@ pub(crate) async fn start_probe_batch(
     Ok(ProbeBatchStarted {
         batch_id,
         plugin_ids: response_plugin_ids,
+        instance_refs,
     })
+}
+
+fn resolve_instance_refs(
+    app_data_dir: &std::path::Path,
+    plugin_ids: &[String],
+    requested: Option<Vec<ProviderInstanceRef>>,
+) -> Vec<ProviderInstanceRef> {
+    let requested_by_provider: HashMap<_, _> = requested
+        .unwrap_or_default()
+        .into_iter()
+        .map(|instance| (instance.provider_id.clone(), instance))
+        .collect();
+    let selected_by_provider = load_selected_instance_ids(app_data_dir);
+
+    plugin_ids
+        .iter()
+        .map(|provider_id| match requested_by_provider.get(provider_id) {
+            Some(requested) if requested.instance_id.is_some() => requested.clone(),
+            Some(requested) => ProviderInstanceRef {
+                provider_id: provider_id.clone(),
+                instance_id: selected_by_provider
+                    .get(provider_id)
+                    .cloned()
+                    .or_else(|| requested.instance_id.clone()),
+            },
+            None => ProviderInstanceRef {
+                provider_id: provider_id.clone(),
+                instance_id: selected_by_provider.get(provider_id).cloned(),
+            },
+        })
+        .collect()
+}
+
+fn load_selected_instance_ids(app_data_dir: &std::path::Path) -> HashMap<String, String> {
+    for path in [
+        app_data_dir.join("settings.json"),
+        app_data_dir.join(".store").join("settings.json"),
+    ] {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        let Some(configs) = json
+            .get("providerConfigs")
+            .and_then(serde_json::Value::as_object)
+        else {
+            continue;
+        };
+        return configs
+            .iter()
+            .filter_map(|(provider_id, config)| {
+                config
+                    .get("selectedAccountProfileId")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|instance_id| (provider_id.clone(), instance_id.to_string()))
+            })
+            .collect();
+    }
+    HashMap::new()
 }

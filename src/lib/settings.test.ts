@@ -152,6 +152,72 @@ describe("settings", () => {
     ])
   })
 
+  it("preserves account identity while normalizing a pin", () => {
+    const plugins: PluginMeta[] = [
+      {
+        id: "codex",
+        name: "Codex",
+        iconUrl: "codex.svg",
+        lines: [{ type: "progress", label: "Session", scope: "overview" }],
+        primaryCandidates: ["Session"],
+      },
+    ]
+
+    expect(
+      normalizeSurfacePins(
+        [
+          {
+            providerId: "codex",
+            instanceId: "profile-a",
+            metricLabel: "Session",
+            presentation: "bar",
+          },
+        ],
+        plugins
+      )
+    ).toEqual([
+      {
+        providerId: "codex",
+        instanceRef: { providerId: "codex", instanceId: "profile-a" },
+        metricLabel: "Session",
+        presentation: "bar",
+      },
+    ])
+  })
+
+  it("loads the persisted provider instance reference shape", () => {
+    const plugins: PluginMeta[] = [
+      {
+        id: "codex",
+        name: "Codex",
+        iconUrl: "codex.svg",
+        lines: [{ type: "progress", label: "Session", scope: "overview" }],
+        primaryCandidates: ["Session"],
+      },
+    ]
+
+    expect(
+      normalizeSurfacePins(
+        [
+          {
+            providerId: "codex",
+            instanceRef: { providerId: "codex", instanceId: "profile-a" },
+            metricLabel: "Session",
+            presentation: "bar",
+          },
+        ],
+        plugins
+      )
+    ).toEqual([
+      {
+        providerId: "codex",
+        instanceRef: { providerId: "codex", instanceId: "profile-a" },
+        metricLabel: "Session",
+        presentation: "bar",
+      },
+    ])
+  })
+
   it("loads and saves normalized surface pins", async () => {
     const plugins: PluginMeta[] = [
       {

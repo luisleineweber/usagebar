@@ -1,9 +1,10 @@
 use crate::local_http_api::cache::CachedPluginSnapshot;
+use crate::plugin_engine::freshness::DataFreshnessGroups;
 use crate::plugin_engine::runtime::{MetricLine, ProgressFormat, UsageHistoryEntry};
 use serde::Serialize;
 use time::{Duration, OffsetDateTime, format_description::well_known::Rfc3339};
 
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +22,8 @@ struct UsageProvider<'a> {
     plan: &'a Option<String>,
     lines: &'a [MetricLine],
     fetched_at: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    freshness: &'a Option<DataFreshnessGroups>,
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -46,6 +49,8 @@ struct HistoryProvider {
     totals: HistoryTotals,
     entries: Vec<UsageHistoryEntry>,
     fetched_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    freshness: Option<DataFreshnessGroups>,
 }
 
 #[derive(Serialize)]
@@ -76,6 +81,8 @@ struct StatuslineProvider {
     display_name: String,
     text: String,
     fetched_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    freshness: Option<DataFreshnessGroups>,
 }
 
 pub(crate) fn usage(snapshots: &[CachedPluginSnapshot], json: bool) -> Result<String, String> {
@@ -88,6 +95,7 @@ pub(crate) fn usage(snapshots: &[CachedPluginSnapshot], json: bool) -> Result<St
                 plan: &snapshot.plan,
                 lines: &snapshot.lines,
                 fetched_at: &snapshot.fetched_at,
+                freshness: &snapshot.freshness,
             })
             .collect();
         return serde_json::to_string(&UsageResponse {
@@ -199,6 +207,14 @@ pub(crate) fn history(
             totals: provider_totals,
             entries,
             fetched_at: snapshot.fetched_at.clone(),
+            freshness: snapshot
+                .freshness
+                .as_ref()
+                .and_then(|freshness| freshness.history.clone())
+                .map(|history| DataFreshnessGroups {
+                    history: Some(history),
+                    ..Default::default()
+                }),
         });
     }
     if providers.is_empty() {
@@ -319,6 +335,7 @@ pub(crate) fn statusline(snapshots: &[CachedPluginSnapshot], json: bool) -> Resu
                 display_name: snapshot.display_name.clone(),
                 text,
                 fetched_at: snapshot.fetched_at.clone(),
+                freshness: snapshot.freshness.clone(),
             }
         })
         .collect();
@@ -401,11 +418,13 @@ fn number(value: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_engine::freshness::{DataFreshness, DataFreshnessGroups};
     use crate::plugin_engine::runtime::{ProgressFormat, UsageHistory};
 
     fn snapshot() -> CachedPluginSnapshot {
         CachedPluginSnapshot {
             provider_id: "claude".to_string(),
+            instance_ref: None,
             display_name: "Claude".to_string(),
             plan: Some("Pro".to_string()),
             lines: vec![
@@ -446,6 +465,7 @@ mod tests {
                 }],
             }),
             fetched_at: "2026-07-10T12:00:00Z".to_string(),
+            freshness: None,
         }
     }
 
@@ -461,7 +481,35 @@ mod tests {
     fn usage_json_has_stable_schema_and_omits_history() {
         assert_eq!(
             usage(&[snapshot()], true).unwrap(),
-            r#"{"schemaVersion":1,"command":"usage","providers":[{"providerId":"claude","displayName":"Claude","plan":"Pro","lines":[{"type":"progress","label":"Session","used":42.0,"limit":100.0,"format":{"kind":"percent"},"resetsAt":"2026-07-11T00:00:00Z","periodDurationMs":null,"color":null},{"type":"text","label":"Today","value":"$1.25","color":null,"subtitle":null}],"fetchedAt":"2026-07-10T12:00:00Z"}]}"#
+            r#"{"schemaVersion":2,"command":"usage","providers":[{"providerId":"claude","displayName":"Claude","plan":"Pro","lines":[{"type":"progress","label":"Session","used":42.0,"limit":100.0,"format":{"kind":"percent"},"resetsAt":"2026-07-11T00:00:00Z","periodDurationMs":null,"color":null},{"type":"text","label":"Today","value":"$1.25","color":null,"subtitle":null}],"fetchedAt":"2026-07-10T12:00:00Z"}]}"#
+        );
+    }
+
+    #[test]
+    fn usage_json_serializes_group_freshness() {
+        let mut snapshot = snapshot();
+        snapshot.freshness = Some(DataFreshnessGroups {
+            quota: Some(DataFreshness::fresh("2026-07-10T12:01:00Z")),
+            cost: None,
+            history: Some(DataFreshness::retained_from(&DataFreshness::fresh(
+                "2026-07-09T12:00:00Z",
+            ))),
+        });
+
+        let value: serde_json::Value =
+            serde_json::from_str(&usage(&[snapshot], true).unwrap()).unwrap();
+        assert_eq!(value["schemaVersion"], 2);
+        assert_eq!(
+            value["providers"][0]["freshness"]["quota"]["state"],
+            "fresh"
+        );
+        assert_eq!(
+            value["providers"][0]["freshness"]["history"]["state"],
+            "retained"
+        );
+        assert_eq!(
+            value["providers"][0]["freshness"]["history"]["observedAt"],
+            "2026-07-09T12:00:00Z"
         );
     }
 
@@ -479,7 +527,7 @@ mod tests {
         let now = OffsetDateTime::parse("2026-07-10T12:00:00Z", &Rfc3339).unwrap();
         let output = history(&[snapshot()], 7, now, true).unwrap().unwrap();
         let value: serde_json::Value = serde_json::from_str(&output).unwrap();
-        assert_eq!(value["schemaVersion"], 1);
+        assert_eq!(value["schemaVersion"], 2);
         assert_eq!(value["command"], "history");
         assert_eq!(value["days"], 7);
         assert_eq!(value["providers"][0]["entries"][0]["totalTokens"], 15.0);
@@ -492,6 +540,23 @@ mod tests {
         assert_eq!(
             statusline(&[snapshot], false).unwrap(),
             "Claude Work / Team Session 42% used"
+        );
+    }
+
+    #[test]
+    fn statusline_json_serializes_group_freshness() {
+        let mut snapshot = snapshot();
+        snapshot.freshness = Some(DataFreshnessGroups {
+            quota: Some(DataFreshness::fresh("2026-07-10T12:00:00Z")),
+            cost: None,
+            history: None,
+        });
+
+        let value: serde_json::Value =
+            serde_json::from_str(&statusline(&[snapshot], true).unwrap()).unwrap();
+        assert_eq!(
+            value["providers"][0]["freshness"]["quota"]["state"],
+            "fresh"
         );
     }
 }

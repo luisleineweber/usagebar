@@ -2,6 +2,7 @@ use crate::plugin_engine::browser_bridge;
 use crate::plugin_engine::env::*;
 use crate::plugin_engine::manifest::HostCapabilities;
 use crate::plugin_engine::redaction::*;
+use crate::plugin_engine::runtime::ProviderInstanceRef;
 use crate::provider_secret_store;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -216,6 +217,7 @@ fn encrypt_aes256_gcm_internal(plaintext: &str, key_b64: &str) -> Result<String,
     .map_err(|error| format!("failed to encode crypto envelope: {}", error))
 }
 
+#[cfg(test)]
 pub fn inject_host_api<'js>(
     ctx: &Ctx<'js>,
     plugin_id: &str,
@@ -224,10 +226,39 @@ pub fn inject_host_api<'js>(
     app_handle: Option<HostAppHandle>,
     capabilities: &HostCapabilities,
 ) -> rquickjs::Result<()> {
+    inject_host_api_with_instance(
+        ctx,
+        plugin_id,
+        app_data_dir,
+        app_version,
+        app_handle,
+        capabilities,
+        None,
+    )
+}
+
+pub fn inject_host_api_with_instance<'js>(
+    ctx: &Ctx<'js>,
+    plugin_id: &str,
+    app_data_dir: &Path,
+    app_version: &str,
+    app_handle: Option<HostAppHandle>,
+    capabilities: &HostCapabilities,
+    instance_ref: Option<ProviderInstanceRef>,
+) -> rquickjs::Result<()> {
     let globals = ctx.globals();
     let probe_ctx = Object::new(ctx.clone())?;
 
     probe_ctx.set("nowIso", iso_now())?;
+
+    if let Some(instance_ref) = instance_ref {
+        let instance_obj = Object::new(ctx.clone())?;
+        instance_obj.set("providerId", instance_ref.provider_id)?;
+        if let Some(instance_id) = instance_ref.instance_id {
+            instance_obj.set("instanceId", instance_id)?;
+        }
+        probe_ctx.set("instanceRef", instance_obj)?;
+    }
 
     let app_obj = Object::new(ctx.clone())?;
     app_obj.set("version", app_version)?;
@@ -2289,7 +2320,7 @@ mod tests {
             ..Default::default()
         };
         let expected_ccusage_package = ccusage_package_spec();
-        assert_eq!(expected_ccusage_package, "ccusage@20.0.18");
+        assert_eq!(expected_ccusage_package, "ccusage@20.0.19");
         let expected_npm_exec_package = format!("--package={expected_ccusage_package}");
         #[cfg(target_os = "windows")]
         let expected_bunx = vec![
@@ -3070,7 +3101,7 @@ Saved lockfile
                 &path,
                 "@echo off\r\n\
                  echo %* > \"%~dp0args.txt\"\r\n\
-                 echo %* | findstr /C:\"20.0.18\" > nul\r\n\
+                 echo %* | findstr /C:\"20.0.19\" > nul\r\n\
                  if %ERRORLEVEL% EQU 0 exit /b 1\r\n\
                  echo {\"daily\":[]}\r\n\
                  exit /b 0\r\n",
@@ -3088,7 +3119,7 @@ Saved lockfile
             let mut file = std::fs::File::create(&path).expect("create runner");
             writeln!(
                 file,
-                "#!/bin/sh\nprintf '%s' \"$*\" > \"$(dirname \"$0\")/args.txt\"\ncase \"$*\" in *20.0.18*) exit 1 ;; esac\nprintf '{{\"daily\":[]}}\\n'\n"
+                "#!/bin/sh\nprintf '%s' \"$*\" > \"$(dirname \"$0\")/args.txt\"\ncase \"$*\" in *20.0.19*) exit 1 ;; esac\nprintf '{{\"daily\":[]}}\\n'\n"
             )
             .expect("write runner");
             let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
@@ -3129,7 +3160,7 @@ Saved lockfile
             let first = test_dir.join("first.cmd");
             std::fs::write(
                 &first,
-                "@echo off\r\necho %* | findstr /C:\"ccusage@20.0.18\" > nul\r\nif %ERRORLEVEL% EQU 0 exit /b 1\r\necho {\"daily\":[{\"date\":\"legacy\"}]}\r\n",
+                "@echo off\r\necho %* | findstr /C:\"ccusage@20.0.19\" > nul\r\nif %ERRORLEVEL% EQU 0 exit /b 1\r\necho {\"daily\":[{\"date\":\"legacy\"}]}\r\n",
             )
             .expect("write first runner");
             let second = test_dir.join("second.cmd");
@@ -3147,7 +3178,7 @@ Saved lockfile
             let first = test_dir.join("first.sh");
             std::fs::write(
                 &first,
-                "#!/bin/sh\ncase \"$*\" in *ccusage@20.0.18*) exit 1 ;; esac\nprintf '{\"daily\":[{\"date\":\"legacy\"}]}\\n'\n",
+                "#!/bin/sh\ncase \"$*\" in *ccusage@20.0.19*) exit 1 ;; esac\nprintf '{\"daily\":[{\"date\":\"legacy\"}]}\\n'\n",
             )
             .expect("write first runner");
             let second = test_dir.join("second.sh");

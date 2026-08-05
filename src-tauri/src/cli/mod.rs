@@ -146,11 +146,13 @@ mod tests {
         std::fs::create_dir_all(dir).unwrap();
         let snapshot = CachedPluginSnapshot {
             provider_id: "claude".to_string(),
+            instance_ref: None,
             display_name: "Claude".to_string(),
             plan: Some("Pro".to_string()),
             lines: Vec::new(),
             history: None,
             fetched_at: "2026-07-12T08:00:00Z".to_string(),
+            freshness: None,
         };
         let file = serde_json::json!({
             "version": 2,

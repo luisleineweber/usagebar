@@ -1,4 +1,4 @@
-import type { PluginOutput, UsageHistoryEntry } from "@/lib/plugin-types"
+import type { PluginOutput, ProviderInstanceRef, UsageHistoryEntry } from "@/lib/plugin-types"
 
 export type UsageHistoryPeriod = "today" | "yesterday" | "7d" | "30d"
 
@@ -17,6 +17,7 @@ export type UsageHistoryQuery = UsageHistoryFilters & {
 
 export type UsageHistoryRecord = UsageHistoryEntry & {
   providerId: string
+  instanceRef?: ProviderInstanceRef
   source: string
   timeZone: string
 }
@@ -177,7 +178,7 @@ function zonedMidnightMs(year: number, month: number, day: number, timeZone: str
 }
 
 export function filterUsageHistory(
-  outputs: readonly Pick<PluginOutput, "providerId" | "history">[],
+  outputs: readonly Pick<PluginOutput, "providerId" | "history" | "instanceRef">[],
   query: UsageHistoryQuery
 ): UsageHistoryRecord[] {
   const providerIds = selection(query.providerIds)
@@ -210,6 +211,7 @@ export function filterUsageHistory(
       records.push({
         ...entry,
         providerId: output.providerId,
+        ...(output.instanceRef ? { instanceRef: output.instanceRef } : {}),
         source: output.history.source,
         timeZone: output.history.timeZone,
       })

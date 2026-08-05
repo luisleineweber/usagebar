@@ -1,3 +1,4 @@
+use crate::plugin_engine::freshness::DataFreshnessGroups;
 use crate::plugin_engine::host_api;
 use crate::plugin_engine::manifest::LoadedPlugin;
 use crate::plugin_engine::probe_error::{
@@ -48,10 +49,20 @@ pub enum MetricLine {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderInstanceRef {
+    pub provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instance_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginOutput {
     pub provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instance_ref: Option<ProviderInstanceRef>,
     pub display_name: String,
     pub plan: Option<String>,
     pub lines: Vec<MetricLine>,
@@ -60,6 +71,8 @@ pub struct PluginOutput {
     pub error: Option<ProbeError>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<UsageHistory>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freshness: Option<DataFreshnessGroups>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,11 +113,40 @@ pub struct UsageHistoryEntry {
     pub total_tokens: Option<f64>,
 }
 
+#[cfg(test)]
 pub fn run_probe(
     plugin: &LoadedPlugin,
     app_data_dir: &Path,
     app_version: &str,
     app_handle: Option<&RuntimeAppHandle>,
+) -> PluginOutput {
+    run_probe_unstamped(plugin, app_data_dir, app_version, app_handle, None)
+}
+
+pub fn run_probe_for_instance(
+    plugin: &LoadedPlugin,
+    app_data_dir: &Path,
+    app_version: &str,
+    app_handle: Option<&RuntimeAppHandle>,
+    instance_ref: &ProviderInstanceRef,
+) -> PluginOutput {
+    let mut output = run_probe_unstamped(
+        plugin,
+        app_data_dir,
+        app_version,
+        app_handle,
+        Some(instance_ref),
+    );
+    output.instance_ref = Some(instance_ref.clone());
+    output
+}
+
+fn run_probe_unstamped(
+    plugin: &LoadedPlugin,
+    app_data_dir: &Path,
+    app_version: &str,
+    app_handle: Option<&RuntimeAppHandle>,
+    instance_ref: Option<&ProviderInstanceRef>,
 ) -> PluginOutput {
     let fallback = error_output(plugin, "runtime error".to_string());
 
@@ -125,13 +167,14 @@ pub fn run_probe(
     let app_data = app_data_dir.to_path_buf();
 
     ctx.with(|ctx| {
-        if host_api::inject_host_api(
+        if host_api::inject_host_api_with_instance(
             &ctx,
             &plugin_id,
             &app_data,
             app_version,
             app_handle.cloned(),
             &plugin.manifest.capabilities,
+            instance_ref.cloned(),
         )
         .is_err()
         {
@@ -220,12 +263,14 @@ pub fn run_probe(
 
         PluginOutput {
             provider_id: plugin_id,
+            instance_ref: None,
             display_name,
             plan,
             lines,
             icon_url,
             error,
             history,
+            freshness: None,
         }
     })
 }
@@ -729,12 +774,14 @@ pub(crate) fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutp
 fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput {
     PluginOutput {
         provider_id: plugin.manifest.id.clone(),
+        instance_ref: None,
         display_name: plugin.manifest.name.clone(),
         plan: plugin.manifest.default_plan.clone(),
         lines: vec![error_line(error.message.clone())],
         icon_url: plugin.icon_data_url.clone(),
         error: Some(error),
         history: None,
+        freshness: None,
     }
 }
 
@@ -920,6 +967,33 @@ mod tests {
             obj.get("resets_at").is_none(),
             "did not expect resets_at key"
         );
+    }
+
+    #[test]
+    fn run_probe_for_instance_stamps_the_captured_provider_identity() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return { lines: [{ type: "text", label: "Status", value: "ok" }] };
+                }
+            };
+            "#,
+        );
+        let instance_ref = ProviderInstanceRef {
+            provider_id: "codex".to_string(),
+            instance_id: Some("profile-a".to_string()),
+        };
+
+        let output = run_probe_for_instance(
+            &plugin,
+            &temp_app_dir("instance-ref"),
+            "0.0.0",
+            None,
+            &instance_ref,
+        );
+
+        assert_eq!(output.instance_ref, Some(instance_ref));
     }
 
     #[test]

@@ -1,5 +1,34 @@
 ﻿# Active Todo
 
+# Host-owned freshness provenance, 2026-08-05
+
+## Acceptance Criteria
+
+- [x] Successful probe output carries optional group freshness for quota, cost, and history without plugin changes.
+- [x] When the host retains cached history, its marker is `retained` and preserves the prior observation timestamp; a newly returned history marker is `fresh`.
+- [x] Freshness survives the persisted usage snapshot and the JSON forms of all CLI commands that expose provider data.
+- [x] Existing cache files without freshness remain readable and preserve unknown provenance.
+- [ ] Focused Rust/frontend tests, related checks, formatting, and diff review pass; the full Vitest suite and aggregate Rust format gate remain blocked by pre-existing workspace issues documented below.
+
+## Plan
+
+- [x] Trace probe, cache, event, disk, and CLI serialization seams and run a focused baseline.
+- [x] Add the shared freshness model and host-owned retention annotation.
+- [x] Add cache migration/round-trip and CLI serialization regression coverage.
+- [x] Run verification in the documented order and record exact outcomes.
+
+## Verification Notes
+
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib` -> 157 passed, 1 ignored.
+- `cargo test --manifest-path src-tauri/Cargo.toml local_http_api::cache::tests --lib` -> 10 passed; `cli::format::tests` -> 7 passed; `local_http_api::history::tests` -> 3 passed.
+- `bun run test -- src/hooks/app/use-probe-state.test.ts src/lib/usage-history.test.ts src/lib/notification-events.test.ts src/lib/tray-primary-progress.test.ts --run` -> 4 files, 31 passed.
+- `bun run check:frontend` -> Prettier, ESLint, and TypeScript passed.
+- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings` -> passed.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` -> blocked only by pre-existing provider-instance formatting differences in `src-tauri/src/plugin_engine/host_api.rs` and `src-tauri/src/probe_commands.rs`; freshness-touched Rust files are formatted.
+- `bun run test:all` -> timed out at 124 seconds in the first parallel wrapper and 184 seconds in the isolated rerun without producing a test result; focused related tests pass normally.
+- `git diff --check` -> passed.
+- The in-flight provider-instance changes also had a stale `ids(...)` test helper call and an incomplete `Pick<PluginOutput, ...>` type; corrected those narrow compile blockers without changing provider-instance behavior.
+
 # History view shows zero in the Windows taskbar icon, 2026-08-03
 
 ## Acceptance Criteria
@@ -2718,3 +2747,114 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun run test:all` -> 96 files, 1,402 tests passed.
 - `bun run check` -> passed frontend formatting/ESLint/TypeScript plus Rust formatting/Clippy.
 - `bunx prettier --check` and `git diff --check` -> passed; only existing LF/CRLF normalization warnings remain.
+
+# Sibling repository review, 2026-08-04
+
+## Executive Summary
+
+- Fetch remote refs from every repository under `D:\UsageBar` except `usagebar`.
+- Compare new committed content and branch ideas with UsageBar's current plugin, cache, account, and notification contracts.
+- Record actionable recommendations without merging, resetting, or editing sibling worktrees.
+
+## Acceptance Criteria
+
+- [x] `ccusage`, `CodexBar`, `opencode-usage`, `openusage`, and `Win-CodexBar` are fetched successfully.
+- [x] `usagebar` is not fetched or changed by the repository synchronization pass.
+- [x] Dirty sibling worktrees are identified and left untouched.
+- [x] Remote history and relevant source designs are compared against UsageBar's current contracts.
+- [x] Evidence-backed recommendations are recorded in `docs/research/sibling-repo-review-2026-08-04.md`.
+
+## Plan
+
+- [x] Inventory sibling repositories, remotes, branches, and worktree state.
+- [x] Run `git fetch --all --prune` in each sibling repository only.
+- [x] Inspect recent remote commits, relevant branch tips, and source files behind the strongest ideas.
+- [x] Compare findings with UsageBar's plugin, ccusage, account, cache, refresh, and notification seams.
+- [x] Record the report and exact verification notes.
+
+## Verification Notes
+
+- `git fetch --all --prune` in `D:\UsageBar\ccusage`, `CodexBar`, `opencode-usage`, `openusage`, and `Win-CodexBar` -> passed.
+- `usagebar` was excluded from fetch; its source worktree was clean before adding this report/note.
+- `opencode-usage` and `Win-CodexBar` had pre-existing uncommitted changes; neither was modified.
+- Read-only commit/source comparison completed; no source implementation or merge was performed.
+- Report: `docs/research/sibling-repo-review-2026-08-04.md`.
+
+# Recommendation evaluation, 2026-08-05
+
+## Executive Summary
+
+- Validate the sibling-review recommendations against UsageBar's current contracts and tests.
+- Distinguish missing seams from capabilities UsageBar already has in narrower form.
+- Rank the work without changing runtime code or dependency pins.
+
+## Acceptance Criteria
+
+- [x] Each recommendation is supported, narrowed, or rejected using current source evidence.
+- [x] The ccusage pin and behavior are checked against v20.0.19 and the real Windows package runner.
+- [x] Focused frontend and Rust baselines pass.
+- [x] A dependency order and implementation-sized follow-up slices are identified.
+
+## Plan
+
+- [x] Trace plugin output, account selection, cache/history keys, notifications, detail rendering, and retained-data behavior.
+- [x] Compare ccusage 20.0.18 and 20.0.19 with upstream release evidence and local Windows execution.
+- [x] Run focused checks and record the evaluation verdict.
+
+## Verification Notes
+
+- `bun run test -- plugins/codex/plugin.test.js plugins/claude/plugin.test.js plugins/opencode/plugin.test.js src/lib/usage-history.test.ts src/lib/notification-events.test.ts --run` -> 5 files, 162 tests passed.
+- `cargo test --manifest-path src-tauri/Cargo.toml --lib ccusage -- --nocapture` -> 29 passed.
+- `npm view ccusage version dist-tags --json` -> `20.0.19` is the current package and `latest` tag.
+- Real Windows `npx.cmd` Codex queries succeeded for both versions. Against the same local July 1-August 5 corpus, 20.0.19 reported materially lower token and cost totals than 20.0.18, consistent with the upstream replay/reasoning fixes; the corpus was active during measurement, so these are validation signals rather than golden expected values.
+- Real OpenCode `since`/`until` queries returned no local rows for either version, so deterministic SQLite/JSON fixtures remain required to prove that fix in UsageBar.
+- No runtime source, dependency pin, or bundled plugin was changed.
+
+# ccusage 20.0.19 conditional approval, 2026-08-05
+
+## Acceptance Criteria
+
+- [ ] Pin the current ccusage runner to 20.0.19 while preserving the 18.0.11 Claude/Codex fallback.
+- [ ] Preserve the 30-second Windows cold-start policy and exact runner arguments.
+- [ ] Add mandatory sanitized fixtures covering Codex duplicate/multi-tick replay bursts, authoritative reasoning totals, and OpenCode SQLite/JSON rows before, inside, and after `since`/`until`.
+- [ ] Compare the exact normalized daily output from the pinned package against checked-in expectations.
+- [ ] Verify source tests, bundled resources, documentation, and a real packaged Windows run.
+
+## Plan
+
+- [ ] Inspect ccusage v20.0.19 fixture-compatible source shapes and establish a deterministic red/green fixture gate.
+- [ ] Add fixtures, exact normalized daily expectations, and a cross-platform verification command.
+- [ ] Bump only the current pin/docs, update runner regressions, and synchronize bundled plugins.
+- [ ] Run focused tests, related suites, full checks, formatting, and diff review.
+- [ ] Build and run the packaged Windows application against the real provider runner.
+
+## Verification Notes
+
+- Pending implementation.
+
+# Provider account instance identity, 2026-08-05
+
+## Executive Summary
+
+- Carry stable provider-account identity through probes, React state, snapshots, history, notifications, and account-sensitive tray pins.
+- Capture the selected instance at probe start and reject results that no longer match the current selection.
+- Keep history-entry `account` as display/grouping metadata rather than an identity key.
+
+## Acceptance Criteria
+
+- [ ] `ProviderInstanceRef { providerId, instanceId? }` is shared by probe request/result, output/state, persistence/history, notification IDs, and tray pins where account-specific.
+- [ ] Codex managed profile probes use the account captured in the request, and a late result from a previously selected profile cannot replace current state or cache.
+- [ ] Existing unscoped providers and legacy cache/pin data remain readable without inventing an account identity.
+- [ ] Regression tests cover account swap ordering, identity-aware cache/history aggregation, notification IDs, and account-specific pins.
+- [ ] Focused frontend/Rust/plugin tests, related checks, formatting, and diff validation pass.
+
+## Plan
+
+- [ ] Map the public identity seams and establish focused red tests.
+- [ ] Add the shared reference and thread captured identities through probe, output, state, and persistence.
+- [ ] Update history, notification, and tray-pin consumers with identity-aware keys while preserving display metadata semantics.
+- [ ] Run focused tests, related checks, full checks/build where safe, and review the diff.
+
+## Verification Notes
+
+- Baseline and implementation results will be recorded here.

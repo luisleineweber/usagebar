@@ -10,6 +10,7 @@
     "build:release": "node ./scripts/build-release.mjs",
     "release:check": "node ./scripts/release-preflight.mjs",
     "ccusage:bump": "node ./scripts/bump-ccusage-version.mjs",
+    "test:ccusage-fixtures": "node ./scripts/verify-ccusage-fixtures.mjs",
     "bundle:plugins": "node ./copy-bundled.cjs",
     "prepare:cli-sidecar": "node ./scripts/prepare-cli-sidecar.mjs",
     "check:frontend": "bun run format:check && bun run lint && bun run typecheck",

@@ -122,6 +122,7 @@ export function SettingsWindowApp() {
   } = useProbe({
     pluginSettings,
     autoUpdateInterval,
+    providerConfigs,
   })
 
   const scheduleTrayIconUpdate = useCallback(() => {}, [])

@@ -89,6 +89,11 @@
   }
 
   function readSelectedAccountProfileId(ctx) {
+    if (ctx.instanceRef && typeof ctx.instanceRef === "object") {
+      const value = ctx.instanceRef.instanceId
+      return typeof value === "string" ? value.trim() || null : null
+    }
+
     if (!ctx.host.providerConfig || typeof ctx.host.providerConfig.get !== "function") {
       return null
     }

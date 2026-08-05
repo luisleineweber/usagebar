@@ -11,7 +11,16 @@ function output(used: number, resetsAt = "2026-07-14T00:00:00Z"): PluginOutput {
     providerId: "claude",
     displayName: "Claude",
     iconUrl: "",
-    lines: [{ type: "progress", label: "Session", used, limit: 100, format: { kind: "percent" }, resetsAt }],
+    lines: [
+      {
+        type: "progress",
+        label: "Session",
+        used,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt,
+      },
+    ],
   }
 }
 
@@ -41,6 +50,52 @@ describe("notification event derivation", () => {
     })
     expect(events).toHaveLength(1)
     expect(events[0].type).toBe("reset")
+  })
+
+  it("isolates quota events by provider instance and ignores an account swap baseline", () => {
+    const events = deriveUsageEvents({
+      previousOutputs: {
+        codex: {
+          ...output(70),
+          providerId: "codex",
+          instanceRef: { providerId: "codex", instanceId: "profile-a" },
+        },
+      },
+      outputs: {
+        codex: {
+          ...output(95),
+          providerId: "codex",
+          instanceRef: { providerId: "codex", instanceId: "profile-b" },
+        },
+      },
+      previousStatuses: {},
+      statuses: {},
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+    })
+
+    expect(events).toEqual([])
+
+    const accountEvents = deriveUsageEvents({
+      previousOutputs: {
+        codex: {
+          ...output(70),
+          providerId: "codex",
+          instanceRef: { providerId: "codex", instanceId: "profile-b" },
+        },
+      },
+      outputs: {
+        codex: {
+          ...output(95),
+          providerId: "codex",
+          instanceRef: { providerId: "codex", instanceId: "profile-b" },
+        },
+      },
+      previousStatuses: {},
+      statuses: {},
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+    })
+
+    expect(accountEvents[0]?.id).toContain("quota:codex:profile-b:")
   })
 
   it("handles overnight quiet hours", () => {

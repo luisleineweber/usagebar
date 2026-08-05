@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { PluginOutput, ProviderUsageHistory } from "@/lib/plugin-types"
+import type { PluginOutput, ProviderInstanceRef, ProviderUsageHistory } from "@/lib/plugin-types"
+import { sameProviderInstance } from "@/lib/provider-instance"
 import type { PluginState } from "@/hooks/app/types"
 
 const MAX_HISTORY_POINTS_PER_PROVIDER = 240
@@ -29,10 +30,14 @@ function appendUsageHistory(
 
 type UseProbeStateArgs = {
   onProbeResult?: () => void
+  providerInstanceRefs?: Readonly<Record<string, ProviderInstanceRef>>
 }
 
-export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
+export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseProbeStateArgs) {
   const [pluginStates, setPluginStates] = useState<Record<string, PluginState>>({})
+
+  const providerInstanceRefsRef = useRef(providerInstanceRefs)
+  providerInstanceRefsRef.current = providerInstanceRefs
 
   const pluginStatesRef = useRef(pluginStates)
   useEffect(() => {
@@ -55,10 +60,21 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
       const next = { ...prev }
       for (const id of ids) {
         const existing = prev[id]
-        const retainedData = existing?.data ?? existing?.lastSettledData ?? null
+        const currentRef = providerInstanceRefsRef.current[id]
+        const existingRef = existing?.instanceRef ?? existing?.data?.instanceRef
+        const sameInstance =
+          !currentRef ||
+          (existingRef !== undefined && sameProviderInstance(existingRef, currentRef))
+        const retainedData = sameInstance
+          ? (existing?.data ?? existing?.lastSettledData ?? null)
+          : null
+        const retainedSettledData = sameInstance
+          ? (existing?.lastSettledData ?? existing?.data ?? null)
+          : null
         next[id] = {
           data: retainedData,
-          lastSettledData: existing?.lastSettledData ?? existing?.data ?? null,
+          lastSettledData: retainedSettledData,
+          instanceRef: currentRef ?? existing?.instanceRef,
           loading: true,
           error: null,
           errorCategory: null,
@@ -76,10 +92,21 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
       const next = { ...prev }
       for (const id of ids) {
         const existing = prev[id]
-        const retainedData = existing?.data ?? existing?.lastSettledData ?? null
+        const currentRef = providerInstanceRefsRef.current[id]
+        const existingRef = existing?.instanceRef ?? existing?.data?.instanceRef
+        const sameInstance =
+          !currentRef ||
+          (existingRef !== undefined && sameProviderInstance(existingRef, currentRef))
+        const retainedData = sameInstance
+          ? (existing?.data ?? existing?.lastSettledData ?? null)
+          : null
+        const retainedSettledData = sameInstance
+          ? (existing?.lastSettledData ?? existing?.data ?? null)
+          : null
         next[id] = {
           data: retainedData,
-          lastSettledData: existing?.lastSettledData ?? existing?.data ?? null,
+          lastSettledData: retainedSettledData,
+          instanceRef: currentRef ?? existing?.instanceRef,
           loading: false,
           error,
           errorCategory: null,
@@ -94,6 +121,20 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
 
   const handleProbeResult = useCallback(
     (output: PluginOutput) => {
+      const expectedRef = providerInstanceRefsRef.current[output.providerId]
+      if (expectedRef && !sameProviderInstance(output.instanceRef, expectedRef)) return
+      const existingState = pluginStatesRef.current[output.providerId]
+      const existingRef = existingState?.instanceRef ?? existingState?.data?.instanceRef
+      if (
+        !expectedRef &&
+        existingRef &&
+        output.instanceRef &&
+        !sameProviderInstance(output.instanceRef, existingRef) &&
+        !existingState?.loading
+      ) {
+        return
+      }
+
       const errorMessage = getErrorMessage(output)
       const isManual = manualRefreshIdsRef.current.has(output.providerId)
       if (isManual) {
@@ -119,6 +160,7 @@ export function useProbeState({ onProbeResult }: UseProbeStateArgs) {
             lastSettledData: errorMessage
               ? (existing?.lastSettledData ?? existing?.data ?? null)
               : settledOutput,
+            instanceRef: output.instanceRef ?? existing?.instanceRef,
             history: errorMessage
               ? existing?.history
               : appendUsageHistory(existing?.history, settledOutput, capturedAt),

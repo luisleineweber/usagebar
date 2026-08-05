@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
 import { invoke } from "@tauri-apps/api/core"
-import type { PluginOutput } from "@/lib/plugin-types"
+import type { PluginOutput, ProviderInstanceRef } from "@/lib/plugin-types"
 
 type ProbeResult = {
   batchId: string
@@ -15,6 +15,7 @@ type ProbeBatchComplete = {
 type ProbeBatchStarted = {
   batchId: string
   pluginIds: string[]
+  instanceRefs: ProviderInstanceRef[]
 }
 
 type UseProbeEventsOptions = {
@@ -77,27 +78,34 @@ export function useProbeEvents({ onResult, onBatchComplete }: UseProbeEventsOpti
     }
   }, [onBatchComplete, onResult])
 
-  const startBatch = useCallback(async (pluginIds?: string[]) => {
-    // Wait for listeners to be ready before starting the batch
-    if (listenersReadyRef.current) {
-      await listenersReadyRef.current
-    }
+  const startBatch = useCallback(
+    async (pluginIds?: string[], instanceRefs?: ProviderInstanceRef[]) => {
+      // Wait for listeners to be ready before starting the batch
+      if (listenersReadyRef.current) {
+        await listenersReadyRef.current
+      }
 
-    const batchId =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      const batchId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
-    activeBatchIds.current.add(batchId)
-    const args = pluginIds ? { batchId, pluginIds } : { batchId }
-    try {
-      const result = await invoke<ProbeBatchStarted>("start_probe_batch", args)
-      return result.pluginIds
-    } catch (error) {
-      activeBatchIds.current.delete(batchId)
-      throw error
-    }
-  }, [])
+      activeBatchIds.current.add(batchId)
+      const args = {
+        batchId,
+        ...(pluginIds ? { pluginIds } : {}),
+        ...(instanceRefs ? { instanceRefs } : {}),
+      }
+      try {
+        const result = await invoke<ProbeBatchStarted>("start_probe_batch", args)
+        return result.pluginIds
+      } catch (error) {
+        activeBatchIds.current.delete(batchId)
+        throw error
+      }
+    },
+    []
+  )
 
   return { startBatch }
 }

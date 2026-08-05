@@ -1,5 +1,13 @@
 # Lessons
 
+## 2026-08-05
+
+- The ccusage version bump helper still targeted `host_api.rs` after the host implementation was extracted into `ccusage_host_api.rs`, so a routine pin update failed before editing anything. Fix: point the helper at the extracted source and verify the bump command during every ccusage upgrade. Prevention: version-maintenance scripts must follow the actual source-of-truth file and run in the upgrade gate.
+
+## 2026-08-05
+
+- Instance-scoped provider migration must update both runtime test helper names and TypeScript `Pick<PluginOutput, ...>` boundaries. Fix: keep the helper and selected fields aligned with the new `instanceRef` contract. Prevention: run Rust library tests and frontend typecheck together after changing identity scope.
+
 ## 2026-08-03
 
 - History is a non-provider view, but tray state treated it as an unselected Home view and borrowed the lowest provider quota; a valid zero from OpenCode Go therefore appeared as the History icon value. Fix: return an explicit non-provider unknown state and cover the tray preview. Prevention: define tray semantics for every navigation route and test non-provider views with a valid zero quota elsewhere.

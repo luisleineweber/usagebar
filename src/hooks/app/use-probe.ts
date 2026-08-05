@@ -1,17 +1,37 @@
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 import { useProbeEvents } from "@/hooks/use-probe-events"
 import { type AutoUpdateIntervalMinutes, type PluginSettings } from "@/lib/settings"
 import { useProbeAutoUpdate } from "@/hooks/app/use-probe-auto-update"
 import { useProbeRefreshActions } from "@/hooks/app/use-probe-refresh-actions"
 import { useProbeState } from "@/hooks/app/use-probe-state"
+import { providerInstanceRef } from "@/lib/provider-instance"
+import type { ProviderConfigs } from "@/lib/provider-settings"
+import type { ProviderInstanceRef } from "@/lib/plugin-types"
 
 type UseProbeArgs = {
   pluginSettings: PluginSettings | null
   autoUpdateInterval: AutoUpdateIntervalMinutes
+  providerConfigs?: ProviderConfigs
   onProbeResult?: () => void
 }
 
-export function useProbe({ pluginSettings, autoUpdateInterval, onProbeResult }: UseProbeArgs) {
+export function useProbe({
+  pluginSettings,
+  autoUpdateInterval,
+  providerConfigs = {},
+  onProbeResult,
+}: UseProbeArgs) {
+  const providerInstanceRefs = useMemo<Record<string, ProviderInstanceRef>>(
+    () =>
+      Object.fromEntries(
+        Object.entries(providerConfigs).map(([providerId, config]) => [
+          providerId,
+          providerInstanceRef(providerId, config),
+        ])
+      ),
+    [providerConfigs]
+  )
+
   const {
     pluginStates,
     pluginStatesRef,
@@ -19,7 +39,7 @@ export function useProbe({ pluginSettings, autoUpdateInterval, onProbeResult }: 
     setLoadingForPlugins,
     setErrorForPlugins,
     handleProbeResult,
-  } = useProbeState({ onProbeResult })
+  } = useProbeState({ onProbeResult, providerInstanceRefs })
 
   const handleBatchComplete = useCallback(() => {}, [])
 
@@ -28,12 +48,23 @@ export function useProbe({ pluginSettings, autoUpdateInterval, onProbeResult }: 
     onBatchComplete: handleBatchComplete,
   })
 
+  const startBatchWithInstances = useCallback(
+    (pluginIds?: string[]) => {
+      const ids = pluginIds ?? Object.keys(providerInstanceRefs)
+      const instanceRefs = ids.map(
+        (providerId) => providerInstanceRefs[providerId] ?? { providerId }
+      )
+      return startBatch(pluginIds, instanceRefs)
+    },
+    [providerInstanceRefs, startBatch]
+  )
+
   const { autoUpdateNextAt, setAutoUpdateNextAt, resetAutoUpdateSchedule } = useProbeAutoUpdate({
     pluginSettings,
     autoUpdateInterval,
     setLoadingForPlugins,
     setErrorForPlugins,
-    startBatch,
+    startBatch: startBatchWithInstances,
   })
 
   const { handleRetryPlugin, handleRefreshAll } = useProbeRefreshActions({
@@ -43,14 +74,14 @@ export function useProbe({ pluginSettings, autoUpdateInterval, onProbeResult }: 
     resetAutoUpdateSchedule,
     setLoadingForPlugins,
     setErrorForPlugins,
-    startBatch,
+    startBatch: startBatchWithInstances,
   })
 
   return {
     pluginStates,
     setLoadingForPlugins,
     setErrorForPlugins,
-    startBatch,
+    startBatch: startBatchWithInstances,
     autoUpdateNextAt,
     setAutoUpdateNextAt,
     handleRetryPlugin,

@@ -413,11 +413,13 @@ mod tests {
     fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         CachedPluginSnapshot {
             provider_id: id.to_string(),
+            instance_ref: None,
             display_name: name.to_string(),
             plan: Some("Pro".to_string()),
             lines: vec![],
             history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
+            freshness: None,
         }
     }
 

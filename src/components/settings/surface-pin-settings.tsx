@@ -20,8 +20,8 @@ type SurfacePinSettingsProps = {
   preview: TraySettingsPreview
 }
 
-function getPinKey(pin: Pick<SurfacePin, "providerId" | "metricLabel">): string {
-  return JSON.stringify([pin.providerId, pin.metricLabel])
+function getPinKey(pin: Pick<SurfacePin, "providerId" | "instanceRef" | "metricLabel">): string {
+  return JSON.stringify([pin.providerId, pin.instanceRef?.instanceId ?? null, pin.metricLabel])
 }
 
 function formatPercent(fraction: number | undefined): string {

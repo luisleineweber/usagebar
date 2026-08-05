@@ -1,4 +1,5 @@
-use crate::plugin_engine::runtime::{MetricLine, PluginOutput, UsageHistory};
+use crate::plugin_engine::freshness::{DataFreshness, DataFreshnessGroups, DataFreshnessState};
+use crate::plugin_engine::runtime::{MetricLine, PluginOutput, ProviderInstanceRef, UsageHistory};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -13,12 +14,16 @@ const DEFAULT_ENABLED_PLUGINS: &[&str] = &["claude", "codex", "cursor"];
 #[serde(rename_all = "camelCase")]
 pub struct CachedPluginSnapshot {
     pub provider_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instance_ref: Option<ProviderInstanceRef>,
     pub display_name: String,
     pub plan: Option<String>,
     pub lines: Vec<MetricLine>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<UsageHistory>,
     pub fetched_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub freshness: Option<DataFreshnessGroups>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,9 +135,81 @@ fn retain_cached_history(
     snapshots: &HashMap<String, CachedPluginSnapshot>,
 ) {
     if output.history.is_none() {
+        let key = output
+            .instance_ref
+            .as_ref()
+            .map(provider_instance_key)
+            .unwrap_or_else(|| output.provider_id.clone());
         output.history = snapshots
-            .get(&output.provider_id)
+            .get(&key)
             .and_then(|snapshot| snapshot.history.clone());
+    }
+}
+
+fn history_has_cost(history: &UsageHistory) -> bool {
+    history.entries.iter().any(|entry| entry.cost_usd.is_some())
+}
+
+fn retained_marker(
+    previous: Option<&CachedPluginSnapshot>,
+    previous_marker: Option<&DataFreshness>,
+    has_previous_data: bool,
+) -> Option<DataFreshness> {
+    if !has_previous_data {
+        return None;
+    }
+
+    previous_marker
+        .map(DataFreshness::retained_from)
+        .or_else(|| {
+            previous.map(|snapshot| DataFreshness {
+                state: DataFreshnessState::Retained,
+                observed_at: snapshot.fetched_at.clone(),
+            })
+        })
+}
+
+fn build_freshness(
+    output: &PluginOutput,
+    previous: Option<&CachedPluginSnapshot>,
+    history_was_returned: bool,
+    observed_at: &str,
+) -> DataFreshnessGroups {
+    let previous_history = previous.and_then(|snapshot| snapshot.history.as_ref());
+    let history = output.history.as_ref();
+    let previous_freshness = previous.and_then(|snapshot| snapshot.freshness.as_ref());
+    let history_freshness = if history_was_returned {
+        history.map(|_| DataFreshness::fresh(observed_at))
+    } else {
+        retained_marker(
+            previous,
+            previous_freshness.and_then(|freshness| freshness.history.as_ref()),
+            previous_history.is_some(),
+        )
+    };
+    let cost_freshness = if history.is_some_and(history_has_cost) {
+        if history_was_returned {
+            Some(DataFreshness::fresh(observed_at))
+        } else {
+            retained_marker(
+                previous,
+                previous_freshness.and_then(|freshness| freshness.cost.as_ref()),
+                previous_history.is_some_and(history_has_cost),
+            )
+        }
+    } else {
+        None
+    };
+    let quota_freshness = output
+        .lines
+        .iter()
+        .any(|line| matches!(line, MetricLine::Progress { .. }))
+        .then(|| DataFreshness::fresh(observed_at));
+
+    DataFreshnessGroups {
+        quota: quota_freshness,
+        cost: cost_freshness,
+        history: history_freshness,
     }
 }
 
@@ -142,18 +219,30 @@ pub fn cache_successful_output(output: &mut PluginOutput) {
         .unwrap_or_default();
 
     let mut state = cache_state().lock().expect("cache state poisoned");
+    let key = output
+        .instance_ref
+        .as_ref()
+        .map(provider_instance_key)
+        .unwrap_or_else(|| output.provider_id.clone());
+    let previous = state.snapshots.get(&key);
+    let history_was_returned = output.history.is_some();
     retain_cached_history(output, &state.snapshots);
+
+    let freshness = build_freshness(output, previous, history_was_returned, &fetched_at);
+    output.freshness = Some(freshness.clone());
 
     let snapshot = CachedPluginSnapshot {
         provider_id: output.provider_id.clone(),
+        instance_ref: output.instance_ref.clone(),
         display_name: output.display_name.clone(),
         plan: output.plan.clone(),
         lines: output.lines.clone(),
         history: output.history.clone(),
         fetched_at,
+        freshness: Some(freshness),
     };
 
-    state.snapshots.insert(output.provider_id.clone(), snapshot);
+    state.snapshots.insert(key, snapshot);
     save_cache(&state.app_data_dir, &state.snapshots);
 }
 
@@ -225,17 +314,30 @@ pub(crate) fn read_enabled_snapshots(
 
     let mut ordered = Vec::new();
     let mut seen = HashSet::new();
-    for id in settings_order.into_iter().chain(remaining) {
-        if !seen.insert(id.clone()) {
+    let provider_order = settings_order
+        .into_iter()
+        .chain(remaining.iter().filter_map(|key| {
+            snapshots
+                .get(key)
+                .map(|snapshot| snapshot.provider_id.clone())
+        }))
+        .collect::<Vec<_>>();
+    for provider_id in provider_order {
+        let enabled = if has_settings {
+            !disabled.contains(&provider_id)
+        } else {
+            default_enabled.contains(provider_id.as_str())
+        };
+        if !enabled || !seen.insert(provider_id.clone()) {
             continue;
         }
-        let enabled = if has_settings {
-            !disabled.contains(&id)
-        } else {
-            default_enabled.contains(id.as_str())
-        };
-        if enabled && let Some(snapshot) = snapshots.get(&id) {
-            ordered.push(snapshot.clone());
+        for key in &remaining {
+            if snapshots
+                .get(key)
+                .is_some_and(|snapshot| snapshot.provider_id == provider_id)
+            {
+                ordered.push(snapshots[key].clone());
+            }
         }
     }
     Ok(ordered)
@@ -269,13 +371,33 @@ pub(super) fn enabled_snapshots_ordered(state: &CacheState) -> Vec<CachedPluginS
     ordered
         .into_iter()
         .filter(|id| is_enabled(id))
-        .filter_map(|id| state.snapshots.get(&id).cloned())
+        .flat_map(|provider_id| {
+            let mut keys: Vec<_> = state
+                .snapshots
+                .iter()
+                .filter(|(_, snapshot)| snapshot.provider_id == provider_id)
+                .map(|(key, _)| key)
+                .collect();
+            keys.sort();
+            keys.into_iter()
+                .filter_map(|key| state.snapshots.get(key).cloned())
+                .collect::<Vec<_>>()
+        })
         .collect()
+}
+
+fn provider_instance_key(instance_ref: &ProviderInstanceRef) -> String {
+    instance_ref
+        .instance_id
+        .as_ref()
+        .map(|instance_id| format!("{}\0{}", instance_ref.provider_id, instance_id))
+        .unwrap_or_else(|| instance_ref.provider_id.clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_engine::freshness::{DataFreshness, DataFreshnessState};
     use crate::plugin_engine::runtime::{ProgressFormat, UsageHistoryEntry};
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -292,11 +414,13 @@ mod tests {
     fn make_snapshot(id: &str, name: &str) -> CachedPluginSnapshot {
         CachedPluginSnapshot {
             provider_id: id.to_string(),
+            instance_ref: None,
             display_name: name.to_string(),
             plan: Some("Pro".to_string()),
             lines: vec![],
             history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
+            freshness: None,
         }
     }
 
@@ -330,12 +454,14 @@ mod tests {
         let snapshots = HashMap::from([("codex".to_string(), snapshot)]);
         let mut output = PluginOutput {
             provider_id: "codex".to_string(),
+            instance_ref: None,
             display_name: "Codex".to_string(),
             plan: Some("Plus".to_string()),
             lines: vec![],
             icon_url: "codex.svg".to_string(),
             error: None,
             history: None,
+            freshness: None,
         };
 
         retain_cached_history(&mut output, &snapshots);
@@ -346,10 +472,126 @@ mod tests {
     }
 
     #[test]
+    fn retained_history_is_scoped_to_the_provider_instance() {
+        let mut profile_a = make_snapshot("codex", "Codex A");
+        profile_a.instance_ref = Some(ProviderInstanceRef {
+            provider_id: "codex".to_string(),
+            instance_id: Some("profile-a".to_string()),
+        });
+        profile_a.history = Some(make_history());
+        let mut profile_b = make_snapshot("codex", "Codex B");
+        profile_b.instance_ref = Some(ProviderInstanceRef {
+            provider_id: "codex".to_string(),
+            instance_id: Some("profile-b".to_string()),
+        });
+        profile_b.history = Some(UsageHistory {
+            entries: vec![],
+            ..make_history()
+        });
+        let snapshots = HashMap::from([
+            ("codex\0profile-a".to_string(), profile_a),
+            ("codex\0profile-b".to_string(), profile_b),
+        ]);
+        let mut output = PluginOutput {
+            provider_id: "codex".to_string(),
+            instance_ref: Some(ProviderInstanceRef {
+                provider_id: "codex".to_string(),
+                instance_id: Some("profile-b".to_string()),
+            }),
+            display_name: "Codex B".to_string(),
+            plan: Some("Plus".to_string()),
+            lines: vec![],
+            icon_url: "codex.svg".to_string(),
+            error: None,
+            history: None,
+            freshness: None,
+        };
+
+        retain_cached_history(&mut output, &snapshots);
+
+        assert!(
+            output
+                .history
+                .expect("profile B history")
+                .entries
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn host_freshness_distinguishes_current_quota_from_retained_history() {
+        let mut previous = make_snapshot("codex", "Codex");
+        previous.history = Some(make_history());
+        previous.freshness = Some(DataFreshnessGroups {
+            quota: None,
+            cost: None,
+            history: Some(DataFreshness::fresh("2026-03-26T07:00:00Z")),
+        });
+
+        let mut output = PluginOutput {
+            provider_id: "codex".to_string(),
+            instance_ref: None,
+            display_name: "Codex".to_string(),
+            plan: Some("Plus".to_string()),
+            lines: vec![MetricLine::Progress {
+                label: "Session".to_string(),
+                used: 20.0,
+                limit: 100.0,
+                format: ProgressFormat::Percent,
+                resets_at: None,
+                period_duration_ms: None,
+                color: None,
+            }],
+            icon_url: "codex.svg".to_string(),
+            error: None,
+            history: None,
+            freshness: None,
+        };
+        let snapshots = HashMap::from([(previous.provider_id.clone(), previous.clone())]);
+        retain_cached_history(&mut output, &snapshots);
+
+        let freshness = build_freshness(&output, Some(&previous), false, "2026-03-26T08:15:30Z");
+
+        assert_eq!(
+            freshness.quota.as_ref().unwrap().state,
+            DataFreshnessState::Fresh
+        );
+        assert_eq!(
+            freshness.quota.as_ref().unwrap().observed_at,
+            "2026-03-26T08:15:30Z"
+        );
+        assert_eq!(
+            freshness.history.as_ref().unwrap().state,
+            DataFreshnessState::Retained
+        );
+        assert_eq!(
+            freshness.history.as_ref().unwrap().observed_at,
+            "2026-03-26T07:00:00Z"
+        );
+
+        previous.freshness = None;
+        let fallback = build_freshness(&output, Some(&previous), false, "2026-03-26T08:15:30Z");
+        assert_eq!(
+            fallback.history.as_ref().unwrap().observed_at,
+            previous.fetched_at
+        );
+    }
+
+    #[test]
     fn snapshot_serializes_with_fetched_at() {
-        let snapshot = make_snapshot("claude", "Claude");
+        let mut snapshot = make_snapshot("claude", "Claude");
+        snapshot.freshness = Some(DataFreshnessGroups {
+            quota: Some(DataFreshness::fresh("2026-03-26T08:15:30Z")),
+            cost: None,
+            history: None,
+        });
         let json: serde_json::Value = serde_json::to_value(&snapshot).unwrap();
         assert_eq!(json["fetchedAt"], "2026-03-26T08:15:30Z");
+        assert_eq!(json["freshness"]["quota"]["state"], "fresh");
+        assert_eq!(
+            json["freshness"]["quota"]["observedAt"],
+            "2026-03-26T08:15:30Z"
+        );
         assert!(json.get("fetched_at").is_none());
     }
 
@@ -415,6 +657,7 @@ mod tests {
     fn snapshot_with_progress_line_round_trips() {
         let snapshot = CachedPluginSnapshot {
             provider_id: "claude".to_string(),
+            instance_ref: None,
             display_name: "Claude".to_string(),
             plan: Some("Max 20x".to_string()),
             lines: vec![MetricLine::Progress {
@@ -428,6 +671,7 @@ mod tests {
             }],
             history: None,
             fetched_at: "2026-03-26T08:00:00Z".to_string(),
+            freshness: None,
         };
 
         let json = serde_json::to_string(&snapshot).unwrap();

@@ -1,0 +1,46 @@
+{
+  "daily": [
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 25,
+      "costUSD": 0.000783125,
+      "date": "2026-08-01",
+      "inputTokens": 125,
+      "models": {
+        "gpt-5.2-codex": {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 25,
+          "inputTokens": 125,
+          "isFallback": false,
+          "outputTokens": 40,
+          "reasoningOutputTokens": 15,
+          "totalTokens": 205
+        }
+      },
+      "outputTokens": 40,
+      "reasoningOutputTokens": 15,
+      "totalTokens": 205
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 5,
+      "costUSD": 0.00021962499999999999,
+      "date": "2026-08-02",
+      "inputTokens": 45,
+      "models": {
+        "gpt-5.2-codex": {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 5,
+          "inputTokens": 45,
+          "isFallback": false,
+          "outputTokens": 10,
+          "reasoningOutputTokens": 5,
+          "totalTokens": 65
+        }
+      },
+      "outputTokens": 10,
+      "reasoningOutputTokens": 5,
+      "totalTokens": 65
+    }
+  ]
+}

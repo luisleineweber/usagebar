@@ -1,5 +1,6 @@
 import { LazyStore } from "@tauri-apps/plugin-store"
-import type { PluginMeta } from "@/lib/plugin-types"
+import type { PluginMeta, ProviderInstanceRef } from "@/lib/plugin-types"
+import { providerInstanceKey } from "@/lib/provider-instance"
 
 // Refresh cooldown duration in milliseconds (5 minutes)
 export const REFRESH_COOLDOWN_MS = 300_000
@@ -29,6 +30,7 @@ export type MenubarIconStyle = "provider" | "bars" | "donut"
 
 export type SurfacePin = {
   providerId: string
+  instanceRef?: ProviderInstanceRef
   metricLabel: string
   presentation: "text" | "bar"
 }
@@ -401,11 +403,22 @@ export function normalizeSurfacePins(value: unknown, plugins: PluginMeta[]): Sur
     if (!candidate || typeof candidate !== "object") continue
     const raw = candidate as Record<string, unknown>
     const providerId = typeof raw.providerId === "string" ? raw.providerId.trim() : ""
+    const rawInstanceRef =
+      raw.instanceRef && typeof raw.instanceRef === "object"
+        ? (raw.instanceRef as Record<string, unknown>)
+        : undefined
+    const instanceId =
+      typeof raw.instanceId === "string"
+        ? raw.instanceId.trim()
+        : typeof rawInstanceRef?.instanceId === "string"
+          ? rawInstanceRef.instanceId.trim()
+          : ""
     const metricLabel = typeof raw.metricLabel === "string" ? raw.metricLabel.trim() : ""
     const presentation =
       raw.presentation === "text" ? "text" : raw.presentation === "bar" ? "bar" : null
     const metricLabels = progressLabelsByProvider.get(providerId)
-    const key = `${providerId}\u0000${metricLabel}`
+    const instanceRef = instanceId ? { providerId, instanceId } : undefined
+    const key = `${providerInstanceKey(instanceRef ?? { providerId })}\u0000${metricLabel}`
     if (
       !providerId ||
       !metricLabel ||
@@ -416,7 +429,7 @@ export function normalizeSurfacePins(value: unknown, plugins: PluginMeta[]): Sur
       continue
     }
     seen.add(key)
-    pins.push({ providerId, metricLabel, presentation })
+    pins.push({ providerId, ...(instanceRef ? { instanceRef } : {}), metricLabel, presentation })
     if (pins.length >= MAX_SURFACE_PINS) break
   }
 

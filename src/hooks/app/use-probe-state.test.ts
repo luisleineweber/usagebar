@@ -3,6 +3,60 @@ import { describe, expect, it, vi } from "vitest"
 import { useProbeState } from "@/hooks/app/use-probe-state"
 
 describe("useProbeState", () => {
+  it("rejects a late result from a previously selected provider account", () => {
+    const { result, rerender } = renderHook(
+      ({ instanceId }) =>
+        useProbeState({
+          onProbeResult: vi.fn(),
+          providerInstanceRefs: {
+            codex: { providerId: "codex", instanceId },
+          },
+        }),
+      { initialProps: { instanceId: "profile-a" } }
+    )
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        instanceRef: { providerId: "codex", instanceId: "profile-a" },
+        displayName: "Codex A",
+        iconUrl: "/codex.svg",
+        lines: [{ type: "text", label: "Now", value: "A" }],
+      })
+    })
+
+    rerender({ instanceId: "profile-b" })
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        instanceRef: { providerId: "codex", instanceId: "profile-a" },
+        displayName: "Codex A",
+        iconUrl: "/codex.svg",
+        lines: [{ type: "text", label: "Now", value: "stale A" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex.data?.displayName).toBe("Codex A")
+    expect(result.current.pluginStates.codex.data?.lines[0]).toEqual({
+      type: "text",
+      label: "Now",
+      value: "A",
+    })
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        instanceRef: { providerId: "codex", instanceId: "profile-b" },
+        displayName: "Codex B",
+        iconUrl: "/codex.svg",
+        lines: [{ type: "text", label: "Now", value: "B" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex.data?.displayName).toBe("Codex B")
+  })
+
   it("retains provider activity history when a later successful probe omits it", () => {
     const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
     const history = {

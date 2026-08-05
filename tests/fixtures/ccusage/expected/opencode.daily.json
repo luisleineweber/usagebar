@@ -1,0 +1,44 @@
+{
+  "daily": [
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 0,
+      "date": "2026-08-02",
+      "inputTokens": 20,
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 0,
+          "cost": 0.02,
+          "inputTokens": 20,
+          "modelName": "gpt-5.2",
+          "outputTokens": 4
+        }
+      ],
+      "modelsUsed": ["gpt-5.2"],
+      "outputTokens": 4,
+      "totalCost": 0.02,
+      "totalTokens": 24
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 0,
+      "date": "2026-08-01",
+      "inputTokens": 40,
+      "modelBreakdowns": [
+        {
+          "cacheCreationTokens": 0,
+          "cacheReadTokens": 0,
+          "cost": 0.04,
+          "inputTokens": 40,
+          "modelName": "gpt-5.2",
+          "outputTokens": 8
+        }
+      ],
+      "modelsUsed": ["gpt-5.2"],
+      "outputTokens": 8,
+      "totalCost": 0.04,
+      "totalTokens": 48
+    }
+  ]
+}

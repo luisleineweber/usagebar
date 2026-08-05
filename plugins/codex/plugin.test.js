@@ -40,6 +40,29 @@ describe("codex plugin", () => {
     plugin.probe(ctx)
   })
 
+  it("uses the captured probe instance instead of mutable provider config", async () => {
+    const ctx = makeCtx()
+    ctx.instanceRef = { providerId: "codex", instanceId: "profile-2" }
+    ctx.host.providerConfig = {
+      get: vi.fn((key) => (key === "selectedAccountProfileId" ? "profile-1" : null)),
+    }
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "account:profile-2:authJson"
+        ? JSON.stringify({
+            tokens: { access_token: "captured-token" },
+            last_refresh: new Date().toISOString(),
+          })
+        : null
+    )
+    ctx.host.http.request.mockImplementation((opts) => {
+      expect(opts.headers.Authorization).toBe("Bearer captured-token")
+      return { status: 200, headers: {}, bodyText: JSON.stringify({}) }
+    })
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+  })
+
   it("throws explicit error when selected managed profile is missing", async () => {
     const ctx = makeCtx()
     ctx.host.providerConfig = {
@@ -521,12 +544,13 @@ describe("codex plugin", () => {
   it("passes custom path and offline pricing controls to ccusage", async () => {
     const ctx = makeCtx()
     ctx.host.providerConfig = {
-      get: vi.fn((key) =>
-        ({
-          historyPath: "D:/usage/codex",
-          pricingMode: "calculate",
-          offlinePricing: "enabled",
-        })[key] ?? null
+      get: vi.fn(
+        (key) =>
+          ({
+            historyPath: "D:/usage/codex",
+            pricingMode: "calculate",
+            offlinePricing: "enabled",
+          })[key] ?? null
       ),
     }
     ctx.host.fs.writeText(

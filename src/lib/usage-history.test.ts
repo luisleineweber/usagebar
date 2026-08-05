@@ -66,9 +66,7 @@ describe("usage history calendar windows", () => {
       startMs: Date.UTC(2026, 2, 9, 4),
       endMs: afterSpringForwardMs,
     })
-    expect(
-      getUsageHistoryWindow("yesterday", afterSpringForwardMs, "America/New_York")
-    ).toEqual({
+    expect(getUsageHistoryWindow("yesterday", afterSpringForwardMs, "America/New_York")).toEqual({
       startMs: Date.UTC(2026, 2, 8, 5),
       endMs: Date.UTC(2026, 2, 9, 4),
     })
@@ -94,6 +92,31 @@ describe("filterUsageHistory", () => {
     expect(filtered[0]).toMatchObject({ providerId: "codex", model: "gpt-5", project: "usagebar" })
   })
 
+  it("keeps provider instance identity on aggregated records without using entry account text", () => {
+    const records = filterUsageHistory(
+      [
+        {
+          ...output("codex", [historyEntry({ account: "same display account" })]),
+          instanceRef: { providerId: "codex", instanceId: "profile-a" },
+        },
+        {
+          ...output("codex", [historyEntry({ account: "same display account" })]),
+          instanceRef: { providerId: "codex", instanceId: "profile-b" },
+        },
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+
+    expect(records.map((record) => record.instanceRef?.instanceId)).toEqual([
+      "profile-a",
+      "profile-b",
+    ])
+    expect(records.map((record) => record.account)).toEqual([
+      "same display account",
+      "same display account",
+    ])
+  })
+
   it("ignores missing histories and entries after now", () => {
     const withoutHistory: PluginOutput = {
       providerId: "empty",
@@ -104,9 +127,7 @@ describe("filterUsageHistory", () => {
     const filtered = filterUsageHistory(
       [
         withoutHistory,
-        output("codex", [
-          historyEntry({ periodStart: "2026-07-10T13:00:00.000Z" }),
-        ]),
+        output("codex", [historyEntry({ periodStart: "2026-07-10T13:00:00.000Z" })]),
       ],
       { period: "today", nowMs: NOW_MS }
     )
@@ -132,10 +153,10 @@ describe("filterUsageHistory", () => {
 
   it("fails loudly for malformed periods", () => {
     expect(() =>
-      filterUsageHistory(
-        [output("codex", [historyEntry({ periodStart: "invalid" })])],
-        { period: "today", nowMs: NOW_MS }
-      )
+      filterUsageHistory([output("codex", [historyEntry({ periodStart: "invalid" })])], {
+        period: "today",
+        nowMs: NOW_MS,
+      })
     ).toThrow("Invalid usage history period")
   })
 })
