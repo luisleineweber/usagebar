@@ -2851,19 +2851,26 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 
 ## Acceptance Criteria
 
-- [ ] `ProviderInstanceRef { providerId, instanceId? }` is shared by probe request/result, output/state, persistence/history, notification IDs, and tray pins where account-specific.
-- [ ] Codex managed profile probes use the account captured in the request, and a late result from a previously selected profile cannot replace current state or cache.
-- [ ] Existing unscoped providers and legacy cache/pin data remain readable without inventing an account identity.
-- [ ] Regression tests cover account swap ordering, identity-aware cache/history aggregation, notification IDs, and account-specific pins.
-- [ ] Focused frontend/Rust/plugin tests, related checks, formatting, and diff validation pass.
+- [x] `ProviderInstanceRef { providerId, instanceId? }` is shared by probe request/result, output/state, persistence/history, notification IDs, and tray pins where account-specific.
+- [x] Codex managed profile probes use the account captured in the request, and a late result from a previously selected profile cannot replace current state or cache.
+- [x] Existing unscoped providers and legacy cache/pin data remain readable without inventing an account identity.
+- [x] Regression tests cover account swap ordering, identity-aware cache/history aggregation, notification IDs, and account-specific pins.
+- [x] Focused frontend/Rust/plugin tests, related checks, formatting, and diff validation pass.
 
 ## Plan
 
-- [ ] Map the public identity seams and establish focused red tests.
-- [ ] Add the shared reference and thread captured identities through probe, output, state, and persistence.
-- [ ] Update history, notification, and tray-pin consumers with identity-aware keys while preserving display metadata semantics.
-- [ ] Run focused tests, related checks, full checks/build where safe, and review the diff.
+- [x] Map the public identity seams and establish focused red tests.
+- [x] Add the shared reference and thread captured identities through probe, output, state, and persistence.
+- [x] Update history, notification, and tray-pin consumers with identity-aware keys while preserving display metadata semantics.
+- [x] Run focused tests, related checks, full checks/build where safe, and review the diff.
 
 ## Verification Notes
 
-- Baseline and implementation results will be recorded here.
+- Baseline: `bun run test -- src/hooks/app/use-probe-state.test.ts src/lib/usage-history.test.ts src/lib/notification-events.test.ts src/components/settings/surface-pin-settings.test.tsx --run` -> 4 files, 21 passed; `cargo check --manifest-path src-tauri/Cargo.toml --locked` -> passed.
+- Focused identity tests: probe events, pin/widget/settings, probe state, notifications, history, tray, and provider-instance tests -> 102 passed.
+- Rust identity tests: runtime -> 12 passed; probe coordinator -> 3 passed; cache -> 11 passed.
+- `bun run bundle:plugins` -> synchronized 34 source plugins, including Codex.
+- `bun run check` -> passed formatting, ESLint, TypeScript, Rust formatting, and Clippy.
+- `bun run test:all --reporter=dot` -> 98 files, 1,416 passed.
+- CodeRabbit narrowed review of `src/lib` -> 0 findings. Repository-wide review timed out after 5 minutes because unrelated concurrent changes enlarged the worktree.
+- The worktree contains concurrent commits `9d7cb3f6` and `d9d16b99`; this follow-up commit contains the stable probe-wrapper fix and task records.

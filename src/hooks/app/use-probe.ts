@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react"
+import { useCallback, useMemo, useRef } from "react"
 import { useProbeEvents } from "@/hooks/use-probe-events"
 import { type AutoUpdateIntervalMinutes, type PluginSettings } from "@/lib/settings"
 import { useProbeAutoUpdate } from "@/hooks/app/use-probe-auto-update"
@@ -31,6 +31,8 @@ export function useProbe({
       ),
     [providerConfigs]
   )
+  const providerInstanceRefsRef = useRef(providerInstanceRefs)
+  providerInstanceRefsRef.current = providerInstanceRefs
 
   const {
     pluginStates,
@@ -50,13 +52,17 @@ export function useProbe({
 
   const startBatchWithInstances = useCallback(
     (pluginIds?: string[]) => {
-      const ids = pluginIds ?? Object.keys(providerInstanceRefs)
+      const currentRefs = providerInstanceRefsRef.current
+      const ids = pluginIds ?? Object.keys(currentRefs)
+      if (pluginIds === undefined && ids.length === 0) return startBatch()
       const instanceRefs = ids.map(
-        (providerId) => providerInstanceRefs[providerId] ?? { providerId }
+        (providerId) => currentRefs[providerId] ?? { providerId }
       )
-      return startBatch(pluginIds, instanceRefs)
+      const hasScopedInstance = instanceRefs.some((instanceRef) => instanceRef.instanceId)
+      if (hasScopedInstance) return startBatch(pluginIds, instanceRefs)
+      return pluginIds === undefined ? startBatch() : startBatch(pluginIds)
     },
-    [providerInstanceRefs, startBatch]
+    [startBatch]
   )
 
   const { autoUpdateNextAt, setAutoUpdateNextAt, resetAutoUpdateSchedule } = useProbeAutoUpdate({
