@@ -8,6 +8,7 @@ import { SETTINGS_WINDOW_CLOSED_EVENT, SETTINGS_WINDOW_OPEN_EVENT } from "@/lib/
 const HOME_PANEL_MAX_HEIGHT_PX = 720
 const DETAIL_PANEL_MAX_HEIGHT_PX = 860
 const HOME_PANEL_MIN_HEIGHT_PX = 280
+const HOME_PANEL_PROVIDER_STEP_PX = 12
 const DETAIL_PANEL_MIN_HEIGHT_PX = 400
 const DETAIL_PANEL_BASE_HEIGHT_PX = 468
 const MAX_HEIGHT_FALLBACK_PX = 820
@@ -46,8 +47,11 @@ export function panelMinHeightForView(activeView: ActiveView): number {
   return DETAIL_PANEL_MIN_HEIGHT_PX
 }
 
-export function panelPreferredMinHeightForView(activeView: ActiveView): number {
-  if (activeView === "home") return HOME_PANEL_MIN_HEIGHT_PX
+export function panelPreferredMinHeightForView(activeView: ActiveView, providerCount = 0): number {
+  if (activeView === "home") {
+    const normalizedProviderCount = Math.max(0, Math.floor(providerCount))
+    return HOME_PANEL_MIN_HEIGHT_PX + normalizedProviderCount * HOME_PANEL_PROVIDER_STEP_PX
+  }
   return DETAIL_PANEL_BASE_HEIGHT_PX
 }
 
@@ -380,7 +384,7 @@ export function usePanel({
         contentHeightLogical + footerHeightLogical + paddingTopLogical + paddingBottomLogical
       )
       const navMinHeightLogical = panelMinHeightForNav(navPluginCount, showHistoryInBar)
-      const viewMinHeightLogical = panelPreferredMinHeightForView(activeView)
+      const viewMinHeightLogical = panelPreferredMinHeightForView(activeView, navPluginCount)
       const panelMaxHeightPx = panelMaxHeightForView(activeView)
 
       let maxHeightLogical: number | null = null

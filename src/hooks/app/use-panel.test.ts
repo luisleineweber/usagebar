@@ -445,7 +445,10 @@ describe("usePanel", () => {
 
   it("uses a stronger preferred baseline for provider detail views", () => {
     expect(panelPreferredMinHeightForView("home")).toBe(280)
+    expect(panelPreferredMinHeightForView("home", 1)).toBe(292)
+    expect(panelPreferredMinHeightForView("home", 3)).toBe(316)
     expect(panelPreferredMinHeightForView("opencode")).toBe(468)
+    expect(panelPreferredMinHeightForView("opencode", 3)).toBe(468)
   })
 
   it("keeps a minimum height for the nav icon stack", () => {

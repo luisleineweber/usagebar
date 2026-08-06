@@ -107,7 +107,7 @@ export function AppShell({
       : maxPanelHeightPx != null
         ? { maxHeight: `${maxPanelHeightPx}px` }
         : undefined
-  const contentMinHeightPx = panelPreferredMinHeightForView(activeView)
+  const contentMinHeightPx = panelPreferredMinHeightForView(activeView, navPlugins.length)
   const activeProviderId = navPlugins.some((plugin) => plugin.id === activeView)
     ? activeView
     : (selectedPlugin?.meta.id ?? resolvedSelectedPlugin?.meta.id ?? null)

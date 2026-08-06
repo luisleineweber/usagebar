@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-06
+
+- The overview content floor stayed fixed while selected providers increased. Fix: add a small provider-count increment to the home minimum height and use it for both measurement and rendering. Prevention: test shared layout floors with zero, one, and several selected providers.
+
 ## 2026-08-05
 
 - Stacked bars show all providers, so first/latest provider selection and its preview label add no value. Fix: hide both when stacked bars is active. Prevention: test tray-style-specific settings and preview content together.
