@@ -140,14 +140,16 @@
   }
 }
 
-/* Panel-specific styles for transparent Tauri window */
+/* The tray panel owns its visible surface. The native window stays transparent
+   so the rounded corners are actual cut-outs instead of a rounded rectangle
+   painted inside a square window. */
 html,
 body,
 #root {
   width: 100%;
   height: 100%;
   min-height: 0;
-  background: var(--card);
+  background: transparent;
   overflow: hidden;
   margin: 0;
   padding: 0;
@@ -158,6 +160,7 @@ html[data-window="settings"] body,
 html[data-window="settings"] #root {
   min-height: 100%;
   overflow: auto;
+  background: var(--background);
 }
 
 /* Hide scrollbar track globally */

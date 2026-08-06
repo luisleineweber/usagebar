@@ -194,10 +194,10 @@ export function AppShell({
   )
 
   return (
-    <div ref={containerRef} className="flex h-full min-h-0 flex-col bg-card">
+    <div ref={containerRef} className="flex h-full min-h-0 flex-col bg-transparent">
       <div
         data-testid="app-panel"
-        className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-card select-none"
+        className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border bg-card select-none"
         style={panelStyle}
         onContextMenu={openContextMenu}
       >
