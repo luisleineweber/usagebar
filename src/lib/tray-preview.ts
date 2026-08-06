@@ -25,17 +25,28 @@ export function buildTraySettingsPreview(args: {
   pluginStates: Record<string, PluginState>
   displayMode: DisplayMode
   surfacePins?: SurfacePin[]
-  activeView: string
+  preferredProviderId?: string | null
 }): { preview: TraySettingsPreview; state: TrayState } {
-  const { pluginsMeta, pluginSettings, pluginStates, displayMode, surfacePins = [], activeView } = args
-  if (!pluginSettings) return { preview: EMPTY_TRAY_SETTINGS_PREVIEW, state: resolveTrayState({ pluginsMeta, pluginSettings, pluginStates, activeView }) }
+  const {
+    pluginsMeta,
+    pluginSettings,
+    pluginStates,
+    displayMode,
+    surfacePins = [],
+    preferredProviderId = null,
+  } = args
+  if (!pluginSettings) {
+    return {
+      preview: EMPTY_TRAY_SETTINGS_PREVIEW,
+      state: resolveTrayState({ pluginsMeta, pluginSettings, pluginStates, preferredProviderId }),
+    }
+  }
 
   const state = resolveTrayState({
     pluginsMeta,
     pluginSettings,
     pluginStates,
-    activeView,
-    displayMode,
+    preferredProviderId,
   })
   const pinnedBars = getTrayPinnedBars({ pins: surfacePins, pluginSettings, pluginStates, displayMode })
   const bars = pinnedBars.length > 0

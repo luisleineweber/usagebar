@@ -86,8 +86,8 @@ const defaultProps = {
   onTimeFormatModeChange: vi.fn(),
   menubarIconStyle: "provider" as const,
   onMenubarIconStyleChange: vi.fn(),
-  surfacePins: [],
-  onSurfacePinsChange: vi.fn(),
+  trayProviderSelection: "first" as const,
+  onTrayProviderSelectionChange: vi.fn(),
   showHistoryInBar: true,
   onShowHistoryInBarChange: vi.fn(),
   traySettingsPreview: {
@@ -221,9 +221,28 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("radio", { name: "Compact" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Stacked bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "First provider" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Latest provider" })).toBeInTheDocument()
     expect(screen.queryByRole("radio", { name: "Merged" })).not.toBeInTheDocument()
     await user.click(screen.getByRole("radio", { name: "Stacked bars" }))
     expect(onMenubarIconStyleChange).toHaveBeenCalledWith("bars")
+  })
+
+  it("hides provider selection for stacked bars", () => {
+    render(<TestHarness menubarIconStyle="bars" />)
+
+    expect(screen.queryByRole("radio", { name: "First provider" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "Latest provider" })).not.toBeInTheDocument()
+    expect(screen.getByText("Stacked bars show the first four providers.")).toBeInTheDocument()
+  })
+
+  it("updates tray provider selection", async () => {
+    const onTrayProviderSelectionChange = vi.fn()
+    render(<TestHarness onTrayProviderSelectionChange={onTrayProviderSelectionChange} />)
+
+    await userEvent.click(screen.getByRole("radio", { name: "Latest provider" }))
+
+    expect(onTrayProviderSelectionChange).toHaveBeenCalledWith("last")
   })
 
   it("opens the issue tracker from the General tab", async () => {

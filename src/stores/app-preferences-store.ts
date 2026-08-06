@@ -5,6 +5,7 @@ import {
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
+  DEFAULT_TRAY_PROVIDER_SELECTION,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_SHOW_HISTORY_IN_BAR,
   DEFAULT_START_ON_LOGIN,
@@ -16,6 +17,7 @@ import {
   type DisplayMode,
   type GlobalShortcut,
   type MenubarIconStyle,
+  type TrayProviderSelection,
   type ResetTimerDisplayMode,
   type SurfacePin,
   type ThemeMode,
@@ -32,6 +34,7 @@ type AppPreferencesStore = {
   globalShortcut: GlobalShortcut
   startOnLogin: boolean
   menubarIconStyle: MenubarIconStyle
+  trayProviderSelection: TrayProviderSelection
   surfacePins: SurfacePin[]
   showHistoryInBar: boolean
   setAutoUpdateInterval: (value: AutoUpdateIntervalMinutes) => void
@@ -43,6 +46,7 @@ type AppPreferencesStore = {
   setGlobalShortcut: (value: GlobalShortcut) => void
   setStartOnLogin: (value: boolean) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setTrayProviderSelection: (value: TrayProviderSelection) => void
   setSurfacePins: (value: SurfacePin[]) => void
   setShowHistoryInBar: (value: boolean) => void
   resetState: () => void
@@ -58,6 +62,7 @@ const initialState = {
   globalShortcut: DEFAULT_GLOBAL_SHORTCUT,
   startOnLogin: DEFAULT_START_ON_LOGIN,
   menubarIconStyle: DEFAULT_MENUBAR_ICON_STYLE,
+  trayProviderSelection: DEFAULT_TRAY_PROVIDER_SELECTION,
   surfacePins: DEFAULT_SURFACE_PINS,
   showHistoryInBar: DEFAULT_SHOW_HISTORY_IN_BAR,
 }
@@ -73,6 +78,7 @@ export const useAppPreferencesStore = create<AppPreferencesStore>((set) => ({
   setGlobalShortcut: (value) => set({ globalShortcut: value }),
   setStartOnLogin: (value) => set({ startOnLogin: value }),
   setMenubarIconStyle: (value) => set({ menubarIconStyle: value }),
+  setTrayProviderSelection: (value) => set({ trayProviderSelection: value }),
   setSurfacePins: (value) => set({ surfacePins: value }),
   setShowHistoryInBar: (value) => set({ showHistoryInBar: value }),
   resetState: () => set(initialState),

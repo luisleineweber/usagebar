@@ -2,6 +2,19 @@
 
 ## 2026-08-05
 
+- Stacked bars show all providers, so first/latest provider selection and its preview label add no value. Fix: hide both when stacked bars is active. Prevention: test tray-style-specific settings and preview content together.
+- Tray previews and tray state must describe the active icon style and must not expose an unrelated provider name. Fix: show first-four-provider guidance for stacked bars, keep provider selection only for Compact and Donut, and keep the wide stacked-bars preview compact. Prevention: test all three icon previews, the stacked-bars settings layout, and runtime tray selection.
+
+## 2026-08-05
+
+- Tray provider selection needs an explicit preference and a session-only last-provider state. Fix: persist the first/last mode, start each session with the first provider, and record the provider left before Dashboard or History. Prevention: test startup, provider navigation, Dashboard, History, and settings-window synchronization together.
+
+## 2026-08-05
+
+- Tray icon state must follow the first enabled, supported provider in saved listing order on startup and every app view. Fix: remove active-view and quota-ranking selection from the shared tray-state resolver, and cover Dashboard, provider, and History navigation. Prevention: test the tray icon across all navigation routes whenever its provider-selection rule changes.
+
+## 2026-08-05
+
 - The ccusage version bump helper still targeted `host_api.rs` after the host implementation was extracted into `ccusage_host_api.rs`, so a routine pin update failed before editing anything. Fix: point the helper at the extracted source and verify the bump command during every ccusage upgrade. Prevention: version-maintenance scripts must follow the actual source-of-truth file and run in the upgrade gate.
 
 ## 2026-08-05

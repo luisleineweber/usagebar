@@ -13,6 +13,7 @@ import {
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
+  DEFAULT_TRAY_PROVIDER_SELECTION,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_SHOW_HISTORY_IN_BAR,
   DEFAULT_START_ON_LOGIN,
@@ -25,6 +26,7 @@ import {
   loadDisplayMode,
   loadGlobalShortcut,
   loadMenubarIconStyle,
+  loadTrayProviderSelection,
   migrateLegacyTraySettings,
   loadPluginSettingsRecord,
   loadResetTimerDisplayMode,
@@ -40,6 +42,7 @@ import {
   type DisplayMode,
   type GlobalShortcut,
   type MenubarIconStyle,
+  type TrayProviderSelection,
   type PluginSettings,
   type ResetTimerDisplayMode,
   type ThemeMode,
@@ -59,6 +62,7 @@ type UseSettingsBootstrapArgs = {
   setGlobalShortcut: (value: GlobalShortcut) => void
   setStartOnLogin: (value: boolean) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setTrayProviderSelection: (value: TrayProviderSelection) => void
   setSurfacePins: (value: SurfacePin[]) => void
   setShowHistoryInBar: (value: boolean) => void
   setLoadingForPlugins: (ids: string[]) => void
@@ -78,6 +82,7 @@ export function useSettingsBootstrap({
   setGlobalShortcut,
   setStartOnLogin,
   setMenubarIconStyle,
+  setTrayProviderSelection,
   setSurfacePins,
   setShowHistoryInBar,
   setLoadingForPlugins,
@@ -214,6 +219,13 @@ export function useSettingsBootstrap({
           console.error("Failed to load surface pins:", error)
         }
 
+        let storedTrayProviderSelection = DEFAULT_TRAY_PROVIDER_SELECTION
+        try {
+          storedTrayProviderSelection = await loadTrayProviderSelection()
+        } catch (error) {
+          console.error("Failed to load tray provider selection:", error)
+        }
+
         let storedShowHistoryInBar = DEFAULT_SHOW_HISTORY_IN_BAR
         try {
           storedShowHistoryInBar = await loadShowHistoryInBar()
@@ -231,6 +243,7 @@ export function useSettingsBootstrap({
           setGlobalShortcut(storedGlobalShortcut)
           setStartOnLogin(storedStartOnLogin)
           setMenubarIconStyle(storedMenubarIconStyle)
+          setTrayProviderSelection(storedTrayProviderSelection)
           setSurfacePins(storedSurfacePins)
           setShowHistoryInBar(storedShowHistoryInBar)
 
@@ -264,6 +277,7 @@ export function useSettingsBootstrap({
     setGlobalShortcut,
     setLoadingForPlugins,
     setMenubarIconStyle,
+    setTrayProviderSelection,
     setSurfacePins,
     setShowHistoryInBar,
     migrateLegacyTraySettings,

@@ -8,6 +8,7 @@ import type {
   ResetTimerDisplayMode,
   ThemeMode,
   TimeFormatMode,
+  TrayProviderSelection,
   SurfacePin,
 } from "@/lib/settings"
 
@@ -20,6 +21,7 @@ export type DisplayPreferenceUpdate =
   | { key: "resetTimerDisplayMode"; value: ResetTimerDisplayMode }
   | { key: "timeFormatMode"; value: TimeFormatMode }
   | { key: "menubarIconStyle"; value: MenubarIconStyle }
+  | { key: "trayProviderSelection"; value: TrayProviderSelection }
   | { key: "showHistoryInBar"; value: boolean }
   | { key: "surfacePins"; value: SurfacePin[] }
 

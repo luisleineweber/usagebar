@@ -47,12 +47,11 @@ describe("resolveTrayState", () => {
         pluginsMeta,
         pluginSettings: null,
         pluginStates: {},
-        activeView: "home",
       })
     ).toMatchObject({ kind: "unknown", reason: "no-provider" })
   })
 
-  it("uses the selected provider even when another provider has less remaining usage", () => {
+  it("uses the first provider in listing order on every view", () => {
     const result = resolveTrayState({
       pluginsMeta,
       pluginSettings: { order: ["alpha", "beta", "gamma"], disabled: [] },
@@ -60,7 +59,6 @@ describe("resolveTrayState", () => {
         alpha: state(output("alpha", 10)),
         beta: state(output("beta", 91)),
       },
-      activeView: "alpha",
     })
 
     expect(result).toMatchObject({
@@ -70,7 +68,25 @@ describe("resolveTrayState", () => {
     })
   })
 
-  it("does not borrow a provider quota while History is active", () => {
+  it("uses the preferred provider when the tray selection mode requests it", () => {
+    const result = resolveTrayState({
+      pluginsMeta,
+      pluginSettings: { order: ["alpha", "beta"], disabled: [] },
+      pluginStates: {
+        alpha: state(output("alpha", 10)),
+        beta: state(output("beta", 80)),
+      },
+      preferredProviderId: "beta",
+    })
+
+    expect(result).toMatchObject({
+      kind: "value",
+      providerId: "beta",
+      remainingPercentExact: 20,
+    })
+  })
+
+  it("keeps the first provider on History instead of becoming unknown", () => {
     const result = resolveTrayState({
       pluginsMeta,
       pluginSettings: { order: ["alpha", "beta"], disabled: [] },
@@ -78,46 +94,26 @@ describe("resolveTrayState", () => {
         alpha: state(output("alpha", 25)),
         beta: state(output("beta", 100)),
       },
-      activeView: "history",
-    })
-
-    expect(result).toMatchObject({
-      kind: "unknown",
-      providerId: null,
-      providerName: null,
-      metricLabel: null,
-      reason: "non-provider-view",
-    })
-  })
-
-  it("chooses the lowest current remaining value on Home with stable order tie-breaks", () => {
-    const result = resolveTrayState({
-      pluginsMeta,
-      pluginSettings: { order: ["alpha", "beta", "gamma"], disabled: [] },
-      pluginStates: {
-        alpha: state(output("alpha", 75)),
-        beta: state(output("beta", 75)),
-        gamma: state(output("gamma", 20)),
-      },
-      activeView: "home",
     })
 
     expect(result).toMatchObject({
       kind: "value",
       providerId: "alpha",
-      remainingPercentExact: 25,
+      remainingPercentExact: 75,
+    })
+  })
+
+  it("does not skip the first provider when it has no data", () => {
+    const result = resolveTrayState({
+      pluginsMeta,
+      pluginSettings: { order: ["alpha", "beta", "gamma"], disabled: [] },
+      pluginStates: {
+        beta: state(output("beta", 90)),
+        gamma: state(output("gamma", 20)),
+      },
     })
 
-    const tied = resolveTrayState({
-      pluginsMeta,
-      pluginSettings: { order: ["beta", "alpha", "gamma"], disabled: [] },
-      pluginStates: {
-        alpha: state(output("alpha", 75)),
-        beta: state(output("beta", 75)),
-      },
-      activeView: "home",
-    })
-    expect(tied).toMatchObject({ kind: "value", providerId: "beta" })
+    expect(result).toMatchObject({ kind: "unknown", providerId: "alpha", reason: "no-data" })
   })
 
   it("always computes remaining usage regardless of the global display mode", () => {
@@ -125,8 +121,6 @@ describe("resolveTrayState", () => {
       pluginsMeta,
       pluginSettings: { order: ["alpha"], disabled: [] },
       pluginStates: { alpha: state(output("alpha", 25)) },
-      activeView: "alpha",
-      displayMode: "used",
     })
 
     expect(result).toMatchObject({ kind: "value", remainingPercentExact: 75 })
@@ -137,7 +131,6 @@ describe("resolveTrayState", () => {
       pluginsMeta,
       pluginSettings: { order: ["alpha"], disabled: [] },
       pluginStates: { alpha: state(output("alpha", 100)) },
-      activeView: "alpha",
     })
 
     expect(result).toMatchObject({ kind: "value", remainingPercentExact: 0 })
@@ -148,7 +141,6 @@ describe("resolveTrayState", () => {
       pluginsMeta,
       pluginSettings: { order: ["alpha"], disabled: [] },
       pluginStates: { alpha: state(output("alpha", 25), "Could not refresh") },
-      activeView: "alpha",
     })
 
     expect(result).toMatchObject({
@@ -165,7 +157,6 @@ describe("resolveTrayState", () => {
       pluginsMeta,
       pluginSettings: { order: ["alpha", "beta"], disabled: [] },
       pluginStates: { alpha: state(null, "Failed") },
-      activeView: "home",
     })
 
     expect(result).toMatchObject({ kind: "error", providerId: "alpha" })
@@ -176,7 +167,6 @@ describe("resolveTrayState", () => {
       pluginsMeta,
       pluginSettings: { order: ["alpha"], disabled: [] },
       pluginStates: { alpha: state(output("alpha", 1, 0)) },
-      activeView: "alpha",
     })
 
     expect(result).toMatchObject({ kind: "unknown", reason: "invalid-limit" })

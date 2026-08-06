@@ -27,6 +27,8 @@ const state = vi.hoisted(() => ({
   saveResetTimerDisplayModeMock: vi.fn(),
   loadMenubarIconStyleMock: vi.fn(),
   saveMenubarIconStyleMock: vi.fn(),
+  loadTrayProviderSelectionMock: vi.fn(),
+  saveTrayProviderSelectionMock: vi.fn(),
   loadSurfacePinsMock: vi.fn(),
   saveSurfacePinsMock: vi.fn(),
   loadShowHistoryInBarMock: vi.fn(),
@@ -312,6 +314,8 @@ vi.mock("@/lib/settings", async () => {
     saveResetTimerDisplayMode: state.saveResetTimerDisplayModeMock,
     loadMenubarIconStyle: state.loadMenubarIconStyleMock,
     saveMenubarIconStyle: state.saveMenubarIconStyleMock,
+    loadTrayProviderSelection: state.loadTrayProviderSelectionMock,
+    saveTrayProviderSelection: state.saveTrayProviderSelectionMock,
     loadSurfacePins: state.loadSurfacePinsMock,
     saveSurfacePins: state.saveSurfacePinsMock,
     loadShowHistoryInBar: state.loadShowHistoryInBarMock,
@@ -398,6 +402,8 @@ describe("App", () => {
     state.saveResetTimerDisplayModeMock.mockReset()
     state.loadMenubarIconStyleMock.mockReset()
     state.saveMenubarIconStyleMock.mockReset()
+    state.loadTrayProviderSelectionMock.mockReset()
+    state.saveTrayProviderSelectionMock.mockReset()
     state.loadSurfacePinsMock.mockReset()
     state.saveSurfacePinsMock.mockReset()
     state.migrateLegacyTraySettingsMock.mockReset()
@@ -455,6 +461,8 @@ describe("App", () => {
     state.saveResetTimerDisplayModeMock.mockResolvedValue(undefined)
     state.loadMenubarIconStyleMock.mockResolvedValue("provider")
     state.saveMenubarIconStyleMock.mockResolvedValue(undefined)
+    state.loadTrayProviderSelectionMock.mockResolvedValue("first")
+    state.saveTrayProviderSelectionMock.mockResolvedValue(undefined)
     state.loadSurfacePinsMock.mockResolvedValue([])
     state.saveSurfacePinsMock.mockResolvedValue(undefined)
     state.loadShowHistoryInBarMock.mockResolvedValue(true)
@@ -1042,7 +1050,7 @@ describe("App", () => {
     expect(state.traySetTitleMock).not.toHaveBeenCalled()
   })
 
-  it("renders the selected provider in the tray icon", async () => {
+  it("keeps the first provider in the tray icon across navigation", async () => {
     state.invokeMock.mockImplementation(async (cmd: string) => {
       if (cmd === "list_plugins") {
         return [
@@ -1101,17 +1109,36 @@ describe("App", () => {
       ],
     })
 
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: 50,
+          state: expect.objectContaining({ kind: "value", providerId: "a" }),
+        })
+      )
+    )
+
     await userEvent.click(screen.getByRole("button", { name: "Beta" }))
 
     await waitFor(() =>
       expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          value: 70,
-          state: expect.objectContaining({ kind: "value", providerId: "b" }),
+          value: 50,
+          state: expect.objectContaining({ kind: "value", providerId: "a" }),
         })
       )
     )
     expect(state.traySetTitleMock).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole("button", { name: "History" }))
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: 50,
+          state: expect.objectContaining({ kind: "value", providerId: "a" }),
+        })
+      )
+    )
 
     await userEvent.click(screen.getByRole("button", { name: "Home" }))
     await waitFor(() =>
@@ -1128,6 +1155,106 @@ describe("App", () => {
     })
     await userEvent.click(settingsButtons[0])
     expect(state.renderTrayNumberIconMock).toHaveBeenCalled()
+  })
+
+  it("uses the last provider after leaving it when configured", async () => {
+    state.loadTrayProviderSelectionMock.mockResolvedValueOnce("last")
+    state.invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "list_plugins") {
+        return [
+          {
+            id: "a",
+            name: "Alpha",
+            iconUrl: "icon-a",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+          {
+            id: "b",
+            name: "Beta",
+            iconUrl: "icon-b",
+            primaryCandidates: ["Session"],
+            lines: [{ type: "progress", label: "Session", scope: "overview" }],
+          },
+        ]
+      }
+      return null
+    })
+    state.loadPluginSettingsMock.mockResolvedValueOnce({
+      order: ["a", "b"],
+      disabled: [],
+    })
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+
+    state.probeHandlers?.onResult({
+      providerId: "a",
+      displayName: "Alpha",
+      iconUrl: "icon-a",
+      lines: [
+        {
+          type: "progress",
+          label: "Session",
+          used: 50,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+      ],
+    })
+    state.probeHandlers?.onResult({
+      providerId: "b",
+      displayName: "Beta",
+      iconUrl: "icon-b",
+      lines: [
+        {
+          type: "progress",
+          label: "Session",
+          used: 30,
+          limit: 100,
+          format: { kind: "percent" },
+        },
+      ],
+    })
+
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: 50,
+          state: expect.objectContaining({ providerId: "a" }),
+        })
+      )
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Beta" }))
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: 70,
+          state: expect.objectContaining({ providerId: "b" }),
+        })
+      )
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "History" }))
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: 70,
+          state: expect.objectContaining({ providerId: "b" }),
+        })
+      )
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Home" }))
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          value: 70,
+          state: expect.objectContaining({ providerId: "b" }),
+        })
+      )
+    )
   })
 
   it("covers about open/close callbacks", async () => {

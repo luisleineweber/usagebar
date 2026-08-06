@@ -61,7 +61,6 @@ describe("buildTraySettingsPreview", () => {
         { providerId: "codex", metricLabel: "Weekly", presentation: "bar" },
         { providerId: "claude", metricLabel: "Weekly", presentation: "text" },
       ],
-      activeView: "home",
     })
 
     expect(result.preview.bars).toEqual([
@@ -70,21 +69,20 @@ describe("buildTraySettingsPreview", () => {
     ])
   })
 
-  it("does not select a provider quota for the History view", () => {
+  it("keeps the first provider for the History view", () => {
     const result = buildTraySettingsPreview({
       pluginsMeta,
       pluginSettings: { order: ["codex", "claude"], disabled: [] },
       pluginStates,
       displayMode: "left",
-      activeView: "history",
     })
 
     expect(result.state).toMatchObject({
-      kind: "unknown",
-      providerId: null,
-      reason: "non-provider-view",
+      kind: "value",
+      providerId: "codex",
+      remainingPercentExact: 80,
     })
-    expect(result.preview.providerBars).toEqual([])
-    expect(result.preview.providerIconUrl).toBeUndefined()
+    expect(result.preview.providerBars).toEqual([{ id: "codex", fraction: 0.8 }])
+    expect(result.preview.providerIconUrl).toBe("codex-icon")
   })
 })

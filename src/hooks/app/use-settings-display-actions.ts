@@ -3,6 +3,7 @@ import {
   saveAccentColor,
   saveDisplayMode,
   saveMenubarIconStyle,
+  saveTrayProviderSelection,
   saveResetTimerDisplayMode,
   saveThemeMode,
   saveTimeFormatMode,
@@ -11,6 +12,7 @@ import {
   type DisplayMode,
   type AccentColor,
   type MenubarIconStyle,
+  type TrayProviderSelection,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
@@ -28,6 +30,7 @@ type UseSettingsDisplayActionsArgs = {
   setResetTimerDisplayMode: (value: ResetTimerDisplayMode) => void
   setTimeFormatMode: (value: TimeFormatMode) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setTrayProviderSelection: (value: TrayProviderSelection) => void
   setSurfacePins: (value: SurfacePin[]) => void
   setShowHistoryInBar: (value: boolean) => void
   scheduleTrayIconUpdate: ScheduleTrayIconUpdate
@@ -41,6 +44,7 @@ export function useSettingsDisplayActions({
   setResetTimerDisplayMode,
   setTimeFormatMode,
   setMenubarIconStyle,
+  setTrayProviderSelection,
   setSurfacePins,
   setShowHistoryInBar,
   scheduleTrayIconUpdate,
@@ -113,6 +117,17 @@ export function useSettingsDisplayActions({
     })
   }, [scheduleTrayIconUpdate, setMenubarIconStyle])
 
+  const handleTrayProviderSelectionChange = useCallback((selection: TrayProviderSelection) => {
+    setTrayProviderSelection(selection)
+    scheduleTrayIconUpdate("settings", 0)
+    void notifyDisplayPreferenceUpdated({ key: "trayProviderSelection", value: selection }).catch((error) => {
+      console.error("Failed to publish tray provider selection update:", error)
+    })
+    void saveTrayProviderSelection(selection).catch((error) => {
+      console.error("Failed to save tray provider selection:", error)
+    })
+  }, [scheduleTrayIconUpdate, setTrayProviderSelection])
+
   const handleSurfacePinsChange = useCallback((pins: SurfacePin[]) => {
     setSurfacePins(pins)
     scheduleTrayIconUpdate("settings", 0)
@@ -142,6 +157,7 @@ export function useSettingsDisplayActions({
     handleResetTimerDisplayModeToggle,
     handleTimeFormatModeChange,
     handleMenubarIconStyleChange,
+    handleTrayProviderSelectionChange,
     handleSurfacePinsChange,
     handleShowHistoryInBarChange,
   }

@@ -13,10 +13,10 @@ import type {
   DisplayMode,
   GlobalShortcut,
   MenubarIconStyle,
+  TrayProviderSelection,
   ResetTimerDisplayMode,
   ThemeMode,
   TimeFormatMode,
-  SurfacePin,
 } from "@/lib/settings"
 
 interface SettingsPageProps {
@@ -41,8 +41,8 @@ interface SettingsPageProps {
   onTimeFormatModeChange: (value: TimeFormatMode) => void
   menubarIconStyle: MenubarIconStyle
   onMenubarIconStyleChange: (value: MenubarIconStyle) => void
-  surfacePins: SurfacePin[]
-  onSurfacePinsChange: (value: SurfacePin[]) => void
+  trayProviderSelection: TrayProviderSelection
+  onTrayProviderSelectionChange: (value: TrayProviderSelection) => void
   showHistoryInBar: boolean
   onShowHistoryInBarChange: (value: boolean) => void
   traySettingsPreview: TraySettingsPreview
@@ -80,8 +80,8 @@ export function SettingsPage({
   onTimeFormatModeChange,
   menubarIconStyle,
   onMenubarIconStyleChange,
-  surfacePins,
-  onSurfacePinsChange,
+  trayProviderSelection,
+  onTrayProviderSelectionChange,
   showHistoryInBar,
   onShowHistoryInBarChange,
   traySettingsPreview,
@@ -170,12 +170,11 @@ export function SettingsPage({
           onTimeFormatModeChange={onTimeFormatModeChange}
           menubarIconStyle={menubarIconStyle}
           onMenubarIconStyleChange={onMenubarIconStyleChange}
-          surfacePins={surfacePins}
-          onSurfacePinsChange={onSurfacePinsChange}
+          trayProviderSelection={trayProviderSelection}
+          onTrayProviderSelectionChange={onTrayProviderSelectionChange}
           showHistoryInBar={showHistoryInBar}
           onShowHistoryInBarChange={onShowHistoryInBarChange}
           traySettingsPreview={traySettingsPreview}
-          plugins={providers.map((provider) => provider.meta)}
           globalShortcut={globalShortcut}
           onGlobalShortcutChange={onGlobalShortcutChange}
           startOnLogin={startOnLogin}

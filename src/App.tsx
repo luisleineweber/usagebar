@@ -61,6 +61,8 @@ function App() {
     setDisplayMode,
     menubarIconStyle,
     setMenubarIconStyle,
+    trayProviderSelection,
+    setTrayProviderSelection,
     surfacePins,
     setSurfacePins,
     showHistoryInBar,
@@ -83,6 +85,8 @@ function App() {
       setDisplayMode: state.setDisplayMode,
       menubarIconStyle: state.menubarIconStyle,
       setMenubarIconStyle: state.setMenubarIconStyle,
+      trayProviderSelection: state.trayProviderSelection,
+      setTrayProviderSelection: state.setTrayProviderSelection,
       surfacePins: state.surfacePins,
       setSurfacePins: state.setSurfacePins,
       showHistoryInBar: state.showHistoryInBar,
@@ -134,6 +138,7 @@ function App() {
     menubarIconStyle,
     surfacePins,
     activeView,
+    trayProviderSelection,
     timeFormatMode,
   })
 
@@ -151,6 +156,7 @@ function App() {
     setAccentColor,
     setDisplayMode,
     setMenubarIconStyle,
+    setTrayProviderSelection,
     setSurfacePins,
     setShowHistoryInBar,
     setResetTimerDisplayMode,
@@ -178,6 +184,7 @@ function App() {
     setSurfacePins,
     setShowHistoryInBar,
     setMenubarIconStyle,
+    setTrayProviderSelection,
   })
 
   const didOpenFirstRunRef = useRef(false)
@@ -205,6 +212,7 @@ function App() {
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setMenubarIconStyle,
+    setTrayProviderSelection,
     setSurfacePins,
     setShowHistoryInBar,
     scheduleTrayIconUpdate,

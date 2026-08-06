@@ -14,6 +14,7 @@ const {
   loadDisplayModeMock,
   loadGlobalShortcutMock,
   loadMenubarIconStyleMock,
+  loadTrayProviderSelectionMock,
   loadPluginSettingsRecordMock,
   loadResetTimerDisplayModeMock,
   loadStartOnLoginMock,
@@ -37,6 +38,7 @@ const {
   loadDisplayModeMock: vi.fn(),
   loadGlobalShortcutMock: vi.fn(),
   loadMenubarIconStyleMock: vi.fn(),
+  loadTrayProviderSelectionMock: vi.fn(),
   loadPluginSettingsRecordMock: vi.fn(),
   loadResetTimerDisplayModeMock: vi.fn(),
   loadStartOnLoginMock: vi.fn(),
@@ -67,6 +69,7 @@ vi.mock("@/lib/settings", () => ({
   DEFAULT_DISPLAY_MODE: "left",
   DEFAULT_GLOBAL_SHORTCUT: null,
   DEFAULT_MENUBAR_ICON_STYLE: "provider",
+  DEFAULT_TRAY_PROVIDER_SELECTION: "first",
   DEFAULT_SHOW_HISTORY_IN_BAR: true,
   DEFAULT_RESET_TIMER_DISPLAY_MODE: "relative",
   DEFAULT_START_ON_LOGIN: false,
@@ -79,6 +82,7 @@ vi.mock("@/lib/settings", () => ({
   loadDisplayMode: loadDisplayModeMock,
   loadGlobalShortcut: loadGlobalShortcutMock,
   loadMenubarIconStyle: loadMenubarIconStyleMock,
+  loadTrayProviderSelection: loadTrayProviderSelectionMock,
   loadPluginSettingsRecord: loadPluginSettingsRecordMock,
   loadResetTimerDisplayMode: loadResetTimerDisplayModeMock,
   loadStartOnLogin: loadStartOnLoginMock,
@@ -106,6 +110,7 @@ function createArgs() {
     setGlobalShortcut: vi.fn(),
     setStartOnLogin: vi.fn(),
     setMenubarIconStyle: vi.fn(),
+    setTrayProviderSelection: vi.fn(),
     setSurfacePins: vi.fn(),
     setShowHistoryInBar: vi.fn(),
     setLoadingForPlugins: vi.fn(),
@@ -129,6 +134,7 @@ describe("useSettingsBootstrap", () => {
     loadDisplayModeMock.mockReset()
     loadGlobalShortcutMock.mockReset()
     loadMenubarIconStyleMock.mockReset()
+    loadTrayProviderSelectionMock.mockReset()
     loadPluginSettingsRecordMock.mockReset()
     loadResetTimerDisplayModeMock.mockReset()
     loadStartOnLoginMock.mockReset()
@@ -167,6 +173,7 @@ describe("useSettingsBootstrap", () => {
     loadTimeFormatModeMock.mockResolvedValue("auto")
     loadGlobalShortcutMock.mockResolvedValue("CommandOrControl+Shift+O")
     loadMenubarIconStyleMock.mockResolvedValue("provider")
+    loadTrayProviderSelectionMock.mockResolvedValue("first")
     loadStartOnLoginMock.mockResolvedValue(true)
     loadSurfacePinsMock.mockResolvedValue([])
     loadShowHistoryInBarMock.mockResolvedValue(true)

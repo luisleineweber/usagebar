@@ -8,6 +8,7 @@ import type {
   MenubarIconStyle,
   PluginSettings,
   SurfacePin,
+  TrayProviderSelection,
   TimeFormatMode,
 } from "@/lib/settings"
 import {
@@ -41,6 +42,7 @@ type UseTrayIconArgs = {
   menubarIconStyle: MenubarIconStyle
   surfacePins?: SurfacePin[]
   activeView: string
+  trayProviderSelection: TrayProviderSelection
   timeFormatMode?: TimeFormatMode
 }
 
@@ -83,6 +85,7 @@ export function useTrayIcon({
   menubarIconStyle,
   surfacePins = [],
   activeView,
+  trayProviderSelection,
   timeFormatMode = "auto",
 }: UseTrayIconArgs) {
   const trayRef = useRef<TrayIcon | null>(null)
@@ -103,6 +106,8 @@ export function useTrayIcon({
   const menubarIconStyleRef = useRef(menubarIconStyle)
   const surfacePinsRef = useRef(surfacePins)
   const activeViewRef = useRef(activeView)
+  const trayProviderSelectionRef = useRef(trayProviderSelection)
+  const lastLeftProviderIdRef = useRef<string | null>(null)
   const timeFormatModeRef = useRef(timeFormatMode)
   const useTemplateIconRef = useRef(shouldUseTemplateTrayIcon())
   const lastIconKeyRef = useRef<string | null>(null)
@@ -132,8 +137,18 @@ export function useTrayIcon({
     surfacePinsRef.current = surfacePins
   }, [surfacePins])
   useEffect(() => {
+    const previousView = activeViewRef.current
+    if (
+      previousView !== activeView &&
+      pluginsMetaRef.current.some((plugin) => plugin.id === previousView)
+    ) {
+      lastLeftProviderIdRef.current = previousView
+    }
     activeViewRef.current = activeView
   }, [activeView])
+  useEffect(() => {
+    trayProviderSelectionRef.current = trayProviderSelection
+  }, [trayProviderSelection])
   useEffect(() => {
     timeFormatModeRef.current = timeFormatMode
   }, [timeFormatMode])
@@ -177,7 +192,11 @@ export function useTrayIcon({
         return maybeSetTooltip.call(tray, tooltip)
       }
       const setTitleIfChanged = (title: string) => {
-        if (!useTemplateIconRef.current || lastTitleRef.current === title || typeof maybeSetTitle !== "function") {
+        if (
+          !useTemplateIconRef.current ||
+          lastTitleRef.current === title ||
+          typeof maybeSetTitle !== "function"
+        ) {
           return Promise.resolve()
         }
         lastTitleRef.current = title
@@ -219,13 +238,21 @@ export function useTrayIcon({
         return
       }
 
+      const style = menubarIconStyleRef.current
+      const preferredProviderId =
+        style !== "bars" && trayProviderSelectionRef.current === "last"
+          ? currentMeta.some((plugin) => plugin.id === activeViewRef.current)
+            ? activeViewRef.current
+            : lastLeftProviderIdRef.current
+          : null
+
       const { state: trayState, preview: nextPreview } = buildTraySettingsPreview({
         pluginsMeta: currentMeta,
         pluginSettings: currentSettings,
         pluginStates: currentStates,
         displayMode: displayModeRef.current,
         surfacePins: surfacePinsRef.current,
-        activeView: activeViewRef.current,
+        preferredProviderId,
       })
       const providerId = trayState.providerId
       setTraySettingsPreview((previous) =>
@@ -236,7 +263,6 @@ export function useTrayIcon({
         timeFormatMode: timeFormatModeRef.current,
       })
       const isTemplate = useTemplateIconRef.current
-      const style = menubarIconStyleRef.current
       if (!isTemplate && style !== "provider") {
         const renderBars = style === "donut" ? nextPreview.providerBars : nextPreview.bars
         void renderTrayBarsIcon({
@@ -271,14 +297,20 @@ export function useTrayIcon({
               })
             : getTrayNumberColor({ kind: trayState.kind, scheme })
         void renderTrayNumberIcon({
-          value: trayState.kind === "value" ? Math.round(trayState.remainingPercentExact) : trayState.kind,
+          value:
+            trayState.kind === "value"
+              ? Math.round(trayState.remainingPercentExact)
+              : trayState.kind,
           sizePx: getWindowsTrayIconSizePx(window.devicePixelRatio),
           scheme,
           state: trayState,
         })
           .then((image) =>
             Promise.all([
-              setIconIfChanged(`number:${getTrayStateValue(trayState)}:${scheme}:${numberColor}`, image),
+              setIconIfChanged(
+                `number:${getTrayStateValue(trayState)}:${scheme}:${numberColor}`,
+                image
+              ),
               setTooltipIfChanged(tooltipText),
             ])
           )
@@ -292,7 +324,8 @@ export function useTrayIcon({
         return
       }
 
-      const renderBars = style === "provider" || style === "donut" ? nextPreview.providerBars : nextPreview.bars
+      const renderBars =
+        style === "provider" || style === "donut" ? nextPreview.providerBars : nextPreview.bars
       void renderTrayBarsIcon({
         bars: renderBars,
         sizePx: getTrayIconSizePx(window.devicePixelRatio),
@@ -360,10 +393,11 @@ export function useTrayIcon({
     if (!trayReady) return
     scheduleTrayIconUpdate("settings", 0)
   }, [
-    activeView,
     menubarIconStyle,
     scheduleTrayIconUpdate,
     surfacePins,
+    activeView,
+    trayProviderSelection,
     timeFormatMode,
     trayReady,
   ])

@@ -10,6 +10,7 @@ import type {
   SurfacePin,
   ThemeMode,
   TimeFormatMode,
+  TrayProviderSelection,
 } from "@/lib/settings"
 import type { TrayUpdateReason } from "@/hooks/app/use-tray-icon"
 
@@ -24,6 +25,7 @@ type UseAppWindowSyncArgs = {
   setTimeFormatMode: (value: TimeFormatMode) => void
   setSurfacePins: (value: SurfacePin[]) => void
   setMenubarIconStyle: (value: MenubarIconStyle) => void
+  setTrayProviderSelection: (value: TrayProviderSelection) => void
   setShowHistoryInBar: (value: boolean) => void
 }
 
@@ -38,6 +40,7 @@ export function useAppWindowSync({
   setTimeFormatMode,
   setSurfacePins,
   setMenubarIconStyle,
+  setTrayProviderSelection,
   setShowHistoryInBar,
 }: UseAppWindowSyncArgs) {
   useEffect(() => {
@@ -102,6 +105,11 @@ export function useAppWindowSync({
         setShowHistoryInBar(update.value)
         return
       }
+      if (update.key === "trayProviderSelection") {
+        setTrayProviderSelection(update.value)
+        scheduleTrayIconUpdate("settings", 0)
+        return
+      }
       setMenubarIconStyle(update.value)
       scheduleTrayIconUpdate("settings", 0)
     })
@@ -125,6 +133,7 @@ export function useAppWindowSync({
     setAccentColor,
     setDisplayMode,
     setMenubarIconStyle,
+    setTrayProviderSelection,
     setResetTimerDisplayMode,
     setSurfacePins,
     setShowHistoryInBar,

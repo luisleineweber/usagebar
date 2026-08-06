@@ -5,6 +5,7 @@ import {
   DEFAULT_DISPLAY_MODE,
   DEFAULT_GLOBAL_SHORTCUT,
   DEFAULT_MENUBAR_ICON_STYLE,
+  DEFAULT_TRAY_PROVIDER_SELECTION,
   DEFAULT_PLUGIN_SETTINGS,
   DEFAULT_RESET_TIMER_DISPLAY_MODE,
   DEFAULT_SHOW_HISTORY_IN_BAR,
@@ -18,6 +19,7 @@ import {
   loadDisplayMode,
   loadGlobalShortcut,
   loadMenubarIconStyle,
+  loadTrayProviderSelection,
   loadPluginSettings,
   loadPluginSettingsRecord,
   loadResetTimerDisplayMode,
@@ -34,6 +36,7 @@ import {
   saveDisplayMode,
   saveGlobalShortcut,
   saveMenubarIconStyle,
+  saveTrayProviderSelection,
   saveOnboardingInProgress,
   savePluginSettings,
   saveResetTimerDisplayMode,
@@ -601,6 +604,19 @@ describe("settings", () => {
   it("falls back to default for invalid menubar icon style", async () => {
     storeState.set("menubarIconStyle", "invalid")
     await expect(loadMenubarIconStyle()).resolves.toBe(DEFAULT_MENUBAR_ICON_STYLE)
+  })
+
+  it("loads and saves tray provider selection", async () => {
+    await expect(loadTrayProviderSelection()).resolves.toBe(DEFAULT_TRAY_PROVIDER_SELECTION)
+
+    await saveTrayProviderSelection("last")
+
+    await expect(loadTrayProviderSelection()).resolves.toBe("last")
+  })
+
+  it("falls back to the first tray provider for an invalid selection", async () => {
+    storeState.set("trayProviderSelection", "invalid")
+    await expect(loadTrayProviderSelection()).resolves.toBe(DEFAULT_TRAY_PROVIDER_SELECTION)
   })
 
   it("loads and saves History visibility with an enabled default", async () => {

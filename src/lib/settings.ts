@@ -28,6 +28,8 @@ export type TimeFormatMode = "auto" | "12h" | "24h"
 
 export type MenubarIconStyle = "provider" | "bars" | "donut"
 
+export type TrayProviderSelection = "first" | "last"
+
 export type SurfacePin = {
   providerId: string
   instanceRef?: ProviderInstanceRef
@@ -47,6 +49,7 @@ const DISPLAY_MODE_KEY = "displayMode"
 const RESET_TIMER_DISPLAY_MODE_KEY = "resetTimerDisplayMode"
 const TIME_FORMAT_MODE_KEY = "timeFormatMode"
 const MENUBAR_ICON_STYLE_KEY = "menubarIconStyle"
+const TRAY_PROVIDER_SELECTION_KEY = "trayProviderSelection"
 const SHOW_HISTORY_IN_BAR_KEY = "showHistoryInBar"
 const SURFACE_PINS_KEY = "surfacePins"
 const LEGACY_TRAY_ICON_STYLE_KEY = "trayIconStyle"
@@ -61,6 +64,7 @@ export const DEFAULT_DISPLAY_MODE: DisplayMode = "left"
 export const DEFAULT_RESET_TIMER_DISPLAY_MODE: ResetTimerDisplayMode = "relative"
 export const DEFAULT_TIME_FORMAT_MODE: TimeFormatMode = "auto"
 export const DEFAULT_MENUBAR_ICON_STYLE: MenubarIconStyle = "provider"
+export const DEFAULT_TRAY_PROVIDER_SELECTION: TrayProviderSelection = "first"
 export const DEFAULT_SHOW_HISTORY_IN_BAR = true
 export const DEFAULT_SURFACE_PINS: SurfacePin[] = []
 export const MAX_SURFACE_PINS = 2
@@ -74,11 +78,17 @@ const DISPLAY_MODES: DisplayMode[] = ["used", "left"]
 const RESET_TIMER_DISPLAY_MODES: ResetTimerDisplayMode[] = ["relative", "absolute"]
 const TIME_FORMAT_MODES: TimeFormatMode[] = ["auto", "12h", "24h"]
 const MENUBAR_ICON_STYLES: MenubarIconStyle[] = ["provider", "bars", "donut"]
+const TRAY_PROVIDER_SELECTIONS: TrayProviderSelection[] = ["first", "last"]
 
 export const MENUBAR_ICON_STYLE_OPTIONS: { value: MenubarIconStyle; label: string }[] = [
   { value: "provider", label: "Compact" },
   { value: "bars", label: "Stacked bars" },
   { value: "donut", label: "Donut" },
+]
+
+export const TRAY_PROVIDER_SELECTION_OPTIONS: { value: TrayProviderSelection; label: string }[] = [
+  { value: "first", label: "First provider" },
+  { value: "last", label: "Latest provider" },
 ]
 
 export const AUTO_UPDATE_OPTIONS: { value: AutoUpdateIntervalMinutes; label: string }[] =
@@ -374,6 +384,21 @@ export async function loadMenubarIconStyle(): Promise<MenubarIconStyle> {
 
 export async function saveMenubarIconStyle(style: MenubarIconStyle): Promise<void> {
   await store.set(MENUBAR_ICON_STYLE_KEY, style)
+  await store.save()
+}
+
+function isTrayProviderSelection(value: unknown): value is TrayProviderSelection {
+  return typeof value === "string" && TRAY_PROVIDER_SELECTIONS.includes(value as TrayProviderSelection)
+}
+
+export async function loadTrayProviderSelection(): Promise<TrayProviderSelection> {
+  const stored = await store.get<unknown>(TRAY_PROVIDER_SELECTION_KEY)
+  if (isTrayProviderSelection(stored)) return stored
+  return DEFAULT_TRAY_PROVIDER_SELECTION
+}
+
+export async function saveTrayProviderSelection(value: TrayProviderSelection): Promise<void> {
+  await store.set(TRAY_PROVIDER_SELECTION_KEY, value)
   await store.save()
 }
 

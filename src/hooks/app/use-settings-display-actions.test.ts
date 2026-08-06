@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const {
   saveDisplayModeMock,
   saveMenubarIconStyleMock,
+  saveTrayProviderSelectionMock,
   saveResetTimerDisplayModeMock,
   saveThemeModeMock,
   saveTimeFormatModeMock,
@@ -14,6 +15,7 @@ const {
   saveResetTimerDisplayModeMock: vi.fn(),
   saveTimeFormatModeMock: vi.fn(),
   saveMenubarIconStyleMock: vi.fn(),
+  saveTrayProviderSelectionMock: vi.fn(),
   saveShowHistoryInBarMock: vi.fn(),
 }))
 
@@ -23,6 +25,7 @@ vi.mock("@/lib/settings", () => ({
   saveResetTimerDisplayMode: saveResetTimerDisplayModeMock,
   saveTimeFormatMode: saveTimeFormatModeMock,
   saveMenubarIconStyle: saveMenubarIconStyleMock,
+  saveTrayProviderSelection: saveTrayProviderSelectionMock,
   saveShowHistoryInBar: saveShowHistoryInBarMock,
 }))
 
@@ -35,12 +38,14 @@ describe("useSettingsDisplayActions", () => {
     saveResetTimerDisplayModeMock.mockReset()
     saveTimeFormatModeMock.mockReset()
     saveMenubarIconStyleMock.mockReset()
+    saveTrayProviderSelectionMock.mockReset()
     saveShowHistoryInBarMock.mockReset()
     saveThemeModeMock.mockResolvedValue(undefined)
     saveDisplayModeMock.mockResolvedValue(undefined)
     saveResetTimerDisplayModeMock.mockResolvedValue(undefined)
     saveTimeFormatModeMock.mockResolvedValue(undefined)
     saveMenubarIconStyleMock.mockResolvedValue(undefined)
+    saveTrayProviderSelectionMock.mockResolvedValue(undefined)
     saveShowHistoryInBarMock.mockResolvedValue(undefined)
   })
 
@@ -209,6 +214,31 @@ describe("useSettingsDisplayActions", () => {
 
     expect(setShowHistoryInBar).toHaveBeenCalledWith(false)
     expect(saveShowHistoryInBarMock).toHaveBeenCalledWith(false)
+  })
+
+  it("persists tray provider selection changes", () => {
+    const setTrayProviderSelection = vi.fn()
+    const scheduleTrayIconUpdate = vi.fn()
+
+    const { result } = renderHook(() =>
+      useSettingsDisplayActions({
+        setThemeMode: vi.fn(),
+        setDisplayMode: vi.fn(),
+        resetTimerDisplayMode: "relative",
+        setResetTimerDisplayMode: vi.fn(),
+        setTimeFormatMode: vi.fn(),
+        setTrayProviderSelection,
+        scheduleTrayIconUpdate,
+      })
+    )
+
+    act(() => {
+      result.current.handleTrayProviderSelectionChange("last")
+    })
+
+    expect(setTrayProviderSelection).toHaveBeenCalledWith("last")
+    expect(scheduleTrayIconUpdate).toHaveBeenCalledWith("settings", 0)
+    expect(saveTrayProviderSelectionMock).toHaveBeenCalledWith("last")
   })
 
   it("logs time format save failures", async () => {

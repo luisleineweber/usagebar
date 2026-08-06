@@ -7,12 +7,12 @@ import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section"
 import type { TraySettingsPreview } from "@/lib/tray-preview"
 import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
-import type { PluginMeta } from "@/lib/plugin-types"
 import {
   AUTO_UPDATE_OPTIONS,
   ACCENT_COLOR_OPTIONS,
   DISPLAY_MODE_OPTIONS,
   MENUBAR_ICON_STYLE_OPTIONS,
+  TRAY_PROVIDER_SELECTION_OPTIONS,
   RESET_TIMER_DISPLAY_OPTIONS,
   THEME_OPTIONS,
   TIME_FORMAT_OPTIONS,
@@ -21,7 +21,7 @@ import {
   type DisplayMode,
   type GlobalShortcut,
   type MenubarIconStyle,
-  type SurfacePin,
+  type TrayProviderSelection,
   type ResetTimerDisplayMode,
   type ThemeMode,
   type TimeFormatMode,
@@ -50,12 +50,11 @@ type GeneralSettingsPaneProps = {
   onTimeFormatModeChange: (value: TimeFormatMode) => void
   menubarIconStyle: MenubarIconStyle
   onMenubarIconStyleChange: (value: MenubarIconStyle) => void
-  surfacePins: SurfacePin[]
-  onSurfacePinsChange: (value: SurfacePin[]) => void
+  trayProviderSelection: TrayProviderSelection
+  onTrayProviderSelectionChange: (value: TrayProviderSelection) => void
   showHistoryInBar: boolean
   onShowHistoryInBarChange: (value: boolean) => void
   traySettingsPreview: TraySettingsPreview
-  plugins: PluginMeta[]
   globalShortcut: GlobalShortcut
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
@@ -77,12 +76,11 @@ export function GeneralSettingsPane({
   onTimeFormatModeChange,
   menubarIconStyle,
   onMenubarIconStyleChange,
-  surfacePins,
-  onSurfacePinsChange,
+  trayProviderSelection,
+  onTrayProviderSelectionChange,
   showHistoryInBar,
   onShowHistoryInBarChange,
   traySettingsPreview,
-  plugins,
   globalShortcut,
   onGlobalShortcutChange,
   startOnLogin,
@@ -248,16 +246,51 @@ export function GeneralSettingsPane({
           })}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          On Windows, Compact shows remaining usage as a number. Stacked bars compare multiple
-          providers, while Donut combines a provider icon with its usage.
+          Compact shows remaining usage as a number. Stacked bars compare multiple providers, while Donut combines a provider icon with its usage.
         </p>
-        <SurfacePinSettings
-          plugins={plugins}
-          pins={surfacePins}
-          onPinsChange={onSurfacePinsChange}
-          menubarIconStyle={menubarIconStyle}
-          preview={traySettingsPreview}
-        />
+        <div
+          className={
+            menubarIconStyle === "bars"
+              ? "mt-4 flex justify-end"
+              : "mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start"
+          }
+        >
+          {menubarIconStyle !== "bars" && (
+            <div>
+              <h4 className="mb-2 text-sm font-medium">Provider selection</h4>
+              <div
+                className={TWO_OPTION_GROUP_CLASS}
+                role="radiogroup"
+                aria-label="Tray provider selection"
+              >
+                {TRAY_PROVIDER_SELECTION_OPTIONS.map((option) => {
+                  const isActive = option.value === trayProviderSelection
+                  return (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={isActive}
+                      variant={isActive ? "default" : "outline"}
+                      size="sm"
+                      className="min-h-9 w-full"
+                      onClick={() => onTrayProviderSelectionChange(option.value)}
+                    >
+                      {option.label}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          <div className={menubarIconStyle === "bars" ? "w-full sm:w-48" : undefined}>
+            <SurfacePinSettings
+              menubarIconStyle={menubarIconStyle}
+              trayProviderSelection={trayProviderSelection}
+              preview={traySettingsPreview}
+            />
+          </div>
+        </div>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>

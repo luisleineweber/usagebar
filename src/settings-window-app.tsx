@@ -73,6 +73,8 @@ export function SettingsWindowApp() {
     setDisplayMode,
     menubarIconStyle,
     setMenubarIconStyle,
+    trayProviderSelection,
+    setTrayProviderSelection,
     surfacePins,
     setSurfacePins,
     showHistoryInBar,
@@ -97,6 +99,8 @@ export function SettingsWindowApp() {
       setDisplayMode: state.setDisplayMode,
       menubarIconStyle: state.menubarIconStyle,
       setMenubarIconStyle: state.setMenubarIconStyle,
+      trayProviderSelection: state.trayProviderSelection,
+      setTrayProviderSelection: state.setTrayProviderSelection,
       surfacePins: state.surfacePins,
       setSurfacePins: state.setSurfacePins,
       showHistoryInBar: state.showHistoryInBar,
@@ -132,7 +136,6 @@ export function SettingsWindowApp() {
     pluginStates,
     displayMode,
     surfacePins,
-    activeView: "home",
   })
 
   const { applyStartOnLogin, isFirstRun, finishFirstRun } = useSettingsBootstrap({
@@ -143,6 +146,7 @@ export function SettingsWindowApp() {
     setAccentColor,
     setDisplayMode,
     setMenubarIconStyle,
+    setTrayProviderSelection,
     setSurfacePins,
     setShowHistoryInBar,
     setResetTimerDisplayMode,
@@ -163,7 +167,7 @@ export function SettingsWindowApp() {
     handleResetTimerDisplayModeChange,
     handleTimeFormatModeChange,
     handleMenubarIconStyleChange,
-    handleSurfacePinsChange,
+    handleTrayProviderSelectionChange,
     handleShowHistoryInBarChange,
   } = useSettingsDisplayActions({
     setThemeMode,
@@ -173,6 +177,7 @@ export function SettingsWindowApp() {
     setResetTimerDisplayMode,
     setTimeFormatMode,
     setMenubarIconStyle,
+    setTrayProviderSelection,
     setSurfacePins,
     setShowHistoryInBar,
     scheduleTrayIconUpdate,
@@ -364,8 +369,8 @@ export function SettingsWindowApp() {
             onTimeFormatModeChange={handleTimeFormatModeChange}
             menubarIconStyle={menubarIconStyle}
             onMenubarIconStyleChange={handleMenubarIconStyleChange}
-            surfacePins={surfacePins}
-            onSurfacePinsChange={handleSurfacePinsChange}
+            trayProviderSelection={trayProviderSelection}
+            onTrayProviderSelectionChange={handleTrayProviderSelectionChange}
             showHistoryInBar={showHistoryInBar}
             onShowHistoryInBarChange={handleShowHistoryInBarChange}
             traySettingsPreview={traySettingsPreview}
