@@ -106,8 +106,24 @@ function ProviderRow({
           ? "border-border bg-muted/70 text-foreground shadow-sm"
           : "border-transparent bg-transparent hover:border-border/55 hover:bg-muted/35"
       )}
-      onClick={onSelect}
+      onClick={(event) => {
+        const target = event.target
+        if (
+          (target instanceof HTMLInputElement && target.type === "checkbox") ||
+          (target instanceof Element && target.closest("button"))
+        ) {
+          return
+        }
+        onSelect()
+      }}
       onKeyDown={(e) => {
+        const target = e.target
+        if (
+          (target instanceof HTMLInputElement && target.type === "checkbox") ||
+          (target instanceof Element && target.closest("button"))
+        ) {
+          return
+        }
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
           onSelect()
@@ -166,6 +182,8 @@ function ProviderRow({
           if (nextEnabled === plugin.enabled) return
           onToggle(plugin.id)
         }}
+        onPointerDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       />
       {plugin.hidden ? (
@@ -223,22 +241,16 @@ export function ProvidersSettingsPane({
    * On xl (≥ 1280 px) both panels are always visible via CSS, so this state only
    * controls the narrow-screen experience.
    */
-  const [activePanel, setActivePanel] = useState<"list" | "detail">("list")
+  const [activePanel, setActivePanel] = useState<"list" | "detail">(
+    selectedProviderId ? "detail" : "list"
+  )
 
-  // Auto-select the first provider when none is selected (or when the selected one disappears).
   useEffect(() => {
-    if (settingsProviders.length === 0) return
-    if (
-      !selectedProviderId ||
-      !settingsProviders.some((provider) => provider.id === selectedProviderId)
-    ) {
-      onSelectedProviderChange(settingsProviders[0]!.id)
-    }
-  }, [onSelectedProviderChange, selectedProviderId, settingsProviders])
+    setActivePanel(selectedProviderId ? "detail" : "list")
+  }, [selectedProviderId])
 
   const selectedProvider =
     settingsProviders.find((provider) => provider.id === selectedProviderId) ??
-    settingsProviders[0] ??
     null
 
   /** Called when the user explicitly taps / clicks a provider row. */

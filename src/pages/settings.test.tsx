@@ -332,6 +332,39 @@ describe("SettingsPage", () => {
     expect(onToggle).toHaveBeenCalledWith("codex")
   })
 
+  it("does not open provider details when toggling a provider checkbox", async () => {
+    const onSelectedProviderChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        settingsTab="providers"
+        onSettingsTabChange={vi.fn()}
+        selectedProviderId="opencode"
+        onSelectedProviderChange={onSelectedProviderChange}
+      />
+    )
+
+    const codexRow = screen.getByRole("button", { name: /codex/i })
+    await userEvent.click(within(codexRow).getByRole("checkbox"))
+
+    expect(onSelectedProviderChange).not.toHaveBeenCalled()
+  })
+
+  it("does not select the first provider when opening the Providers tab", () => {
+    const onSelectedProviderChange = vi.fn()
+    render(
+      <SettingsPage
+        {...defaultProps}
+        settingsTab="providers"
+        onSettingsTabChange={vi.fn()}
+        selectedProviderId={null}
+        onSelectedProviderChange={onSelectedProviderChange}
+      />
+    )
+
+    expect(onSelectedProviderChange).not.toHaveBeenCalled()
+  })
+
   it("updates auto-update interval on the General tab", async () => {
     const onAutoUpdateIntervalChange = vi.fn()
     render(<TestHarness onAutoUpdateIntervalChange={onAutoUpdateIntervalChange} />)

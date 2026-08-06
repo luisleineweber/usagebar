@@ -51,6 +51,9 @@ pub fn open(
             .emit(SETTINGS_OPEN_EVENT, payload.clone())
             .map_err(|error| format!("failed to retarget settings window: {}", error))?;
         window
+            .unminimize()
+            .map_err(|error| format!("failed to restore settings window: {}", error))?;
+        window
             .show()
             .map_err(|error| format!("failed to show settings window: {}", error))?;
         window

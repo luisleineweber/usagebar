@@ -2,6 +2,11 @@
 
 ## 2026-08-06
 
+- Provider checkbox events could reach the provider row and open its detail view. Fix: ignore child events in row selection and remove automatic provider selection. Prevention: test checkbox toggles separately from explicit row selection.
+- Showing an existing Settings window did not restore a minimized window before focusing it. Fix: unminimize before show and focus. Prevention: verify existing-window paths for hidden, minimized, and background states.
+
+## 2026-08-06
+
 - The overview content floor stayed fixed while selected providers increased. Fix: add a small provider-count increment to the home minimum height and use it for both measurement and rendering. Prevention: test shared layout floors with zero, one, and several selected providers.
 
 ## 2026-08-05
