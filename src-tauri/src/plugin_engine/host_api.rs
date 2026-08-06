@@ -30,12 +30,14 @@ fn clone_host_app_handle(app_handle: &Option<HostAppHandle>) -> Option<HostAppHa
 fn clone_host_app_handle(app_handle: &Option<HostAppHandle>) -> Option<HostAppHandle> {
     *app_handle
 }
-const WHITELISTED_ENV_VARS: [&str; 39] = [
+const WHITELISTED_ENV_VARS: [&str; 52] = [
     "CODEX_HOME",
     "CODEBUFF_API_KEY",
     "GH_CONFIG_DIR",
     "ALIBABA_API_KEY",
     "ALIBABA_REGION",
+    "ALIBABA_TOKEN_PLAN_COOKIE_HEADER",
+    "ARK_API_KEY",
     "AUGMENT_COOKIE_HEADER",
     "AUGMENT_SESSION_AUTH",
     "CLOUDSDK_CONFIG",
@@ -47,6 +49,13 @@ const WHITELISTED_ENV_VARS: [&str; 39] = [
     "COPILOT_BILLING_ORG",
     "DEEPSEEK_API_KEY",
     "DEEPSEEK_KEY",
+    "DOUBAO_API_KEY",
+    "VOLCENGINE_API_KEY",
+    "CHUTES_API_KEY",
+    "DEVIN_BEARER_TOKEN",
+    "DEVIN_AUTHORIZATION",
+    "DEVIN_ORGANIZATION",
+    "DEVIN_ORG",
     "KILO_API_KEY",
     "MOONSHOT_API_KEY",
     "KIMI_API_KEY",
@@ -67,6 +76,10 @@ const WHITELISTED_ENV_VARS: [&str; 39] = [
     "PERPLEXITY_COOKIE_HEADER",
     "PERPLEXITY_COOKIE",
     "PERPLEXITY_SESSION_TOKEN",
+    "QODER_COOKIE_HEADER",
+    "QODER_COOKIE",
+    "QODER_REGION",
+    "STEPFUN_TOKEN",
     "SYNTHETIC_API_KEY",
     "WARP_API_KEY",
     "WARP_TOKEN",

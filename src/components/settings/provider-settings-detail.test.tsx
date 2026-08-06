@@ -1002,7 +1002,7 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByLabelText("Augment Cookie header")).toBeInTheDocument()
   })
 
-  it("shows explicit Alibaba Coding Plan API-key guidance", () => {
+  it("shows Alibaba Coding Plan and Token Plan credential fields", () => {
     render(
       <ProviderSettingsDetail
         plugin={alibabaPlugin}
@@ -1020,19 +1020,76 @@ describe("ProviderSettingsDetail", () => {
 
     expect(
       screen.getByText(
-        /Fetches 5-hour, weekly, and monthly Coding Plan request quotas from a stored API key or ALIBABA_API_KEY/
+        /Fetches Coding Plan request quotas and Bailian Token Plan credits from separate credentials/
       )
     ).toBeInTheDocument()
     expect(
-      screen.getByText(
-        /Create a Coding Plan API key, save it here or set ALIBABA_API_KEY, then retry/
-      )
+      screen.getByText(/Save the credential for each Alibaba plan that you use/)
     ).toBeInTheDocument()
     expect(
       screen.getByText(
         /UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint\./
       )
     ).toBeInTheDocument()
+    expect(screen.getByLabelText("Alibaba Coding Plan Bailian Cookie header")).toBeInTheDocument()
+  })
+
+  it("saves and clears the Alibaba Bailian Cookie header", async () => {
+    const onSecretSave = vi.fn(async () => undefined)
+    const onSecretDelete = vi.fn(async () => undefined)
+
+    const { rerender } = render(
+      <ProviderSettingsDetail
+        plugin={alibabaPlugin}
+        enabled
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
+        onEnabledChange={vi.fn()}
+        onSecretSave={onSecretSave}
+        onSecretDelete={onSecretDelete}
+      />
+    )
+
+    await userEvent.type(
+      screen.getByLabelText("Alibaba Coding Plan Bailian Cookie header"),
+      "  login=ticket; sec_token=csrf  "
+    )
+    await userEvent.click(screen.getAllByRole("button", { name: "Save secret" })[1])
+    await waitFor(() => {
+      expect(onSecretSave).toHaveBeenCalledWith(
+        "alibaba",
+        "cookieHeader",
+        "login=ticket; sec_token=csrf"
+      )
+    })
+
+    rerender(
+      <ProviderSettingsDetail
+        plugin={alibabaPlugin}
+        enabled
+        config={{ secrets: { cookieHeader: { updatedAt: Date.now() } } }}
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+        }}
+        onEnabledChange={vi.fn()}
+        onSecretSave={onSecretSave}
+        onSecretDelete={onSecretDelete}
+      />
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Clear secret" }))
+    await waitFor(() => {
+      expect(onSecretDelete).toHaveBeenCalledWith("alibaba", "cookieHeader")
+    })
   })
 
   it("shows explicit Vertex AI gcloud guidance", () => {

@@ -135,8 +135,16 @@ export function ProviderSettingsDetail({
   const secretUpdatedText = secretKey
     ? formatTimestamp(config?.secrets?.[secretKey]?.updatedAt ?? null)
     : null
+  const additionalSecret = definition.additionalSecretField
+  const additionalSecretPresent = additionalSecret
+    ? hasProviderSecret(config, additionalSecret.key)
+    : false
+  const additionalSecretUpdatedText = additionalSecret
+    ? formatTimestamp(config?.secrets?.[additionalSecret.key]?.updatedAt ?? null)
+    : null
   const [workspaceDraft, setWorkspaceDraft] = useState(config?.workspaceId ?? "")
   const [secretDraft, setSecretDraft] = useState("")
+  const [additionalSecretDraft, setAdditionalSecretDraft] = useState("")
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [isSavingConfig, setIsSavingConfig] = useState(false)
@@ -153,6 +161,7 @@ export function ProviderSettingsDetail({
 
   useEffect(() => {
     setSecretDraft("")
+    setAdditionalSecretDraft("")
     setSaveError(null)
     setSaveMessage(null)
   }, [plugin.id])
@@ -193,7 +202,10 @@ export function ProviderSettingsDetail({
         ? `${plugin.supportMessage} ${baseSetupHint}`
         : baseSetupHint
   const hasEditableSettings = Boolean(
-    definition.sourceOptions || definition.secretField || definition.textField
+    definition.sourceOptions ||
+    definition.secretField ||
+    definition.additionalSecretField ||
+    definition.textField
   )
   const groupClass = "border-t border-border/55 py-4"
   const groupTitleClass = "text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
@@ -223,7 +235,7 @@ export function ProviderSettingsDetail({
       await onConfigChange(plugin.id, {
         workspaceId: workspaceDraft.trim() || undefined,
       })
-      setSaveMessage("Workspace override saved.")
+      setSaveMessage(`${definition.textField.label} saved.`)
     } catch (error) {
       setSaveError(getErrorMessage(error, "Failed to save workspace."))
     } finally {
@@ -306,6 +318,44 @@ export function ProviderSettingsDetail({
     try {
       await onSecretDelete(plugin.id, definition.secretField.key)
       setSecretDraft("")
+      setSaveMessage("Stored secret removed.")
+    } catch (error) {
+      setSaveError(getErrorMessage(error, "Failed to clear secret."))
+    } finally {
+      setIsSavingSecret(false)
+    }
+  }
+
+  const handleAdditionalSecretSave = async () => {
+    if (!additionalSecret || !onSecretSave) return
+    const trimmed = additionalSecretDraft.trim()
+    if (!trimmed) {
+      setSaveError("Paste a secret before saving.")
+      setSaveMessage(null)
+      return
+    }
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsSavingSecret(true)
+    try {
+      await onSecretSave(plugin.id, additionalSecret.key, trimmed)
+      setAdditionalSecretDraft("")
+      setSaveMessage("Secret stored securely for this app.")
+    } catch (error) {
+      setSaveError(getErrorMessage(error, "Failed to save secret."))
+    } finally {
+      setIsSavingSecret(false)
+    }
+  }
+
+  const handleAdditionalSecretDelete = async () => {
+    if (!additionalSecret || !onSecretDelete) return
+    setSaveError(null)
+    setSaveMessage(null)
+    setIsSavingSecret(true)
+    try {
+      await onSecretDelete(plugin.id, additionalSecret.key)
+      setAdditionalSecretDraft("")
       setSaveMessage("Stored secret removed.")
     } catch (error) {
       setSaveError(getErrorMessage(error, "Failed to clear secret."))
@@ -616,7 +666,7 @@ export function ProviderSettingsDetail({
                     type="button"
                     size="xs"
                     onClick={() => void handleSecretSave()}
-                    disabled={isSavingSecret}
+                    disabled={isSavingSecret || !onSecretSave}
                   >
                     <KeyRound className="size-3" />
                     {secretPresent ? "Replace secret" : "Save secret"}
@@ -628,7 +678,62 @@ export function ProviderSettingsDetail({
                       size="xs"
                       className="text-destructive hover:text-destructive"
                       onClick={() => void handleSecretDelete()}
-                      disabled={isSavingSecret}
+                      disabled={isSavingSecret || !onSecretDelete}
+                    >
+                      <Trash2 className="size-3" />
+                      Clear secret
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {showManualFields && additionalSecret && (
+              <div className="space-y-3">
+                <div className="rounded-md border border-border/55 bg-muted/25 px-3 py-2.5">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {additionalSecret.label} state
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-foreground">
+                    {additionalSecretPresent
+                      ? `Stored${additionalSecretUpdatedText ? ` / ${additionalSecretUpdatedText}` : ""}`
+                      : "No secret stored"}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {additionalSecret.label}
+                  </label>
+                  <textarea
+                    id={`provider-secret-${plugin.id}-${additionalSecret.key}`}
+                    aria-label={`${plugin.name} ${additionalSecret.label}`}
+                    className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
+                    placeholder={additionalSecret.placeholder}
+                    value={additionalSecretDraft}
+                    onChange={(event) => setAdditionalSecretDraft(event.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {additionalSecret.description}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="xs"
+                    onClick={() => void handleAdditionalSecretSave()}
+                    disabled={isSavingSecret || !onSecretSave}
+                  >
+                    <KeyRound className="size-3" />
+                    {additionalSecretPresent ? "Replace secret" : "Save secret"}
+                  </Button>
+                  {additionalSecretPresent && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => void handleAdditionalSecretDelete()}
+                      disabled={isSavingSecret || !onSecretDelete}
                     >
                       <Trash2 className="size-3" />
                       Clear secret

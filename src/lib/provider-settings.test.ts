@@ -102,6 +102,12 @@ describe("getProviderSettingsDefinition", () => {
   it("uses an Admin API key field for Mistral", () => {
     expect(getProviderSettingsDefinition("mistral").secretField?.key).toBe("adminApiKey")
   })
+
+  it("defines both Alibaba credential fields", () => {
+    const definition = getProviderSettingsDefinition("alibaba")
+    expect(definition.secretField?.key).toBe("apiKey")
+    expect(definition.additionalSecretField?.key).toBe("cookieHeader")
+  })
 })
 
 describe("normalizeProviderConfigs", () => {

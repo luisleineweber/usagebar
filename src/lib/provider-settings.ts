@@ -53,6 +53,12 @@ export type ProviderSettingsDefinition = {
     description: string
     placeholder: string
   }
+  additionalSecretField?: {
+    key: string
+    label: string
+    description: string
+    placeholder: string
+  }
   textField?: {
     key: "workspaceId"
     label: string
@@ -454,19 +460,104 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   },
   alibaba: {
     mode: "editable",
-    title: "Alibaba Coding Plan Setup",
+    title: "Alibaba Setup",
     summary:
-      "Fetches 5-hour, weekly, and monthly Coding Plan request quotas from a stored API key or ALIBABA_API_KEY, with optional ALIBABA_REGION override.",
+      "Fetches Coding Plan request quotas and Bailian Token Plan credits from separate credentials.",
     statusHint:
-      "Save an Alibaba API key here or set ALIBABA_API_KEY before launching UsageBar. Default region is cn-beijing unless ALIBABA_REGION is set.",
-    connectHint:
-      "Create a Coding Plan API key, save it here or set ALIBABA_API_KEY, then retry. Set ALIBABA_REGION before launch if your account uses a non-default region.",
+      "Save a Coding Plan API key, a Bailian Cookie header, or both. Default Coding Plan region is cn-beijing.",
+    connectHint: "Save the credential for each Alibaba plan that you use, then retry.",
     secretField: {
       key: "apiKey",
       label: "API key",
       description:
         "Paste an Alibaba Coding Plan API key. UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint.",
       placeholder: "sk-sp-...",
+    },
+    additionalSecretField: {
+      key: "cookieHeader",
+      label: "Bailian Cookie header",
+      description:
+        "Paste the full Cookie request header from the Bailian Token Plan subscription page. Do not paste Set-Cookie.",
+      placeholder: "login_aliyunid_ticket=...; sec_token=...;",
+    },
+  },
+  doubao: {
+    mode: "editable",
+    title: "Doubao Setup",
+    summary: "Reads Volcengine Ark request-limit headers with a minimal one-token probe.",
+    statusHint: "Save a Doubao API key or set ARK_API_KEY, VOLCENGINE_API_KEY, or DOUBAO_API_KEY.",
+    connectHint: "Save a Volcengine Ark API key, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "UsageBar sends one minimal request to the Ark coding endpoint.",
+      placeholder: "API key",
+    },
+  },
+  chutes: {
+    mode: "editable",
+    title: "Chutes Setup",
+    summary: "Fetches the four-hour and monthly quota windows from the Chutes management API.",
+    statusHint: "Save a Chutes API key or set CHUTES_API_KEY.",
+    connectHint: "Create a Chutes API key, save it here, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description: "UsageBar sends this key only to api.chutes.ai.",
+      placeholder: "cpk_...",
+    },
+  },
+  devin: {
+    mode: "editable",
+    title: "Devin Setup",
+    summary: "Fetches daily and weekly quota for one explicit Devin organization.",
+    statusHint: "Save a bearer token and an internal org_... organization ID.",
+    connectHint:
+      "Copy the bearer token and internal organization ID from an app.devin.ai quota request.",
+    secretField: {
+      key: "token",
+      label: "Bearer token",
+      description: "Paste the bare token or the complete Bearer header value.",
+      placeholder: "Bearer ...",
+    },
+    textField: {
+      key: "workspaceId",
+      label: "Organization ID",
+      description: "Use the internal org_... ID. UsageBar does not guess this value.",
+      placeholder: "org_...",
+    },
+  },
+  qoder: {
+    mode: "editable",
+    title: "Qoder Setup",
+    summary: "Fetches Big Model credits from the international or China Qoder dashboard.",
+    statusHint: "Save a Cookie header and set the matching Qoder host.",
+    connectHint:
+      "Copy the Cookie request header from the Qoder usage page and enter qoder.com or qoder.com.cn.",
+    secretField: {
+      key: "cookieHeader",
+      label: "Cookie header",
+      description: "Paste the Cookie request header. Do not paste Set-Cookie.",
+      placeholder: "session=...;",
+    },
+    textField: {
+      key: "workspaceId",
+      label: "Qoder host",
+      description: "Enter qoder.com or qoder.com.cn for the account region.",
+      placeholder: "qoder.com",
+    },
+  },
+  stepfun: {
+    mode: "editable",
+    title: "StepFun Setup",
+    summary: "Fetches five-hour and weekly Step Plan quota with a manual Oasis-Token.",
+    statusHint: "Save a current Oasis-Token or set STEPFUN_TOKEN.",
+    connectHint: "Copy an Oasis-Token from a signed-in platform.stepfun.com request, then retry.",
+    secretField: {
+      key: "token",
+      label: "Oasis-Token",
+      description: "UsageBar stores the token in the app credential vault.",
+      placeholder: "Oasis-Token",
     },
   },
   deepseek: {
