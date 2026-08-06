@@ -50,22 +50,78 @@ const pluginStates = {
   },
 }
 
-describe("buildTraySettingsPreview", () => {
-  it("keeps Metric 1 and Metric 2 values by provider and metric identity", () => {
-    const result = buildTraySettingsPreview({
-      pluginsMeta,
-      pluginSettings: { order: ["codex", "claude"], disabled: [] },
-      pluginStates,
-      displayMode: "left",
-      surfacePins: [
-        { providerId: "codex", metricLabel: "Weekly", presentation: "bar" },
-        { providerId: "claude", metricLabel: "Weekly", presentation: "text" },
+const fourProviderMeta = [
+  ...pluginsMeta,
+  {
+    id: "cursor",
+    name: "Cursor",
+    iconUrl: "cursor-icon",
+    primaryCandidates: ["Requests"],
+    lines: [{ type: "progress" as const, label: "Requests", scope: "overview" as const }],
+  },
+  {
+    id: "opencode",
+    name: "OpenCode",
+    iconUrl: "opencode-icon",
+    primaryCandidates: ["Usage"],
+    lines: [{ type: "progress" as const, label: "Usage", scope: "overview" as const }],
+  },
+]
+
+const fourProviderStates = {
+  ...pluginStates,
+  cursor: {
+    data: {
+      providerId: "cursor",
+      displayName: "Cursor",
+      iconUrl: "cursor-icon",
+      lines: [
+        {
+          type: "progress" as const,
+          label: "Requests",
+          used: 30,
+          limit: 100,
+          format: { kind: "percent" as const },
+        },
       ],
+    },
+    loading: false,
+    error: null,
+  },
+  opencode: {
+    data: {
+      providerId: "opencode",
+      displayName: "OpenCode",
+      iconUrl: "opencode-icon",
+      lines: [
+        {
+          type: "progress" as const,
+          label: "Usage",
+          used: 90,
+          limit: 100,
+          format: { kind: "percent" as const },
+        },
+      ],
+    },
+    loading: false,
+    error: null,
+  },
+}
+
+describe("buildTraySettingsPreview", () => {
+  it("uses the first four primary provider metrics for stacked bars", () => {
+    const result = buildTraySettingsPreview({
+      pluginsMeta: fourProviderMeta,
+      pluginSettings: { order: ["codex", "claude", "cursor", "opencode"], disabled: [] },
+      pluginStates: fourProviderStates,
+      displayMode: "left",
     })
 
     expect(result.preview.bars).toEqual([
-      { id: "codex:Weekly", fraction: 0.4 },
-      { id: "claude:Weekly", fraction: 0.3 },
+      { id: "codex", fraction: 0.8 },
+      { id: "claude", fraction: 0.3 },
+      { id: "cursor", fraction: 0.7 },
+      { id: "opencode", fraction: 0.1 },
     ])
   })
 

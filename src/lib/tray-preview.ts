@@ -1,7 +1,7 @@
 import type { PluginState } from "@/hooks/app/types"
 import type { PluginMeta } from "@/lib/plugin-types"
-import type { DisplayMode, MenubarIconStyle, PluginSettings, SurfacePin } from "@/lib/settings"
-import { getTrayPinnedBars, getTrayPrimaryBars, type TrayPrimaryBar } from "@/lib/tray-primary-progress"
+import type { DisplayMode, MenubarIconStyle, PluginSettings } from "@/lib/settings"
+import { getTrayPrimaryBars, type TrayPrimaryBar } from "@/lib/tray-primary-progress"
 import { formatTrayNativeTitle } from "@/lib/tray-tooltip"
 import { resolveTrayState, type TrayState } from "@/lib/tray-state"
 
@@ -24,7 +24,6 @@ export function buildTraySettingsPreview(args: {
   pluginSettings: PluginSettings | null
   pluginStates: Record<string, PluginState>
   displayMode: DisplayMode
-  surfacePins?: SurfacePin[]
   preferredProviderId?: string | null
 }): { preview: TraySettingsPreview; state: TrayState } {
   const {
@@ -32,7 +31,6 @@ export function buildTraySettingsPreview(args: {
     pluginSettings,
     pluginStates,
     displayMode,
-    surfacePins = [],
     preferredProviderId = null,
   } = args
   if (!pluginSettings) {
@@ -48,10 +46,13 @@ export function buildTraySettingsPreview(args: {
     pluginStates,
     preferredProviderId,
   })
-  const pinnedBars = getTrayPinnedBars({ pins: surfacePins, pluginSettings, pluginStates, displayMode })
-  const bars = pinnedBars.length > 0
-    ? pinnedBars
-    : getTrayPrimaryBars({ pluginsMeta, pluginSettings, pluginStates, maxBars: 4, displayMode })
+  const bars = getTrayPrimaryBars({
+    pluginsMeta,
+    pluginSettings,
+    pluginStates,
+    maxBars: 4,
+    displayMode,
+  })
   const providerBars = state.providerId
     ? getTrayPrimaryBars({
         pluginsMeta,

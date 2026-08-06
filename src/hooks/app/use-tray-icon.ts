@@ -7,7 +7,6 @@ import type {
   DisplayMode,
   MenubarIconStyle,
   PluginSettings,
-  SurfacePin,
   TrayProviderSelection,
   TimeFormatMode,
 } from "@/lib/settings"
@@ -40,7 +39,6 @@ type UseTrayIconArgs = {
   displayMode: DisplayMode
   accentColor: AccentColor
   menubarIconStyle: MenubarIconStyle
-  surfacePins?: SurfacePin[]
   activeView: string
   trayProviderSelection: TrayProviderSelection
   timeFormatMode?: TimeFormatMode
@@ -83,7 +81,6 @@ export function useTrayIcon({
   displayMode,
   accentColor,
   menubarIconStyle,
-  surfacePins = [],
   activeView,
   trayProviderSelection,
   timeFormatMode = "auto",
@@ -104,7 +101,6 @@ export function useTrayIcon({
   const displayModeRef = useRef(displayMode)
   const accentColorRef = useRef(accentColor)
   const menubarIconStyleRef = useRef(menubarIconStyle)
-  const surfacePinsRef = useRef(surfacePins)
   const activeViewRef = useRef(activeView)
   const trayProviderSelectionRef = useRef(trayProviderSelection)
   const lastLeftProviderIdRef = useRef<string | null>(null)
@@ -133,9 +129,6 @@ export function useTrayIcon({
   useEffect(() => {
     menubarIconStyleRef.current = menubarIconStyle
   }, [menubarIconStyle])
-  useEffect(() => {
-    surfacePinsRef.current = surfacePins
-  }, [surfacePins])
   useEffect(() => {
     const previousView = activeViewRef.current
     if (
@@ -251,7 +244,6 @@ export function useTrayIcon({
         pluginSettings: currentSettings,
         pluginStates: currentStates,
         displayMode: displayModeRef.current,
-        surfacePins: surfacePinsRef.current,
         preferredProviderId,
       })
       const providerId = trayState.providerId
@@ -395,7 +387,6 @@ export function useTrayIcon({
   }, [
     menubarIconStyle,
     scheduleTrayIconUpdate,
-    surfacePins,
     activeView,
     trayProviderSelection,
     timeFormatMode,

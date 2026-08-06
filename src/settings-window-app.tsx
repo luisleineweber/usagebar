@@ -75,7 +75,6 @@ export function SettingsWindowApp() {
     setMenubarIconStyle,
     trayProviderSelection,
     setTrayProviderSelection,
-    surfacePins,
     setSurfacePins,
     showHistoryInBar,
     setShowHistoryInBar,
@@ -101,7 +100,6 @@ export function SettingsWindowApp() {
       setMenubarIconStyle: state.setMenubarIconStyle,
       trayProviderSelection: state.trayProviderSelection,
       setTrayProviderSelection: state.setTrayProviderSelection,
-      surfacePins: state.surfacePins,
       setSurfacePins: state.setSurfacePins,
       showHistoryInBar: state.showHistoryInBar,
       setShowHistoryInBar: state.setShowHistoryInBar,
@@ -135,7 +133,6 @@ export function SettingsWindowApp() {
     pluginSettings,
     pluginStates,
     displayMode,
-    surfacePins,
   })
 
   const { applyStartOnLogin, isFirstRun, finishFirstRun } = useSettingsBootstrap({
