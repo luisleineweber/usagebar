@@ -1602,7 +1602,7 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 
 - Previous release body fetched with `gh release view v0.1.0-alpha.3 --json body,tagName,name,isPrerelease,isDraft`.
 - Release commits since Alpha 3: `befa0c8`, `1477eeb`, `5c9e71a`, `e5bd292`, `67b5e57`.
-- Local untracked file `docs/feature-roadmap-plan.html` is left out of release prep unless explicitly added later.
+- Local roadmap file `docs/plans/feature-roadmap-plan.html` is left out of release prep unless explicitly added later.
 - `bun run release:check` -> passed, release version `0.1.0-alpha.4`, 32 bundled plugins.
 - `bun run check` -> passed after formatting `package.json`; accidental package diff was reverted because it had no semantic release change.
 - `bun run format:rust:check` -> passed.
@@ -1726,7 +1726,7 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 
 ## Acceptance Criteria
 
-- [x] `docs/reports/competitor-implementation-plan.html` is present in this worktree for Alpha 4 context.
+- [x] `docs/archive/reports/competitor-implementation-plan.html` is present in this worktree for Alpha 4 context.
 - [x] Codex trusts explicit zero-credit usage responses over stale credit headers.
 - [x] Claude prefers usable keychain credentials over stale legacy credential files.
 - [x] Perplexity upstream group fallback is checked against this fork and documented as superseded.
@@ -1746,7 +1746,7 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 
 ## Verification Notes
 
-- Imported local report from `D:\UsageBar\usagebar\docs\reports\competitor-implementation-plan.html` into ignored worktree path `docs/reports/competitor-implementation-plan.html`.
+- Imported local report from `D:\UsageBar\usagebar\docs\archive\reports\competitor-implementation-plan.html` into ignored worktree path `docs/archive/reports/competitor-implementation-plan.html`.
 - Upstream checked: OpenUsage `v0.6.24` commits `7c83829` (Codex zero credits), `eb7eaf7` (Claude keychain preference), `f847b24` (Perplexity missing group), `41c2d79` (ccusage nvm alias path), and `38786d0` (ccusage release-age fallback).
 - Perplexity group fallback is superseded in this fork: current `plugins/perplexity/plugin.js` uses `https://www.perplexity.ai/rest/billing/credits` with stored/env cookie auth and has no groups REST path.
 - ccusage release-age fallback deferred: upstream changes ccusage from provider-specific `ccusage@18.0.11` / `@ccusage/codex@18.0.11` to unified `ccusage@20.0.2` plus legacy fallback. That is a shared command-family migration, not a narrow reliability patch; keep it as its own Alpha 4 backend slice with full Claude/Codex ccusage contract tests.
@@ -1756,7 +1756,7 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun run bundle:plugins` -> bundled 32 plugins including `claude` and `codex`.
 - `cargo test --manifest-path src-tauri/Cargo.toml nvm_default_bin_path --lib` -> 3 tests passed.
 - `cargo test --manifest-path src-tauri/Cargo.toml ccusage_path_entries_with_includes_nvm_default_version --lib` -> 1 test passed.
-- `bun prettier --check docs\providers\claude.md plugins\claude\plugin.js plugins\claude\plugin.test.js plugins\codex\plugin.js plugins\codex\plugin.test.js tasks\todo.md docs\reports\competitor-implementation-plan.html` -> passed.
+- `bun prettier --check docs\providers\claude.md plugins\claude\plugin.js plugins\claude\plugin.test.js plugins\codex\plugin.js plugins\codex\plugin.test.js tasks\todo.md docs\archive\reports\competitor-implementation-plan.html` -> passed.
 - `bun run format:rust:check` -> passed.
 - Source/bundled SHA-256 check for Claude and Codex `plugin.js` / `plugin.test.js` -> passed.
 - `git --no-pager diff --check` -> passed; only expected CRLF conversion warnings were reported.
@@ -1903,15 +1903,15 @@ Keep this file short. Add only the current slice, acceptance criteria, and verif
 - `bun run test:coverage:summary` passed from the generated JSON summary.
 - `bun run test:coverage` still failed strictly as expected: statements 85.3%, branches 78.67%, lines 88.65% are below 90%; functions 90.96% passes.
 - `bun run lint` passed.
-- `bun prettier --check package.json vite.config.ts scripts/coverage-summary.mjs scripts/run-coverage-report.mjs tasks/todo.md docs/test-results-improvement-report.md` passed.
-- Re-check on 2026-05-25 after added tests: `bun run test:coverage:report` passed with 84 files / 1317 tests. Strict `bun run test:coverage` still failed: statements 86.69%, branches 80.20%, lines 89.99%, functions 93.40%. `bun run check` passed. Corrected `docs/test-results-improvement-report.md` to stop claiming lines coverage passed.
+- `bun prettier --check package.json vite.config.ts scripts/coverage-summary.mjs scripts/run-coverage-report.mjs tasks/todo.md docs/reports/test-results-improvement-report.md` passed.
+- Re-check on 2026-05-25 after added tests: `bun run test:coverage:report` passed with 84 files / 1317 tests. Strict `bun run test:coverage` still failed: statements 86.69%, branches 80.20%, lines 89.99%, functions 93.40%. `bun run check` passed. Corrected `docs/reports/test-results-improvement-report.md` to stop claiming lines coverage passed.
 - Alpha 3 local build smoke on 2026-05-25: `bun run build:release` compiled the release binary but failed at MSI bundling because WiX rejects prerelease version `0.1.0-alpha.3`. Retried as `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1 bun run build:release -- --bundles nsis`; NSIS build passed and produced `src-tauri/target/release/bundle/nsis/UsageBar_0.1.0-alpha.3_x64-setup.exe`. Updater signing and Authenticode signing were skipped locally because signing material was not present.
 
 # Competitor implementation plan completion
 
 ## Executive Summary
 
-- Finish the remaining implementable tracks from `docs/reports/competitor-implementation-plan.html`.
+- Finish the remaining implementable tracks from `docs/archive/reports/competitor-implementation-plan.html`.
 - Add direct OpenAI API spend visibility, local JSON endpoint contracts, OpenCode local cost windows, and provider expansion triage notes.
 - Treat speculative providers as documented research until stable quota or billing sources are found.
 

@@ -122,7 +122,7 @@ Record these fields in the relevant provider doc or rollout note:
 
 ## Rollout Roadmap
 
-The execution order lives in [windows-provider-rollout-plan.md](./windows-provider-rollout-plan.md).
+The execution order lives in [windows-provider-rollout-plan.md](./plans/windows-provider-rollout-plan.md).
 
 This status page keeps:
 
