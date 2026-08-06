@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "devin",
+  "name": "Devin",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#46B482",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Save a Devin bearer token and an internal organization ID in Setup."
+    }
+  },
+  "sourceProvenance": "privateEndpoint",
+  "capabilities": {
+    "env": true,
+    "providerConfig": true,
+    "providerSecrets": true,
+    "http": true,
+    "httpDomains": ["app.devin.ai"]
+  },
+  "lines": [
+    { "type": "progress", "label": "Daily", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Weekly", "scope": "overview", "primaryOrder": 2 },
+    { "type": "badge", "label": "Plan", "scope": "detail" },
+    { "type": "text", "label": "Organization", "scope": "detail" },
+    { "type": "text", "label": "Source", "scope": "detail" },
+    { "type": "text", "label": "Auth source", "scope": "detail" }
+  ]
+}
