@@ -853,6 +853,7 @@ mod tests {
                 version: "0.0.0".to_string(),
                 entry: "plugin.js".to_string(),
                 icon: "icon.svg".to_string(),
+                dark_icon: None,
                 icon_color_mode: crate::plugin_engine::manifest::IconColorMode::default(),
                 brand_color: None,
                 default_plan: None,
@@ -866,6 +867,7 @@ mod tests {
             plugin_dir: PathBuf::from("."),
             entry_script: entry_script.to_string(),
             icon_data_url: "data:image/svg+xml;base64,".to_string(),
+            dark_icon_data_url: None,
         }
     }
 

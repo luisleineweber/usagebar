@@ -557,6 +557,14 @@ describe("App", () => {
 
   const renderSettingsWindow = () => render(<SettingsWindowApp />)
 
+  it("keeps the panel frame and sidebar bounded to the viewport", async () => {
+    render(<App />)
+
+    const panel = await screen.findByTestId("app-panel")
+    expect(panel).toHaveClass("h-full", "min-h-0")
+    expect(screen.getByRole("navigation")).toHaveClass("overflow-hidden")
+  })
+
   it("applies theme mode changes to document", async () => {
     const mq = {
       matches: false,

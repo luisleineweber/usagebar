@@ -27,6 +27,11 @@ for (const id of plugins) {
       throw new Error(`Plugin ${id} references missing ${field}: ${String(asset)}`)
     }
   }
+  if (manifest.darkIcon !== undefined) {
+    if (typeof manifest.darkIcon !== "string" || !manifest.darkIcon.trim() || !existsSync(join(pluginDir, manifest.darkIcon))) {
+      throw new Error(`Plugin ${id} references missing darkIcon: ${String(manifest.darkIcon)}`)
+    }
+  }
 
   cpSync(pluginDir, join(dstDir, id), { recursive: true })
 }

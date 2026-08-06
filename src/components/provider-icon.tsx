@@ -1,9 +1,11 @@
 import type { PluginIconColorMode } from "@/lib/plugin-types"
 import { getProviderIconColor } from "@/lib/provider-icon"
 import { cn } from "@/lib/utils"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 
 type ProviderIconProps = {
   iconUrl: string
+  darkIconUrl?: string
   iconColorMode?: PluginIconColorMode
   brandColor?: string
   isDark?: boolean
@@ -16,21 +18,24 @@ type ProviderIconProps = {
 
 export function ProviderIcon({
   iconUrl,
+  darkIconUrl,
   iconColorMode = "monochrome",
   brandColor,
-  isDark = false,
+  isDark,
   className,
   label,
   title,
   ariaHidden = false,
   testId,
 }: ProviderIconProps) {
+  const appIsDark = useDarkMode()
+  const resolvedIsDark = isDark ?? appIsDark
   const classes = cn("inline-block shrink-0 object-contain", className)
 
   if (iconColorMode === "multicolor") {
     return (
       <img
-        src={iconUrl}
+        src={resolvedIsDark && darkIconUrl ? darkIconUrl : iconUrl}
         alt={ariaHidden ? "" : label}
         aria-hidden={ariaHidden || undefined}
         title={title}
@@ -49,7 +54,7 @@ export function ProviderIcon({
       data-testid={testId}
       className={classes}
       style={{
-        backgroundColor: getProviderIconColor(brandColor, isDark),
+        backgroundColor: getProviderIconColor(brandColor, resolvedIsDark),
         WebkitMaskImage: `url(${iconUrl})`,
         WebkitMaskSize: "contain",
         WebkitMaskRepeat: "no-repeat",

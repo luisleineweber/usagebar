@@ -46,6 +46,7 @@ interface NavPlugin {
   id: string
   name: string
   iconUrl: string
+  darkIconUrl?: string
   iconColorMode?: PluginIconColorMode
   brandColor?: string
   supportState?: "supported" | "experimental" | "comingSoonOnWindows"
@@ -146,6 +147,7 @@ function SortableNavPlugin({
         ) : null}
         <ProviderIcon
           iconUrl={plugin.iconUrl}
+          darkIconUrl={plugin.darkIconUrl}
           iconColorMode={plugin.iconColorMode}
           brandColor={plugin.brandColor}
           isDark={isDark}
@@ -214,7 +216,7 @@ export function SideNav({
   return (
     <nav
       className={cn(
-        "relative flex h-full min-h-0 shrink-0 flex-col w-12 border-r bg-muted/50 dark:bg-card pt-3",
+        "relative flex h-full min-h-0 shrink-0 flex-col w-12 overflow-hidden border-r bg-muted/50 pt-3 dark:bg-card",
         arrangeMode && "bg-accent/40"
       )}
       onContextMenu={(event) => {

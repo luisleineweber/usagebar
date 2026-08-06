@@ -165,6 +165,8 @@ pub struct PluginManifest {
     pub entry: String,
     pub icon: String,
     #[serde(default)]
+    pub dark_icon: Option<String>,
+    #[serde(default)]
     pub icon_color_mode: IconColorMode,
     pub brand_color: Option<String>,
     #[serde(default)]
@@ -187,6 +189,7 @@ pub struct LoadedPlugin {
     pub plugin_dir: PathBuf,
     pub entry_script: String,
     pub icon_data_url: String,
+    pub dark_icon_data_url: Option<String>,
 }
 
 pub fn load_plugins_from_dir(plugins_dir: &std::path::Path) -> Vec<LoadedPlugin> {
@@ -256,12 +259,22 @@ fn load_single_plugin(
     let icon_file = plugin_dir.join(&manifest.icon);
     let icon_bytes = std::fs::read(&icon_file)?;
     let icon_data_url = format!("data:image/svg+xml;base64,{}", STANDARD.encode(&icon_bytes));
+    let dark_icon_data_url = manifest
+        .dark_icon
+        .as_ref()
+        .map(|dark_icon| {
+            let dark_icon_file = plugin_dir.join(dark_icon);
+            std::fs::read(dark_icon_file)
+                .map(|bytes| format!("data:image/svg+xml;base64,{}", STANDARD.encode(bytes)))
+        })
+        .transpose()?;
 
     Ok(LoadedPlugin {
         manifest,
         plugin_dir: plugin_dir.to_path_buf(),
         entry_script,
         icon_data_url,
+        dark_icon_data_url,
     })
 }
 

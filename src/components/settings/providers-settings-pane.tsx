@@ -134,6 +134,7 @@ function ProviderRow({
       <div className="relative">
         <ProviderIcon
           iconUrl={plugin.iconUrl}
+          darkIconUrl={plugin.darkIconUrl}
           iconColorMode={plugin.iconColorMode}
           brandColor={plugin.brandColor}
           isDark={isDark}

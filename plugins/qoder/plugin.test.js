@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makePluginTestContext } from "../test-helpers.js"
 async function loadPlugin() {
@@ -8,6 +9,27 @@ async function loadPlugin() {
 }
 describe("qoder plugin", () => {
   beforeEach(() => vi.restoreAllMocks())
+
+  it("uses a white neutral mark in dark mode", () => {
+    const icons = [
+      "plugins/qoder/icon.svg",
+      "src-tauri/resources/bundled_plugins/qoder/icon.svg",
+    ].map((path) => readFileSync(path, "utf8"))
+    const darkIcons = [
+      "plugins/qoder/icon-dark.svg",
+      "src-tauri/resources/bundled_plugins/qoder/icon-dark.svg",
+    ].map((path) => readFileSync(path, "utf8"))
+
+    for (const icon of icons) {
+      expect(icon).toContain('<path d="M11.617')
+      expect(icon).toContain('fill="currentColor"')
+    }
+    for (const icon of darkIcons) {
+      expect(icon).toContain('<style>:root{color:#fff}</style>')
+      expect(icon).toContain('fill="currentColor"')
+    }
+  })
+
   it("merges total and shared credits", async () => {
     const plugin = await loadPlugin()
     const ctx = makePluginTestContext()

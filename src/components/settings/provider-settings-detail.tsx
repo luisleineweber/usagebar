@@ -367,6 +367,7 @@ export function ProviderSettingsDetail({
         <div className="flex min-w-0 items-start gap-3">
           <ProviderIcon
             iconUrl={plugin.iconUrl}
+            darkIconUrl={plugin.darkIconUrl}
             iconColorMode={plugin.iconColorMode}
             brandColor={plugin.brandColor}
             isDark={isDark}

@@ -2,6 +2,10 @@
 
 ## 2026-08-06
 
+- The first panel paint could leave the sidebar and content column without a shared viewport height, so Settings and the footer moved with provider content. Fix: give the root, panel, content column, and sidebar explicit bounded flex geometry. Prevention: test the first App render for a full-height panel frame and clipped provider list.
+
+## 2026-08-06
+
 - Provider checkbox events could reach the provider row and open its detail view. Fix: ignore child events in row selection and remove automatic provider selection. Prevention: test checkbox toggles separately from explicit row selection.
 - Showing an existing Settings window did not restore a minimized window before focusing it. Fix: unminimize before show and focus. Prevention: verify existing-window paths for hidden, minimized, and background states.
 
@@ -223,3 +227,4 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - Sidebar scroll ownership: a flex item around the provider list can grow past the panel even when its inner list has `overflow-y-auto`. Put the variable-length list in the flex item and keep bottom actions outside the scroller.
 - Sidebar height chain: `min-h-0` does not create a definite cross-axis height. Give the row and sidebar `h-full`, then size the panel from fixed navigation controls only; provider count belongs in the scrollable list.
 - Sidebar footer grouping: a fixed action after a scrollable icon list needs its own spacing and separator. Keep Settings in a shrink-resistant footer zone so it does not look like another provider.
+- External multicolor SVGs: `currentColor` in an `<img>` does not inherit app text color, and SVG media queries do not follow a forced app theme. Expose a theme-specific icon asset and select it from the app theme state.

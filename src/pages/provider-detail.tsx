@@ -73,6 +73,7 @@ export function ProviderDetailPage({
       <ProviderCard
         name={plugin.meta.name}
         iconUrl={plugin.meta.iconUrl}
+        darkIconUrl={plugin.meta.darkIconUrl}
         iconColorMode={plugin.meta.iconColorMode}
         plan={plugin.data?.plan ?? plugin.lastSettledData?.plan ?? plugin.meta.defaultPlan}
         links={plugin.meta.links}

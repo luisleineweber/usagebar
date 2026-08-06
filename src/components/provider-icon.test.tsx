@@ -19,6 +19,21 @@ describe("ProviderIcon", () => {
     expect(icon).not.toHaveStyle({ maskImage: "url(qoder.svg)" })
   })
 
+  it("uses the dark multicolor asset in dark mode", () => {
+    render(
+      <ProviderIcon
+        iconUrl="qoder.svg"
+        darkIconUrl="qoder-dark.svg"
+        iconColorMode="multicolor"
+        isDark
+        label="Qoder"
+        className="size-6"
+      />
+    )
+
+    expect(screen.getByRole("img", { name: "Qoder" })).toHaveAttribute("src", "qoder-dark.svg")
+  })
+
   it("keeps monochrome provider artwork on the brand-color mask path", () => {
     render(
       <ProviderIcon

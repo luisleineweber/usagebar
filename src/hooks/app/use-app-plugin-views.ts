@@ -78,6 +78,7 @@ export function useAppPluginViews({
         id: plugin.meta.id,
         name: plugin.meta.name,
         iconUrl: plugin.meta.iconUrl,
+        darkIconUrl: plugin.meta.darkIconUrl,
         iconColorMode: plugin.meta.iconColorMode,
         brandColor: plugin.meta.brandColor,
         supportState: plugin.meta.supportState,

@@ -113,6 +113,7 @@ function OnboardingProviderIcon({
   return (
     <ProviderIcon
       iconUrl={provider.iconUrl}
+      darkIconUrl={provider.darkIconUrl}
       iconColorMode={provider.iconColorMode}
       brandColor={provider.brandColor}
       isDark={isDark}

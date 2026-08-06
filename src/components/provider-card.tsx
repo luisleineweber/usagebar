@@ -44,6 +44,7 @@ import {
 interface ProviderCardProps {
   name: string
   iconUrl?: string
+  darkIconUrl?: string
   iconColorMode?: PluginIconColorMode
   plan?: string
   links?: PluginLink[]
@@ -87,6 +88,7 @@ function formatRelativeTime(diffMs: number): string {
 export function ProviderCard({
   name,
   iconUrl,
+  darkIconUrl,
   iconColorMode,
   plan,
   links = [],
@@ -170,6 +172,7 @@ export function ProviderCard({
             {iconUrl ? (
               <ProviderIcon
                 iconUrl={iconUrl}
+                darkIconUrl={darkIconUrl}
                 iconColorMode={iconColorMode}
                 label={`${name} icon`}
                 className="size-4 text-foreground/80"

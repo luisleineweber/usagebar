@@ -194,9 +194,10 @@ export function AppShell({
   )
 
   return (
-    <div ref={containerRef} className="flex flex-col bg-card">
+    <div ref={containerRef} className="flex h-full min-h-0 flex-col bg-card">
       <div
-        className="relative bg-card rounded-xl overflow-hidden select-none w-full border flex flex-col"
+        data-testid="app-panel"
+        className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-card select-none"
         style={panelStyle}
         onContextMenu={openContextMenu}
       >
@@ -216,7 +217,7 @@ export function AppShell({
           />
           <div
             ref={contentColumnRef}
-            className="flex-1 flex flex-col px-3 pt-2 pb-1.5 min-w-0 bg-card dark:bg-muted/50"
+            className="flex min-h-0 min-w-0 flex-1 flex-col bg-card px-3 pb-1.5 pt-2 dark:bg-muted/50"
           >
             <div className="relative flex-1 min-h-0">
               <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-none">
