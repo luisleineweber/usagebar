@@ -2,7 +2,7 @@
 name: UsageBar
 description: A focused Windows tray utility for local AI usage visibility.
 colors:
-  light-background: "#ffffff"
+  light-background: "#f7f8fa"
   light-foreground: "#121722"
   light-muted: "#f4f4f5"
   light-muted-foreground: "#71717a"
@@ -89,7 +89,7 @@ The palette is neutral by default so quota, incident, and provider colors retain
 
 ### Neutral
 
-- **Work Surface** (`#ffffff`): light content and card surface.
+- **Work Surface** (`#f7f8fa`): light content and card surface.
 - **Night Surface** (`#1c1c1e`): dark content and card surface.
 - **Night Layer** (`#2a2a2c`): dark secondary panels and navigation.
 - **Quiet Text** (`#71717a` light, `#888888` dark): supporting labels only where contrast remains AA.

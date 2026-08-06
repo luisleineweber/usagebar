@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { SkeletonLines } from "@/components/skeleton-lines"
 import { PluginError } from "@/components/plugin-error"
 import { MetricLineRenderer } from "@/components/metric-line-renderer"
+import { ProviderIcon } from "@/components/provider-icon"
 import { useNowTicker } from "@/hooks/use-now-ticker"
 import {
   REFRESH_COOLDOWN_MS,
@@ -22,7 +23,13 @@ import {
   type ResetTimerDisplayMode,
   type TimeFormatMode,
 } from "@/lib/settings"
-import type { ManifestLine, MetricLine, PluginLink, ProbeErrorCategory } from "@/lib/plugin-types"
+import type {
+  ManifestLine,
+  MetricLine,
+  PluginIconColorMode,
+  PluginLink,
+  ProbeErrorCategory,
+} from "@/lib/plugin-types"
 import { groupLinesByType } from "@/lib/group-lines-by-type"
 import {
   hasProviderStatusIssue,
@@ -37,6 +44,7 @@ import {
 interface ProviderCardProps {
   name: string
   iconUrl?: string
+  iconColorMode?: PluginIconColorMode
   plan?: string
   links?: PluginLink[]
   showSeparator?: boolean
@@ -79,6 +87,7 @@ function formatRelativeTime(diffMs: number): string {
 export function ProviderCard({
   name,
   iconUrl,
+  iconColorMode,
   plan,
   links = [],
   showSeparator = true,
@@ -159,21 +168,11 @@ export function ProviderCard({
         <div className="flex items-center gap-2 mb-2">
           <div className="relative flex min-w-0 flex-1 items-center gap-1.5">
             {iconUrl ? (
-              <span
-                role="img"
-                aria-label={`${name} icon`}
-                className="size-4 shrink-0 text-foreground/80"
-                style={{
-                  backgroundColor: "currentColor",
-                  WebkitMaskImage: `url(${iconUrl})`,
-                  WebkitMaskSize: "contain",
-                  WebkitMaskRepeat: "no-repeat",
-                  WebkitMaskPosition: "center",
-                  maskImage: `url(${iconUrl})`,
-                  maskSize: "contain",
-                  maskRepeat: "no-repeat",
-                  maskPosition: "center",
-                }}
+              <ProviderIcon
+                iconUrl={iconUrl}
+                iconColorMode={iconColorMode}
+                label={`${name} icon`}
+                className="size-4 text-foreground/80"
               />
             ) : null}
             <h2 className="truncate text-lg font-semibold" style={{ transform: "translateZ(0)" }}>

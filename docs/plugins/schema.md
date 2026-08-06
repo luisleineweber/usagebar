@@ -48,6 +48,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "iconColorMode": "monochrome",
   "platformSupport": {
     "windows": {
       "state": "experimental",
@@ -84,6 +85,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `version`          | string | Yes      | Semver version                                                                                                  |
 | `entry`            | string | Yes      | Relative path to JS entry file                                                                                  |
 | `icon`             | string | Yes      | Relative path to SVG icon file                                                                                  |
+| `iconColorMode`    | string | No       | `monochrome` uses the brand color mask; `multicolor` keeps the SVG's original colors                            |
 | `platformSupport`  | object | No       | Optional per-platform support/surfacing metadata                                                                |
 | `links`            | array  | No       | Optional quick links shown on detail page                                                                       |
 | `status`           | object | No       | Optional machine-readable provider status source                                                                |
@@ -96,7 +98,7 @@ Validation rules:
 - `entry` must be relative (not absolute)
 - `entry` must exist within the plugin directory
 - `id` must match `globalThis.__openusage_plugin.id`
-- `icon` must be relative and point to an SVG file (use `fill="currentColor"` for theme compatibility)
+- `icon` must be relative and point to an SVG file. Use `iconColorMode: "multicolor"` when the SVG has fixed colors.
 - `links[].url` (if provided) must be an `http://` or `https://` URL
 
 ### Provider status source (Optional)

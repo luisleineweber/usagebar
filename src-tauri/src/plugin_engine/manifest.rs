@@ -147,6 +147,14 @@ pub enum SourceProvenance {
     HtmlScrape,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, serde::Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum IconColorMode {
+    #[default]
+    Monochrome,
+    Multicolor,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PluginManifest {
@@ -156,6 +164,8 @@ pub struct PluginManifest {
     pub version: String,
     pub entry: String,
     pub icon: String,
+    #[serde(default)]
+    pub icon_color_mode: IconColorMode,
     pub brand_color: Option<String>,
     #[serde(default)]
     pub default_plan: Option<String>,

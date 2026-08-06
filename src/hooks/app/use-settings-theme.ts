@@ -1,12 +1,12 @@
 import { useEffect } from "react"
-import type { AccentColor, ThemeMode } from "@/lib/settings"
+import { getDisplayAccentColor, type AccentColor, type ThemeMode } from "@/lib/settings"
 
 export function useSettingsTheme(themeMode: ThemeMode, accentColor: AccentColor) {
   useEffect(() => {
     const root = document.documentElement
-    root.style.setProperty("--page-accent", accentColor)
     const apply = (dark: boolean) => {
       root.classList.toggle("dark", dark)
+      root.style.setProperty("--page-accent", getDisplayAccentColor(accentColor, dark))
     }
 
     if (themeMode === "light") {

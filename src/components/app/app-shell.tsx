@@ -200,7 +200,7 @@ export function AppShell({
         style={panelStyle}
         onContextMenu={openContextMenu}
       >
-        <div className="flex flex-1 min-h-0 flex-row">
+        <div className="flex h-full flex-1 min-h-0 flex-row">
           <SideNav
             activeView={activeView}
             onViewChange={setActiveView}

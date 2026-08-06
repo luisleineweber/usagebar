@@ -12,6 +12,7 @@ import {
   DEFAULT_START_ON_LOGIN,
   DEFAULT_THEME_MODE,
   DEFAULT_TIME_FORMAT_MODE,
+  getDisplayAccentColor,
   arePluginSettingsEqual,
   getEnabledPluginIds,
   loadAutoUpdateInterval,
@@ -85,6 +86,12 @@ describe("settings", () => {
       hasStoredSettings: false,
       onboardingInProgress: false,
     })
+  })
+
+  it("uses a readable green accent on light surfaces", () => {
+    expect(getDisplayAccentColor("#bfff00", false)).toBe("#15803d")
+    expect(getDisplayAccentColor("#bfff00", true)).toBe("#bfff00")
+    expect(getDisplayAccentColor("#86c5ff", false)).toBe("#86c5ff")
   })
 
   it("sanitizes stored settings", async () => {

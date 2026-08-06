@@ -853,6 +853,7 @@ mod tests {
                 version: "0.0.0".to_string(),
                 entry: "plugin.js".to_string(),
                 icon: "icon.svg".to_string(),
+                icon_color_mode: crate::plugin_engine::manifest::IconColorMode::default(),
                 brand_color: None,
                 default_plan: None,
                 lines: vec![],

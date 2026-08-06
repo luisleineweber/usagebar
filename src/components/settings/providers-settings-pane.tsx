@@ -16,13 +16,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { ArrowLeft, ChevronRight, Eye } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ProviderIcon } from "@/components/provider-icon"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
 import type { ProviderConfig } from "@/lib/provider-settings"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 import { cn } from "@/lib/utils"
-import { getProviderIconColor } from "@/lib/provider-icon"
 
 const SETTINGS_PROVIDER_PRIORITY = ["codex", "claude", "cursor", "opencode-go"] as const
 
@@ -45,39 +45,6 @@ export function orderSettingsProviders<T extends Pick<SettingsPluginState, "id" 
 
     return left.name.localeCompare(right.name)
   })
-}
-
-// ---------------------------------------------------------------------------
-// Provider icon mask
-// ---------------------------------------------------------------------------
-
-function ProviderIconMask({
-  iconUrl,
-  brandColor,
-  isDark,
-}: {
-  iconUrl: string
-  brandColor?: string
-  isDark: boolean
-}) {
-  return (
-    <span
-      aria-hidden
-      data-testid="provider-icon"
-      className="inline-block size-5 shrink-0 bg-foreground/85"
-      style={{
-        backgroundColor: getProviderIconColor(brandColor, isDark),
-        WebkitMaskImage: `url(${iconUrl})`,
-        WebkitMaskSize: "contain",
-        WebkitMaskRepeat: "no-repeat",
-        WebkitMaskPosition: "center",
-        maskImage: `url(${iconUrl})`,
-        maskSize: "contain",
-        maskRepeat: "no-repeat",
-        maskPosition: "center",
-      }}
-    />
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -149,7 +116,15 @@ function ProviderRow({
     >
       {/* Icon + status dot */}
       <div className="relative">
-        <ProviderIconMask iconUrl={plugin.iconUrl} brandColor={plugin.brandColor} isDark={isDark} />
+        <ProviderIcon
+          iconUrl={plugin.iconUrl}
+          iconColorMode={plugin.iconColorMode}
+          brandColor={plugin.brandColor}
+          isDark={isDark}
+          className="size-5"
+          ariaHidden
+          testId="provider-icon"
+        />
         <span
           className={cn(
             "absolute -right-1 -top-1 size-2.5 rounded-full border border-card",

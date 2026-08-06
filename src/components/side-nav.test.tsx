@@ -99,6 +99,35 @@ describe("SideNav", () => {
     expect(icon).toHaveStyle({ backgroundColor: "#ff0000" })
   })
 
+  it("renders multicolor plugin artwork without applying a mask", () => {
+    render(
+      <SideNav
+        activeView="home"
+        onViewChange={() => {}}
+        plugins={[
+          { id: "qoder", name: "Qoder", iconUrl: "qoder.svg", iconColorMode: "multicolor" },
+        ]}
+      />
+    )
+
+    const icon = screen.getByRole("img", { name: "Qoder" })
+    expect(icon.tagName).toBe("IMG")
+    expect(icon).toHaveAttribute("src", "qoder.svg")
+    expect(icon).not.toHaveStyle({ maskImage: "url(qoder.svg)" })
+  })
+
+  it("keeps inactive provider icons at full opacity", () => {
+    render(
+      <SideNav
+        activeView="home"
+        onViewChange={() => {}}
+        plugins={[{ id: "p", name: "P", iconUrl: "icon.svg", brandColor: "#ff0000" }]}
+      />
+    )
+
+    expect(screen.getByRole("img", { name: "P" })).not.toHaveClass("opacity-70")
+  })
+
   it("falls back to currentColor (light) or white (dark) for low-contrast brand colors", () => {
     const onViewChange = vi.fn()
 
@@ -177,8 +206,9 @@ describe("SideNav", () => {
       />
     )
 
-    expect(screen.getByRole("navigation")).toHaveClass("min-h-0")
+    expect(screen.getByRole("navigation")).toHaveClass("h-full", "min-h-0", "shrink-0")
     expect(screen.getByRole("button", { name: "Settings" })).toHaveClass("shrink-0")
-    expect(screen.getByTestId("provider-list")).toHaveClass("overflow-y-auto")
+    expect(screen.getByTestId("provider-list")).toHaveClass("min-h-0", "flex-1", "overflow-y-auto")
+    expect(screen.getByTestId("side-nav-footer")).toHaveClass("mt-2", "border-t", "pt-2", "shrink-0")
   })
 })

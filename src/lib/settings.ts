@@ -20,6 +20,12 @@ export type ThemeMode = "system" | "light" | "dark"
 
 export type AccentColor = "#bfff00" | "#86c5ff" | "#c1121f" | "#eb4600" | "#e07c8e"
 
+/** Use a darker green for accent controls on light surfaces. Keep the stored accent for dark UI and tray output. */
+export function getDisplayAccentColor(color: AccentColor, isDark: boolean): string {
+  if (!isDark && color === "#bfff00") return "#15803d"
+  return color
+}
+
 export type DisplayMode = "used" | "left"
 
 export type ResetTimerDisplayMode = "relative" | "absolute"

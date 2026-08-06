@@ -55,10 +55,9 @@ export function panelPreferredMinHeightForView(activeView: ActiveView, providerC
   return DETAIL_PANEL_BASE_HEIGHT_PX
 }
 
-export function panelMinHeightForNav(providerCount: number, showHistoryInBar = true): number {
-  const normalizedProviderCount = Math.max(0, Math.floor(providerCount))
+export function panelMinHeightForNav(showHistoryInBar = true): number {
   const buttonCount =
-    SIDE_NAV_STATIC_BUTTON_COUNT + normalizedProviderCount + (showHistoryInBar ? 1 : 0)
+    SIDE_NAV_STATIC_BUTTON_COUNT + (showHistoryInBar ? 1 : 0)
   return SIDE_NAV_TOP_PADDING_PX + buttonCount * SIDE_NAV_BUTTON_HEIGHT_PX
 }
 
@@ -383,7 +382,7 @@ export function usePanel({
         1,
         contentHeightLogical + footerHeightLogical + paddingTopLogical + paddingBottomLogical
       )
-      const navMinHeightLogical = panelMinHeightForNav(navPluginCount, showHistoryInBar)
+      const navMinHeightLogical = panelMinHeightForNav(showHistoryInBar)
       const viewMinHeightLogical = panelPreferredMinHeightForView(activeView, navPluginCount)
       const panelMaxHeightPx = panelMaxHeightForView(activeView)
 

@@ -5,6 +5,7 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "iconColorMode": "multicolor",
   "brandColor": "#615CED",
   "defaultPlan": "Free",
   "platformSupport": {

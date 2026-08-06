@@ -107,11 +107,13 @@ export type ProviderUsageHistory = {
 }
 
 export type PluginSupportState = "supported" | "experimental" | "comingSoonOnWindows"
+export type PluginIconColorMode = "monochrome" | "multicolor"
 
 export type PluginMeta = {
   id: string
   name: string
   iconUrl: string
+  iconColorMode?: PluginIconColorMode
   brandColor?: string
   defaultPlan?: string
   supportState?: PluginSupportState

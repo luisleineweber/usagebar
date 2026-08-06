@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 import { GlobalShortcutSection } from "@/components/global-shortcut-section"
 import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section"
@@ -16,6 +17,7 @@ import {
   RESET_TIMER_DISPLAY_OPTIONS,
   THEME_OPTIONS,
   TIME_FORMAT_OPTIONS,
+  getDisplayAccentColor,
   type AutoUpdateIntervalMinutes,
   type AccentColor,
   type DisplayMode,
@@ -26,6 +28,7 @@ import {
   type ThemeMode,
   type TimeFormatMode,
 } from "@/lib/settings"
+import { getContrastTextColor } from "@/lib/color"
 import { getTimeFormatter } from "@/lib/reset-tooltip"
 import { cn } from "@/lib/utils"
 
@@ -86,6 +89,8 @@ export function GeneralSettingsPane({
   startOnLogin,
   onStartOnLoginChange,
 }: GeneralSettingsPaneProps) {
+  const isDark = useDarkMode()
+
   return (
     <div className="grid gap-x-10 gap-y-6 py-1 xl:grid-cols-2 xl:items-start">
       <section className={SETTINGS_SECTION_CLASS}>
@@ -341,6 +346,7 @@ export function GeneralSettingsPane({
         <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Accent color">
           {ACCENT_COLOR_OPTIONS.map((option) => {
             const isActive = option.value === accentColor
+            const displayColor = getDisplayAccentColor(option.value, isDark)
             return (
               <Button
                 key={option.value}
@@ -352,10 +358,10 @@ export function GeneralSettingsPane({
                 size="sm"
                 className={cn("min-h-10 w-full px-2", isActive && "ring-2 ring-offset-2")}
                 style={{
-                  borderColor: option.value,
-                  backgroundColor: isActive ? option.value : undefined,
-                  color: isActive ? "#111827" : option.value,
-                  outlineColor: option.value,
+                  borderColor: displayColor,
+                  backgroundColor: isActive ? displayColor : undefined,
+                  color: isActive ? getContrastTextColor(displayColor) : displayColor,
+                  outlineColor: displayColor,
                 }}
                 onClick={() => onAccentColorChange(option.value)}
               >

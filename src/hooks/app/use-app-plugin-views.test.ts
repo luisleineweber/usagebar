@@ -65,6 +65,20 @@ describe("useAppPluginViews", () => {
     ])
   })
 
+  it("passes the icon color mode into the UsageBar navigation", () => {
+    const { result } = renderHook(() =>
+      useAppPluginViews({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        pluginSettings: { order: ["qoder"], disabled: [] },
+        pluginsMeta: [{ ...createPluginMeta("qoder", "Qoder"), iconColorMode: "multicolor" }],
+        pluginStates: {},
+      })
+    )
+
+    expect(result.current.navPlugins[0]?.iconColorMode).toBe("multicolor")
+  })
+
   it("keeps a provider incident attached to the matching card view", () => {
     const status = {
       indicator: "minor" as const,
@@ -82,7 +96,12 @@ describe("useAppPluginViews", () => {
         pluginStates: {
           cursor: {
             ...defaultPluginState(),
-            data: { providerId: "cursor", displayName: "Cursor", lines: [], iconUrl: "/cursor.svg" },
+            data: {
+              providerId: "cursor",
+              displayName: "Cursor",
+              lines: [],
+              iconUrl: "/cursor.svg",
+            },
           },
         },
         providerStatuses: { cursor: status },

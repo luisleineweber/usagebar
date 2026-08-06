@@ -15,7 +15,7 @@ import { OnboardingCookieField } from "@/components/onboarding/onboarding-cookie
 import { ProviderRetryAction } from "@/components/onboarding/provider-retry-action"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
-import { getProviderIconColor } from "@/lib/provider-icon"
+import { ProviderIcon } from "@/components/provider-icon"
 import type { ProbeErrorCategory } from "@/lib/plugin-types"
 import { getProviderSettingsDefinition } from "@/lib/provider-settings"
 
@@ -103,22 +103,21 @@ function getFailureHelp(providerId: string, category?: ProbeErrorCategory | null
   return "The refresh failed. Your selection is saved. Check the connection again now or continue in Provider Settings later."
 }
 
-function ProviderIcon({ provider, isDark }: { provider: SettingsPluginState; isDark: boolean }) {
+function OnboardingProviderIcon({
+  provider,
+  isDark,
+}: {
+  provider: SettingsPluginState
+  isDark: boolean
+}) {
   return (
-    <span
-      aria-hidden
-      className="inline-block size-7 shrink-0 bg-foreground/80"
-      style={{
-        backgroundColor: getProviderIconColor(provider.brandColor, isDark),
-        WebkitMaskImage: `url(${provider.iconUrl})`,
-        WebkitMaskSize: "contain",
-        WebkitMaskRepeat: "no-repeat",
-        WebkitMaskPosition: "center",
-        maskImage: `url(${provider.iconUrl})`,
-        maskSize: "contain",
-        maskRepeat: "no-repeat",
-        maskPosition: "center",
-      }}
+    <ProviderIcon
+      iconUrl={provider.iconUrl}
+      iconColorMode={provider.iconColorMode}
+      brandColor={provider.brandColor}
+      isDark={isDark}
+      className="size-7"
+      ariaHidden
     />
   )
 }
@@ -315,7 +314,7 @@ export function FirstRunOnboarding({
                       aria-label={`Select ${provider.name}`}
                       className="mt-1"
                     />
-                    <ProviderIcon provider={provider} isDark={isDark} />
+                    <OnboardingProviderIcon provider={provider} isDark={isDark} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className="font-medium">{provider.name}</span>
@@ -359,7 +358,7 @@ export function FirstRunOnboarding({
               return (
                 <section key={provider.id} className="rounded-lg border border-border p-4">
                   <div className="flex items-center gap-3">
-                    <ProviderIcon provider={provider} isDark={isDark} />
+                    <OnboardingProviderIcon provider={provider} isDark={isDark} />
                     <div className="min-w-0 flex-1">
                       <h2 className="font-medium">{provider.name}</h2>
                       <div className="mt-0.5 text-xs font-medium">

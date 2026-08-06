@@ -136,6 +136,11 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 
 - Alpha 6 dev isolation separated the app-data directory from installed Alpha 5 without a migration, so local preferences and provider secrets appeared reset. Fix: perform a one-time, read-only-source migration from the release sibling directory before startup settings access. Prevention: every new app identifier requires an explicit data migration decision and regression test.
 
+## 2026-08-06
+
+- Light-mode provider icons looked faded because inactive navigation icons used `opacity-70`, and the panel used pure white surfaces. Fix: keep provider identity at full opacity and use a soft neutral light surface. Prevention: express selection through background and active indicators, not provider icon opacity.
+- The Green accent used a neon value that had almost no contrast on a light surface. Fix: map it to a dark green for light-mode UI and select button text by contrast. Prevention: verify every user-selectable accent against its active and inactive surface in both themes.
+
 ## Current Prevention Rules
 
 - Provider percentage math: normalize floating-point results before output. Keep authoritative zero distinct from missing data, and never emit a progress line with a zero limit.
@@ -209,3 +214,7 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - Legacy provider order: when a provider was persisted by an old append-to-end default, repair only the recognizable generated order; preserve arbitrary user drag order. Prevention: add a regression fixture for persisted orders created before provider-order fixes.
 - Used metric labels: progress values in `used` mode had no textual mode label, while `left` values were explicitly labeled. Use one shared display suffix and test every supported format in both modes.
 - Provider/account probe identity: stamping an output after reading mutable provider settings is too late; an old in-flight probe can still replace the newly selected account. Capture `ProviderInstanceRef` at batch start, pass it into the plugin context, and reject mismatched results. Add an out-of-order account-switch regression whenever a provider gains account selection.
+- Provider icon colors: CSS masks keep only SVG shape alpha and discard provider colors. Declare multicolor artwork in the manifest and render it as an image; keep brand-color masks for monochrome artwork.
+- Sidebar scroll ownership: a flex item around the provider list can grow past the panel even when its inner list has `overflow-y-auto`. Put the variable-length list in the flex item and keep bottom actions outside the scroller.
+- Sidebar height chain: `min-h-0` does not create a definite cross-axis height. Give the row and sidebar `h-full`, then size the panel from fixed navigation controls only; provider count belongs in the scrollable list.
+- Sidebar footer grouping: a fixed action after a scrollable icon list needs its own spacing and separator. Keep Settings in a shrink-resistant footer zone so it does not look like another provider.

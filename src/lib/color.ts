@@ -36,6 +36,16 @@ export function getRelativeLuminance(hex: string): number {
   return rgb ? relativeLuminance(rgb) : 0
 }
 
+/** Choose the stronger of the standard dark and light text colors. */
+export function getContrastTextColor(hex: string): "#111827" | "#ffffff" {
+  const rgb = parseHexColor(hex)
+  if (!rgb) return "#111827"
+
+  return contrastRatio(rgb, [17, 24, 39]) >= contrastRatio(rgb, [255, 255, 255])
+    ? "#111827"
+    : "#ffffff"
+}
+
 /** Return only colors with usable contrast on both light and dark surfaces. */
 export function getAccessibleColor(color?: string): string | undefined {
   if (!color) return undefined

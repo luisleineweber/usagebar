@@ -117,7 +117,7 @@ Each plugin folder under `plugins/` contains:
 plugins/claude/
   ├── plugin.json      # identity, capabilities, icon, display hints
   ├── index.js         # the plugin execution entry point
-  └── icon.svg         # provider icon (must use currentColor)
+  └── icon.svg         # provider icon
 ```
 
 **`plugin.json` key fields:**
@@ -126,6 +126,7 @@ plugins/claude/
 {
   "id": "claude",
   "name": "Claude",
+  "iconColorMode": "monochrome",    // "monochrome" | "multicolor"
   "brandColor": "#D97757",
   "supportState": "supported",        // "supported" | "experimental" | "comingSoonOnWindows"
   "capabilities": ["http"],           // what host APIs the plugin may call
@@ -235,4 +236,4 @@ type PluginOutput = {
 - **Stores:** setters only; no derived logic in stores — derive in hooks or `useMemo`.
 - **IPC:** JS must use **camelCase** parameters (`{ batchId, pluginIds }`). Tauri auto-converts to Rust snake_case.
 - **Tailwind:** use design tokens (`text-muted-foreground`, `bg-destructive/5`, etc.) over hardcoded colors.
-- **Icons:** plugin SVGs must use `currentColor` for theme compatibility.
+- **Icons:** use `iconColorMode: "multicolor"` for artwork with fixed colors. Other icons use the brand-color mask.

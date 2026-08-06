@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ProviderIcon } from "@/components/provider-icon"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 import { AccountManagementSection } from "@/components/settings/account-management-section"
@@ -33,7 +34,6 @@ import {
   type ProviderSourceMode,
 } from "@/lib/provider-settings"
 import { cn } from "@/lib/utils"
-import { getProviderIconColor } from "@/lib/provider-icon"
 
 export type ProviderSettingsDetailProps = {
   plugin: PluginMeta
@@ -82,35 +82,6 @@ function getProbeStatus(
     tone: "muted",
     label: "Click Retry to run the first check for this provider.",
   }
-}
-
-function ProviderIconMask({
-  iconUrl,
-  brandColor,
-  isDark,
-}: {
-  iconUrl: string
-  brandColor?: string
-  isDark: boolean
-}) {
-  return (
-    <span
-      aria-hidden
-      data-testid="provider-icon"
-      className="inline-block size-8 shrink-0 bg-foreground/85"
-      style={{
-        backgroundColor: getProviderIconColor(brandColor, isDark),
-        WebkitMaskImage: `url(${iconUrl})`,
-        WebkitMaskSize: "contain",
-        WebkitMaskRepeat: "no-repeat",
-        WebkitMaskPosition: "center",
-        maskImage: `url(${iconUrl})`,
-        maskSize: "contain",
-        maskRepeat: "no-repeat",
-        maskPosition: "center",
-      }}
-    />
-  )
 }
 
 export function ProviderSettingsDetail({
@@ -394,10 +365,14 @@ export function ProviderSettingsDetail({
       {/* Provider header */}
       <div className="border-b border-border/60 pb-5">
         <div className="flex min-w-0 items-start gap-3">
-          <ProviderIconMask
+          <ProviderIcon
             iconUrl={plugin.iconUrl}
+            iconColorMode={plugin.iconColorMode}
             brandColor={plugin.brandColor}
             isDark={isDark}
+            className="size-8"
+            ariaHidden
+            testId="provider-icon"
           />
           <div className="min-w-0 flex-1">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">

@@ -15,8 +15,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { ProviderIcon } from "@/components/provider-icon"
 import { cn } from "@/lib/utils"
-import { getRelativeLuminance } from "@/lib/color"
+import type { PluginIconColorMode } from "@/lib/plugin-types"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 import {
   hasProviderStatusIssue,
@@ -45,6 +46,7 @@ interface NavPlugin {
   id: string
   name: string
   iconUrl: string
+  iconColorMode?: PluginIconColorMode
   brandColor?: string
   supportState?: "supported" | "experimental" | "comingSoonOnWindows"
   supportMessage?: string | null
@@ -98,14 +100,6 @@ function NavButton({
   )
 }
 
-function getIconColor(brandColor: string | undefined, isDark: boolean): string {
-  if (!brandColor) return "currentColor"
-  const luminance = getRelativeLuminance(brandColor)
-  if (isDark && luminance < 0.15) return "#ffffff"
-  if (!isDark && luminance > 0.85) return "currentColor"
-  return brandColor
-}
-
 interface SortableNavPluginProps {
   plugin: NavPlugin
   isActive: boolean
@@ -150,29 +144,20 @@ function SortableNavPlugin({
         {isArrangeMode ? (
           <GripVertical className="pointer-events-none absolute left-0 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/70" />
         ) : null}
-        <span
-          role="img"
-          aria-label={plugin.name}
+        <ProviderIcon
+          iconUrl={plugin.iconUrl}
+          iconColorMode={plugin.iconColorMode}
+          brandColor={plugin.brandColor}
+          isDark={isDark}
+          label={plugin.name}
           title={
             providerStatusLabel(plugin.status) ??
             (plugin.supportState !== "supported" ? (plugin.supportMessage ?? undefined) : undefined)
           }
           className={cn(
-            "size-6 inline-block transition-opacity",
-            isActive ? "opacity-100" : "opacity-70",
+            "size-6",
             plugin.supportState === "comingSoonOnWindows" ? "opacity-45" : ""
           )}
-          style={{
-            backgroundColor: getIconColor(plugin.brandColor, isDark),
-            WebkitMaskImage: `url(${plugin.iconUrl})`,
-            WebkitMaskSize: "contain",
-            WebkitMaskRepeat: "no-repeat",
-            WebkitMaskPosition: "center",
-            maskImage: `url(${plugin.iconUrl})`,
-            maskSize: "contain",
-            maskRepeat: "no-repeat",
-            maskPosition: "center",
-          }}
         />
         {hasProviderStatusIssue(plugin.status) ? (
           <span
@@ -229,7 +214,7 @@ export function SideNav({
   return (
     <nav
       className={cn(
-        "relative flex min-h-0 flex-col w-12 border-r bg-muted/50 dark:bg-card pt-3",
+        "relative flex h-full min-h-0 shrink-0 flex-col w-12 border-r bg-muted/50 dark:bg-card pt-3",
         arrangeMode && "bg-accent/40"
       )}
       onContextMenu={(event) => {
@@ -256,8 +241,8 @@ export function SideNav({
         </NavButton>
       ) : null}
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div data-testid="provider-list" className="min-h-0 flex-1 overflow-y-auto scrollbar-none">
+      <div data-testid="provider-list" className="min-h-0 flex-1 overflow-y-auto scrollbar-none">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext
             items={plugins.map((plugin) => plugin.id)}
             strategy={verticalListSortingStrategy}
@@ -274,11 +259,11 @@ export function SideNav({
               />
             ))}
           </SortableContext>
-        </div>
-      </DndContext>
+        </DndContext>
+      </div>
 
       {arrangeMode ? (
-        <div className="px-1.5 pt-2">
+        <div className="shrink-0 px-1.5 pt-2">
           <button
             type="button"
             className="flex h-8 w-full items-center justify-center rounded-md border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-accent"
@@ -291,9 +276,14 @@ export function SideNav({
         </div>
       ) : null}
 
-      <NavButton isActive={false} onClick={() => onOpenSettings?.()} aria-label="Settings">
-        <Settings className="size-6" />
-      </NavButton>
+      <div
+        data-testid="side-nav-footer"
+        className="mt-2 shrink-0 border-t border-border/70 pt-2"
+      >
+        <NavButton isActive={false} onClick={() => onOpenSettings?.()} aria-label="Settings">
+          <Settings className="size-6" />
+        </NavButton>
+      </div>
     </nav>
   )
 }
