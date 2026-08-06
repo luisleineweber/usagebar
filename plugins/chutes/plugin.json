@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "chutes",
+  "name": "Chutes",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#3184FF",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Save a Chutes API key in Setup or set CHUTES_API_KEY."
+    }
+  },
+  "sourceProvenance": "officialApi",
+  "capabilities": {
+    "env": true,
+    "providerSecrets": true,
+    "http": true,
+    "httpDomains": ["api.chutes.ai"]
+  },
+  "lines": [
+    { "type": "progress", "label": "4-hour", "scope": "overview", "primaryOrder": 1 },
+    { "type": "progress", "label": "Monthly", "scope": "overview", "primaryOrder": 2 },
+    { "type": "badge", "label": "Plan", "scope": "detail" },
+    { "type": "text", "label": "Source", "scope": "detail" },
+    { "type": "text", "label": "Auth source", "scope": "detail" }
+  ]
+}
