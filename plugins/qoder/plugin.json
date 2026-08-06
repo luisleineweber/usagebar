@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "qoder",
+  "name": "Qoder",
+  "version": "0.0.1",
+  "entry": "plugin.js",
+  "icon": "icon.svg",
+  "brandColor": "#10B981",
+  "platformSupport": {
+    "windows": {
+      "state": "experimental",
+      "message": "Save a Qoder Cookie header and select qoder.com or qoder.com.cn in Setup."
+    }
+  },
+  "sourceProvenance": "cookieReplay",
+  "capabilities": {
+    "env": true,
+    "providerConfig": true,
+    "providerSecrets": true,
+    "http": true,
+    "httpDomains": ["qoder.com", "qoder.com.cn"]
+  },
+  "lines": [
+    { "type": "progress", "label": "Credits", "scope": "overview", "primaryOrder": 1 },
+    { "type": "badge", "label": "Region", "scope": "detail" },
+    { "type": "text", "label": "Remaining", "scope": "detail" },
+    { "type": "text", "label": "Source", "scope": "detail" },
+    { "type": "text", "label": "Auth source", "scope": "detail" }
+  ]
+}
