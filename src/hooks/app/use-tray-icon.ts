@@ -26,7 +26,11 @@ import {
   getWindowsTrayIconSizePx,
   renderTrayNumberIcon,
 } from "@/lib/tray-number-icon"
-import { formatTrayNativeTitle, formatTrayTooltip } from "@/lib/tray-tooltip"
+import {
+  formatTrayBarsTooltip,
+  formatTrayNativeTitle,
+  formatTrayTooltip,
+} from "@/lib/tray-tooltip"
 import type { TrayState } from "@/lib/tray-state"
 import type { PluginState } from "@/hooks/app/types"
 
@@ -251,9 +255,12 @@ export function useTrayIcon({
         isSameTraySettingsPreview(previous, nextPreview) ? previous : nextPreview
       )
 
-      const tooltipText = formatTrayTooltip(trayState, {
-        timeFormatMode: timeFormatModeRef.current,
-      })
+      const tooltipText =
+        style === "bars"
+          ? formatTrayBarsTooltip(nextPreview.bars, currentMeta)
+          : formatTrayTooltip(trayState, {
+              timeFormatMode: timeFormatModeRef.current,
+            })
       const isTemplate = useTemplateIconRef.current
       if (!isTemplate && style !== "provider") {
         const renderBars = style === "donut" ? nextPreview.providerBars : nextPreview.bars

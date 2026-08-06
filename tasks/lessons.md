@@ -141,6 +141,7 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - Provider percentage math: normalize floating-point results before output. Keep authoritative zero distinct from missing data, and never emit a progress line with a zero limit.
 
 - Stacked tray bars must use the first four primary providers. Do not let legacy metric pins reduce the bar set after the pin controls are removed.
+- Stacked-bar tooltips must list provider percentages. Do not reuse the detailed single-provider tooltip for the multi-provider bar style.
 
 - Prerelease updater checks: a missing unsigned `latest.json` makes Tauri `check()` reject before GitHub discovery runs. Catch updater-manifest failures, then query the GitHub release API; only report an error when both sources fail. Add a regression test for the next alpha candidate.
 

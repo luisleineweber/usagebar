@@ -1,9 +1,32 @@
 import { describe, expect, it } from "vitest"
 
-import { formatTrayTooltip } from "@/lib/tray-tooltip"
+import type { PluginMeta } from "@/lib/plugin-types"
+import { formatTrayBarsTooltip, formatTrayTooltip } from "@/lib/tray-tooltip"
 
 const resetsAt = "2026-07-24T18:00:00Z"
 const nowMs = Date.parse("2026-07-24T12:00:00Z")
+const pluginsMeta: PluginMeta[] = [
+  { id: "alpha", name: "Alpha", iconUrl: "", primaryCandidates: ["Session"], lines: [] },
+  { id: "beta", name: "Beta", iconUrl: "", primaryCandidates: ["Session"], lines: [] },
+  { id: "gamma", name: "Gamma", iconUrl: "", primaryCandidates: ["Session"], lines: [] },
+  { id: "delta", name: "Delta", iconUrl: "", primaryCandidates: ["Session"], lines: [] },
+]
+
+describe("formatTrayBarsTooltip", () => {
+  it("lists the four stacked provider values", () => {
+    expect(
+      formatTrayBarsTooltip(
+        [
+          { id: "alpha", fraction: 1 },
+          { id: "beta", fraction: 0.75 },
+          { id: "gamma", fraction: 0.5 },
+          { id: "delta", fraction: 0.25 },
+        ],
+        pluginsMeta
+      )
+    ).toBe("UsageBar\nAlpha: 100%\nBeta: 75%\nGamma: 50%\nDelta: 25%")
+  })
+})
 
 describe("formatTrayTooltip", () => {
   it("includes provider, metric, exact remaining value and reset time", () => {
