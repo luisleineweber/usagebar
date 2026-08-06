@@ -1,6 +1,6 @@
-# Alibaba Coding Plan
+# Alibaba
 
-Track Alibaba Coding Plan request quota usage.
+Track Alibaba Coding Plan request quotas and Bailian Token Plan credits.
 
 ## Authentication
 
@@ -9,6 +9,14 @@ Alibaba Coding Plan supports API key authentication:
 1. Generate a Coding Plan API key from the Alibaba Cloud Coding Plan page. Coding Plan keys use the `sk-sp-...` format.
 2. Add it to UsageBar Settings, or
 3. Set the `ALIBABA_API_KEY` environment variable
+
+Alibaba Token Plan uses a Bailian session:
+
+1. Open the Bailian Token Plan page while signed in.
+2. Copy the complete `Cookie` request header from the browser network tools.
+3. Save it as the Bailian Cookie header in UsageBar Settings.
+
+You can also set `ALIBABA_TOKEN_PLAN_COOKIE_HEADER` before UsageBar starts.
 
 ## Configuration
 
@@ -33,6 +41,8 @@ Default region: `cn-beijing`
 - **Source**: Shows the quota endpoint family used for the current result
 - **Auth source**: Shows whether the app used the stored API key or `ALIBABA_API_KEY`
 - **Endpoint**: Shows the concrete region endpoint requested
+- **Token credits**: Used and total Bailian Token Plan credits
+- **Token expiry**: Uses the nearest provider-reported expiry as the reset time
 
 Current public Coding Plan docs describe Pro as 6,000 requests per 5 hours, 45,000 requests per week, and 90,000 requests per month. Older Lite subscriptions are no longer sold to new users but remain supported as 1,200 / 9,000 / 18,000 request limits when the API identifies the plan as Lite.
 
@@ -55,6 +65,12 @@ Unknown plan names do not get fallback limits. If Alibaba returns usage without 
 - Check your network connection
 - If behind a proxy, configure [Proxy Settings](../proxy.md)
 - Verify the region setting is correct for your account
+
+### "Alibaba Token Plan login required"
+
+- Sign in to Bailian again.
+- Copy a new Cookie request header from the Token Plan page.
+- Confirm that the header belongs to `bailian.console.aliyun.com`.
 
 ### "Alibaba Coding Plan quota requires a browser console session"
 

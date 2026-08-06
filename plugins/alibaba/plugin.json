@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "alibaba",
-  "name": "Alibaba Coding Plan",
+  "name": "Alibaba",
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "alibabacloud-color.svg",
@@ -10,10 +10,17 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Windows experimental. Save an Alibaba API key in Setup or set ALIBABA_API_KEY, then use ALIBABA_REGION if you need a non-default region."
+      "message": "Windows experimental. Save a Coding Plan API key, a Bailian Token Plan Cookie header, or both in Setup."
     }
   },
+  "sourceProvenance": "privateEndpoint",
   "lines": [
+    {
+      "type": "progress",
+      "label": "Token credits",
+      "scope": "overview",
+      "primaryOrder": 3
+    },
     {
       "type": "progress",
       "label": "5-hour",
@@ -61,7 +68,8 @@
     "http": true,
     "httpDomains": [
       "devops.aliyuncs.com",
-      "devops.cn-beijing.aliyuncs.com"
+      "devops.cn-beijing.aliyuncs.com",
+      "bailian.console.aliyun.com"
     ]
   }
 }
