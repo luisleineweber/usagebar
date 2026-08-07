@@ -33,6 +33,10 @@ playwright-report/
 .env*
 !.env.example
 
+# Tauri updater signing keys
+/usagebar.key
+/usagebar.key.pub
+
 # Agent working files
 docs/choices.md
 docs/breadcrumbs.md
