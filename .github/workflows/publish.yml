@@ -48,6 +48,10 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
+          shared-key: ${{ runner.os }}-${{ runner.arch }}-${{ env.RUST_TOOLCHAIN }}-release
+          add-rust-environment-hash-key: false
+          key: ${{ hashFiles('src-tauri/Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -81,7 +85,7 @@ jobs:
           echo "Prerelease $RELEASE_TAG will publish an unsigned Windows installer until Authenticode signing is configured."
 
       - name: Verify updater signing key is configured
-        if: runner.os == 'Windows' && !contains(env.RELEASE_TAG, '-')
+        if: runner.os == 'Windows'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
@@ -89,12 +93,6 @@ jobs:
             echo "Missing TAURI_SIGNING_PRIVATE_KEY secret."
             exit 1
           fi
-
-      - name: Allow unsigned prerelease updater artifacts
-        if: runner.os == 'Windows' && contains(env.RELEASE_TAG, '-')
-        run: |
-          echo "No Tauri updater signing key configured; publishing this technical-preview installer without updater signatures."
-          echo "USAGEBAR_ALLOW_UNSIGNED_UPDATER=1" >> "$GITHUB_ENV"
 
       - name: Verify Windows Authenticode signing secrets are configured
         if: runner.os == 'Windows'
@@ -142,7 +140,7 @@ jobs:
           releaseDraft: false
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           includeUpdaterJson: true
-          args: ${{ matrix.args }} ${{ contains(env.RELEASE_TAG, '-') && '--no-sign' || '' }}
+          args: ${{ matrix.args }}
 
       - name: Verify updater assets uploaded
         env:
@@ -150,12 +148,33 @@ jobs:
         run: |
           ASSETS=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
 
-          if [[ "$USAGEBAR_ALLOW_UNSIGNED_UPDATER" != "1" ]]; then
-            printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
-            printf '%s\n' "$ASSETS" | grep -Eq '\.sig$' || { echo "Missing updater signatures (.sig)"; exit 1; }
-          else
-            echo "Unsigned prerelease: updater manifest and signature assets are not required."
-          fi
+          printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
+          printf '%s\n' "$ASSETS" | grep -Eq '\.sig$' || { echo "Missing updater signatures (.sig)"; exit 1; }
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             printf '%s\n' "$ASSETS" | grep -Eq 'setup\.exe$' || { echo "Missing Windows setup executable"; exit 1; }
           fi
+
+      - name: Publish updater channel manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CHANNEL_TAG="updater"
+          CHANNEL_DIR="$RUNNER_TEMP/usagebar-updater-channel"
+          mkdir -p "$CHANNEL_DIR"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$CHANNEL_DIR"
+
+          if ! gh release view "$CHANNEL_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$CHANNEL_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --title "UsageBar updater channel" \
+              --notes "Machine-readable updater metadata. Install UsageBar from the versioned releases."
+          fi
+
+          gh release upload "$CHANNEL_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            "$CHANNEL_DIR/latest.json" \
+            --clobber
+
+          CHANNEL_ASSET=$(gh release view "$CHANNEL_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
+          printf '%s\n' "$CHANNEL_ASSET" | grep -Fxq 'latest.json' || { echo "Updater channel is missing latest.json"; exit 1; }

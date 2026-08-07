@@ -36,7 +36,7 @@ Build the Windows installer locally before the first publish of a version:
 bun run build:release -- --bundles nsis
 ```
 
-If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local builds can still complete without Tauri updater signatures. Windows installer builds require Authenticode material by default. When that material is configured, the helper signs the final NSIS/MSI artifact after the build so the setup executable has a real publisher.
+Release builds require `TAURI_SIGNING_PRIVATE_KEY`. Pass `--no-sign` only for an explicit local installer smoke build that will not support in-app updates. Windows installer builds require Authenticode material by default. When that material is configured, the helper signs the final NSIS/MSI artifact after the build so the setup executable has a real publisher.
 
 Alpha 8 exception: unsigned Windows prerelease installers are allowed as technical-preview artifacts while Authenticode signing is deferred. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local unsigned builds. GitHub prerelease publishes set this automatically for tags that contain a prerelease suffix such as `v0.1.0-alpha.8`. These artifacts can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and must be described as unsigned in release notes.
 
@@ -70,13 +70,14 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 
 - a Windows setup executable ending in `setup.exe`
 
-Stable releases require `TAURI_SIGNING_PRIVATE_KEY` and updater signature assets. For prerelease tags, the workflow passes `--no-sign` when that key is unavailable and publishes an unsigned technical-preview installer without updater assets. Prerelease tags also set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` so Authenticode signing remains optional.
+All published releases require `TAURI_SIGNING_PRIVATE_KEY`, `latest.json`, and updater signature assets. Prerelease tags still set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`, so Authenticode signing remains optional for technical previews.
 
-Current updater channel note:
+Current updater channel:
 
 - GitHub's `releases/latest` alias only resolves stable releases, not prereleases.
-- UsageBar currently keeps updater checks disabled for prerelease app versions like `0.1.0-alpha.1` and `0.1.0-beta.7`.
-- Re-enable prerelease auto-updates only after moving off the stable-only alias or after shipping a stable release channel.
+- The publish workflow copies each signed `latest.json` to the fixed `updater` release.
+- UsageBar reads `https://github.com/luisleineweber/usagebar/releases/download/updater/latest.json`.
+- The app downloads first. It installs and relaunches only after the user selects `Restart to update`.
 
 ## Alpha Gate
 
@@ -87,10 +88,10 @@ Before publishing Alpha 8, verify and record:
 - Install, uninstall, config/data location, and first-run provider setup are documented.
 - At least one supported provider works from a fresh setup path.
 - Invalid credentials, offline/network failure, provider API failure, empty data, and refresh-in-progress states do not crash the app.
-- README and release notes state privacy, telemetry, crash-log behavior, known limitations, and feedback/debug-info path.
+- README and the linked support documentation state privacy, telemetry, crash-log behavior, known limitations, and feedback/debug-info path.
 - `CHANGELOG.md` includes the exact release version with supported features and known limitations.
 
-Use the Alpha Gate bullets above for the final local artifact or GitHub release candidate before tagging. Historical Alpha 1 smoke evidence is archived at [alpha-smoke-test-0.1.0-alpha.1.md](archive/release/alpha-smoke-test-0.1.0-alpha.1.md).
+Use the Alpha Gate bullets above as verification checks for the final local artifact or GitHub release candidate before tagging. Keep `Alpha Notes` short and include only the release-specific points that remain relevant. Historical Alpha 1 smoke evidence is archived at [alpha-smoke-test-0.1.0-alpha.1.md](archive/release/alpha-smoke-test-0.1.0-alpha.1.md).
 
 Suggested Alpha 1 release-note shape:
 
@@ -100,21 +101,25 @@ Suggested Alpha 1 release-note shape:
 This is a public alpha for Windows users who want to test UsageBar before a full release.
 
 ### Supported
+
 - Windows NSIS installer
 - Provider setup for ...
 - Manual refresh
 - Local settings storage
 
 ### Known limitations
+
 - Some providers are experimental and may need manual cookie/API-key setup
 - Some costs or usage buckets may be estimated or partial
 - Prerelease updates may open GitHub Releases instead of installing in-app
 - UI polish, crash recovery, and signed-build coverage are not final
 
 ### Privacy
+
 UsageBar stores app settings and app-owned provider secrets locally under `%APPDATA%\com.sunstory.usagebar` on Windows. Provider secrets saved by UsageBar are encrypted with Windows DPAPI. Provider credentials and usage payloads are not intentionally sent to UsageBar-owned services.
 
 ### Feedback
+
 Report bugs at https://github.com/luisleineweber/usagebar/issues/new and include app version, Windows version, provider, error text, timestamp, and sanitized logs. Do not include API keys, cookies, or raw credential files.
 ```
 

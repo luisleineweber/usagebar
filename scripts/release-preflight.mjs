@@ -80,7 +80,9 @@ if (!semverPattern.test(version)) {
 }
 
 if (tauriConf.version !== version) {
-  fail(`src-tauri/tauri.conf.json version (${tauriConf.version}) does not match package.json (${version})`)
+  fail(
+    `src-tauri/tauri.conf.json version (${tauriConf.version}) does not match package.json (${version})`
+  )
 }
 
 if (cargoVersion !== version) {
@@ -102,8 +104,18 @@ if (tauriConf.productName !== "UsageBar") {
 }
 
 const updaterEndpoints = tauriConf.plugins?.updater?.endpoints ?? []
-if (!updaterEndpoints.some((endpoint) => String(endpoint).includes("github.com/luisleineweber/usagebar/releases"))) {
-  fail("Updater endpoint is not pointed at luisleineweber/usagebar releases")
+const expectedUpdaterEndpoint =
+  "https://github.com/luisleineweber/usagebar/releases/download/updater/latest.json"
+if (updaterEndpoints.length !== 1 || updaterEndpoints[0] !== expectedUpdaterEndpoint) {
+  fail(`Updater endpoint must be ${expectedUpdaterEndpoint}`)
+}
+
+if (tauriConf.bundle?.createUpdaterArtifacts !== true) {
+  fail("Tauri updater artifacts must be enabled")
+}
+
+if (!tauriConf.plugins?.updater?.pubkey) {
+  fail("Tauri updater public key is missing")
 }
 
 if (!changelog.includes(`## ${version}`)) {

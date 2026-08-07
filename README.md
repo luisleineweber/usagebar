@@ -79,7 +79,7 @@ UsageBar is still pre-release. Alpha 8 is intended to let Windows users install 
 - Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
-- Prerelease auto-updates are intentionally conservative because GitHub's `releases/latest` alias does not resolve prereleases. Prerelease builds may open the matching GitHub release page instead of installing in-app.
+- Published releases use a signed updater channel. UsageBar downloads an available update, then installs it after you select `Restart to update`.
 - Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations are full-release work, not an Alpha 8 promise.
 
 ## Architecture
@@ -166,7 +166,7 @@ bun run release:check -- --release-tag v0.1.0-alpha.8
 bun run build:release -- --bundles nsis
 ```
 
-If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so the local build can skip Tauri updater signatures. Windows installer builds require Authenticode material by default: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, `WINDOWS_CERTIFICATE`, or `WINDOWS_CERTIFICATE_THUMBPRINT`. The helper signs the final setup executable after the build so the Windows launch prompt can show the certificate publisher. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
+Release builds require `TAURI_SIGNING_PRIVATE_KEY`. Pass `--no-sign` only for an explicit local installer smoke build. Windows installer builds require Authenticode material by default: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, `WINDOWS_CERTIFICATE`, or `WINDOWS_CERTIFICATE_THUMBPRINT`. The helper signs the final setup executable after the build so the Windows launch prompt can show the certificate publisher. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
 
 For Alpha 8 unsigned technical-preview builds, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; those installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Stable/public-confidence Windows builds should be Authenticode-signed; see [docs/releasing.md](docs/releasing.md).
 

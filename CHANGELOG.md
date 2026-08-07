@@ -11,7 +11,7 @@
 ### Notes
 
 - Alpha 8 is an unsigned Windows technical preview. Windows may show `Unknown publisher` or SmartScreen warnings.
-- No Tauri updater signing key is configured for this prerelease, so updater signature assets are intentionally omitted and prerelease updater checks remain disabled.
+- Alpha 8 moves to a signed updater channel with in-app download, explicit restart, installation, and relaunch.
 - The NSIS installer is the supported prerelease artifact; MSI remains skipped because WiX rejects semver prerelease versions.
 
 ## 0.1.0-alpha.7
