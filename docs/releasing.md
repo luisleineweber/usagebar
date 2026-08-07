@@ -55,7 +55,7 @@ Recommended GitHub secrets:
 - `WINDOWS_CERTIFICATE_PASSWORD`: `.pfx` export password.
 - `WINDOWS_TIMESTAMP_URL`: optional timestamp server; defaults to `http://timestamp.digicert.com`.
 
-SmartScreen note: Authenticode signing is necessary but not always sufficient. EV certificates usually get immediate SmartScreen reputation. OV certificates and new certificates can still warn until Microsoft has enough reputation for the certificate or submitted binary.
+SmartScreen note: Authenticode signing is necessary but not always sufficient. New OV and EV certificates can still warn until Microsoft has enough reputation for the certificate or submitted binary.
 
 ## GitHub Publish
 
@@ -71,6 +71,8 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 - a Windows setup executable ending in `setup.exe`
 
 All published releases require `TAURI_SIGNING_PRIVATE_KEY`, `latest.json`, and updater signature assets. Prerelease tags still set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`, so Authenticode signing remains optional for technical previews.
+
+The release workflow creates `latest.json` automatically through `tauri-action` with `includeUpdaterJson: true`. It then verifies that the versioned release contains `latest.json` and at least one `.sig` file. The workflow copies the manifest to the fixed `updater` release and verifies that channel again. Do not create or upload `latest.json` manually. A release without the manifest or signatures stops before the updater channel is updated.
 
 Current updater channel:
 
