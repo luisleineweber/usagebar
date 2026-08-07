@@ -48,6 +48,10 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
+          shared-key: ${{ runner.os }}-${{ runner.arch }}-${{ env.RUST_TOOLCHAIN }}-release
+          add-rust-environment-hash-key: false
+          key: ${{ hashFiles('src-tauri/Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - uses: oven-sh/setup-bun@v2
         with:
