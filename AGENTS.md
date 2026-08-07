@@ -111,7 +111,7 @@ This is a reference for frequently used skills, but there are many more to explo
 - Update `CHANGELOG.md` with the exact release version before tagging, publishing, or final release preflight.
 - Before publishing or editing a release body, run `gh release view <previous-tag> --json body` and mirror its structure:
   - `What's Changed`
-  - notable commits as `- Human summary by @luisleineweber in shortsha`
+  - every commit from `<previous-tag>..<new-tag>` as one bullet, using `- Commit summary by @luisleineweber in shortsha`
   - `Alpha Notes`
   - `New Contributors`
   - `Full Changelog: https://github.com/luisleineweber/usagebar/compare/<previous-tag>...<new-tag>`
@@ -122,4 +122,3 @@ This is a reference for frequently used skills, but there are many more to explo
 
 - Tauri IPC: JavaScript uses camelCase (`{ batchId, pluginIds }`); Tauri converts to Rust snake_case. Never send snake_case from JavaScript.
 - Parallel `tauri-action` matrix builds are safe; the action merges existing `latest.json` platform entries.
-

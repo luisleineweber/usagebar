@@ -5,6 +5,23 @@
   SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 !macroend
 
+; A user can remove the install directory without running uninstall.exe.
+; NSIS then sees the old uninstall key and tries to start a file that no
+; longer exists. Remove only that stale current-user entry before install.
+!macro NSIS_HOOK_PREINSTALL
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UsageBar" "UninstallString"
+  ${If} $0 != ""
+    StrCpy $1 $0 1
+    ${If} $1 == '"'
+      StrCpy $0 $0 "" 1
+      StrCpy $0 $0 -1
+    ${EndIf}
+    ${IfNot} ${FileExists} "$0"
+      DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\UsageBar"
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_POSTINSTALL
   ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "UsageBar"
   ${If} $0 != ""
