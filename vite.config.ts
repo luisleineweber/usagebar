@@ -60,7 +60,7 @@ export default defineConfig(async () => ({
         // SSR guard branch untestable in jsdom
         "src/hooks/use-dark-mode.ts",
       ],
-      reporter: ["text", "html", "lcov", "json-summary"],
+      reporter: ["text", "html", "lcov", "json", "json-summary"],
       thresholds: coverageThresholds,
     },
   },

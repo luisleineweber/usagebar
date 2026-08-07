@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process"
 const THRESHOLD = 90
 const CHANGED_FILE_THRESHOLD = 80
 const SUMMARY_PATH = path.resolve("coverage", "coverage-summary.json")
+const FINAL_PATH = path.resolve("coverage", "coverage-final.json")
 const enforceChangedCoverage = process.env.USAGEBAR_COVERAGE_ENFORCE_CHANGED === "1"
 const reportOnly = process.env.USAGEBAR_COVERAGE_REPORT_ONLY === "1"
 
@@ -36,15 +37,58 @@ function runGit(args) {
   }
 }
 
+function runGitRaw(args) {
+  try {
+    return execFileSync("git", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+  } catch {
+    return ""
+  }
+}
+
 function getChangedFiles() {
   const branchFiles = runGit(["diff", "--name-only", "--diff-filter=ACMR", "origin/main...HEAD"])
-  const diffFiles =
-    branchFiles.length > 0
-      ? branchFiles
-      : runGit(["diff", "--name-only", "--diff-filter=ACMR", "HEAD"])
+  const diffFiles = runGit(["diff", "--name-only", "--diff-filter=ACMR", "HEAD"])
   const untrackedFiles = runGit(["ls-files", "--others", "--exclude-standard"])
 
-  return [...new Set([...diffFiles, ...untrackedFiles])]
+  return [...new Set([...branchFiles, ...diffFiles, ...untrackedFiles])]
+}
+
+function addChangedLinesFromDiff(lines, diff) {
+  for (const match of diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+    const start = Number(match[1])
+    const count = match[2] === undefined ? 1 : Number(match[2])
+    for (let line = start; line < start + count; line += 1) lines.add(line)
+  }
+}
+
+function getChangedLines(file) {
+  const lines = new Set()
+  addChangedLinesFromDiff(
+    lines,
+    runGitRaw(["diff", "--unified=0", "--diff-filter=ACMR", "origin/main...HEAD", "--", file])
+  )
+  addChangedLinesFromDiff(
+    lines,
+    runGitRaw(["diff", "--unified=0", "--diff-filter=ACMR", "HEAD", "--", file])
+  )
+  if (runGit(["ls-files", "--others", "--exclude-standard", "--", file]).length > 0) {
+    const lineCount = readFileSync(file, "utf8").split(/\r?\n/).length
+    for (let line = 1; line <= lineCount; line += 1) lines.add(line)
+  }
+  return lines
+}
+
+function getExecutableLineCoverage(finalEntry) {
+  const lines = new Map()
+  for (const [id, location] of Object.entries(finalEntry.statementMap ?? {})) {
+    const line = location.start.line
+    const count = Number(finalEntry.s?.[id] ?? 0)
+    lines.set(line, Math.max(lines.get(line) ?? 0, count))
+  }
+  return lines
 }
 
 function metricLine(label, metric) {
@@ -61,7 +105,7 @@ function fileCoverageLine(entry, metricName = "lines") {
 }
 
 function main() {
-  if (!existsSync(SUMMARY_PATH)) {
+  if (!existsSync(SUMMARY_PATH) || !existsSync(FINAL_PATH)) {
     console.error(`Coverage summary not found: ${SUMMARY_PATH}`)
     console.error("Run `bun run test:coverage` or `bun run test:coverage:report` first.")
     process.exitCode = 1
@@ -69,6 +113,7 @@ function main() {
   }
 
   const summary = JSON.parse(readFileSync(SUMMARY_PATH, "utf8"))
+  const finalCoverage = JSON.parse(readFileSync(FINAL_PATH, "utf8"))
   const total = summary.total
   const entries = Object.entries(summary)
     .filter(([file]) => file !== "total")
@@ -124,6 +169,12 @@ function main() {
       ({ file }) =>
         !file.endsWith(".test.js") && !file.endsWith(".test.ts") && !file.endsWith(".test.tsx")
     )
+  const finalByFile = new Map(
+    Object.entries(finalCoverage).map(([file, coverage]) => [
+      toRelativeCoveragePath(file),
+      coverage,
+    ])
+  )
 
   console.log("")
   console.log("Changed File Coverage")
@@ -139,22 +190,54 @@ function main() {
     }
   }
 
-  if (enforceChangedCoverage) {
-    const failedChangedCoverage = changedCoverage.filter(({ entry }) => {
-      if (!entry) return true
-      return Number(entry.metrics.lines.pct) < CHANGED_FILE_THRESHOLD
+  const changedLineCoverage = changedCoverage
+    .map(({ file }) => {
+      const executableLines = getExecutableLineCoverage(finalByFile.get(file) ?? {})
+      const changedExecutableLines = [...getChangedLines(file)].filter((line) =>
+        executableLines.has(line)
+      )
+      const covered = changedExecutableLines.filter((line) => executableLines.get(line) > 0).length
+      return {
+        file,
+        covered,
+        total: changedExecutableLines.length,
+        pct:
+          changedExecutableLines.length === 0
+            ? 100
+            : (covered / changedExecutableLines.length) * 100,
+      }
     })
+    .filter(({ total }) => total > 0)
+
+  console.log("")
+  console.log("Changed Line Coverage")
+  if (changedLineCoverage.length === 0) {
+    console.log("- No changed executable lines found.")
+  } else {
+    for (const entry of changedLineCoverage) {
+      console.log(`- ${formatPercent(entry.pct)} ${entry.file} (${entry.covered}/${entry.total})`)
+    }
+  }
+
+  if (enforceChangedCoverage) {
+    const missingChangedCoverage = changedCoverage
+      .filter(({ file }) => !finalByFile.has(file))
+      .map(({ file }) => ({ file, pct: 0 }))
+    const failedChangedCoverage = [
+      ...changedLineCoverage.filter(({ pct }) => pct < CHANGED_FILE_THRESHOLD),
+      ...missingChangedCoverage,
+    ]
 
     if (failedChangedCoverage.length > 0) {
       console.error("")
-      console.error(`Changed-file coverage gate: fail (${CHANGED_FILE_THRESHOLD}% line threshold)`)
+      console.error(`Changed-line coverage gate: fail (${CHANGED_FILE_THRESHOLD}% threshold)`)
       for (const { file } of failedChangedCoverage) {
         console.error(`- ${file}`)
       }
       process.exitCode = 1
     } else {
       console.log("")
-      console.log(`Changed-file coverage gate: pass (${CHANGED_FILE_THRESHOLD}% line threshold)`)
+      console.log(`Changed-line coverage gate: pass (${CHANGED_FILE_THRESHOLD}% threshold)`)
     }
   }
 }
