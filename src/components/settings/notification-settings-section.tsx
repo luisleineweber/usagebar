@@ -81,10 +81,12 @@ export function NotificationSettingsSection({ className }: { className?: string 
         Notifications
       </h3>
       <p className="mb-3 text-sm text-muted-foreground">
-        Local quota, reset, and provider-status events. Quiet hours suppress Windows delivery but keep events here.
+        Local quota, reset, and provider-status events. Quiet hours suppress Windows delivery but
+        keep events here.
       </p>
       <label className="flex select-none items-center gap-2 text-sm text-foreground">
         <Checkbox
+          aria-label="Deliver Windows notifications"
           checked={preferences.enabled}
           onCheckedChange={(checked) => void toggleEnabled(checked === true)}
         />
@@ -97,6 +99,7 @@ export function NotificationSettingsSection({ className }: { className?: string 
           {THRESHOLDS.map((threshold) => (
             <label key={threshold} className="flex items-center gap-2 text-sm">
               <Checkbox
+                aria-label={`${threshold}% used`}
                 checked={preferences.quotaThresholds.includes(threshold)}
                 onCheckedChange={(checked) => {
                   const quotaThresholds = checked
@@ -114,13 +117,17 @@ export function NotificationSettingsSection({ className }: { className?: string 
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
         <label className="flex items-center gap-2 text-sm">
           <Checkbox
+            aria-label="Incidents and recovery"
             checked={preferences.incidents}
-            onCheckedChange={(checked) => void update({ ...preferences, incidents: checked === true })}
+            onCheckedChange={(checked) =>
+              void update({ ...preferences, incidents: checked === true })
+            }
           />
           Incidents and recovery
         </label>
         <label className="flex items-center gap-2 text-sm">
           <Checkbox
+            aria-label="Quota resets"
             checked={preferences.resets}
             onCheckedChange={(checked) => void update({ ...preferences, resets: checked === true })}
           />
@@ -131,6 +138,7 @@ export function NotificationSettingsSection({ className }: { className?: string 
       <div className="mt-3 rounded-lg border border-border/60 p-3">
         <label className="flex items-center gap-2 text-sm">
           <Checkbox
+            aria-label="Quiet hours"
             checked={preferences.quietHours.enabled}
             onCheckedChange={(checked) =>
               void update({
@@ -173,13 +181,20 @@ export function NotificationSettingsSection({ className }: { className?: string 
       <div className="mt-4 flex items-center justify-between gap-2">
         <h4 className="text-sm font-medium">Recent events</h4>
         {events.length > 0 ? (
-          <Button type="button" variant="ghost" size="xs" onClick={() => void clearRecentUsageEvents()}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => void clearRecentUsageEvents()}
+          >
             Clear
           </Button>
         ) : null}
       </div>
       {events.length === 0 ? (
-        <p className="mt-1 text-xs text-muted-foreground">No quota, incident, or reset events yet.</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          No quota, incident, or reset events yet.
+        </p>
       ) : (
         <ul className="mt-2 max-h-36 space-y-2 overflow-y-auto" aria-label="Recent usage events">
           {events.slice(0, 10).map((event) => (

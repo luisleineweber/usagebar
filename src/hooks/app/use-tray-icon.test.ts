@@ -43,4 +43,20 @@ describe("use-tray-icon platform helpers", () => {
 
     expect(result).toBe(false)
   })
+
+  it("detects macOS from the user agent when the platform is generic", () => {
+    const result = withNavigatorPlatform("Linux x86_64", "Mozilla/5.0 (Mac OS X)", () =>
+      shouldUseTemplateTrayIcon()
+    )
+
+    expect(result).toBe(true)
+  })
+
+  it("does not use template icons on Linux", () => {
+    const result = withNavigatorPlatform("Linux x86_64", "Mozilla/5.0 (X11; Linux x86_64)", () =>
+      shouldUseTemplateTrayIcon()
+    )
+
+    expect(result).toBe(false)
+  })
 })

@@ -9,6 +9,12 @@ async function loadPlugin() {
 
 describe("chutes plugin", () => {
   beforeEach(() => vi.restoreAllMocks())
+  it("reports missing credentials", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    expect(() => plugin.probe(ctx)).toThrow("API key missing")
+  })
+
   it("renders subscription windows", async () => {
     const plugin = await loadPlugin()
     const ctx = makePluginTestContext()
@@ -66,5 +72,50 @@ describe("chutes plugin", () => {
     ctx.host.providerSecrets.read.mockReturnValue("cpk_test")
     ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
     expect(() => plugin.probe(ctx)).toThrow("missing quota data")
+  })
+
+  it("uses the environment key and derives partial quota values", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    ctx.host.env.get.mockImplementation((name) => (name === "CHUTES_API_KEY" ? "env-key" : null))
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        data: {
+          tier: "Scale",
+          rolling_window: { remaining: 30, total: 100, unit: "requests" },
+          quotas: [{ label: "monthly usage", percent_used: 0.4 }],
+        },
+      }),
+    })
+
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "4-hour")).toMatchObject({ used: 70 })
+    expect(result.lines.find((line) => line.label === "Monthly")).toMatchObject({
+      used: 40,
+      limit: 100,
+      format: { kind: "percent" },
+    })
+    expect(result.lines.find((line) => line.label === "Auth source")).toMatchObject({
+      value: "CHUTES_API_KEY",
+    })
+  })
+
+  it("maps network, HTTP, and invalid response failures", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    ctx.host.providerSecrets.read.mockReturnValue("key")
+
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("offline")
+    })
+    expect(() => plugin.probe(ctx)).toThrow("Check your connection")
+
+    ctx.host.http.request.mockReturnValue({ status: 503, bodyText: "" })
+    expect(() => plugin.probe(ctx)).toThrow("HTTP 503")
+
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "not-json" })
+    expect(() => plugin.probe(ctx)).toThrow("response invalid")
   })
 })

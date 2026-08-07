@@ -5,6 +5,8 @@
     return typeof value === "string" && value.trim() ? value.trim() : null
   }
   function number(value) {
+    if (value === null || value === undefined || (typeof value === "string" && !value.trim()))
+      return null
     const result = typeof value === "number" ? value : Number(value)
     return Number.isFinite(result) ? result : null
   }

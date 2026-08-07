@@ -241,4 +241,24 @@ describe("alibaba plugin", () => {
 
     expect(() => plugin.probe(ctx)).toThrow("missing usage data")
   })
+
+  it("maps Coding Plan network, server, and invalid response failures", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "apiKey" ? "sk-sp-test" : null
+    )
+
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("offline")
+    })
+    expect(() => plugin.probe(ctx)).toThrow("Check your connection")
+    expect(ctx.host.log.error).toHaveBeenCalledWith(expect.stringContaining("offline"))
+
+    ctx.host.http.request.mockReturnValue({ status: 503, bodyText: "" })
+    expect(() => plugin.probe(ctx)).toThrow("HTTP 503")
+
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "not-json" })
+    expect(() => plugin.probe(ctx)).toThrow("response invalid")
+  })
 })

@@ -18,9 +18,7 @@ function makePayload(overrides = {}) {
       result: {
         data: {
           json: {
-            creditBlocks: [
-              { amount_mUsd: 50000000, balance_mUsd: 20000000 },
-            ],
+            creditBlocks: [{ amount_mUsd: 50000000, balance_mUsd: 20000000 }],
           },
         },
       },
@@ -49,7 +47,7 @@ function makePayload(overrides = {}) {
         },
       },
     },
-    ...overrides.extraEntries || [],
+    ...(overrides.extraEntries || []),
   ]
 }
 
@@ -70,7 +68,9 @@ describe("kilo plugin", () => {
 
   it("prefers the stored provider secret over env", async () => {
     const ctx = makeCtx()
-    ctx.host.providerSecrets.read.mockImplementation((key) => (key === "apiKey" ? "stored-key" : null))
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "apiKey" ? "stored-key" : null
+    )
     setEnv(ctx, { KILO_API_KEY: "env-key" })
     ctx.host.http.request.mockReturnValue({
       status: 200,
@@ -82,7 +82,9 @@ describe("kilo plugin", () => {
 
     const request = ctx.host.http.request.mock.calls[0][0]
     expect(request.headers.Authorization).toBe("Bearer stored-key")
-    expect(request.url).toContain("user.getCreditBlocks,kiloPass.getState,user.getAutoTopUpPaymentMethod")
+    expect(request.url).toContain(
+      "user.getCreditBlocks,kiloPass.getState,user.getAutoTopUpPaymentMethod"
+    )
     expect(request.url).toContain("batch=1")
   })
 
@@ -144,7 +146,9 @@ describe("kilo plugin", () => {
       status: 200,
       bodyText: JSON.stringify([
         { result: { data: { json: {} } } },
-        { result: { data: { json: { subscription: { tier: "Pro", currentPeriodUsageUsd: 30 } } } } },
+        {
+          result: { data: { json: { subscription: { tier: "Pro", currentPeriodUsageUsd: 30 } } } },
+        },
       ]),
     })
 
@@ -188,7 +192,9 @@ describe("kilo plugin", () => {
     ctx.host.http.request.mockReturnValue({ status: 404, bodyText: "" })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Kilo API endpoint not found. Verify the tRPC batch path.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Kilo API endpoint not found. Verify the tRPC batch path."
+    )
   })
 
   it("throws for invalid JSON", async () => {
@@ -213,5 +219,20 @@ describe("kilo plugin", () => {
 
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Kilo response missing usage data. Try again later.")
+  })
+
+  it("maps network and server failures", async () => {
+    const ctx = makeCtx()
+    setEnv(ctx, { KILO_API_KEY: "env-key" })
+    const plugin = await loadPlugin()
+
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("offline")
+    })
+    expect(() => plugin.probe(ctx)).toThrow("Check your connection")
+    expect(ctx.host.log.error).toHaveBeenCalledWith(expect.stringContaining("offline"))
+
+    ctx.host.http.request.mockReturnValue({ status: 503, bodyText: "" })
+    expect(() => plugin.probe(ctx)).toThrow("API unavailable (HTTP 503)")
   })
 })

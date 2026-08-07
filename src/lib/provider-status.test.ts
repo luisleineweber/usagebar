@@ -204,6 +204,7 @@ describe("fetchProviderStatus", () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it("returns null when plugin has no statusPageUrl", async () => {
@@ -426,5 +427,112 @@ describe("fetchProviderStatus", () => {
 
     expect(result).toMatchObject({ indicator: "none", description: null })
     vi.unstubAllGlobals()
+  })
+
+  it("reports missing configured components as unknown", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ components: [{ name: "Other", status: "operational" }] }),
+      })
+    )
+
+    await expect(
+      fetchProviderStatus({
+        status: {
+          kind: "statuspageV2",
+          endpoint: "https://status.example.com/api/v2/status.json",
+          componentNames: ["API"],
+        },
+      })
+    ).resolves.toMatchObject({
+      indicator: "unknown",
+      description: "Status components unavailable",
+    })
+  })
+
+  it("selects the most severe configured component and keeps its detail", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            components: [
+              { name: "API", status: "degraded performance", description: "Slow requests" },
+              { name: "Auth", status: "major_outage", description: "Sign-in unavailable" },
+              { name: "Website", status: "under_maintenance" },
+            ],
+          }),
+      })
+    )
+
+    await expect(
+      fetchProviderStatus({
+        status: {
+          kind: "statuspageV2",
+          endpoint: "https://status.example.com/api/v2/status.json",
+          componentNames: ["API", "Auth", "Website"],
+        },
+      })
+    ).resolves.toMatchObject({
+      indicator: "major",
+      description: "Auth: Sign-in unavailable",
+    })
+  })
+
+  it.each([
+    ["<h1>Planned maintenance</h1>", "maintenance"],
+    ["<h1>Service unavailable</h1>", "major"],
+    ["<h1>Partial outage</h1>", "minor"],
+    ["<h1>Current status</h1>", "unknown"],
+  ] as const)("maps HTML status content to %s", async (html, indicator) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve(html) })
+    )
+
+    await expect(
+      fetchProviderStatus({ status: { kind: "html", endpoint: "https://status.example.com" } })
+    ).resolves.toMatchObject({ indicator })
+  })
+
+  it("ignores resolved RSS incidents", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: () =>
+          Promise.resolve(
+            "<rss><channel><item><title>Recovered</title><description>Resolved</description><category>completed</category></item></channel></rss>"
+          ),
+      })
+    )
+
+    await expect(
+      fetchProviderStatus({ status: { kind: "rss", endpoint: "https://status.example.com/rss" } })
+    ).resolves.toMatchObject({ indicator: "none", description: null })
+  })
+
+  it.each([
+    ["UP", "none"],
+    ["MAINTENANCE", "maintenance"],
+    ["DEGRADED", "minor"],
+    ["UNKNOWN", "unknown"],
+  ] as const)("maps Zed %s status", async (value, indicator) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ page: { status: value } }),
+      })
+    )
+
+    await expect(
+      fetchProviderStatus({
+        status: { kind: "zedSummaryV3", endpoint: "https://status.zed.dev/v3/summary.json" },
+      })
+    ).resolves.toMatchObject({ indicator })
   })
 })

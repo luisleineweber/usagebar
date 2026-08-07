@@ -8,6 +8,12 @@ async function loadPlugin() {
 }
 describe("devin plugin", () => {
   beforeEach(() => vi.restoreAllMocks())
+  it("reports missing credentials", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    expect(() => plugin.probe(ctx)).toThrow("bearer token missing")
+  })
+
   it("renders authoritative zero and weekly usage", async () => {
     const plugin = await loadPlugin()
     const ctx = makePluginTestContext()
@@ -56,5 +62,49 @@ describe("devin plugin", () => {
     ctx.host.providerConfig = { get: vi.fn(() => "org_test") }
     ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
     expect(() => plugin.probe(ctx)).toThrow("missing quota data")
+  })
+
+  it("uses environment credentials and legacy partial quota values", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    ctx.host.env.get.mockImplementation((name) => {
+      if (name === "DEVIN_AUTHORIZATION") return "env-token"
+      if (name === "DEVIN_ORG") return "https://app.devin.ai/org_org_env/settings"
+      return null
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        hide_daily_quota: true,
+        quota_usage: [{ weekly_quota: [{ remaining_percent: 0.25, next_reset_at: 10 }] }],
+        plan_name: "Team",
+      }),
+    })
+
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Weekly")).toMatchObject({ used: 75 })
+    expect(result.lines.find((line) => line.label === "Plan")).toMatchObject({ text: "Team" })
+    expect(result.lines.find((line) => line.label === "Auth source")).toMatchObject({
+      value: "DEVIN_AUTHORIZATION",
+    })
+  })
+
+  it("maps network, HTTP, and invalid response failures", async () => {
+    const plugin = await loadPlugin()
+    const ctx = makePluginTestContext()
+    ctx.host.providerSecrets.read.mockReturnValue("token")
+    ctx.host.providerConfig = { get: vi.fn(() => "org_test") }
+
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("offline")
+    })
+    expect(() => plugin.probe(ctx)).toThrow("Check your connection")
+
+    ctx.host.http.request.mockReturnValue({ status: 503, bodyText: "" })
+    expect(() => plugin.probe(ctx)).toThrow("HTTP 503")
+
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "not-json" })
+    expect(() => plugin.probe(ctx)).toThrow("response invalid")
   })
 })

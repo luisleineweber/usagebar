@@ -152,6 +152,12 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 
 ## Current Prevention Rules
 
+- Base UI checkboxes: wrapping visible text does not always name the custom checkbox root. Add an explicit accessible name and select it by role and name in tests.
+- Parallel UI tests: keep each async test focused on one interaction outcome. Long multi-action sequences can exceed Vitest's timeout only under full coverage load.
+- Vitest lifecycle hooks: do not return a mock from `beforeEach`; use a block so Vitest cannot treat the mock as a cleanup callback.
+- Numeric provider data: reject `null`, `undefined`, and empty strings before `Number(...)`; they are missing values, not authoritative zero.
+- Pricing overrides: require both fields and reject negative values before converting or saving; `Number("")` must not create a zero-price override.
+
 - Provider percentage math: normalize floating-point results before output. Keep authoritative zero distinct from missing data, and never emit a progress line with a zero limit.
 
 - Stacked tray bars must use the first four primary providers. Do not let legacy metric pins reduce the bar set after the pin controls are removed.
