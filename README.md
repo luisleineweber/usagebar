@@ -2,7 +2,7 @@
 
 Windows-first tray app for tracking AI coding subscription usage across providers in one place.
 
-![UsageBar Screenshot](screenshot.png)
+![UsageBar Screenshot](docs/assets/screenshot.png)
 
 ## Download
 
@@ -17,8 +17,6 @@ Windows alpha/beta builds are published as GitHub prereleases. Download the late
 ## Providers
 
 Current Windows rollout status comes from each provider's `plugin.json` manifest in this fork.
-
-Alpha 8 adds the experimental Windows providers [Alibaba](docs/providers/alibaba.md), [Chutes](docs/providers/chutes.md), [Devin](docs/providers/devin.md), [Doubao](docs/providers/doubao.md), [Qoder](docs/providers/qoder.md), and [StepFun](docs/providers/stepfun.md).
 
 Status meanings:
 

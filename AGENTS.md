@@ -6,8 +6,8 @@
 - Goal: Windows-first Tauri menu-bar/tray app for tracking AI coding subscription usage.
 - Stack: Tauri v2, Rust, React 19, TypeScript, Vite, Tailwind CSS v4, Zustand, Vitest.
 - Architecture: plugin-first; keep UX simple and changes small/reviewable.
-- Fork lineage: `openusage`; Windows work also draws from `CodexBar`; local Claude/Codex usage reference is `ccusage`.
-- “Make a note” means edit this file. Ignore `CLAUDE.md`; it is a symlink target for this file.
+- Fork lineage: `openusage`; Windows work also draws from `CodexBar`; local Claude/Codex/Opencode usage reference is `ccusage`.
+- “Make a note” means edit this file.
 - Editor: `cursor <path>`.
 
 ## Luis' Wishes
@@ -39,6 +39,7 @@
 - Keep components modular and concerns clearly separated.
 - Prefer established, well-maintained libraries when they reduce overall complexity or improve reliability. Do not reimplement common functionality without a clear reason.
 - Lean on the dependencies already in the project before writing your own implementation or adding packages. Do not assume a library lacks a capability without checking its documentation and types.
+- Our design regulations are written down in @DESIGN.md
 - Make architectural decisions for the long term. Do not accept a stopgap that only works for now and is meant to be replaced later.
 - **UI descriptions:** Do not add subtitles, helper text, or descriptive copy beneath headings, labels, cards, or settings by default. Prefer one concise, self-explanatory heading or label. Only add supporting copy when the user explicitly asks for it or when it is necessary to prevent misunderstanding or error, and never use it to restate the heading.
 
@@ -106,6 +107,7 @@ This is a reference for frequently used skills, but there are many more to explo
 
 ## Release
 
+- Full Release regulations are at "\docs\releasing.md"
 - Update `CHANGELOG.md` with the exact release version before tagging, publishing, or final release preflight.
 - Before publishing or editing a release body, run `gh release view <previous-tag> --json body` and mirror its structure:
   - `What's Changed`
