@@ -208,10 +208,27 @@ describe("PanelFooter", () => {
       />
     )
     const button = screen.getByRole("button", { name: "Update to 0.1.0-beta.7" })
-    expect(button).toHaveAttribute("title", "Download and install update")
-    expect(button).toHaveClass("rounded-[10px]", "bg-emerald-500")
+    expect(button).toHaveAttribute("title", "Download update")
+    expect(button).toHaveClass("rounded-md", "border-primary/20", "dark:bg-page-accent/10")
     await userEvent.click(button)
     expect(onInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps a failed download available for retry", () => {
+    render(
+      <PanelFooter
+        version="0.0.0"
+        autoUpdateNextAt={null}
+        updateStatus={{ status: "available", version: "0.1.0-beta.7", error: "Download failed" }}
+        onUpdateInstall={noop}
+        {...footerProps}
+      />
+    )
+
+    expect(screen.getByRole("button", { name: "Update to 0.1.0-beta.7" })).toHaveAttribute(
+      "title",
+      "Download failed. Try again."
+    )
   })
 
   it("shows restart button when ready", async () => {

@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-07
+
+- The available-update action looked like a glowing status badge instead of a native tray action. Fix: use the shared compact button geometry, the product accent, and a download icon. Prevention: review update states against the shared button system in both themes.
+
 ## 2026-08-06
 
 - The first panel paint could leave the sidebar and content column without a shared viewport height, so Settings and the footer moved with provider content. Fix: give the root, panel, content column, and sidebar explicit bounded flex geometry. Prevention: test the first App render for a full-height panel frame and clipped provider list.

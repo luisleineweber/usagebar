@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { Clock3 } from "lucide-react"
+import { Clock3, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AboutDialog } from "@/components/about-dialog"
 import type { UpdateStatus } from "@/hooks/use-app-update"
@@ -72,10 +72,11 @@ function VersionDisplay({
         <Button
           variant="default"
           size="xs"
-          className="rounded-[10px] border-emerald-300 bg-emerald-500 text-white shadow-[0_0_0_3px_rgba(16,185,129,0.22)] hover:bg-emerald-600 dark:border-emerald-300/80 dark:bg-emerald-500 dark:text-white dark:hover:bg-emerald-400"
+          className="rounded-md border-primary/20 bg-primary/5 text-primary shadow-none hover:border-primary/40 hover:bg-primary hover:text-primary-foreground dark:border-page-accent/55 dark:bg-page-accent/10 dark:text-page-accent dark:hover:border-page-accent dark:hover:bg-page-accent dark:hover:text-primary-foreground"
           onClick={onUpdateInstall}
-          title={updateStatus.url ? "Open GitHub release" : "Download and install update"}
+          title={updateStatus.error ? "Download failed. Try again." : "Download update"}
         >
+          <Download className="size-3" aria-hidden />
           Update to {updateStatus.version}
         </Button>
       )
