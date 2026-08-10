@@ -16,7 +16,6 @@ mod dev_data_migration;
 #[cfg(not(test))]
 mod global_shortcut;
 mod local_http_api;
-#[cfg(not(test))]
 mod panel;
 mod plugin_commands;
 mod plugin_engine;

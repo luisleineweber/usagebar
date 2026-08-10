@@ -556,6 +556,118 @@ describe("usePanel", () => {
     }
   })
 
+  it("keeps the scroll fade stable during a panel tween", async () => {
+    vi.useFakeTimers()
+    const OriginalResizeObserver = globalThis.ResizeObserver
+    const originalClientHeight = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "clientHeight"
+    )
+    const resizeCallbacks: ResizeObserverCallback[] = []
+    let reducedMotion = true
+    let scrollHeightValue = 280
+    let clientHeightValue = 280
+
+    globalThis.ResizeObserver = class ResizeObserverStub {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback)
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: reducedMotion,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    })
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        return scrollHeightValue
+      },
+    })
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        return clientHeightValue
+      },
+    })
+
+    let panelState: ReturnType<typeof usePanel> | null = null
+    const displayPlugins: unknown[] = []
+
+    function Harness() {
+      panelState = usePanel({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        showAbout: false,
+        setShowAbout: vi.fn(),
+        displayPlugins,
+        navPluginCount: 0,
+        onPanelFocus: vi.fn(),
+      })
+
+      return createElement(
+        "div",
+        { ref: panelState.containerRef },
+        createElement(
+          "div",
+          { ref: panelState.contentColumnRef },
+          createElement(
+            "div",
+            { ref: panelState.scrollRef },
+            createElement("div", { ref: panelState.contentMeasureRef }, "content")
+          )
+        ),
+        createElement("div", { ref: panelState.footerRef }, "footer")
+      )
+    }
+
+    try {
+      const { rerender } = render(createElement(Harness))
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
+      expect(panelState?.canScrollDown).toBe(false)
+
+      reducedMotion = false
+      scrollHeightValue = 520
+      rerender(createElement(Harness))
+      act(() => {
+        resizeCallbacks[0]?.([], {} as ResizeObserver)
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(70)
+      })
+      expect(panelState?.isPanelResizing).toBe(true)
+
+      clientHeightValue = 278
+      act(() => {
+        resizeCallbacks.at(-1)?.([], {} as ResizeObserver)
+      })
+      expect(panelState?.canScrollDown).toBe(false)
+
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
+      expect(panelState?.canScrollDown).toBe(true)
+    } finally {
+      globalThis.ResizeObserver = OriginalResizeObserver
+      if (originalClientHeight) {
+        Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight)
+      } else {
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientHeight
+      }
+      vi.useRealTimers()
+    }
+  })
+
   it("tweens larger height changes through bounded backend updates", async () => {
     vi.useFakeTimers()
     const OriginalResizeObserver = globalThis.ResizeObserver
@@ -615,6 +727,101 @@ describe("usePanel", () => {
       expect(applyCalls.length).toBeGreaterThan(1)
     } finally {
       globalThis.ResizeObserver = OriginalResizeObserver
+      vi.useRealTimers()
+    }
+  })
+
+  it("keeps small decreases but applies small increases", async () => {
+    vi.useFakeTimers()
+    const OriginalResizeObserver = globalThis.ResizeObserver
+    const originalInnerHeight = window.innerHeight
+    globalThis.ResizeObserver = class ResizeObserverStub {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver
+
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 415,
+    })
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    })
+
+    let scrollHeightValue = 400
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        return scrollHeightValue
+      },
+    })
+
+    function Harness() {
+      const { containerRef, contentColumnRef, scrollRef, contentMeasureRef, footerRef } = usePanel({
+        activeView: "home",
+        setActiveView: vi.fn(),
+        showAbout: false,
+        setShowAbout: vi.fn(),
+        displayPlugins: [],
+        navPluginCount: 0,
+        onPanelFocus: vi.fn(),
+      })
+
+      return createElement(
+        "div",
+        { ref: containerRef },
+        createElement(
+          "div",
+          { ref: contentColumnRef },
+          createElement(
+            "div",
+            { ref: scrollRef },
+            createElement("div", { ref: contentMeasureRef }, "content")
+          )
+        ),
+        createElement("div", { ref: footerRef }, "footer")
+      )
+    }
+
+    try {
+      const { rerender } = render(createElement(Harness))
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
+
+      invokeMock.mockClear()
+      scrollHeightValue = 425
+      rerender(createElement(Harness))
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
+
+      expect(
+        invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")
+      ).toHaveLength(1)
+
+      invokeMock.mockClear()
+      scrollHeightValue = 400
+      rerender(createElement(Harness))
+      await act(async () => {
+        await vi.runAllTimersAsync()
+      })
+
+      expect(invokeMock.mock.calls.filter(([command]) => command === "apply_panel_bounds")).toEqual(
+        []
+      )
+    } finally {
+      globalThis.ResizeObserver = OriginalResizeObserver
+      Object.defineProperty(window, "innerHeight", {
+        configurable: true,
+        value: originalInnerHeight,
+      })
       vi.useRealTimers()
     }
   })

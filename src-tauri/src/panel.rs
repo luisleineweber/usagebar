@@ -130,6 +130,7 @@ pub fn apply_panel_bounds(app_handle: &AppHandle, panel_height_px: f64) {
         &anchor.icon_size,
         Some(panel_height_px),
         anchor.vertical_anchor.as_ref(),
+        false,
     );
 }
 
@@ -356,6 +357,20 @@ fn taskbar_panel_position(work_area: LogicalRect, window_w: f64, window_h: f64) 
     (x, y)
 }
 
+fn preferred_tray_vertical_anchor(
+    monitor: LogicalRect,
+    work_area: LogicalRect,
+) -> Option<VerticalAnchor> {
+    let top_reserved = (work_area.y - monitor.y).max(0.0);
+    let bottom_reserved = (monitor.y + monitor.height - work_area.y - work_area.height).max(0.0);
+
+    if bottom_reserved > top_reserved && bottom_reserved > 0.0 {
+        return Some(VerticalAnchor::Bottom(work_area.y + work_area.height - 8.0));
+    }
+
+    None
+}
+
 fn position_panel_at_taskbar(app_handle: &tauri::AppHandle, window: &WebviewWindow) {
     let monitor = window
         .current_monitor()
@@ -453,6 +468,7 @@ fn position_panel_from_anchor(
     icon_size: &Size,
     panel_height_px: Option<f64>,
     stored_vertical_anchor: Option<&VerticalAnchor>,
+    prefer_taskbar_anchor: bool,
 ) -> Option<VerticalAnchor> {
     let window = app_handle
         .get_webview_window("main")
@@ -477,11 +493,23 @@ fn position_panel_from_anchor(
         width: work_area.size.width as f64 / scale_factor,
         height: work_area.size.height as f64 / scale_factor,
     };
+    let monitor_rect = LogicalRect {
+        x: monitor.position().x as f64 / scale_factor,
+        y: monitor.position().y as f64 / scale_factor,
+        width: monitor.size().width as f64 / scale_factor,
+        height: monitor.size().height as f64 / scale_factor,
+    };
 
     let target_window_h = resolved_panel_height(
         measured_window_h,
         panel_height_px.or_else(stored_panel_height),
     );
+
+    let taskbar_anchor = if prefer_taskbar_anchor {
+        preferred_tray_vertical_anchor(monitor_rect, work_area_rect)
+    } else {
+        None
+    };
 
     let placement = compute_panel_placement(
         LogicalRect {
@@ -494,7 +522,7 @@ fn position_panel_from_anchor(
         measured_window_h,
         work_area_rect,
         Some(target_window_h),
-        stored_vertical_anchor,
+        taskbar_anchor.as_ref().or(stored_vertical_anchor),
     );
 
     apply_window_bounds(
@@ -522,8 +550,14 @@ fn position_panel_near_cursor(app_handle: &AppHandle) -> Option<VerticalAnchor> 
 
     let anchor_size = Size::Logical(LogicalSize::new(24.0, 24.0));
     let anchor_position = Position::Logical(LogicalPosition::new(cursor_x - 12.0, cursor_y - 12.0));
-    let vertical_anchor =
-        position_panel_from_anchor(app_handle, &anchor_position, &anchor_size, None, None);
+    let vertical_anchor = position_panel_from_anchor(
+        app_handle,
+        &anchor_position,
+        &anchor_size,
+        None,
+        None,
+        false,
+    );
     save_tray_anchor(&anchor_position, &anchor_size, vertical_anchor.clone());
     vertical_anchor
 }
@@ -534,7 +568,7 @@ pub fn position_panel_at_tray_icon(
     icon_size: Size,
 ) {
     let vertical_anchor =
-        position_panel_from_anchor(app_handle, &icon_position, &icon_size, None, None);
+        position_panel_from_anchor(app_handle, &icon_position, &icon_size, None, None, true);
     save_tray_anchor(&icon_position, &icon_size, vertical_anchor);
 }
 
@@ -553,6 +587,7 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
         &anchor.icon_size,
         panel_height_px.or_else(stored_panel_height),
         anchor.vertical_anchor.as_ref(),
+        false,
     );
 }
 
@@ -560,7 +595,7 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
 mod tests {
     use super::{
         LogicalRect, PhysicalWindowBounds, VerticalAnchor, compute_panel_placement,
-        physical_window_bounds, taskbar_panel_position,
+        physical_window_bounds, preferred_tray_vertical_anchor, taskbar_panel_position,
     };
 
     #[test]
@@ -612,6 +647,26 @@ mod tests {
 
         assert_eq!(placement.y, 32.0);
         assert_eq!(placement.vertical_anchor, VerticalAnchor::Bottom(552.0));
+    }
+
+    #[test]
+    fn bottom_taskbar_prefers_bottom_anchor_even_if_tray_rect_is_above_center() {
+        let anchor = preferred_tray_vertical_anchor(
+            LogicalRect {
+                x: 0.0,
+                y: 0.0,
+                width: 1920.0,
+                height: 1080.0,
+            },
+            LogicalRect {
+                x: 0.0,
+                y: 0.0,
+                width: 1920.0,
+                height: 1040.0,
+            },
+        );
+
+        assert_eq!(anchor, Some(VerticalAnchor::Bottom(1032.0)));
     }
 
     #[test]

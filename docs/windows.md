@@ -139,7 +139,7 @@ The roadmap doc carries:
 
 ## Current Windows TODO (product)
 
-- Panel anchoring is still too mac-like: it behaves top-aligned, but on Windows the taskbar is usually at the bottom. The panel should stay bottom-anchored to the taskbar/tray edge and grow upward as its height changes.
+- Panel anchoring now prefers the bottom edge when the Windows work area shows a bottom taskbar reservation. Packaged validation remains open for top and side taskbars.
 - Antigravity is currently showing `100% left` all the time and needs a Windows-specific fix for real remaining-usage calculation.
 - Logged-out or currently unavailable providers should not be auto-removed from the sidebar. Availability state should affect how they are shown/toggled in Settings, not whether they disappear from navigation entirely.
 

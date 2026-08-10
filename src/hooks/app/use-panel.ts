@@ -13,10 +13,10 @@ const DETAIL_PANEL_MIN_HEIGHT_PX = 400
 const DETAIL_PANEL_BASE_HEIGHT_PX = 468
 const MAX_HEIGHT_FALLBACK_PX = 820
 const MAX_HEIGHT_FRACTION_OF_MONITOR = 0.9
-const PANEL_HEIGHT_DELTA_THRESHOLD_PX = 2
+const PANEL_HEIGHT_DELTA_THRESHOLD_PX = 25
 const PANEL_HEIGHT_TWEEN_THRESHOLD_PX = 12
-const PANEL_HEIGHT_TWEEN_DURATION_MS = 150
-const PANEL_HEIGHT_TWEEN_STEPS = 3
+const PANEL_HEIGHT_TWEEN_DURATION_MS = 180
+const PANEL_HEIGHT_TWEEN_STEPS = 5
 export const PANEL_AUTO_HIDE_DELAY_MS = 30_000
 const SIDE_NAV_TOP_PADDING_PX = 12
 const SIDE_NAV_BUTTON_HEIGHT_PX = 44
@@ -56,8 +56,7 @@ export function panelPreferredMinHeightForView(activeView: ActiveView, providerC
 }
 
 export function panelMinHeightForNav(showHistoryInBar = true): number {
-  const buttonCount =
-    SIDE_NAV_STATIC_BUTTON_COUNT + (showHistoryInBar ? 1 : 0)
+  const buttonCount = SIDE_NAV_STATIC_BUTTON_COUNT + (showHistoryInBar ? 1 : 0)
   return SIDE_NAV_TOP_PADDING_PX + buttonCount * SIDE_NAV_BUTTON_HEIGHT_PX
 }
 
@@ -315,7 +314,8 @@ export function usePanel({
       const previousTarget = measuredTargetPanelHeightPxRef.current
       if (
         previousTarget !== null &&
-        Math.abs(previousTarget - roundedHeight) < PANEL_HEIGHT_DELTA_THRESHOLD_PX
+        roundedHeight < previousTarget &&
+        previousTarget - roundedHeight <= PANEL_HEIGHT_DELTA_THRESHOLD_PX
       ) {
         return
       }
@@ -468,6 +468,7 @@ export function usePanel({
     if (!el) return
 
     const check = () => {
+      if (isPanelResizing) return
       setCanScrollDown(el.scrollHeight - el.scrollTop - el.clientHeight > 1)
     }
 
@@ -485,7 +486,7 @@ export function usePanel({
       ro.disconnect()
       mo.disconnect()
     }
-  }, [activeView])
+  }, [activeView, isPanelResizing])
 
   return {
     containerRef,
