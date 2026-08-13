@@ -137,7 +137,10 @@ describe("NotificationSettingsSection", () => {
     await user.click(incidents)
 
     await waitFor(() =>
-      expect(screen.getByText("Notification preferences could not be saved.")).toBeInTheDocument()
+      expect(screen.getByText("Notification preferences could not be saved.")).toHaveAttribute(
+        "role",
+        "alert"
+      )
     )
   })
 

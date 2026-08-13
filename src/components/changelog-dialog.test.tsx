@@ -39,7 +39,7 @@ describe("ChangelogDialog", () => {
 
     render(<ChangelogDialog currentVersion="1.0.0" onBack={() => {}} onClose={() => {}} />)
 
-    expect(screen.getByText("Fetching release info...")).toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveTextContent("Fetching release info...")
   })
 
   it("renders error state", () => {
@@ -47,7 +47,7 @@ describe("ChangelogDialog", () => {
 
     render(<ChangelogDialog currentVersion="1.0.0" onBack={() => {}} onClose={() => {}} />)
 
-    expect(screen.getByText("Failed to load release notes")).toBeInTheDocument()
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to load release notes")
     expect(screen.getByText("something went wrong")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument()
   })

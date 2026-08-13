@@ -94,8 +94,16 @@ export function ReportingSourceSettings({
         />
         Use bundled offline pricing data
       </label>
-      {message ? <p className="mt-2 text-xs text-primary">{message}</p> : null}
-      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+      {message ? (
+        <p role="status" className="mt-2 text-xs text-primary">
+          {message}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
     </div>
   )
 }

@@ -318,7 +318,11 @@ export function ProviderCard({
           <Tooltip>
             <TooltipTrigger
               render={(props) => (
-                <div {...props} className="mb-2 flex items-center gap-1.5 text-xs text-destructive">
+                <div
+                  {...props}
+                  role="alert"
+                  className="mb-2 flex items-center gap-1.5 text-xs text-destructive"
+                >
                   <AlertCircle className="h-3 w-3 flex-shrink-0" />
                   <span className="truncate">{error}</span>
                 </div>

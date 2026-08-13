@@ -453,7 +453,15 @@ export function ProviderSettingsDetail({
             </div>
           </div>
 
-          <div className="mt-4 flex items-start gap-2 rounded-md border border-border/55 bg-muted/25 px-3 py-3">
+          <div
+            role={
+              probeStatus.tone === "error"
+                ? "alert"
+                : probeStatus.tone === "info" || probeStatus.tone === "success"
+                  ? "status"
+                  : undefined
+            }
+          >
             {probeStatus.tone === "error" ? (
               <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
             ) : probeStatus.tone === "success" ? (
@@ -783,8 +791,16 @@ export function ProviderSettingsDetail({
               />
             )}
 
-            {saveMessage && <p className="text-xs text-primary">{saveMessage}</p>}
-            {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+            {saveMessage && (
+              <p role="status" className="text-xs text-primary">
+                {saveMessage}
+              </p>
+            )}
+            {saveError && (
+              <p role="alert" className="text-xs text-destructive">
+                {saveError}
+              </p>
+            )}
           </div>
         </div>
       </div>

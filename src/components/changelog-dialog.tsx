@@ -236,12 +236,18 @@ export function ChangelogDialog({ currentVersion, onBack, onClose }: ChangelogDi
 
         <div className="custom-scrollbar flex-1 overflow-x-hidden overflow-y-auto p-5">
           {loading ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <div
+              role="status"
+              className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground"
+            >
               <Loader2 className="size-6 animate-spin" />
               <span className="text-xs">Fetching release info...</span>
             </div>
           ) : error ? (
-            <div className="flex h-full flex-col items-center justify-center p-4 text-center">
+            <div
+              role="alert"
+              className="flex h-full flex-col items-center justify-center p-4 text-center"
+            >
               <span className="mb-1 text-sm font-medium text-destructive">Failed to load release notes</span>
               <span className="mb-4 text-xs text-muted-foreground">{error}</span>
               <Button size="xs" variant="outline" onClick={() => window.location.reload()}>

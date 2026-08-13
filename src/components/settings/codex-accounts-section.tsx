@@ -165,8 +165,16 @@ export function CodexAccountsSection({ config, onConfigChange }: CodexAccountsSe
         )}
       </div>
 
-      {message && <p className="mt-3 text-xs text-primary">{message}</p>}
-      {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
+      {message && (
+        <p role="status" className="mt-3 text-xs text-primary">
+          {message}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="mt-3 text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

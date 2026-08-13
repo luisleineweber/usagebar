@@ -64,9 +64,17 @@ function VersionDisplay({
 
   switch (updateStatus.status) {
     case "checking":
-      return <span className="text-xs text-muted-foreground">Checking for updates...</span>
+      return (
+        <span role="status" className="text-xs text-muted-foreground">
+          Checking for updates...
+        </span>
+      )
     case "up-to-date":
-      return <span className="text-xs text-muted-foreground">Up to date</span>
+      return (
+        <span role="status" className="text-xs text-muted-foreground">
+          Up to date
+        </span>
+      )
     case "available":
       return (
         <Button
@@ -82,7 +90,7 @@ function VersionDisplay({
       )
     case "downloading":
       return (
-        <span className="text-xs text-muted-foreground">
+        <span role="status" className="text-xs text-muted-foreground">
           {updateStatus.progress >= 0
             ? `Downloading update ${updateStatus.progress}%`
             : "Downloading update..."}
@@ -100,22 +108,27 @@ function VersionDisplay({
         </Button>
       )
     case "installing":
-      return <span className="text-xs text-muted-foreground">Installing...</span>
+      return (
+        <span role="status" className="text-xs text-muted-foreground">
+          Installing...
+        </span>
+      )
     case "unavailable":
       return (
-        <span className="text-xs text-muted-foreground" title={updateStatus.message}>
+        <span role="status" className="text-xs text-muted-foreground" title={updateStatus.message}>
           Updates unavailable
         </span>
       )
     case "error":
       if (updateStatus.message === "Update check failed") {
-        return versionButton(
-          "Update check failed",
-          "Update check failed. Right-click to try again."
+        return (
+          <span role="alert">
+            {versionButton("Update check failed", "Update check failed. Right-click to try again.")}
+          </span>
         )
       }
       return (
-        <span className="text-xs text-destructive" title={updateStatus.message}>
+        <span role="alert" className="text-xs text-destructive" title={updateStatus.message}>
           Update failed
         </span>
       )

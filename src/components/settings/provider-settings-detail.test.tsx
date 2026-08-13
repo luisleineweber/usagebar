@@ -366,7 +366,10 @@ describe("ProviderSettingsDetail", () => {
     await waitFor(() => {
       expect(onSecretSave).toHaveBeenCalledWith("ollama", "cookieHeader", "session=abc123")
     })
-    expect(screen.getByText("Secret stored securely for this app.")).toBeInTheDocument()
+    expect(screen.getByText("Secret stored securely for this app.")).toHaveAttribute(
+      "role",
+      "status"
+    )
   })
 
   it("shows Ollama Cloud auth detection guidance while keeping settings cookie editable", () => {
@@ -428,6 +431,11 @@ describe("ProviderSettingsDetail", () => {
         )
       ).toBeInTheDocument()
     })
+    expect(
+      screen.getByText(
+        "Saved Ollama cookie header, but could not read it back from a fresh system credential vault lookup: Element not found"
+      )
+    ).toHaveAttribute("role", "alert")
   })
 
   it("clears an existing Ollama secret", async () => {
@@ -455,7 +463,7 @@ describe("ProviderSettingsDetail", () => {
     await waitFor(() => {
       expect(onSecretDelete).toHaveBeenCalledWith("ollama", "cookieHeader")
     })
-    expect(screen.getByText("Stored secret removed.")).toBeInTheDocument()
+    expect(screen.getByText("Stored secret removed.")).toHaveAttribute("role", "status")
   })
 
   it("saves the OpenCode workspace override", async () => {

@@ -35,6 +35,11 @@ describe("ReportingSourceSettings", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }))
 
-    await waitFor(() => expect(screen.getByText("Reporting settings could not be saved.")).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByText("Reporting settings could not be saved.")).toHaveAttribute(
+        "role",
+        "alert"
+      )
+    )
   })
 })

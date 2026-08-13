@@ -96,7 +96,7 @@ export function AboutDialog({ version, onClose }: AboutDialogProps) {
         <h2 className="text-xl font-semibold mb-1">{APP_NAME}</h2>
 
         <div className="flex flex-col items-center gap-2 mb-4">
-          <span className="inline-block text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+          <span className="inline-block text-xs text-foreground bg-muted px-2 py-0.5 rounded-full">
             v{version}
           </span>
           <Button

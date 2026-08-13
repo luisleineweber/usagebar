@@ -28,7 +28,7 @@ describe("AboutDialog", () => {
     render(<AboutDialog version="1.2.3" onClose={() => {}} />)
     expect(screen.getByRole("img", { name: APP_NAME })).toHaveAttribute("src", "/favicon.png")
     expect(screen.getByText(APP_NAME)).toBeInTheDocument()
-    expect(screen.getByText("v1.2.3")).toBeInTheDocument()
+    expect(screen.getByText("v1.2.3")).toHaveClass("text-foreground")
     expect(screen.getByRole("button", { name: "OpenUsage" })).toBeInTheDocument()
     expect(screen.getByText(/redirected toward a Windows-native desktop experience/i)).toBeInTheDocument()
     expect(screen.getByText("By")).toBeInTheDocument()

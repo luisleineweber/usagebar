@@ -152,7 +152,7 @@ describe("PanelFooter", () => {
         {...footerProps}
       />
     )
-    expect(screen.getByText("Downloading update 42%")).toBeTruthy()
+    expect(screen.getByRole("status")).toHaveTextContent("Downloading update 42%")
   })
 
   it("shows visible feedback while checking for updates", () => {
@@ -166,7 +166,7 @@ describe("PanelFooter", () => {
       />
     )
 
-    expect(screen.getByText("Checking for updates...")).toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveTextContent("Checking for updates...")
   })
 
   it("shows when the app is up to date", () => {
@@ -180,7 +180,7 @@ describe("PanelFooter", () => {
       />
     )
 
-    expect(screen.getByText("Up to date")).toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveTextContent("Up to date")
   })
 
   it("shows downloading state without percentage when progress is unknown", () => {
@@ -193,7 +193,7 @@ describe("PanelFooter", () => {
         {...footerProps}
       />
     )
-    expect(screen.getByText("Downloading update...")).toBeTruthy()
+    expect(screen.getByRole("status")).toHaveTextContent("Downloading update...")
   })
 
   it("shows explicit update action when an update is available", async () => {
@@ -265,6 +265,7 @@ describe("PanelFooter", () => {
     )
 
     const versionButton = screen.getByRole("button", { name: "Update check failed" })
+    expect(screen.getByRole("alert")).toHaveTextContent("Update check failed")
     expect(versionButton).toHaveAttribute("title", "Update check failed. Right-click to try again.")
     expect(screen.queryByRole("button", { name: "Updates soon" })).toBeNull()
 
@@ -277,7 +278,7 @@ describe("PanelFooter", () => {
   })
 
   it("shows error state for non-check failures", () => {
-    const { container } = render(
+    render(
       <PanelFooter
         version="0.0.0"
         autoUpdateNextAt={null}
@@ -286,7 +287,7 @@ describe("PanelFooter", () => {
         {...footerProps}
       />
     )
-    expect(container.textContent).toContain("Update failed")
+    expect(screen.getByRole("alert")).toHaveTextContent("Update failed")
     expect(screen.queryByRole("button", { name: "Updates soon" })).toBeNull()
   })
 
@@ -300,7 +301,7 @@ describe("PanelFooter", () => {
         {...footerProps}
       />
     )
-    expect(screen.getByText("Installing...")).toBeTruthy()
+    expect(screen.getByRole("status")).toHaveTextContent("Installing...")
   })
 
   it("shows when update checks are unavailable", () => {

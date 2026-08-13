@@ -205,7 +205,11 @@ export function NotificationSettingsSection({ className }: { className?: string 
           ))}
         </ul>
       )}
-      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
     </section>
   )
 }

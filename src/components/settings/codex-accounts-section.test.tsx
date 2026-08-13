@@ -70,7 +70,7 @@ describe("CodexAccountsSection", () => {
     render(<CodexAccountsSection />)
 
     await waitFor(() => {
-      expect(screen.getByText("load failed")).toBeInTheDocument()
+      expect(screen.getByText("load failed")).toHaveAttribute("role", "alert")
     })
   })
 
@@ -109,7 +109,7 @@ describe("CodexAccountsSection", () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText(/Imported/)).toBeInTheDocument()
+      expect(screen.getByText(/Imported/)).toHaveAttribute("role", "status")
     })
   })
 
@@ -150,7 +150,10 @@ describe("CodexAccountsSection", () => {
       expect(onConfigChange).toHaveBeenCalledWith("codex", {
         selectedAccountProfileId: "p1",
       })
-      expect(screen.getByText("Active Codex account updated.")).toBeInTheDocument()
+      expect(screen.getByText("Active Codex account updated.")).toHaveAttribute(
+        "role",
+        "status"
+      )
     })
   })
 
@@ -169,7 +172,7 @@ describe("CodexAccountsSection", () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText("select failed")).toBeInTheDocument()
+      expect(screen.getByText("select failed")).toHaveAttribute("role", "alert")
     })
   })
 
