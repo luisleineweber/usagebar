@@ -3,7 +3,12 @@ import { invoke, isTauri } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { currentMonitor } from "@tauri-apps/api/window"
 import type { ActiveView } from "@/components/side-nav"
-import { SETTINGS_WINDOW_CLOSED_EVENT, SETTINGS_WINDOW_OPEN_EVENT } from "@/lib/settings-window"
+import {
+  SETTINGS_WINDOW_CLOSED_EVENT,
+  SETTINGS_WINDOW_OPEN_EVENT,
+  SETTINGS_WINDOW_STATE_EVENT,
+  type SettingsWindowStatePayload,
+} from "@/lib/settings-window"
 
 const HOME_PANEL_MAX_HEIGHT_PX = 720
 const DETAIL_PANEL_MAX_HEIGHT_PX = 860
@@ -257,6 +262,16 @@ export function usePanel({
         return
       }
       unlisteners.push(u4)
+
+      const u5 = await listen<SettingsWindowStatePayload>(SETTINGS_WINDOW_STATE_EVENT, (event) => {
+        settingsWindowOpenRef.current = !event.payload.isMinimized
+        scheduleAutoHideRef.current()
+      })
+      if (cancelled) {
+        u5()
+        return
+      }
+      unlisteners.push(u5)
     }
 
     void setup()

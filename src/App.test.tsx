@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   trackMock: vi.fn(),
   setSizeMock: vi.fn(),
   hideWindowMock: vi.fn(),
+  isMinimizedMock: vi.fn(),
   currentMonitorMock: vi.fn(),
   startBatchMock: vi.fn(),
   savePluginSettingsMock: vi.fn(),
@@ -43,6 +44,7 @@ const state = vi.hoisted(() => ({
   closeRequestedHandler: null as
     | null
     | ((event: { preventDefault: () => void }) => void | Promise<void>),
+  focusChangedHandler: null as null | ((event: { payload: boolean }) => void),
   autostartEnableMock: vi.fn(),
   autostartDisableMock: vi.fn(),
   autostartIsEnabledMock: vi.fn(),
@@ -216,6 +218,11 @@ vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
     setSize: state.setSizeMock,
     hide: state.hideWindowMock,
+    isMinimized: state.isMinimizedMock,
+    onFocusChanged: async (handler: (event: { payload: boolean }) => void) => {
+      state.focusChangedHandler = handler
+      return vi.fn()
+    },
     onCloseRequested: async (
       handler: (event: { preventDefault: () => void }) => void | Promise<void>
     ) => {
@@ -384,6 +391,8 @@ describe("App", () => {
     state.trackMock.mockReset()
     state.setSizeMock.mockReset()
     state.hideWindowMock.mockReset()
+    state.isMinimizedMock.mockReset()
+    state.focusChangedHandler = null
     state.currentMonitorMock.mockReset()
     state.startBatchMock.mockReset()
     state.savePluginSettingsMock.mockReset()
@@ -486,6 +495,7 @@ describe("App", () => {
       },
     })
     state.hideWindowMock.mockResolvedValue(undefined)
+    state.isMinimizedMock.mockResolvedValue(false)
     state.currentMonitorMock.mockResolvedValue({ size: { height: 1000 } })
     state.startBatchMock.mockResolvedValue(["a"])
     state.trayGetByIdMock.mockResolvedValue({
@@ -2009,6 +2019,27 @@ describe("App", () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it("publishes the minimized settings window state", async () => {
+    state.isMinimizedMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    renderSettingsWindow()
+
+    await waitFor(() => expect(state.focusChangedHandler).not.toBeNull())
+
+    await act(async () => {
+      state.focusChangedHandler?.({ payload: false })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(eventState.emitMock).toHaveBeenCalledWith("settings:state", { isMinimized: true })
+
+    await act(async () => {
+      state.focusChangedHandler?.({ payload: true })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(eventState.emitMock).toHaveBeenCalledWith("settings:state", { isMinimized: false })
   })
 
   it("clears settings auto-close on unmount", async () => {

@@ -3,12 +3,17 @@ import { emit } from "@tauri-apps/api/event"
 
 export const SETTINGS_WINDOW_OPEN_EVENT = "settings:open"
 export const SETTINGS_WINDOW_CLOSED_EVENT = "settings:closed"
+export const SETTINGS_WINDOW_STATE_EVENT = "settings:state"
 
 export type SettingsWindowTab = "general" | "providers"
 
 export type SettingsWindowTarget = {
   tab?: SettingsWindowTab
   providerId?: string | null
+}
+
+export type SettingsWindowStatePayload = {
+  isMinimized: boolean
 }
 
 export type SelectedProviderChangeOptions = {
@@ -34,4 +39,8 @@ export async function openSettingsWindow(target: SettingsWindowTarget = {}): Pro
 
 export async function notifySettingsWindowClosed(): Promise<void> {
   await emit(SETTINGS_WINDOW_CLOSED_EVENT)
+}
+
+export async function notifySettingsWindowState(isMinimized: boolean): Promise<void> {
+  await emit(SETTINGS_WINDOW_STATE_EVENT, { isMinimized } satisfies SettingsWindowStatePayload)
 }

@@ -82,7 +82,7 @@ describe("usePanel", () => {
     )
 
     await waitFor(() => {
-      expect(listenMock).toHaveBeenCalledTimes(4)
+      expect(listenMock).toHaveBeenCalledTimes(5)
     })
 
     act(() => {
@@ -265,6 +265,56 @@ describe("usePanel", () => {
     }
   })
 
+  it("auto-hides when the settings window is minimized", async () => {
+    vi.useFakeTimers()
+    const callbacks = new Map<string, (event: { payload: unknown }) => void>()
+
+    listenMock.mockImplementation(
+      async (event: string, callback: (event: { payload: unknown }) => void) => {
+        callbacks.set(event, callback)
+        return vi.fn()
+      }
+    )
+
+    try {
+      renderHook(() =>
+        usePanel({
+          activeView: "home",
+          setActiveView: vi.fn(),
+          showAbout: false,
+          setShowAbout: vi.fn(),
+          displayPlugins: [],
+          navPluginCount: 0,
+          onPanelFocus: vi.fn(),
+        })
+      )
+
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      act(() => {
+        callbacks.get("settings:open")?.({ payload: null })
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS)
+      })
+      expect(invokeMock).not.toHaveBeenCalledWith("hide_panel")
+
+      act(() => {
+        callbacks.get("settings:state")?.({ payload: { isMinimized: true } })
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS)
+      })
+
+      expect(invokeMock).toHaveBeenCalledWith("hide_panel")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("resets auto-hide on panel activity and tray navigation", async () => {
     vi.useFakeTimers()
     const callbacks = new Map<string, (event: { payload: unknown }) => void>()
@@ -293,7 +343,7 @@ describe("usePanel", () => {
         await Promise.resolve()
         await Promise.resolve()
       })
-      expect(listenMock).toHaveBeenCalledTimes(4)
+      expect(listenMock).toHaveBeenCalledTimes(5)
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(PANEL_AUTO_HIDE_DELAY_MS - 1)
@@ -421,7 +471,7 @@ describe("usePanel", () => {
     )
 
     await waitFor(() => {
-      expect(listenMock).toHaveBeenCalledTimes(4)
+      expect(listenMock).toHaveBeenCalledTimes(5)
     })
 
     act(() => {

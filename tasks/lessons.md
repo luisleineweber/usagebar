@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-13
+
+- The panel timer paused for every open Settings window, including a window minimized to the taskbar. Fix: publish the native minimized state and resume the panel timer when Settings is minimized. Prevention: test open, minimized, restored, and closed Settings states together.
+
 ## 2026-08-07
 
 - The available-update action looked like a glowing status badge instead of a native tray action. Fix: use the shared compact button geometry, the product accent, and a download icon. Prevention: review update states against the shared button system in both themes.

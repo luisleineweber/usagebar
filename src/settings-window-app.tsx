@@ -15,6 +15,7 @@ import { useFirstRunOnboarding } from "@/hooks/app/use-first-run-onboarding"
 import { buildTraySettingsPreview } from "@/lib/tray-preview"
 import {
   notifySettingsWindowClosed,
+  notifySettingsWindowState,
   parseSettingsWindowLocation,
   SETTINGS_WINDOW_OPEN_EVENT,
   type SettingsWindowTab,
@@ -206,6 +207,42 @@ export function SettingsWindowApp() {
     pluginStates,
     providerConfigs,
   })
+
+  useEffect(() => {
+    const settingsWindow = getCurrentWindow()
+    let disposed = false
+    let unlisten: (() => void) | undefined
+
+    const handleFocusChanged = () => {
+      void settingsWindow
+        .isMinimized()
+        .then((isMinimized) => {
+          if (disposed) return
+          return notifySettingsWindowState(isMinimized)
+        })
+        .catch((error) => {
+          console.error("Failed to publish settings window state:", error)
+        })
+    }
+
+    void settingsWindow
+      .onFocusChanged(handleFocusChanged)
+      .then((dispose) => {
+        if (disposed) {
+          dispose()
+          return
+        }
+        unlisten = dispose
+      })
+      .catch((error) => {
+        console.error("Failed to listen for settings window focus changes:", error)
+      })
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
 
   useEffect(() => {
     document.documentElement.dataset.window = "settings"
