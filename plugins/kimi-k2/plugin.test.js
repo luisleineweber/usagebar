@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { readFileSync } from "node:fs"
 import { makeCtx } from "../test-helpers.js"
 
 const loadPlugin = async () => {
@@ -40,11 +41,23 @@ describe("kimi-k2 plugin", () => {
     )
   })
 
+  it("declares the credential capabilities required for API key lookup", () => {
+    const manifest = JSON.parse(readFileSync("plugins/kimi-k2/plugin.json", "utf8"))
+
+    expect(manifest.capabilities.providerSecrets).toBe(true)
+    expect(manifest.capabilities.env).toBe(true)
+  })
+
   it("prefers the stored provider secret over env", async () => {
     const ctx = makeCtx()
-    ctx.host.providerSecrets.read.mockImplementation((key) => (key === "apiKey" ? "secret-key" : null))
+    ctx.host.providerSecrets.read.mockImplementation((key) =>
+      key === "apiKey" ? "secret-key" : null
+    )
     setEnv(ctx, { MOONSHOT_API_KEY: "env-key" })
-    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify(balancePayload()) })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(balancePayload()),
+    })
 
     const plugin = await loadPlugin()
     plugin.probe(ctx)
@@ -61,7 +74,10 @@ describe("kimi-k2 plugin", () => {
       KIMI_API_KEY: "",
       KIMI_KEY: "fallback-key",
     })
-    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify(balancePayload()) })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(balancePayload()),
+    })
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
@@ -73,7 +89,10 @@ describe("kimi-k2 plugin", () => {
   it("renders official Moonshot balance lines", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MOONSHOT_API_KEY: "moonshot-key" })
-    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify(balancePayload()) })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify(balancePayload()),
+    })
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
@@ -112,7 +131,9 @@ describe("kimi-k2 plugin", () => {
     ctx.host.http.request.mockReturnValue({ status: 500, bodyText: "" })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Moonshot API balance request failed (HTTP 500). Try again later.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Moonshot API balance request failed (HTTP 500). Try again later."
+    )
   })
 
   it("throws on invalid JSON", async () => {
@@ -121,7 +142,9 @@ describe("kimi-k2 plugin", () => {
     ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "not-json" })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Moonshot API balance response invalid. Try again later.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Moonshot API balance response invalid. Try again later."
+    )
   })
 
   it("throws when the official balance shape is missing", async () => {
@@ -130,6 +153,8 @@ describe("kimi-k2 plugin", () => {
     ctx.host.http.request.mockReturnValue({ status: 200, bodyText: JSON.stringify({ data: {} }) })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Moonshot API balance response invalid. Try again later.")
+    expect(() => plugin.probe(ctx)).toThrow(
+      "Moonshot API balance response invalid. Try again later."
+    )
   })
 })

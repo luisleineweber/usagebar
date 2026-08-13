@@ -32,9 +32,9 @@
     }
   ],
   "capabilities": {
+    "env": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "api.z.ai"
-    ]
+    "httpDomains": ["api.z.ai"]
   }
 }

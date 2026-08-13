@@ -100,6 +100,10 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "providerSecrets": true,
+    "keychain": true,
+    "browser": true,
     "http": true,
     "httpDomains": ["cloud.zed.dev", "dashboard.zed.dev"]
   }

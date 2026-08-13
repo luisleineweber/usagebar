@@ -12,6 +12,9 @@
       "state": "supported"
     }
   },
+  "capabilities": {
+    "fs": true
+  },
   "lines": [
     { "type": "progress", "label": "Quota", "scope": "overview", "primaryOrder": 1 },
     { "type": "text", "label": "Used", "scope": "detail" },

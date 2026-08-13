@@ -48,6 +48,7 @@
   ],
   "capabilities": {
     "http": true,
+    "sqliteRead": true,
     "httpDomains": ["server.self-serve.windsurf.com"]
   }
 }

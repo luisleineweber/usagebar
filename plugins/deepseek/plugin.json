@@ -46,9 +46,9 @@
     }
   ],
   "capabilities": {
+    "env": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "api.deepseek.com"
-    ]
+    "httpDomains": ["api.deepseek.com"]
   }
 }

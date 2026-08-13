@@ -13,12 +13,11 @@
     }
   },
   "capabilities": {
+    "sqliteRead": true,
     "sqliteWrite": true,
+    "keychain": true,
     "http": true,
-    "httpDomains": [
-      "api2.cursor.sh",
-      "cursor.com"
-    ]
+    "httpDomains": ["api2.cursor.sh", "cursor.com"]
   },
   "links": [
     {

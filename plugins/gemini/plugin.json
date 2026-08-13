@@ -47,7 +47,9 @@
     }
   ],
   "capabilities": {
+    "fs": true,
     "http": true,
+    "ccusage": true,
     "httpDomains": [
       "oauth2.googleapis.com",
       "cloudcode-pa.googleapis.com",

@@ -32,9 +32,10 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "ampcode.com"
-    ]
+    "ccusage": true,
+    "httpDomains": ["ampcode.com"]
   }
 }

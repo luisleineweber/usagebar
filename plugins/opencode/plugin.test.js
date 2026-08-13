@@ -298,7 +298,7 @@ describe("opencode plugin", () => {
   it("declares local OpenCode cost detail lines in the manifest", () => {
     const manifest = JSON.parse(readFileSync("plugins/opencode/plugin.json", "utf8"))
 
-    expect(manifest.capabilities.sqlite).toBe(true)
+    expect(manifest.capabilities.sqliteRead).toBe(true)
     expect(manifest.lines).toEqual(
       expect.arrayContaining([
         { type: "text", label: "Yesterday", scope: "detail" },

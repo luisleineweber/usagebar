@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
-  "brandColor": "#74AA9C",
+  "brandColor": "#000000",
   "defaultPlan": "Free",
   "platformSupport": {
     "windows": {
@@ -86,10 +86,14 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "env": true,
+    "providerConfig": true,
+    "browser": true,
+    "keychain": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "auth.openai.com",
-      "chatgpt.com"
-    ]
+    "ccusage": true,
+    "httpDomains": ["auth.openai.com", "chatgpt.com"]
   }
 }

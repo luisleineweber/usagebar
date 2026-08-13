@@ -65,6 +65,9 @@
     }
   ],
   "capabilities": {
+    "env": true,
+    "providerConfig": true,
+    "providerSecrets": true,
     "http": true,
     "httpDomains": [
       "devops.aliyuncs.com",

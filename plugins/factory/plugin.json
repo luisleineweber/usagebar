@@ -27,10 +27,11 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "crypto": true,
+    "keychain": true,
     "http": true,
-    "httpDomains": [
-      "api.workos.com",
-      "api.factory.ai"
-    ]
+    "ccusage": true,
+    "httpDomains": ["api.workos.com", "api.factory.ai"]
   }
 }

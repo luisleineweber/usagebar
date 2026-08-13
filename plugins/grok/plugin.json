@@ -26,6 +26,7 @@
     { "type": "badge", "label": "Pay as you go", "scope": "detail" }
   ],
   "capabilities": {
+    "fs": true,
     "http": true,
     "httpDomains": ["cli-chat-proxy.grok.com"]
   }

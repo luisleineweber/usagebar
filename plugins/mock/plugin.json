@@ -12,11 +12,17 @@
       "surfaced": false
     }
   },
+  "capabilities": {},
   "lines": [
     { "type": "progress", "label": "Ahead pace", "scope": "overview", "primaryOrder": 1 },
     { "type": "progress", "label": "On Track pace", "scope": "overview", "primaryOrder": 2 },
     { "type": "progress", "label": "Behind pace", "scope": "overview", "primaryOrder": 3 },
-    { "type": "progress", "label": "Time marker empty-side demo", "scope": "overview", "primaryOrder": 4 },
+    {
+      "type": "progress",
+      "label": "Time marker empty-side demo",
+      "scope": "overview",
+      "primaryOrder": 4
+    },
     { "type": "progress", "label": "Empty bar", "scope": "overview", "primaryOrder": 5 },
     { "type": "progress", "label": "Exactly full", "scope": "overview", "primaryOrder": 6 },
     { "type": "progress", "label": "Over limit!", "scope": "overview", "primaryOrder": 7 },

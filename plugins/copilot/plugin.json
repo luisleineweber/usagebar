@@ -53,6 +53,11 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "env": true,
+    "providerConfig": true,
+    "keychain": true,
+    "gh": true,
     "http": true,
     "httpDomains": ["api.github.com"]
   }

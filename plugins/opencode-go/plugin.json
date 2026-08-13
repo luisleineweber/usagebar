@@ -67,7 +67,14 @@
     }
   ],
   "capabilities": {
+    "env": true,
+    "providerConfig": true,
+    "providerSecrets": true,
+    "keychain": true,
     "http": true,
+    "sqliteRead": true,
+    "fs": true,
+    "ccusage": true,
     "httpDomains": ["opencode.ai"]
   }
 }

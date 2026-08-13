@@ -38,9 +38,10 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "env": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "www.codebuff.com"
-    ]
+    "httpDomains": ["www.codebuff.com"]
   }
 }

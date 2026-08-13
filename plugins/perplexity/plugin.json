@@ -66,6 +66,8 @@
     }
   ],
   "capabilities": {
+    "env": true,
+    "providerSecrets": true,
     "http": true,
     "httpDomains": ["www.perplexity.ai"]
   }

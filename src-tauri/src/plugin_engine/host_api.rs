@@ -1768,7 +1768,11 @@ mod tests {
                 &app_data,
                 "0.0.0",
                 None,
-                &HostCapabilities::default(),
+                &HostCapabilities {
+                    keychain: true,
+                    gh: true,
+                    ..HostCapabilities::default()
+                },
             )
             .expect("inject host api");
             let globals = ctx.globals();
@@ -1876,7 +1880,10 @@ mod tests {
                 &app_data,
                 "0.0.0",
                 None,
-                &HostCapabilities::default(),
+                &HostCapabilities {
+                    crypto: true,
+                    ..HostCapabilities::default()
+                },
             )
             .expect("inject host api");
             let globals = ctx.globals();
@@ -1913,7 +1920,10 @@ mod tests {
                 &app_data,
                 "0.0.0",
                 None,
-                &HostCapabilities::default(),
+                &HostCapabilities {
+                    provider_secrets: true,
+                    ..HostCapabilities::default()
+                },
             )
             .expect("inject host api");
             let globals = ctx.globals();
@@ -1974,7 +1984,10 @@ mod tests {
                 &app_data,
                 "0.0.0",
                 None,
-                &HostCapabilities::default(),
+                &HostCapabilities {
+                    env: true,
+                    ..HostCapabilities::default()
+                },
             )
             .expect("inject host api");
             let globals = ctx.globals();
@@ -2050,7 +2063,10 @@ mod tests {
                 &app_data,
                 "0.0.0",
                 None,
-                &HostCapabilities::default(),
+                &HostCapabilities {
+                    env: true,
+                    ..HostCapabilities::default()
+                },
             )
             .expect("inject host api");
             let globals = ctx.globals();

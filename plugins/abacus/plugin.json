@@ -53,9 +53,9 @@
     }
   ],
   "capabilities": {
+    "env": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "apps.abacus.ai"
-    ]
+    "httpDomains": ["apps.abacus.ai"]
   }
 }

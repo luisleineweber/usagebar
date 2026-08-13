@@ -22,11 +22,9 @@
     }
   ],
   "capabilities": {
+    "env": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "api.minimax.io",
-      "www.minimax.io",
-      "api.minimaxi.com"
-    ]
+    "httpDomains": ["api.minimax.io", "www.minimax.io", "api.minimaxi.com"]
   }
 }

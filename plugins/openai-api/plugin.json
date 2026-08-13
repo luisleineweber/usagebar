@@ -5,6 +5,7 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "iconAspectRatio": 3.583333,
   "brandColor": "#10A37F",
   "defaultPlan": "Pay-as-you-go",
   "platformSupport": {
@@ -65,8 +66,9 @@
     }
   ],
   "capabilities": {
+    "providerSecrets": true,
     "http": true,
     "httpDomains": ["api.openai.com"],
-    "env": ["OPENAI_ADMIN_API_KEY", "OPENAI_API_KEY"]
+    "env": true
   }
 }

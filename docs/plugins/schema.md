@@ -65,9 +65,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
   "sourceProvenance": "officialApi",
   "capabilities": {
     "http": true,
-    "httpDomains": ["api.example.com"],
-    "sqliteRead": true,
-    "sqliteWrite": false
+    "httpDomains": ["api.example.com"]
   },
   "lines": [
     { "type": "badge", "label": "Plan", "scope": "overview" },
@@ -86,11 +84,12 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `entry`            | string | Yes      | Relative path to JS entry file                                                                                  |
 | `icon`             | string | Yes      | Relative path to SVG icon file                                                                                  |
 | `iconColorMode`    | string | No       | `monochrome` uses the brand color mask; `multicolor` keeps the SVG's original colors                            |
+| `iconAspectRatio`  | number | No       | Width divided by height for rectangular icons; natural-fit surfaces use this ratio                            |
 | `platformSupport`  | object | No       | Optional per-platform support/surfacing metadata                                                                |
 | `links`            | array  | No       | Optional quick links shown on detail page                                                                       |
 | `status`           | object | No       | Optional machine-readable provider status source                                                                |
 | `sourceProvenance` | string | No       | Provider source class: `officialApi`, `officialLocalSource`, `privateEndpoint`, `cookieReplay`, or `htmlScrape` |
-| `capabilities`     | object | No       | Optional host API allowlist; omitted fields keep legacy defaults                                                |
+| `capabilities`     | object | Yes      | Host API allowlist; omitted fields are denied                                                                   |
 | `lines`            | array  | Yes      | Output shape used for loading skeletons                                                                         |
 
 Validation rules:
@@ -123,26 +122,26 @@ The status source drives the incident badge in the provider card. The `Status` l
 | `cookieReplay`        | Session or cookie reuse against web-backed endpoints                      |
 | `htmlScrape`          | HTML parsing or scraping                                                  |
 
-### Host Capabilities (Optional)
+### Host Capabilities (Required)
 
-`capabilities` narrows the host surface injected into `ctx.host`. For existing plugins, omitted fields keep the previous permissive defaults except SQLite writes, which default to disabled. New plugins should declare only the APIs and domains they need.
+`capabilities` defines the host surface injected into `ctx.host`. Each plugin must declare this object and set every needed API to `true`. Omitted API fields are denied.
 
 | Field             | Type     | Default | Description                                                                                                                     |
 | ----------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `fs`              | boolean  | `true`  | Expose `ctx.host.fs`                                                                                                            |
-| `crypto`          | boolean  | `true`  | Expose `ctx.host.crypto`                                                                                                        |
-| `env`             | boolean  | `true`  | Expose whitelisted environment lookup                                                                                           |
-| `providerConfig`  | boolean  | `true`  | Expose provider config helpers                                                                                                  |
-| `http`            | boolean  | `true`  | Expose `ctx.host.http`                                                                                                          |
+| `fs`              | boolean  | `false` | Expose `ctx.host.fs`                                                                                                            |
+| `crypto`          | boolean  | `false` | Expose `ctx.host.crypto`                                                                                                        |
+| `env`             | boolean  | `false` | Expose whitelisted environment lookup                                                                                           |
+| `providerConfig`  | boolean  | `false` | Expose provider config helpers                                                                                                  |
+| `http`            | boolean  | `false` | Expose `ctx.host.http`                                                                                                          |
 | `httpDomains`     | string[] | `[]`    | HTTP hostname allowlist. Empty or omitted means all plugin HTTP requests are blocked. Supports exact hosts and `*.example.com`. |
-| `browser`         | boolean  | `true`  | Expose browser/session bridge helpers                                                                                           |
-| `keychain`        | boolean  | `true`  | Expose generic credential helpers                                                                                               |
-| `gh`              | boolean  | `true`  | Expose GitHub auth helper                                                                                                       |
-| `providerSecrets` | boolean  | `true`  | Expose app-owned provider secret storage                                                                                        |
-| `sqliteRead`      | boolean  | `true`  | Expose read-only SQLite query access                                                                                            |
+| `browser`         | boolean  | `false` | Expose browser/session bridge helpers                                                                                           |
+| `keychain`        | boolean  | `false` | Expose generic credential helpers                                                                                               |
+| `gh`              | boolean  | `false` | Expose GitHub auth helper                                                                                                       |
+| `providerSecrets` | boolean  | `false` | Expose app-owned provider secret storage                                                                                        |
+| `sqliteRead`      | boolean  | `false` | Expose read-only SQLite query access                                                                                            |
 | `sqliteWrite`     | boolean  | `false` | Enable SQLite write access; denied and logged unless explicitly true                                                            |
-| `ls`              | boolean  | `true`  | Expose local language-server discovery                                                                                          |
-| `ccusage`         | boolean  | `true`  | Expose ccusage runner integration                                                                                               |
+| `ls`              | boolean  | `false` | Expose local language-server discovery                                                                                          |
+| `ccusage`         | boolean  | `false` | Expose ccusage runner integration                                                                                               |
 
 ### Platform Support (Optional)
 
@@ -335,6 +334,7 @@ A complete, working plugin that fetches data and displays all three line types.
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
+  "capabilities": {},
   "lines": [
     { "type": "badge", "label": "Status", "scope": "overview" },
     { "type": "progress", "label": "Usage", "scope": "overview", "primaryOrder": 1 },

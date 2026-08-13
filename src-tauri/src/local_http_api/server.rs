@@ -427,6 +427,12 @@ mod tests {
     fn route_get_usage_returns_200() {
         let response = route("GET", "/v1/usage");
         assert!(response.starts_with("HTTP/1.1 200"));
+        let body = response
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body)
+            .expect("usage response body");
+        let payload: serde_json::Value = serde_json::from_str(body).expect("usage JSON");
+        assert!(payload.is_array(), "usage response must be an array");
     }
 
     #[test]

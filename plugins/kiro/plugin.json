@@ -41,10 +41,9 @@
     }
   ],
   "capabilities": {
+    "fs": true,
     "http": true,
-    "httpDomains": [
-      "prod.us-east-1.auth.desktop.kiro.dev",
-      "*.amazonaws.com"
-    ]
+    "sqliteRead": true,
+    "httpDomains": ["prod.us-east-1.auth.desktop.kiro.dev", "*.amazonaws.com"]
   }
 }

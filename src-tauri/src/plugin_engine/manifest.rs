@@ -79,62 +79,38 @@ pub struct PlatformSupport {
     pub windows: WindowsSupportConfig,
 }
 
-fn default_true() -> bool {
-    true
-}
-
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct HostCapabilities {
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub fs: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub crypto: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub env: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub provider_config: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub http: bool,
     #[serde(default)]
     pub http_domains: Vec<String>,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub browser: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub keychain: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub gh: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub provider_secrets: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub sqlite_read: bool,
     #[serde(default)]
     pub sqlite_write: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub ls: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub ccusage: bool,
-}
-
-impl Default for HostCapabilities {
-    fn default() -> Self {
-        Self {
-            fs: true,
-            crypto: true,
-            env: true,
-            provider_config: true,
-            http: true,
-            http_domains: Vec::new(),
-            browser: true,
-            keychain: true,
-            gh: true,
-            provider_secrets: true,
-            sqlite_read: true,
-            sqlite_write: false,
-            ls: true,
-            ccusage: true,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -168,6 +144,8 @@ pub struct PluginManifest {
     pub dark_icon: Option<String>,
     #[serde(default)]
     pub icon_color_mode: IconColorMode,
+    #[serde(default)]
+    pub icon_aspect_ratio: Option<f32>,
     pub brand_color: Option<String>,
     #[serde(default)]
     pub default_plan: Option<String>,
@@ -178,7 +156,6 @@ pub struct PluginManifest {
     pub status: Option<PluginStatus>,
     #[serde(default)]
     pub platform_support: PlatformSupport,
-    #[serde(default)]
     pub capabilities: HostCapabilities,
     pub source_provenance: Option<SourceProvenance>,
 }
@@ -316,6 +293,62 @@ mod tests {
     }
 
     #[test]
+    fn every_plugin_manifest_declares_capabilities() {
+        let plugins_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plugins");
+        let mut manifest_count = 0;
+
+        for entry in std::fs::read_dir(&plugins_dir).expect("plugins directory") {
+            let entry = entry.expect("plugin directory entry");
+            let plugin_dir = entry.path();
+            if !plugin_dir.is_dir() {
+                continue;
+            }
+
+            let manifest_path = plugin_dir.join("plugin.json");
+            if !manifest_path.is_file() {
+                continue;
+            }
+
+            let plugin_id = entry.file_name().to_string_lossy().into_owned();
+            let manifest_text = std::fs::read_to_string(&manifest_path)
+                .unwrap_or_else(|error| panic!("read {plugin_id}/plugin.json: {error}"));
+            let manifest_json: serde_json::Value = serde_json::from_str(&manifest_text)
+                .unwrap_or_else(|error| panic!("parse {plugin_id}/plugin.json: {error}"));
+            assert!(
+                manifest_json.get("capabilities").is_some(),
+                "{plugin_id}/plugin.json must declare capabilities"
+            );
+
+            let manifest: PluginManifest = serde_json::from_value(manifest_json)
+                .unwrap_or_else(|error| panic!("validate {plugin_id}/plugin.json: {error}"));
+            assert_eq!(manifest.id, plugin_id);
+            manifest_count += 1;
+        }
+
+        assert!(manifest_count > 0, "no plugin manifests found");
+    }
+
+    #[test]
+    fn capabilities_default_to_deny() {
+        let capabilities =
+            serde_json::from_str::<HostCapabilities>("{}").expect("capabilities parse failed");
+        assert!(!capabilities.fs);
+        assert!(!capabilities.crypto);
+        assert!(!capabilities.env);
+        assert!(!capabilities.provider_config);
+        assert!(!capabilities.http);
+        assert!(!capabilities.browser);
+        assert!(!capabilities.keychain);
+        assert!(!capabilities.gh);
+        assert!(!capabilities.provider_secrets);
+        assert!(!capabilities.sqlite_read);
+        assert!(!capabilities.sqlite_write);
+        assert!(!capabilities.ls);
+        assert!(!capabilities.ccusage);
+        assert!(capabilities.http_domains.is_empty());
+    }
+
+    #[test]
     fn primary_order_is_none_by_default() {
         let manifest = parse_manifest(
             r#"
@@ -327,6 +360,7 @@ mod tests {
               "entry": "plugin.js",
               "icon": "icon.svg",
               "brandColor": null,
+              "capabilities": {},
               "lines": [
                 { "type": "progress", "label": "A", "scope": "overview" }
               ]
@@ -337,8 +371,8 @@ mod tests {
         assert!(manifest.lines[0].primary_order.is_none());
         assert!(manifest.links.is_empty());
         assert!(manifest.status.is_none());
-        assert!(manifest.capabilities.http);
-        assert!(manifest.capabilities.sqlite_read);
+        assert!(!manifest.capabilities.http);
+        assert!(!manifest.capabilities.sqlite_read);
         assert!(!manifest.capabilities.sqlite_write);
         assert!(manifest.capabilities.http_domains.is_empty());
         assert!(manifest.source_provenance.is_none());
@@ -356,6 +390,7 @@ mod tests {
               "entry": "plugin.js",
               "icon": "icon.svg",
               "brandColor": null,
+              "capabilities": {},
               "lines": [
                 { "type": "progress", "label": "A", "scope": "overview", "primaryOrder": 1 },
                 { "type": "progress", "label": "B", "scope": "overview", "primaryOrder": 2 },
@@ -382,6 +417,7 @@ mod tests {
               "entry": "plugin.js",
               "icon": "icon.svg",
               "brandColor": null,
+              "capabilities": {},
               "lines": [
                 { "type": "progress", "label": "Third", "scope": "overview", "primaryOrder": 3 },
                 { "type": "progress", "label": "First", "scope": "overview", "primaryOrder": 1 },
@@ -416,6 +452,7 @@ mod tests {
               "entry": "plugin.js",
               "icon": "icon.svg",
               "brandColor": null,
+              "capabilities": {},
               "links": [
                 { "label": "Status", "url": "https://status.example.com" },
                 { "label": "Billing", "url": "https://example.com/billing" }
@@ -443,6 +480,7 @@ mod tests {
               "version": "0.0.1",
               "entry": "plugin.js",
               "icon": "icon.svg",
+              "capabilities": {},
               "lines": [],
               "status": {
                 "kind": "statuspageV2",
@@ -473,6 +511,7 @@ mod tests {
               "version": "0.0.1",
               "entry": "plugin.js",
               "icon": "icon.svg",
+              "capabilities": {},
               "defaultPlan": "Free",
               "lines": []
             }
@@ -494,6 +533,7 @@ mod tests {
               "entry": "plugin.js",
               "icon": "icon.svg",
               "brandColor": null,
+              "capabilities": {},
               "lines": [
                 { "type": "progress", "label": "A", "scope": "overview", "primaryOrder": 1 }
               ]
@@ -521,6 +561,7 @@ mod tests {
               "entry": "plugin.js",
               "icon": "icon.svg",
               "brandColor": null,
+              "capabilities": {},
               "platformSupport": {
                 "windows": {
                   "state": "experimental",

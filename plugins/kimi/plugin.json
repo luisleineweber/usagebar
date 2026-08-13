@@ -43,11 +43,11 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "env": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "api.kimi.com",
-      "api.moonshot.ai",
-      "auth.kimi.com"
-    ]
+    "ccusage": true,
+    "httpDomains": ["api.kimi.com", "api.moonshot.ai", "auth.kimi.com"]
   }
 }

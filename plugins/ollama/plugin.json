@@ -57,9 +57,10 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "env": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "ollama.com"
-    ]
+    "httpDomains": ["ollama.com"]
   }
 }

@@ -47,9 +47,9 @@
     }
   ],
   "capabilities": {
+    "env": true,
+    "providerSecrets": true,
     "http": true,
-    "httpDomains": [
-      "app.warp.dev"
-    ]
+    "httpDomains": ["app.warp.dev"]
   }
 }

@@ -71,11 +71,12 @@
     }
   ],
   "capabilities": {
+    "fs": true,
+    "providerConfig": true,
+    "providerSecrets": true,
+    "keychain": true,
     "http": true,
-    "httpDomains": [
-      "api.anthropic.com",
-      "platform.claude.com",
-      "claude.ai"
-    ]
+    "ccusage": true,
+    "httpDomains": ["api.anthropic.com", "platform.claude.com", "claude.ai"]
   }
 }

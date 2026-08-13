@@ -33,8 +33,8 @@
   ],
   "capabilities": {
     "http": true,
-    "httpDomains": [
-      "api.moonshot.ai"
-    ]
+    "providerSecrets": true,
+    "env": true,
+    "httpDomains": ["api.moonshot.ai"]
   }
 }
