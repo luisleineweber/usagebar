@@ -282,20 +282,21 @@ export function GeneralSettingsPane({
         <p className="mb-3 text-sm text-muted-foreground">
           Choose which pages are available in the tray panel.
         </p>
-        <label className="flex select-none items-start gap-2 text-sm text-foreground">
+        <div className="flex items-start gap-2 text-sm text-foreground">
           <Checkbox
+            id="show-history-in-bar"
             key={`show-history-in-bar-${showHistoryInBar}`}
             aria-label="Show History in bar"
             checked={showHistoryInBar}
             onCheckedChange={(checked) => onShowHistoryInBarChange(checked === true)}
           />
-          <span>
+          <label htmlFor="show-history-in-bar" className="cursor-pointer select-none">
             <span className="block">Show History in bar</span>
             <span className="block text-xs text-muted-foreground">
               Add the History page to the tray panel navigation.
             </span>
-          </span>
-        </label>
+          </label>
+        </div>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
@@ -355,14 +356,18 @@ export function GeneralSettingsPane({
         <p className="mb-3 text-sm text-muted-foreground">
           Open UsageBar automatically after you sign in.
         </p>
-        <label className="flex select-none items-center gap-2 text-sm text-foreground">
+        <div className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox
+            id="start-on-login"
             key={`start-on-login-${startOnLogin}`}
+            aria-label="Start on login"
             checked={startOnLogin}
             onCheckedChange={(checked) => onStartOnLoginChange(checked === true)}
           />
-          Start on login
-        </label>
+          <label htmlFor="start-on-login" className="cursor-pointer select-none">
+            Start on login
+          </label>
+        </div>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>

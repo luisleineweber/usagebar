@@ -420,14 +420,21 @@ export function ProviderSettingsDetail({
               Retry
             </Button>
           )}
-          <label className="ml-auto flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Enabled</span>
+          <div className="ml-auto flex items-center gap-2 text-sm">
+            <label
+              htmlFor={`${plugin.id}-enabled`}
+              className="cursor-pointer text-muted-foreground"
+            >
+              Enabled
+            </label>
             <Checkbox
+              id={`${plugin.id}-enabled`}
+              aria-label={`Enable ${plugin.name}`}
               checked={enabled}
               disabled={plugin.supportState === "comingSoonOnWindows"}
               onCheckedChange={(checked) => onEnabledChange(checked === true)}
             />
-          </label>
+          </div>
         </div>
       </div>
 
@@ -461,6 +468,7 @@ export function ProviderSettingsDetail({
                   ? "status"
                   : undefined
             }
+            className="mt-4 flex items-start gap-2 rounded-md border border-border/55 bg-muted/25 px-3 py-3"
           >
             {probeStatus.tone === "error" ? (
               <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />

@@ -82,8 +82,10 @@ export function ReportingSourceSettings({
         <option value="calculate">Recalculate from model pricing</option>
         <option value="display">Recorded cost only</option>
       </select>
-      <label className="mt-3 flex items-center gap-2 text-sm">
+      <div className="mt-3 flex items-center gap-2 text-sm">
         <Checkbox
+          id={`${providerId}-offline-pricing`}
+          aria-label="Use bundled offline pricing data"
           checked={config?.offlinePricing === "enabled"}
           onCheckedChange={(checked) =>
             void update(
@@ -91,9 +93,11 @@ export function ReportingSourceSettings({
               checked === true ? "Offline pricing enabled." : "Online pricing enabled."
             )
           }
-        />
-        Use bundled offline pricing data
-      </label>
+          />
+        <label htmlFor={`${providerId}-offline-pricing`} className="cursor-pointer">
+          Use bundled offline pricing data
+        </label>
+      </div>
       {message ? (
         <p role="status" className="mt-2 text-xs text-primary">
           {message}

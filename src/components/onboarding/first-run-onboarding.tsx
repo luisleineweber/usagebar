@@ -305,28 +305,34 @@ export function FirstRunOnboarding({
                 const checked = selectedIds.has(provider.id)
                 const guidance = getProviderGuidance(provider)
                 return (
-                  <label
+                  <div
                     key={provider.id}
-                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-border px-4 py-4 transition-colors hover:bg-muted/60"
+                    className="flex items-start gap-3 rounded-lg border border-border px-4 py-4 transition-colors hover:bg-muted/60"
                   >
                     <Checkbox
+                      id={`onboarding-provider-${provider.id}`}
                       checked={checked}
                       onCheckedChange={() => toggleProvider(provider.id)}
                       aria-label={`Select ${provider.name}`}
                       className="mt-1"
                     />
-                    <OnboardingProviderIcon provider={provider} isDark={isDark} />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-2">
-                        <span className="font-medium">{provider.name}</span>
-                        {guidance.recommended ? (
-                          <Badge variant="outline" className="text-[0.68rem]">
-                            Recommended
-                          </Badge>
-                        ) : null}
+                    <label
+                      htmlFor={`onboarding-provider-${provider.id}`}
+                      className="flex min-w-0 flex-1 cursor-pointer items-start gap-3"
+                    >
+                      <OnboardingProviderIcon provider={provider} isDark={isDark} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="font-medium">{provider.name}</span>
+                          {guidance.recommended ? (
+                            <Badge variant="outline" className="text-[0.68rem]">
+                              Recommended
+                            </Badge>
+                          ) : null}
+                        </span>
                       </span>
-                    </span>
-                  </label>
+                    </label>
+                  </div>
                 )
               })}
             </div>

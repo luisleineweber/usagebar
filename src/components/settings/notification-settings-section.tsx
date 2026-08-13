@@ -84,21 +84,25 @@ export function NotificationSettingsSection({ className }: { className?: string 
         Local quota, reset, and provider-status events. Quiet hours suppress Windows delivery but
         keep events here.
       </p>
-      <label className="flex select-none items-center gap-2 text-sm text-foreground">
+      <div className="flex items-center gap-2 text-sm text-foreground">
         <Checkbox
+          id="notification-delivery"
           aria-label="Deliver Windows notifications"
           checked={preferences.enabled}
           onCheckedChange={(checked) => void toggleEnabled(checked === true)}
         />
-        Deliver Windows notifications
-      </label>
+        <label htmlFor="notification-delivery" className="cursor-pointer select-none">
+          Deliver Windows notifications
+        </label>
+      </div>
 
       <fieldset className="mt-3">
         <legend className="text-xs font-medium text-muted-foreground">Quota thresholds</legend>
         <div className="mt-2 flex flex-wrap gap-3">
           {THRESHOLDS.map((threshold) => (
-            <label key={threshold} className="flex items-center gap-2 text-sm">
+            <div key={threshold} className="flex items-center gap-2 text-sm">
               <Checkbox
+                id={`notification-threshold-${threshold}`}
                 aria-label={`${threshold}% used`}
                 checked={preferences.quotaThresholds.includes(threshold)}
                 onCheckedChange={(checked) => {
@@ -108,36 +112,45 @@ export function NotificationSettingsSection({ className }: { className?: string 
                   void update({ ...preferences, quotaThresholds })
                 }}
               />
-              {threshold}% used
-            </label>
+              <label htmlFor={`notification-threshold-${threshold}`} className="cursor-pointer">
+                {threshold}% used
+              </label>
+            </div>
           ))}
         </div>
       </fieldset>
 
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-        <label className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm">
           <Checkbox
+            id="notification-incidents"
             aria-label="Incidents and recovery"
             checked={preferences.incidents}
             onCheckedChange={(checked) =>
               void update({ ...preferences, incidents: checked === true })
             }
           />
-          Incidents and recovery
-        </label>
-        <label className="flex items-center gap-2 text-sm">
+          <label htmlFor="notification-incidents" className="cursor-pointer">
+            Incidents and recovery
+          </label>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
           <Checkbox
+            id="notification-resets"
             aria-label="Quota resets"
             checked={preferences.resets}
             onCheckedChange={(checked) => void update({ ...preferences, resets: checked === true })}
           />
-          Quota resets
-        </label>
+          <label htmlFor="notification-resets" className="cursor-pointer">
+            Quota resets
+          </label>
+        </div>
       </div>
 
       <div className="mt-3 rounded-lg border border-border/60 p-3">
-        <label className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-2 text-sm">
           <Checkbox
+            id="notification-quiet-hours"
             aria-label="Quiet hours"
             checked={preferences.quietHours.enabled}
             onCheckedChange={(checked) =>
@@ -147,8 +160,10 @@ export function NotificationSettingsSection({ className }: { className?: string 
               })
             }
           />
-          Quiet hours
-        </label>
+          <label htmlFor="notification-quiet-hours" className="cursor-pointer">
+            Quiet hours
+          </label>
+        </div>
         <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
           <input
             aria-label="Quiet hours start"
