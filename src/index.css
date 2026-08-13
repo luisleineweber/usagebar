@@ -276,6 +276,8 @@ html[data-window="settings"] #root {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .update-border-beam::before,
+  .nav-arrange-item,
   .animate-shimmer {
     animation: none;
   }
