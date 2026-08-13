@@ -161,4 +161,34 @@ mod tests {
             ["second"]
         );
     }
+
+    #[test]
+    fn timed_out_instance_releases_all_waiting_batches() {
+        let mut coordinator = ProbeCoordinator::default();
+        let instance = instances(&["claude"])[0].clone();
+
+        assert_eq!(
+            coordinator
+                .reserve_batch("timed-out".to_string(), std::slice::from_ref(&instance))
+                .unwrap(),
+            vec![instance.clone()]
+        );
+        assert!(
+            coordinator
+                .reserve_batch("waiting".to_string(), std::slice::from_ref(&instance))
+                .unwrap()
+                .is_empty()
+        );
+
+        let cleanup = coordinator.complete_instance(&instance);
+        assert_eq!(cleanup.result_batch_ids, ["timed-out", "waiting"]);
+        assert_eq!(cleanup.completed_batch_ids, ["timed-out", "waiting"]);
+
+        assert_eq!(
+            coordinator
+                .reserve_batch("after-timeout".to_string(), std::slice::from_ref(&instance))
+                .unwrap(),
+            vec![instance]
+        );
+    }
 }

@@ -7,6 +7,11 @@ use crate::plugin_engine::probe_error::{
 use rquickjs::{Array, Context, Ctx, Error, Object, Promise, Runtime, Value};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::time::{Duration, Instant};
+
+const PROBE_MEMORY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
+const PROBE_STACK_LIMIT_BYTES: usize = 1024 * 1024;
+const PROBE_EXECUTION_LIMIT: Duration = Duration::from_secs(30);
 
 #[cfg(not(test))]
 type RuntimeAppHandle = tauri::AppHandle;
@@ -120,7 +125,24 @@ pub fn run_probe(
     app_version: &str,
     app_handle: Option<&RuntimeAppHandle>,
 ) -> PluginOutput {
-    run_probe_unstamped(plugin, app_data_dir, app_version, app_handle, None)
+    run_probe_unstamped(
+        plugin,
+        app_data_dir,
+        app_version,
+        app_handle,
+        None,
+        PROBE_EXECUTION_LIMIT,
+    )
+}
+
+#[cfg(test)]
+fn run_probe_with_timeout(
+    plugin: &LoadedPlugin,
+    app_data_dir: &Path,
+    app_version: &str,
+    timeout: Duration,
+) -> PluginOutput {
+    run_probe_unstamped(plugin, app_data_dir, app_version, None, None, timeout)
 }
 
 pub fn run_probe_for_instance(
@@ -136,6 +158,7 @@ pub fn run_probe_for_instance(
         app_version,
         app_handle,
         Some(instance_ref),
+        PROBE_EXECUTION_LIMIT,
     );
     output.instance_ref = Some(instance_ref.clone());
     output
@@ -147,17 +170,25 @@ fn run_probe_unstamped(
     app_version: &str,
     app_handle: Option<&RuntimeAppHandle>,
     instance_ref: Option<&ProviderInstanceRef>,
+    execution_limit: Duration,
 ) -> PluginOutput {
     let fallback = error_output(plugin, "runtime error".to_string());
+    let timeout_message = probe_timeout_message(execution_limit);
+    let deadline_at = Instant::now()
+        .checked_add(execution_limit)
+        .unwrap_or_else(Instant::now);
 
     let rt = match Runtime::new() {
         Ok(rt) => rt,
         Err(_) => return fallback,
     };
+    rt.set_memory_limit(PROBE_MEMORY_LIMIT_BYTES);
+    rt.set_max_stack_size(PROBE_STACK_LIMIT_BYTES);
+    rt.set_interrupt_handler(Some(Box::new(move || Instant::now() >= deadline_at)));
 
     let ctx = match Context::full(&rt) {
         Ok(ctx) => ctx,
-        Err(_) => return fallback,
+        Err(_) => return execution_error_output(plugin, deadline_at, &timeout_message, fallback),
     };
 
     let plugin_id = plugin.manifest.id.clone();
@@ -178,37 +209,89 @@ fn run_probe_unstamped(
         )
         .is_err()
         {
-            return error_output(plugin, "host api injection failed".to_string());
+            return execution_error_output(
+                plugin,
+                deadline_at,
+                &timeout_message,
+                error_output(plugin, "host api injection failed".to_string()),
+            );
         }
         if host_api::patch_http_wrapper(&ctx).is_err() {
-            return error_output(plugin, "http wrapper patch failed".to_string());
+            return execution_error_output(
+                plugin,
+                deadline_at,
+                &timeout_message,
+                error_output(plugin, "http wrapper patch failed".to_string()),
+            );
         }
         if host_api::patch_browser_wrapper(&ctx).is_err() {
-            return error_output(plugin, "browser wrapper patch failed".to_string());
+            return execution_error_output(
+                plugin,
+                deadline_at,
+                &timeout_message,
+                error_output(plugin, "browser wrapper patch failed".to_string()),
+            );
         }
         if host_api::patch_ls_wrapper(&ctx).is_err() {
-            return error_output(plugin, "ls wrapper patch failed".to_string());
+            return execution_error_output(
+                plugin,
+                deadline_at,
+                &timeout_message,
+                error_output(plugin, "ls wrapper patch failed".to_string()),
+            );
         }
         if host_api::patch_ccusage_wrapper(&ctx).is_err() {
-            return error_output(plugin, "ccusage wrapper patch failed".to_string());
+            return execution_error_output(
+                plugin,
+                deadline_at,
+                &timeout_message,
+                error_output(plugin, "ccusage wrapper patch failed".to_string()),
+            );
         }
         if host_api::inject_utils(&ctx).is_err() {
-            return error_output(plugin, "utils injection failed".to_string());
+            return execution_error_output(
+                plugin,
+                deadline_at,
+                &timeout_message,
+                error_output(plugin, "utils injection failed".to_string()),
+            );
         }
 
         if ctx.eval::<(), _>(entry_script.as_bytes()).is_err() {
-            return error_output(plugin, "script eval failed".to_string());
+            return execution_error_output(
+                plugin,
+                deadline_at,
+                &timeout_message,
+                error_output(plugin, "script eval failed".to_string()),
+            );
+        }
+        if Instant::now() >= deadline_at {
+            return error_output(plugin, timeout_message.clone());
         }
 
         let globals = ctx.globals();
         let plugin_obj: Object = match globals.get("__openusage_plugin") {
             Ok(obj) => obj,
-            Err(_) => return error_output(plugin, "missing __openusage_plugin".to_string()),
+            Err(_) => {
+                return execution_error_output(
+                    plugin,
+                    deadline_at,
+                    &timeout_message,
+                    error_output(plugin, "missing __openusage_plugin".to_string()),
+                );
+            }
         };
 
         let probe_fn: rquickjs::Function = match plugin_obj.get("probe") {
             Ok(f) => f,
-            Err(_) => return error_output(plugin, "missing probe()".to_string()),
+            Err(_) => {
+                return execution_error_output(
+                    plugin,
+                    deadline_at,
+                    &timeout_message,
+                    error_output(plugin, "missing probe()".to_string()),
+                );
+            }
         };
 
         let probe_ctx: Value = globals
@@ -217,8 +300,16 @@ fn run_probe_unstamped(
 
         let result_value: Value = match probe_fn.call((probe_ctx,)) {
             Ok(r) => r,
-            Err(_) => return probe_error_output(plugin, extract_probe_error(&ctx)),
+            Err(_) => {
+                if Instant::now() >= deadline_at {
+                    return error_output(plugin, timeout_message.clone());
+                }
+                return probe_error_output(plugin, extract_probe_error(&ctx));
+            }
         };
+        if Instant::now() >= deadline_at {
+            return error_output(plugin, timeout_message.clone());
+        }
         let result: Object = if result_value.is_promise() {
             let promise: Promise = match result_value.into_promise() {
                 Some(promise) => promise,
@@ -229,9 +320,17 @@ fn run_probe_unstamped(
             match promise.finish::<Object>() {
                 Ok(obj) => obj,
                 Err(Error::WouldBlock) => {
+                    if Instant::now() >= deadline_at {
+                        return error_output(plugin, timeout_message.clone());
+                    }
                     return error_output(plugin, "probe() returned unresolved promise".to_string());
                 }
-                Err(_) => return probe_error_output(plugin, extract_probe_error(&ctx)),
+                Err(_) => {
+                    if Instant::now() >= deadline_at {
+                        return error_output(plugin, timeout_message.clone());
+                    }
+                    return probe_error_output(plugin, extract_probe_error(&ctx));
+                }
             }
         } else {
             match result_value.into_object() {
@@ -239,6 +338,9 @@ fn run_probe_unstamped(
                 None => return error_output(plugin, "probe() returned non-object".to_string()),
             }
         };
+        if Instant::now() >= deadline_at {
+            return error_output(plugin, timeout_message.clone());
+        }
 
         let plan: Option<String> = result
             .get::<_, String>("plan")
@@ -771,6 +873,29 @@ pub(crate) fn error_output(plugin: &LoadedPlugin, message: String) -> PluginOutp
     probe_error_output(plugin, error)
 }
 
+fn execution_error_output(
+    plugin: &LoadedPlugin,
+    deadline_at: Instant,
+    timeout_message: &str,
+    fallback: PluginOutput,
+) -> PluginOutput {
+    if Instant::now() >= deadline_at {
+        error_output(plugin, timeout_message.to_string())
+    } else {
+        fallback
+    }
+}
+
+fn probe_timeout_message(timeout: Duration) -> String {
+    if timeout.subsec_millis() == 0 {
+        return format!("probe timed out after {}s", timeout.as_secs());
+    }
+    if timeout.as_secs() == 0 {
+        return format!("probe timed out after {}ms", timeout.as_millis());
+    }
+    format!("probe timed out after {:.3}s", timeout.as_secs_f64())
+}
+
 fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput {
     PluginOutput {
         provider_id: plugin.manifest.id.clone(),
@@ -914,6 +1039,28 @@ mod tests {
         );
         let output = run_probe(&plugin, &temp_app_dir("async"), "0.0.0", None);
         assert_eq!(error_text(output), "boom");
+    }
+
+    #[test]
+    fn run_probe_interrupts_cpu_bound_script() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    while (true) {}
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe_with_timeout(
+            &plugin,
+            &temp_app_dir("interrupt"),
+            "0.0.0",
+            Duration::from_millis(50),
+        );
+
+        assert_eq!(error_text(output), "probe timed out after 50ms");
     }
 
     #[test]

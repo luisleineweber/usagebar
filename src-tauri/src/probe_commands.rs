@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 use tauri::Emitter;
 use tokio::sync::Semaphore;
@@ -11,6 +12,7 @@ use crate::plugin_engine;
 use crate::plugin_engine::runtime::ProviderInstanceRef;
 
 const MAX_CONCURRENT_PROBES: usize = 4;
+const PROBE_WORKER_TIMEOUT: Duration = Duration::from_secs(35);
 
 fn probe_semaphore() -> &'static Arc<Semaphore> {
     static SEMAPHORE: OnceLock<Arc<Semaphore>> = OnceLock::new();
@@ -149,13 +151,14 @@ pub(crate) async fn start_probe_batch(
         let worker_instance_ref = instance_ref.clone();
         let panic_plugin = plugin.clone();
         let join_plugin = plugin.clone();
+        let timeout_plugin = plugin.clone();
         let capacity_plugin = plugin.clone();
         let worker_handle = handle.clone();
 
         tauri::async_runtime::spawn(async move {
             let mut output = match semaphore.acquire_owned().await {
                 Ok(_permit) => {
-                    match tauri::async_runtime::spawn_blocking(move || {
+                    let worker = tauri::async_runtime::spawn_blocking(move || {
                         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             plugin_engine::runtime::run_probe_for_instance(
                                 &worker_plugin,
@@ -176,15 +179,29 @@ pub(crate) async fn start_probe_batch(
                                 )
                             }
                         }
-                    })
-                    .await
-                    {
-                        Ok(output) => output,
-                        Err(error) => {
+                    });
+
+                    match tokio::time::timeout(PROBE_WORKER_TIMEOUT, worker).await {
+                        Ok(Ok(output)) => output,
+                        Ok(Err(error)) => {
                             log::error!("probe {} worker failed: {}", join_plugin_id, error);
                             plugin_engine::runtime::error_output(
                                 &join_plugin,
                                 "provider probe worker failed".to_string(),
+                            )
+                        }
+                        Err(_) => {
+                            log::error!(
+                                "probe {} worker timed out after {} seconds",
+                                join_plugin_id,
+                                PROBE_WORKER_TIMEOUT.as_secs()
+                            );
+                            plugin_engine::runtime::error_output(
+                                &timeout_plugin,
+                                format!(
+                                    "provider probe timed out after {}s",
+                                    PROBE_WORKER_TIMEOUT.as_secs()
+                                ),
                             )
                         }
                     }
