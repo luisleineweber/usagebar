@@ -1,6 +1,7 @@
 ;(function () {
   const PROVIDER_ID = "opencode-go"
   const BASE_URL = "https://opencode.ai"
+  const GO_USAGE_URL = BASE_URL + "/zen/go/v1/usage"
   const SERVER_URL = BASE_URL + "/_server"
   const WORKSPACES_SERVER_ID = "def39973159c7f0483d8793a822b8dbb10d067e12c65455fcb4608459ba0234f"
   const SUBSCRIPTION_SERVER_ID = "7abeebee372f304e050aaaf92be863f4a86490e382f8c79db68fd94040d691b4"
@@ -14,11 +15,7 @@
   ).join(", ")
   const FIVE_HOURS_MS = 5 * 60 * 60 * 1000
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000
-  const LIMITS = {
-    session: 12,
-    weekly: 30,
-    monthly: 60,
-  }
+  const MONTH_MS = 30 * 24 * 60 * 60 * 1000
   const FREE_LIMITS = {
     sessionRequests: 200,
   }
@@ -471,99 +468,79 @@
     }
   }
 
-  function tryLoadZenBalance(ctx) {
-    try {
-      return loadZenBalanceLine(ctx)
-    } catch (e) {
-      if (ctx.host.log && typeof ctx.host.log.warn === "function") {
-        ctx.host.log.warn("opencode-go zen balance read failed: " + String(e))
-      }
-      return null
-    }
-  }
-
-  function clampPercent(used, limit) {
-    if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) return 0
-    const percent = (used / limit) * 100
-    if (!Number.isFinite(percent)) return 0
-    return Math.round(Math.max(0, Math.min(100, percent)) * 10) / 10
-  }
-
   function toIso(ms) {
     if (!Number.isFinite(ms)) return null
     return new Date(ms).toISOString()
   }
 
-  function startOfUtcWeek(nowMs) {
-    const date = new Date(nowMs)
-    const offset = (date.getUTCDay() + 6) % 7
-    date.setUTCDate(date.getUTCDate() - offset)
-    date.setUTCHours(0, 0, 0, 0)
-    return date.getTime()
+  function readGoErrorType(ctx, bodyText) {
+    const payload = ctx.util.tryParseJson(bodyText)
+    if (!payload || typeof payload !== "object") return null
+    const error = payload.error
+    if (!error || typeof error !== "object") return null
+    return typeof error.type === "string" && error.type.trim() ? error.type.trim() : null
   }
 
-  function startOfUtcMonth(nowMs) {
-    const date = new Date(nowMs)
-    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0)
-  }
-
-  function startOfNextUtcMonth(nowMs) {
-    const date = new Date(nowMs)
-    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1, 0, 0, 0, 0)
-  }
-
-  function shiftMonth(year, month, delta) {
-    const total = year * 12 + month + delta
-    return [Math.floor(total / 12), ((total % 12) + 12) % 12]
-  }
-
-  function anchorMonth(year, month, anchorDate) {
-    const maxDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-    return Date.UTC(
-      year,
-      month,
-      Math.min(anchorDate.getUTCDate(), maxDay),
-      anchorDate.getUTCHours(),
-      anchorDate.getUTCMinutes(),
-      anchorDate.getUTCSeconds(),
-      anchorDate.getUTCMilliseconds()
-    )
-  }
-
-  function anchoredMonthBounds(nowMs, anchorMs) {
-    if (!Number.isFinite(anchorMs)) {
-      const startMs = startOfUtcMonth(nowMs)
-      return { startMs, endMs: startOfNextUtcMonth(nowMs) }
+  function readGoUsage(ctx, apiKey) {
+    let response
+    try {
+      response = ctx.host.http.request({
+        method: "GET",
+        url: GO_USAGE_URL,
+        headers: {
+          Authorization: "Bearer " + apiKey,
+          Accept: "application/json",
+        },
+        timeoutMs: 15000,
+      })
+    } catch {
+      throw "OpenCode Go usage request failed. Check your connection."
     }
 
-    const nowDate = new Date(nowMs)
-    const anchorDate = new Date(anchorMs)
-    let year = nowDate.getUTCFullYear()
-    let month = nowDate.getUTCMonth()
-    let startMs = anchorMonth(year, month, anchorDate)
-
-    if (startMs > nowMs) {
-      const previous = shiftMonth(year, month, -1)
-      year = previous[0]
-      month = previous[1]
-      startMs = anchorMonth(year, month, anchorDate)
+    if (!response || typeof response.status !== "number") {
+      throw "OpenCode Go usage response invalid."
+    }
+    if (response.status === 401) {
+      throw "OpenCode Go API key invalid. Log into OpenCode Go again."
+    }
+    if (response.status === 403) {
+      if (readGoErrorType(ctx, response.bodyText) === "EntitlementError") return null
+      throw "OpenCode Go usage request forbidden."
+    }
+    if (response.status < 200 || response.status >= 300) {
+      throw "OpenCode Go usage request failed (HTTP " + response.status + ")."
     }
 
-    const next = shiftMonth(year, month, 1)
-    return {
-      startMs,
-      endMs: anchorMonth(next[0], next[1], anchorDate),
+    const payload = ctx.util.tryParseJson(response.bodyText)
+    const usage = payload && typeof payload === "object" ? payload.usage : null
+    if (!usage || typeof usage !== "object") {
+      throw "OpenCode Go usage response invalid."
     }
-  }
 
-  function sumRange(rows, startMs, endMs) {
-    let total = 0
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = rows[i]
-      if (row.createdMs < startMs || row.createdMs >= endMs) continue
-      total += row.cost
+    const windows = [
+      { key: "rolling", label: "5h", periodDurationMs: FIVE_HOURS_MS },
+      { key: "weekly", label: "Weekly", periodDurationMs: WEEK_MS },
+      { key: "monthly", label: "Monthly", periodDurationMs: MONTH_MS },
+    ]
+    const lines = []
+    for (let i = 0; i < windows.length; i += 1) {
+      const definition = windows[i]
+      const window = usage[definition.key]
+      const percent = window && typeof window === "object" ? readNumber(window.percent) : null
+      if (percent === null || percent < 0) throw "OpenCode Go usage response invalid."
+
+      const opts = {
+        label: definition.label,
+        used: percent,
+        limit: 100,
+        format: { kind: "percent" },
+        periodDurationMs: definition.periodDurationMs,
+      }
+      const resetsAt = window && typeof window === "object" ? ctx.util.toIso(window.resetsAt) : null
+      if (resetsAt) opts.resetsAt = resetsAt
+      lines.push(ctx.line.progress(opts))
     }
-    return Math.round(total * 10000) / 10000
+    return lines
   }
 
   function countFreeRange(rows, startMs, endMs) {
@@ -614,37 +591,6 @@
     }
   }
 
-  function textIncludesFreeTier(value) {
-    if (typeof value !== "string") return false
-    return value.toLowerCase().indexOf("free") !== -1
-  }
-
-  function objectIncludesTier(value, matcher, depth) {
-    if (depth > 7 || value === null || value === undefined) return false
-    if (typeof value === "string") return matcher(value)
-    if (typeof value !== "object") return false
-
-    if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i += 1) {
-        if (objectIncludesTier(value[i], matcher, depth + 1)) return true
-      }
-      return false
-    }
-
-    const keys = Object.keys(value)
-    for (let i = 0; i < keys.length; i += 1) {
-      const key = keys[i]
-      if (matcher(key) || objectIncludesTier(value[key], matcher, depth + 1)) return true
-    }
-    return false
-  }
-
-  function readAccountTierFromValue(value) {
-    if (objectHasActiveGoSubscription(value, 0)) return PLAN.go
-    if (objectIncludesTier(value, textIncludesFreeTier, 0)) return PLAN.free
-    return null
-  }
-
   function loadAuthProfile(ctx) {
     if (!ctx.host.fs.exists(AUTH_PATH)) return null
 
@@ -662,7 +608,6 @@
         if (key) {
           return {
             key,
-            tier: readAccountTierFromValue(entry) || readAccountTierFromValue(parsed),
           }
         }
       }
@@ -696,52 +641,6 @@
     }
 
     return { ok: true, rows }
-  }
-
-  function buildProgressLines(ctx, rows, nowMs) {
-    const sessionStartMs = nowMs - FIVE_HOURS_MS
-    const weeklyStartMs = startOfUtcWeek(nowMs)
-    const weeklyEndMs = weeklyStartMs + WEEK_MS
-    let earliestMs = null
-    for (let i = 0; i < rows.length; i += 1) {
-      const createdMs = rows[i].createdMs
-      if (!Number.isFinite(createdMs)) continue
-      if (earliestMs === null || createdMs < earliestMs) earliestMs = createdMs
-    }
-    const monthBounds = anchoredMonthBounds(nowMs, earliestMs)
-    const monthlyStartMs = monthBounds.startMs
-    const monthlyEndMs = monthBounds.endMs
-
-    const sessionCost = sumRange(rows, sessionStartMs, nowMs)
-    const weeklyCost = sumRange(rows, weeklyStartMs, weeklyEndMs)
-    const monthlyCost = sumRange(rows, monthlyStartMs, monthlyEndMs)
-
-    return [
-      ctx.line.progress({
-        label: "5h",
-        used: clampPercent(sessionCost, LIMITS.session),
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: nextRollingReset(rows, nowMs),
-        periodDurationMs: FIVE_HOURS_MS,
-      }),
-      ctx.line.progress({
-        label: "Weekly",
-        used: clampPercent(weeklyCost, LIMITS.weekly),
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: toIso(weeklyEndMs),
-        periodDurationMs: WEEK_MS,
-      }),
-      ctx.line.progress({
-        label: "Monthly",
-        used: clampPercent(monthlyCost, LIMITS.monthly),
-        limit: 100,
-        format: { kind: "percent" },
-        resetsAt: toIso(monthlyEndMs),
-        periodDurationMs: monthlyEndMs - monthlyStartMs,
-      }),
-    ]
   }
 
   function buildSoftEmptyLines(ctx) {
@@ -789,16 +688,22 @@
       throw "OpenCode Go not detected. Log in with OpenCode Go or use it locally first."
     }
 
+    const goLines = authProfile && authProfile.key ? readGoUsage(ctx, authProfile.key) : null
+    if (goLines) {
+      const lines = appendZenBalanceLine(ctx, goLines)
+      return { plan: PLAN.go, lines }
+    }
+
     if (!history.ok) {
       return {
-        plan: authProfile && authProfile.tier === PLAN.go ? PLAN.go : PLAN.free,
+        plan: PLAN.free,
         lines: appendZenBalanceLine(ctx, buildSoftEmptyLines(ctx)),
       }
     }
 
     if (!history.present) {
       return {
-        plan: authProfile && authProfile.tier === PLAN.go ? PLAN.go : PLAN.free,
+        plan: PLAN.free,
         lines: appendZenBalanceLine(ctx, buildNotSubscribedLines(ctx)),
       }
     }
@@ -806,24 +711,13 @@
     const rowsResult = loadHistory(ctx)
     if (!rowsResult.ok) {
       return {
-        plan: authProfile && authProfile.tier === PLAN.go ? PLAN.go : PLAN.free,
+        plan: PLAN.free,
         lines: appendZenBalanceLine(ctx, buildSoftEmptyLines(ctx)),
       }
     }
 
-    const zen = tryLoadZenBalance(ctx)
-    const hasGoSubscription =
-      (authProfile && authProfile.tier === PLAN.go) || (zen && zen.hasActiveGoSubscription)
-    if (!hasGoSubscription) {
-      const freeLines = buildFreeUsageLines(ctx, rowsResult.rows, readNowMs())
-      return { plan: PLAN.free, lines: freeLines }
-    }
-
-    const progressLines = buildProgressLines(ctx, rowsResult.rows, readNowMs())
-    return {
-      plan: PLAN.go,
-      lines: zen ? progressLines.concat(zen.lines) : progressLines,
-    }
+    const freeLines = buildFreeUsageLines(ctx, rowsResult.rows, readNowMs())
+    return { plan: PLAN.free, lines: freeLines }
   }
 
   function addCcusageHistory(ctx, result) {

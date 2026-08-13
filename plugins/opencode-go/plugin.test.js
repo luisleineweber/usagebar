@@ -3,6 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 
 const AUTH_PATH = "~/.local/share/opencode/auth.json"
+const GO_USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
+
+function goUsageResponse(usage = {
+  rolling: { percent: 12.5, resetsAt: "2026-03-06T14:00:00.000Z" },
+  weekly: { percent: 34, resetsAt: "2026-03-09T00:00:00.000Z" },
+  monthly: { percent: 56.75, resetsAt: "2026-04-06T00:00:00.000Z" },
+}) {
+  return response(JSON.stringify({ usage }))
+}
+
+function noGoSubscriptionResponse() {
+  return response(JSON.stringify({ error: { type: "EntitlementError" } }), 403)
+}
 
 const loadPlugin = async () => {
   await import("./plugin.js")
@@ -10,6 +23,10 @@ const loadPlugin = async () => {
 }
 
 function setAuth(ctx, value = "go-key", extras = {}) {
+  ctx.goUsageResponse = noGoSubscriptionResponse()
+  ctx.host.http.request.mockImplementation((request) =>
+    request.url === GO_USAGE_URL ? ctx.goUsageResponse : undefined
+  )
   ctx.host.fs.writeText(
     AUTH_PATH,
     JSON.stringify({
@@ -20,6 +37,7 @@ function setAuth(ctx, value = "go-key", extras = {}) {
 
 function setGoSubscriptionAuth(ctx, value = "go-key") {
   setAuth(ctx, value, { goSubscription: { status: "active" } })
+  ctx.goUsageResponse = goUsageResponse()
 }
 
 function response(bodyText, status = 200) {
@@ -42,7 +60,10 @@ function setZenConfig(
       return null
     }),
   }
-  ctx.host.http.request.mockReturnValue(response(JSON.stringify(payload)))
+  const zenResponse = response(JSON.stringify(payload))
+  ctx.host.http.request.mockImplementation((request) =>
+    request.url === GO_USAGE_URL ? ctx.goUsageResponse || noGoSubscriptionResponse() : zenResponse
+  )
   return workspaceId
 }
 
@@ -172,6 +193,7 @@ describe("opencode-go plugin", () => {
         opencode: { type: "api-key", key: "current-go-key" },
       })
     )
+    ctx.host.http.request.mockReturnValue(noGoSubscriptionResponse())
     setHistoryQuery(ctx, [])
 
     const plugin = await loadPlugin()
@@ -454,109 +476,83 @@ describe("opencode-go plugin", () => {
     const ctx = makeCtx()
     setGoSubscriptionAuth(ctx)
     setZenConfig(ctx)
-    ctx.host.http.request.mockReturnValue(response("{}", 500))
+    ctx.host.http.request.mockImplementation((request) =>
+      request.url === GO_USAGE_URL ? ctx.goUsageResponse : response("{}", 500)
+    )
     setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 }])
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines[0]).toMatchObject({ type: "progress", label: "5h", used: 10 })
+    expect(result.lines[0]).toMatchObject({ type: "progress", label: "5h", used: 12.5 })
     expect(result.lines.some((line) => line.label === "Zen balance")).toBe(false)
     expect(ctx.host.log.warn).toHaveBeenCalledWith(
       expect.stringContaining("opencode-go zen balance read failed: OpenCode Zen request failed")
     )
   })
 
-  it("uses row timestamp fallback when JSON timestamp is missing", async () => {
+  it("uses account-wide quota windows from the official usage endpoint", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
 
     const ctx = makeCtx()
     setGoSubscriptionAuth(ctx)
-    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 1.2 }])
+    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T09:30:00.000Z"), cost: 40 }])
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines[0].used).toBe(10)
-    expect(result.lines[0].resetsAt).toBe("2026-03-06T14:30:00.000Z")
-  })
-
-  it("counts only the rolling 5h window", async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
-
-    const ctx = makeCtx()
-    setGoSubscriptionAuth(ctx)
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-06T06:30:00.000Z"), cost: 9 },
-      { createdMs: Date.parse("2026-03-06T08:00:00.000Z"), cost: 2.4 },
-      { createdMs: Date.parse("2026-03-06T10:00:00.000Z"), cost: 1.2 },
+    expect(ctx.host.http.request).toHaveBeenCalledWith({
+      method: "GET",
+      url: GO_USAGE_URL,
+      headers: {
+        Authorization: "Bearer go-key",
+        Accept: "application/json",
+      },
+      timeoutMs: 15000,
+    })
+    expect(result.lines).toEqual([
+      {
+        type: "progress",
+        label: "5h",
+        used: 12.5,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt: "2026-03-06T14:00:00.000Z",
+        periodDurationMs: 5 * 60 * 60 * 1000,
+      },
+      {
+        type: "progress",
+        label: "Weekly",
+        used: 34,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt: "2026-03-09T00:00:00.000Z",
+        periodDurationMs: 7 * 24 * 60 * 60 * 1000,
+      },
+      {
+        type: "progress",
+        label: "Monthly",
+        used: 56.75,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt: "2026-04-06T00:00:00.000Z",
+        periodDurationMs: 30 * 24 * 60 * 60 * 1000,
+      },
     ])
-
-    const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-
-    expect(result.lines[0].used).toBe(30)
-    expect(result.lines[0].resetsAt).toBe("2026-03-06T13:00:00.000Z")
   })
 
-  it("uses UTC Monday boundaries for weekly aggregation", async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
-
+  it("reports a rejected Go key instead of using local quota math", async () => {
     const ctx = makeCtx()
     setGoSubscriptionAuth(ctx)
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-03-01T23:59:59.000Z"), cost: 10 },
-      { createdMs: Date.parse("2026-03-02T00:00:00.000Z"), cost: 6 },
-      { createdMs: Date.parse("2026-03-05T09:00:00.000Z"), cost: 3 },
-    ])
+    ctx.goUsageResponse = response(JSON.stringify({ error: { type: "AuthError" } }), 401)
+    setHistoryQuery(ctx, [{ createdMs: Date.now(), cost: 40 }])
 
     const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-    const weeklyLine = result.lines.find((line) => line.label === "Weekly")
-
-    expect(weeklyLine.used).toBe(30)
-    expect(weeklyLine.resetsAt).toBe("2026-03-09T00:00:00.000Z")
+    expect(() => plugin.probe(ctx)).toThrow("OpenCode Go API key invalid")
   })
 
-  it("uses the earliest local usage timestamp as the monthly anchor", async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
-
-    const ctx = makeCtx()
-    setGoSubscriptionAuth(ctx)
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-02-25T07:53:16.000Z"), cost: 2.181 },
-      { createdMs: Date.parse("2026-03-01T00:00:00.000Z"), cost: 0.2 },
-      { createdMs: Date.parse("2026-03-04T12:00:00.000Z"), cost: 0.2904 },
-    ])
-
-    const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-    const monthlyLine = result.lines.find((line) => line.label === "Monthly")
-
-    expect(monthlyLine.used).toBe(4.5)
-    expect(monthlyLine.resetsAt).toBe("2026-03-25T07:53:16.000Z")
-    expect(monthlyLine.periodDurationMs).toBe(28 * 24 * 60 * 60 * 1000)
-  })
-
-  it("clamps percentages at 100", async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date("2026-03-06T12:00:00.000Z"))
-
-    const ctx = makeCtx()
-    setGoSubscriptionAuth(ctx)
-    setHistoryQuery(ctx, [{ createdMs: Date.parse("2026-03-06T11:00:00.000Z"), cost: 40 }])
-
-    const plugin = await loadPlugin()
-    const result = plugin.probe(ctx)
-
-    expect(result.lines[0].used).toBe(100)
-  })
-
-  it("returns a soft empty state when sqlite is unreadable but auth exists", async () => {
+  it("keeps official meters when sqlite is unreadable", async () => {
     const ctx = makeCtx()
     setGoSubscriptionAuth(ctx)
     ctx.host.sqlite.query.mockImplementation(() => {
@@ -564,35 +560,27 @@ describe("opencode-go plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(plugin.probe(ctx)).toEqual({
-      plan: "GoSubscription",
-      lines: [
-        {
-          type: "badge",
-          label: "Status",
-          text: "No Go usage data",
-          color: "#a3a3a3",
-        },
-      ],
+    const result = plugin.probe(ctx)
+    expect(result.plan).toBe("GoSubscription")
+    expect(result.lines.find((line) => line.label === "5h")).toMatchObject({
+      type: "progress",
+      used: 12.5,
+      limit: 100,
     })
   })
 
-  it("returns a soft empty state when sqlite returns malformed JSON and auth exists", async () => {
+  it("keeps official meters when sqlite returns malformed JSON", async () => {
     const ctx = makeCtx()
     setGoSubscriptionAuth(ctx)
     ctx.host.sqlite.query.mockReturnValue("not-json")
 
     const plugin = await loadPlugin()
-    expect(plugin.probe(ctx)).toEqual({
-      plan: "GoSubscription",
-      lines: [
-        {
-          type: "badge",
-          label: "Status",
-          text: "No Go usage data",
-          color: "#a3a3a3",
-        },
-      ],
+    const result = plugin.probe(ctx)
+    expect(result.plan).toBe("GoSubscription")
+    expect(result.lines.find((line) => line.label === "5h")).toMatchObject({
+      type: "progress",
+      used: 12.5,
+      limit: 100,
     })
   })
 })

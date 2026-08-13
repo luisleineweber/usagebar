@@ -140,11 +140,11 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     mode: "editable",
     title: "OpenCode Setup",
     summary:
-      "Tracks OpenCode usage from local auth and SQLite history. Paid status requires current subscription evidence.",
+      "Tracks account-wide OpenCode Go quota from the official usage API and keeps local history from SQLite and ccusage.",
     statusHint:
-      "Local Go usage is auto-detected. No browser cookie is needed for the main OpenCode provider.",
+      "OpenCode Go quota uses the local opencode-go key. No browser cookie is needed.",
     connectHint:
-      "Install OpenCode Go, sign in on this machine, and use it locally so ~/.local/share/opencode/auth.json and ~/.local/share/opencode/opencode.db exist. UsageBar reads local assistant spend from that history.",
+      "Install OpenCode Go and sign in on this machine so ~/.local/share/opencode/auth.json contains an opencode-go key. SQLite and ccusage provide local history.",
   },
   codex: {
     mode: "editable",

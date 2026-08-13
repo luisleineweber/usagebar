@@ -99,7 +99,7 @@ Record these fields in the relevant provider doc or rollout note:
 | Cursor | Partially working | P0 | account-state variance across free/trial/paid/team/enterprise |
 | Ollama | Working v1 | P0 | only manual cookie mode exists |
 | OpenCode Zen | Experimental | P1 | browser import + real-world cookie/workspace validation for pay-as-you-go billing |
-| OpenCode Go | Working on Windows | P1 | keep current local auth/history schema coverage aligned with upstream CLI changes |
+| OpenCode Go | Working on Windows | P1 | keep the official usage API contract and local auth/history coverage aligned with upstream changes |
 | OpenRouter | Experimental | P2 | real Windows API-key validation plus broader live key-quota evidence |
 | Synthetic | Experimental | P2 | real Windows API-key validation plus broader live quota-shape evidence |
 | Augment | Experimental | P2 | real Windows web-cookie validation plus future CLI/browser import path |

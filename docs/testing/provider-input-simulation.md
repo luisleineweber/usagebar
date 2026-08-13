@@ -37,7 +37,7 @@ Safety:
 | `mock` | None | Works fully | Built-in self-test provider. Data is hardcoded in the plugin. |
 | `ollama` | Stored provider secret `cookieHeader` | Works partially | Manual secret can fake signed-in session, but usage still comes from Ollama web HTTP. |
 | `opencode` | Stored provider secret `cookieHeader`, `OPENCODE_COOKIE_HEADER`, keychain fallback | Works partially | Cookie replay can fake the web session, but billing data still comes from OpenCode HTTP. |
-| `opencode-go` | `~/.local/share/opencode/auth.json`, `~/.local/share/opencode/opencode.db` | Works fully | Main output is derived from local auth + SQLite history. |
+| `opencode-go` | `~/.local/share/opencode/auth.json`, `~/.local/share/opencode/opencode.db`, official usage API | Works partially | Go quota windows come from OpenCode HTTP; SQLite and ccusage provide local history. |
 | `openrouter` | stored provider secret `apiKey`, `OPENROUTER_API_KEY`, `OPENROUTER_API_URL` | Works partially | Secret/env replay can fake auth setup, but credits and key data still come from OpenRouter HTTP. |
 | `perplexity` | stored provider secret `cookieHeader`, `PERPLEXITY_COOKIE_HEADER`, `PERPLEXITY_COOKIE`, `PERPLEXITY_SESSION_TOKEN` | Works partially | Cookie/env replay can fake signed-in billing auth, but credit data still comes from Perplexity HTTP. |
 | `synthetic` | stored provider secret `apiKey`, `SYNTHETIC_API_KEY` | Works partially | Secret/env replay can fake auth setup, but quota data still comes from Synthetic HTTP. |
@@ -253,10 +253,12 @@ Safety:
 - Local inputs read:
 - `~/.local/share/opencode/auth.json`
 - `~/.local/share/opencode/opencode.db`
+- OpenCode Go usage response from `https://opencode.ai/zen/go/v1/usage`
 - What to fake:
 - `auth.json` with an `opencode-go` key entry.
 - SQLite history rows in `opencode.db` `message` table with `providerID`, `role`, `cost`, and `time.created`.
-- Limitation: this is one of the best fully local replay targets in the repo.
+- Return `usage.rolling`, `usage.weekly`, and `usage.monthly` objects from the usage endpoint.
+- Limitation: quota replay needs an HTTP fixture; local history replay remains local.
 
 ### `openrouter`
 - Local inputs read:
