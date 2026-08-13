@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
@@ -208,7 +208,37 @@ describe("SideNav", () => {
 
     expect(screen.getByRole("navigation")).toHaveClass("h-full", "min-h-0", "shrink-0")
     expect(screen.getByRole("button", { name: "Settings" })).toHaveClass("shrink-0")
-    expect(screen.getByTestId("provider-list")).toHaveClass("min-h-0", "flex-1", "overflow-y-auto")
-    expect(screen.getByTestId("side-nav-footer")).toHaveClass("mt-2", "border-t", "pt-2", "shrink-0")
+    expect(screen.getByTestId("provider-list")).toHaveClass("h-full", "min-h-0", "overflow-y-auto")
+    expect(screen.getByTestId("side-nav-footer")).toHaveClass(
+      "mt-2",
+      "border-t",
+      "pt-2",
+      "shrink-0"
+    )
+  })
+
+  it("shows a scroll hint when providers remain below the visible list", () => {
+    render(
+      <SideNav
+        activeView="home"
+        onViewChange={() => {}}
+        plugins={[{ id: "a", name: "A", iconUrl: "a.svg" }]}
+      />
+    )
+
+    const list = screen.getByTestId("provider-list")
+    Object.defineProperties(list, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 200 },
+    })
+
+    fireEvent.scroll(list)
+
+    expect(screen.getByTestId("provider-scroll-indicator")).toBeInTheDocument()
+
+    Object.defineProperty(list, "scrollTop", { configurable: true, value: 100 })
+    fireEvent.scroll(list)
+
+    expect(screen.queryByTestId("provider-scroll-indicator")).not.toBeInTheDocument()
   })
 })

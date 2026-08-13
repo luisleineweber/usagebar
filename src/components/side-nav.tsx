@@ -1,5 +1,5 @@
-import { useCallback } from "react"
-import { BarChart3, Check, GripVertical, Settings } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { BarChart3, Check, ChevronDown, GripVertical, Settings } from "lucide-react"
 import {
   DndContext,
   PointerSensor,
@@ -184,6 +184,8 @@ export function SideNav({
   onOpenContextMenu,
 }: SideNavProps) {
   const isDark = useDarkMode()
+  const providerListRef = useRef<HTMLDivElement>(null)
+  const [hasProvidersBelow, setHasProvidersBelow] = useState(false)
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -212,6 +214,28 @@ export function SideNav({
     },
     [onOpenContextMenu]
   )
+
+  const updateScrollHint = useCallback(() => {
+    const list = providerListRef.current
+    if (!list) return
+
+    setHasProvidersBelow(list.scrollTop + list.clientHeight < list.scrollHeight - 1)
+  }, [])
+
+  useEffect(() => {
+    updateScrollHint()
+    window.addEventListener("resize", updateScrollHint)
+
+    const list = providerListRef.current
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateScrollHint) : null
+    if (list) resizeObserver?.observe(list)
+
+    return () => {
+      window.removeEventListener("resize", updateScrollHint)
+      resizeObserver?.disconnect()
+    }
+  }, [arrangeMode, plugins.length, showHistoryInBar, updateScrollHint])
 
   return (
     <nav
@@ -243,25 +267,46 @@ export function SideNav({
         </NavButton>
       ) : null}
 
-      <div data-testid="provider-list" className="min-h-0 flex-1 overflow-y-auto scrollbar-none">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext
-            items={plugins.map((plugin) => plugin.id)}
-            strategy={verticalListSortingStrategy}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={providerListRef}
+          data-testid="provider-list"
+          onScroll={updateScrollHint}
+          className="h-full min-h-0 overflow-y-auto scrollbar-none"
+        >
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
           >
-            {plugins.map((plugin) => (
-              <SortableNavPlugin
-                key={plugin.id}
-                plugin={plugin}
-                isActive={activeView === plugin.id}
-                isDark={isDark}
-                onClick={() => onViewChange(plugin.id)}
-                onContextMenu={(event) => handlePluginContextMenu(event, plugin.id)}
-                isArrangeMode={arrangeMode}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
+            <SortableContext
+              items={plugins.map((plugin) => plugin.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {plugins.map((plugin) => (
+                <SortableNavPlugin
+                  key={plugin.id}
+                  plugin={plugin}
+                  isActive={activeView === plugin.id}
+                  isDark={isDark}
+                  onClick={() => onViewChange(plugin.id)}
+                  onContextMenu={(event) => handlePluginContextMenu(event, plugin.id)}
+                  isArrangeMode={arrangeMode}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
+
+        {hasProvidersBelow ? (
+          <div
+            data-testid="provider-scroll-indicator"
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-0 left-0 z-10 flex h-5 w-12 items-end justify-center bg-gradient-to-t from-muted via-muted/90 to-transparent pb-0.5 text-muted-foreground dark:from-card dark:via-card/90"
+          >
+            <ChevronDown className="size-3.5" />
+          </div>
+        ) : null}
       </div>
 
       {arrangeMode ? (
@@ -278,10 +323,7 @@ export function SideNav({
         </div>
       ) : null}
 
-      <div
-        data-testid="side-nav-footer"
-        className="mt-2 shrink-0 border-t border-border/70 pt-2"
-      >
+      <div data-testid="side-nav-footer" className="mt-2 shrink-0 border-t border-border/70 pt-2">
         <NavButton isActive={false} onClick={() => onOpenSettings?.()} aria-label="Settings">
           <Settings className="size-6" />
         </NavButton>
