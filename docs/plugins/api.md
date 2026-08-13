@@ -583,7 +583,7 @@ Commonly observed fields include:
 | `cacheReadTokens`     | `number`         | Provider-reported cache-read usage                           |
 | `reasoningTokens`     | `number`         | Provider-reported reasoning usage                            |
 | `cachedInputTokens`   | `number`         | Codex field                                                  |
-| `totalTokens`         | `number`         | Optional aggregate; clients sum component fields when absent |
+| `totalTokens`         | `number`         | Optional aggregate; derive it only when every token component is present, otherwise keep it unknown |
 | `totalCost`           | `number \| null` | Claude cost field                                            |
 | `costUSD`             | `number`         | Codex cost field                                             |
 
@@ -595,8 +595,24 @@ if (result.status === "ok") {
   for (var i = 0; i < result.data.daily.length; i++) {
     var day = result.data.daily[i]
     var cost = day.totalCost != null ? day.totalCost : day.costUSD
+    var tokens = day.totalTokens
+    if (
+      tokens == null &&
+      day.inputTokens != null &&
+      day.outputTokens != null &&
+      day.cacheCreationTokens != null &&
+      day.cacheReadTokens != null &&
+      day.reasoningTokens != null
+    ) {
+      tokens =
+        day.inputTokens +
+        day.outputTokens +
+        day.cacheCreationTokens +
+        day.cacheReadTokens +
+        day.reasoningTokens
+    }
     ctx.host.log.info(
-      day.date + ": " + (day.totalTokens || 0) + " tokens, $" + (cost != null ? cost : "n/a")
+      day.date + ": " + (tokens != null ? tokens : "n/a") + " tokens, $" + (cost != null ? cost : "n/a")
     )
   }
 } else if (result.status === "no_runner") {

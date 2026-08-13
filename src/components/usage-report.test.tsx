@@ -141,10 +141,24 @@ describe("UsageReport", () => {
 
   it("does not label unavailable provider request counts as zero", () => {
     const data = output()
-    data.history!.entries = data.history!.entries.map(({ requests: _requests, ...entry }) => entry)
+    data.history!.entries = data.history!.entries.map(
+      ({
+        costUsd: _costUsd,
+        requests: _requests,
+        inputTokens: _inputTokens,
+        outputTokens: _outputTokens,
+        totalTokens: _totalTokens,
+        ...entry
+      }) => entry
+    )
     render(<UsageReport outputs={[data]} nowMs={NOW_MS} />)
 
     expect(screen.queryByRole("button", { name: "Requests" })).not.toBeInTheDocument()
+
+    const costs = screen.getAllByText("Cost")
+    const tokens = screen.getAllByText("Tokens")
+    expect(costs[costs.length - 1].previousElementSibling).not.toHaveTextContent("0")
+    expect(tokens[tokens.length - 1].previousElementSibling).not.toHaveTextContent("0")
     expect(screen.getByText("Requests").previousElementSibling).toHaveTextContent("—")
   })
 })

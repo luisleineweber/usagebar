@@ -1,6 +1,8 @@
 use crate::local_http_api::cache::CachedPluginSnapshot;
 use crate::plugin_engine::freshness::DataFreshnessGroups;
-use crate::plugin_engine::runtime::{MetricLine, ProgressFormat, UsageHistoryEntry};
+use crate::plugin_engine::runtime::{
+    MetricLine, ProgressFormat, UsageHistoryEntry, UsageHistoryTotals,
+};
 use serde::Serialize;
 use time::{Duration, OffsetDateTime, format_description::well_known::Rfc3339};
 
@@ -26,19 +28,6 @@ struct UsageProvider<'a> {
     freshness: &'a Option<DataFreshnessGroups>,
 }
 
-#[derive(Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct HistoryTotals {
-    cost_usd: f64,
-    requests: f64,
-    input_tokens: f64,
-    output_tokens: f64,
-    cache_read_tokens: f64,
-    cache_creation_tokens: f64,
-    reasoning_tokens: f64,
-    total_tokens: f64,
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HistoryProvider {
@@ -46,7 +35,7 @@ struct HistoryProvider {
     display_name: String,
     source: String,
     time_zone: String,
-    totals: HistoryTotals,
+    totals: UsageHistoryTotals,
     entries: Vec<UsageHistoryEntry>,
     fetched_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -61,7 +50,7 @@ struct HistoryResponse {
     days: u16,
     from: String,
     to: String,
-    totals: HistoryTotals,
+    totals: UsageHistoryTotals,
     providers: Vec<HistoryProvider>,
 }
 
@@ -177,7 +166,7 @@ pub(crate) fn history(
 ) -> Result<Option<String>, String> {
     let from = now - Duration::days(i64::from(days));
     let mut providers = Vec::new();
-    let mut totals = HistoryTotals::default();
+    let mut totals = UsageHistoryTotals::default();
     for snapshot in snapshots {
         let Some(history) = &snapshot.history else {
             continue;
@@ -269,57 +258,27 @@ fn entry_is_in_window(entry: &UsageHistoryEntry, from: OffsetDateTime, to: Offse
     end > from && start <= to
 }
 
-impl HistoryTotals {
-    fn add_entry(&mut self, entry: &UsageHistoryEntry) {
-        self.cost_usd += entry.cost_usd.unwrap_or_default();
-        self.requests += entry.requests.unwrap_or_default();
-        self.input_tokens += entry.input_tokens.unwrap_or_default();
-        self.output_tokens += entry.output_tokens.unwrap_or_default();
-        self.cache_read_tokens += entry.cache_read_tokens.unwrap_or_default();
-        self.cache_creation_tokens += entry.cache_creation_tokens.unwrap_or_default();
-        self.reasoning_tokens += entry.reasoning_tokens.unwrap_or_default();
-        self.total_tokens += entry.total_tokens.unwrap_or_else(|| {
-            entry.input_tokens.unwrap_or_default()
-                + entry.output_tokens.unwrap_or_default()
-                + entry.cache_read_tokens.unwrap_or_default()
-                + entry.cache_creation_tokens.unwrap_or_default()
-                + entry.reasoning_tokens.unwrap_or_default()
-        });
-    }
-
-    fn add(&mut self, other: &Self) {
-        self.cost_usd += other.cost_usd;
-        self.requests += other.requests;
-        self.input_tokens += other.input_tokens;
-        self.output_tokens += other.output_tokens;
-        self.cache_read_tokens += other.cache_read_tokens;
-        self.cache_creation_tokens += other.cache_creation_tokens;
-        self.reasoning_tokens += other.reasoning_tokens;
-        self.total_tokens += other.total_tokens;
-    }
-}
-
-fn totals_for(entries: &[UsageHistoryEntry]) -> HistoryTotals {
-    let mut totals = HistoryTotals::default();
+fn totals_for(entries: &[UsageHistoryEntry]) -> UsageHistoryTotals {
+    let mut totals = UsageHistoryTotals::default();
     for entry in entries {
         totals.add_entry(entry);
     }
     totals
 }
 
-fn history_metrics(totals: &HistoryTotals) -> String {
+fn history_metrics(totals: &UsageHistoryTotals) -> String {
     let mut parts = Vec::new();
-    if totals.cost_usd > 0.0 {
-        parts.push(format!("${}", money(totals.cost_usd)));
+    if let Some(cost_usd) = totals.cost_usd {
+        parts.push(format!("${}", money(cost_usd)));
     }
-    if totals.total_tokens > 0.0 {
-        parts.push(format!("{} tokens", number(totals.total_tokens)));
+    if let Some(total_tokens) = totals.total_tokens {
+        parts.push(format!("{} tokens", number(total_tokens)));
     }
-    if totals.requests > 0.0 {
-        parts.push(format!("{} requests", number(totals.requests)));
+    if let Some(requests) = totals.requests {
+        parts.push(format!("{} requests", number(requests)));
     }
     if parts.is_empty() {
-        "0 usage".to_string()
+        "unknown usage".to_string()
     } else {
         parts.join(" | ")
     }
@@ -531,6 +490,30 @@ mod tests {
         assert_eq!(value["command"], "history");
         assert_eq!(value["days"], 7);
         assert_eq!(value["providers"][0]["entries"][0]["totalTokens"], 15.0);
+    }
+
+    #[test]
+    fn history_json_and_text_keep_missing_totals_unknown() {
+        let now = OffsetDateTime::parse("2026-07-10T12:00:00Z", &Rfc3339).unwrap();
+        let mut snapshot = snapshot();
+        let entry = &mut snapshot.history.as_mut().unwrap().entries[0];
+        entry.cost_usd = None;
+        entry.requests = None;
+        entry.input_tokens = None;
+        entry.output_tokens = None;
+        entry.total_tokens = None;
+
+        let json = history(std::slice::from_ref(&snapshot), 7, now, true)
+            .unwrap()
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(value["totals"]["costUsd"].is_null());
+        assert!(value["totals"]["requests"].is_null());
+        assert!(value["totals"]["totalTokens"].is_null());
+
+        let text = history(&[snapshot], 7, now, false).unwrap().unwrap();
+        assert!(text.contains("unknown usage"));
+        assert!(!text.contains("0 usage"));
     }
 
     #[test]

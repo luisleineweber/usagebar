@@ -37,6 +37,8 @@ usagebar-cli statusline --watch 5
 - `--provider <id>` limits output to one enabled cached provider.
 - `--watch <1-3600>` re-reads the cache at the selected interval. JSON mode emits one object per line.
 
+History JSON totals use `number | null`. `null` means the selected history did not provide that metric; it is not zero.
+
 ## Cache and exit behavior
 
 On Windows, the default cache is `%APPDATA%\com.sunstory.usagebar\usage-api-cache.json`. Set `USAGEBAR_APP_DATA_DIR` to read a different UsageBar data directory for development or support reproduction.

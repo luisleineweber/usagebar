@@ -601,6 +601,7 @@ mod tests {
         let response = route("GET", "/v1/history/claude?groupBy=model");
 
         assert!(response.starts_with("HTTP/1.1 200"));
+        assert!(response.contains(r#""schemaVersion":2"#));
         assert!(response.contains(r#""groupBy":"model""#));
         assert!(response.contains(r#""key":"sonnet""#));
         assert!(response.contains(r#""costUsd":2.5"#));

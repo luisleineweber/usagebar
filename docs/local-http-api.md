@@ -59,6 +59,12 @@ Returns one cached usage snapshot for a known provider.
 - `204 No Content`: Provider is known but has no cached snapshot yet.
 - `404 Not Found`: Provider ID is unknown.
 
+### `GET /v1/history` and `GET /v1/history/:providerId`
+
+Returns grouped cached usage history. Use `provider`, `from`, `to`, `model`, `project`, and `groupBy` query parameters to filter and group the result.
+
+History response `schemaVersion` is `2`. Every field in `totals` and group `totals` is `number | null`. `null` means the selected entries did not provide that metric; it is not zero.
+
 ### Unsupported Methods
 
 `GET` and `OPTIONS` are supported on the API routes. Other methods return `405 Method Not Allowed`.

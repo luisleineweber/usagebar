@@ -23,21 +23,21 @@ export type UsageHistoryRecord = UsageHistoryEntry & {
 }
 
 export type UsageHistoryTotals = {
-  costUsd: number
-  requests: number
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheCreationTokens: number
-  reasoningTokens: number
-  totalTokens: number
+  costUsd: number | null
+  requests: number | null
+  inputTokens: number | null
+  outputTokens: number | null
+  cacheReadTokens: number | null
+  cacheCreationTokens: number | null
+  reasoningTokens: number | null
+  totalTokens: number | null
 }
 
 export type UsageHistoryTopModel = {
   model: string
-  costUsd: number
-  requests: number
-  totalTokens: number
+  costUsd: number | null
+  requests: number | null
+  totalTokens: number | null
 }
 
 export type UsageHistorySummary = {
@@ -51,32 +51,24 @@ export type UsageHistorySummary = {
 
 const PERIODS: readonly UsageHistoryPeriod[] = ["today", "yesterday", "7d", "30d"]
 
-const EMPTY_TOTALS: UsageHistoryTotals = {
-  costUsd: 0,
-  requests: 0,
-  inputTokens: 0,
-  outputTokens: 0,
-  cacheReadTokens: 0,
-  cacheCreationTokens: 0,
-  reasoningTokens: 0,
-  totalTokens: 0,
+function finiteOrNull(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
 }
 
-function finiteOrZero(value: number | undefined): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
-}
-
-function entryTotalTokens(entry: UsageHistoryEntry): number {
+export function entryTotalTokens(entry: UsageHistoryEntry): number | null {
   if (typeof entry.totalTokens === "number" && Number.isFinite(entry.totalTokens)) {
     return entry.totalTokens
   }
-  return (
-    finiteOrZero(entry.inputTokens) +
-    finiteOrZero(entry.outputTokens) +
-    finiteOrZero(entry.cacheReadTokens) +
-    finiteOrZero(entry.cacheCreationTokens) +
-    finiteOrZero(entry.reasoningTokens)
-  )
+  const tokenValues = [
+    entry.inputTokens,
+    entry.outputTokens,
+    entry.cacheReadTokens,
+    entry.cacheCreationTokens,
+    entry.reasoningTokens,
+  ].map(finiteOrNull)
+  return tokenValues.every((value) => value !== null)
+    ? tokenValues.reduce((total, value) => total + (value ?? 0), 0)
+    : null
 }
 
 function selected(value: string | undefined, allowed: ReadonlySet<string> | null): boolean {
@@ -221,39 +213,52 @@ export function filterUsageHistory(
   return records
 }
 
-function addEntry(totals: UsageHistoryTotals, entry: UsageHistoryEntry): void {
-  totals.costUsd += finiteOrZero(entry.costUsd)
-  totals.requests += finiteOrZero(entry.requests)
-  totals.inputTokens += finiteOrZero(entry.inputTokens)
-  totals.outputTokens += finiteOrZero(entry.outputTokens)
-  totals.cacheReadTokens += finiteOrZero(entry.cacheReadTokens)
-  totals.cacheCreationTokens += finiteOrZero(entry.cacheCreationTokens)
-  totals.reasoningTokens += finiteOrZero(entry.reasoningTokens)
-  totals.totalTokens += entryTotalTokens(entry)
+function sumMetric(
+  entries: readonly UsageHistoryEntry[],
+  getValue: (entry: UsageHistoryEntry) => number | undefined | null
+): number | null {
+  if (entries.length === 0) return null
+  let total = 0
+  for (const entry of entries) {
+    const value = finiteOrNull(getValue(entry) ?? undefined)
+    if (value === null) return null
+    total += value
+  }
+  return total
 }
 
 function getTopModel(records: readonly UsageHistoryRecord[]): UsageHistoryTopModel | null {
-  const byModel = new Map<string, UsageHistoryTopModel>()
+  const byModel = new Map<string, UsageHistoryRecord[]>()
 
   for (const record of records) {
     const model = record.model?.trim()
     if (!model) continue
-    const current = byModel.get(model) ?? { model, costUsd: 0, requests: 0, totalTokens: 0 }
-    current.costUsd += finiteOrZero(record.costUsd)
-    current.requests += finiteOrZero(record.requests)
-    current.totalTokens += entryTotalTokens(record)
-    byModel.set(model, current)
+    byModel.set(model, [...(byModel.get(model) ?? []), record])
   }
 
   return (
-    [...byModel.values()].sort(
-      (a, b) =>
-        b.costUsd - a.costUsd ||
-        b.totalTokens - a.totalTokens ||
-        b.requests - a.requests ||
-        a.model.localeCompare(b.model)
-    )[0] ?? null
+    [...byModel.entries()]
+      .map(([model, modelRecords]) => ({
+        model,
+        costUsd: sumMetric(modelRecords, (record) => record.costUsd),
+        requests: sumMetric(modelRecords, (record) => record.requests),
+        totalTokens: sumMetric(modelRecords, entryTotalTokens),
+      }))
+      .sort((a, b) => {
+        const costOrder = compareKnownDescending(a.costUsd, b.costUsd)
+        if (costOrder !== 0) return costOrder
+        const tokenOrder = compareKnownDescending(a.totalTokens, b.totalTokens)
+        if (tokenOrder !== 0) return tokenOrder
+        const requestOrder = compareKnownDescending(a.requests, b.requests)
+        return requestOrder || a.model.localeCompare(b.model)
+      })[0] ?? null
   )
+}
+
+function compareKnownDescending(a: number | null, b: number | null): number {
+  if (a === null) return b === null ? 0 : 1
+  if (b === null) return -1
+  return b - a
 }
 
 export function summarizeUsageHistory(
@@ -261,8 +266,6 @@ export function summarizeUsageHistory(
   query: UsageHistoryQuery
 ): UsageHistorySummary {
   const records = filterUsageHistory(outputs, query)
-  const totals = { ...EMPTY_TOTALS }
-  for (const record of records) addEntry(totals, record)
   const { startMs, endMs } = getUsageHistoryWindow(
     query.period,
     query.nowMs,
@@ -274,7 +277,16 @@ export function summarizeUsageHistory(
     startMs,
     endMs,
     entryCount: records.length,
-    totals,
+    totals: {
+      costUsd: sumMetric(records, (record) => record.costUsd),
+      requests: sumMetric(records, (record) => record.requests),
+      inputTokens: sumMetric(records, (record) => record.inputTokens),
+      outputTokens: sumMetric(records, (record) => record.outputTokens),
+      cacheReadTokens: sumMetric(records, (record) => record.cacheReadTokens),
+      cacheCreationTokens: sumMetric(records, (record) => record.cacheCreationTokens),
+      reasoningTokens: sumMetric(records, (record) => record.reasoningTokens),
+      totalTokens: sumMetric(records, entryTotalTokens),
+    },
     topModel: getTopModel(records),
   }
 }

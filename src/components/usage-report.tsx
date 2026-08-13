@@ -4,6 +4,7 @@ import { ReportPricingEditor, loadModelPriceOverrides } from "@/components/repor
 import type { PluginOutput } from "@/lib/plugin-types"
 import {
   filterUsageHistory,
+  entryTotalTokens,
   summarizeUsageHistory,
   type UsageHistoryPeriod,
   type UsageHistoryRecord,
@@ -31,35 +32,26 @@ const METRIC_OPTIONS: { value: ReportMetric; label: string }[] = [
   { value: "requests", label: "Requests" },
 ]
 
-function entryTokens(record: UsageHistoryRecord): number {
-  return (
-    record.totalTokens ??
-    (record.inputTokens ?? 0) +
-      (record.outputTokens ?? 0) +
-      (record.cacheReadTokens ?? 0) +
-      (record.cacheCreationTokens ?? 0) +
-      (record.reasoningTokens ?? 0)
-  )
-}
-
 function metricValue(
   record: UsageHistoryRecord,
   metric: ReportMetric,
   overrides: ModelPriceOverrides
-): number {
+): number | null {
   if (metric === "cost") return reportEntryCost(record, overrides)
-  if (metric === "requests") return record.requests ?? 0
-  return entryTokens(record)
+  if (metric === "requests") return record.requests ?? null
+  return entryTotalTokens(record)
 }
 
-function formatCompact(value: number): string {
+function formatCompact(value: number | null): string {
+  if (value === null) return "—"
   return new Intl.NumberFormat(undefined, {
     notation: value >= 1_000 ? "compact" : "standard",
     maximumFractionDigits: value >= 1_000 ? 1 : 0,
   }).format(value)
 }
 
-function formatMetric(value: number, metric: ReportMetric): string {
+function formatMetric(value: number | null, metric: ReportMetric): string {
+  if (value === null) return "—"
   if (metric === "cost") {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
@@ -69,6 +61,13 @@ function formatMetric(value: number, metric: ReportMetric): string {
     }).format(value)
   }
   return formatCompact(value)
+}
+
+function sumKnown(values: readonly (number | null)[]): number | null {
+  if (values.length === 0 || values.some((value) => value === null)) return null
+  let total = 0
+  for (const value of values) total += value ?? 0
+  return total
 }
 
 function recordCalendarDay(record: UsageHistoryRecord): string {
@@ -95,19 +94,19 @@ function dailySeries(
   metric: ReportMetric,
   overrides: ModelPriceOverrides
 ) {
-  const totals = new Map<string, { value: number; tokens: number; cost: number }>()
+  const recordsByDay = new Map<string, UsageHistoryRecord[]>()
   for (const record of records) {
     const day = recordCalendarDay(record)
-    const current = totals.get(day) ?? { value: 0, tokens: 0, cost: 0 }
-    totals.set(day, {
-      value: current.value + metricValue(record, metric, overrides),
-      tokens: current.tokens + entryTokens(record),
-      cost: current.cost + reportEntryCost(record, overrides),
-    })
+    recordsByDay.set(day, [...(recordsByDay.get(day) ?? []), record])
   }
-  return [...totals.entries()]
+  return [...recordsByDay.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([day, totals]) => ({ day, ...totals }))
+    .map(([day, dayRecords]) => ({
+      day,
+      value: sumKnown(dayRecords.map((record) => metricValue(record, metric, overrides))),
+      tokens: sumKnown(dayRecords.map(entryTotalTokens)),
+      cost: sumKnown(dayRecords.map((record) => reportEntryCost(record, overrides))),
+    }))
 }
 
 function formatChartDay(day: string): string {
@@ -150,7 +149,7 @@ function TrendChart({
       </div>
     )
   }
-  const max = Math.max(...points.map((point) => point.value), 0)
+  const max = Math.max(...points.map((point) => point.value ?? 0), 0)
   const width = 320
   const height = 86
   const baseline = height - 16
@@ -158,7 +157,7 @@ function TrendChart({
   const step = points.length > 1 ? width / (points.length - 1) : width / 2
   const coordinates = points.map((point, index) => {
     const x = points.length > 1 ? index * step : width / 2
-    const y = max > 0 ? baseline - (point.value / max) * plotHeight : baseline
+    const y = point.value !== null && max > 0 ? baseline - (point.value / max) * plotHeight : baseline
     return { ...point, x, y }
   })
 
@@ -178,7 +177,7 @@ function TrendChart({
           : points.map((point) => `${point.day}: ${formatMetric(point.value, metric)}`).join(", ")}
       </desc>
       <line x1="0" x2={width} y1={baseline} y2={baseline} className="stroke-border" />
-      {coordinates.length > 1 ? (
+      {coordinates.length > 1 && coordinates.every((point) => point.value !== null) ? (
         <polyline
           points={coordinates.map((point) => `${point.x},${point.y}`).join(" ")}
           fill="none"
@@ -257,13 +256,19 @@ function ProjectBreakdown({
   metric: ReportMetric
   overrides: ModelPriceOverrides
 }) {
-  const totals = new Map<string, number>()
+  const values = new Map<string, (number | null)[]>()
   for (const record of records) {
     const project = record.project?.trim() || "Unspecified project"
-    totals.set(project, (totals.get(project) ?? 0) + metricValue(record, metric, overrides))
+    values.set(project, [...(values.get(project) ?? []), metricValue(record, metric, overrides)])
   }
-  const rows = [...totals.entries()].sort((left, right) => right[1] - left[1])
-  const max = Math.max(...rows.map(([, value]) => value), 0)
+  const rows = [...values.entries()]
+    .map(([project, projectValues]) => [project, sumKnown(projectValues)] as const)
+    .sort((left, right) => {
+      if (left[1] === null) return right[1] === null ? 0 : 1
+      if (right[1] === null) return -1
+      return right[1] - left[1]
+    })
+  const max = Math.max(...rows.map(([, value]) => value ?? 0), 0)
   return (
     <div className="space-y-2 py-1" aria-label="Usage grouped by project">
       {rows.map(([project, value]) => (
@@ -277,7 +282,9 @@ function ProjectBreakdown({
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-border/70">
             <div
               className="h-full rounded-full bg-primary dark:bg-page-accent"
-              style={{ width: `${max > 0 ? Math.max((value / max) * 100, 2) : 0}%` }}
+                style={{
+                  width: `${value !== null && max > 0 ? Math.max((value / max) * 100, 2) : 0}%`,
+                }}
             />
           </div>
         </div>
@@ -355,14 +362,14 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
   }
   const records = filterUsageHistory(outputs, query)
   const summary = summarizeUsageHistory(outputs, query)
-  const hasRequestData = records.some((record) => typeof record.requests === "number")
+  const hasRequestData = summary.totals.requests !== null
 
   useEffect(() => {
     if (metric === "requests" && !hasRequestData) setMetric("cost")
   }, [hasRequestData, metric])
   const selectedValue =
     metric === "cost"
-      ? records.reduce((total, record) => total + reportEntryCost(record, priceOverrides), 0)
+      ? sumKnown(records.map((record) => reportEntryCost(record, priceOverrides)))
       : metric === "requests"
         ? summary.totals.requests
         : summary.totals.totalTokens
@@ -496,10 +503,7 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
           <div className="px-1">
             <strong className="block tabular-nums">
               {formatMetric(
-                records.reduce(
-                  (total, record) => total + reportEntryCost(record, priceOverrides),
-                  0
-                ),
+                sumKnown(records.map((record) => reportEntryCost(record, priceOverrides))),
                 "cost"
               )}
             </strong>
@@ -523,7 +527,7 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
       {summary.topModel ? (
         <p className="mt-2 text-xs text-muted-foreground">
           Top model: <span className="font-medium text-foreground">{summary.topModel.model}</span>
-          {summary.topModel.totalTokens > 0
+          {summary.topModel.totalTokens !== null && summary.topModel.totalTokens > 0
             ? `, ${formatCompact(summary.topModel.totalTokens)} tokens`
             : ""}
         </p>

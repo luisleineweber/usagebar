@@ -162,7 +162,7 @@ describe("filterUsageHistory", () => {
 })
 
 describe("summarizeUsageHistory", () => {
-  it("totals cost, requests, and every token category across sparse entries", () => {
+  it("keeps aggregate fields unknown when any selected entry omits them", () => {
     const summary = summarizeUsageHistory(
       [
         output("codex", [
@@ -203,14 +203,14 @@ describe("summarizeUsageHistory", () => {
 
     expect(summary.entryCount).toBe(3)
     expect(summary.totals).toEqual({
-      costUsd: 1.25,
+      costUsd: null,
       requests: 5,
-      inputTokens: 110,
+      inputTokens: null,
       outputTokens: 77,
-      cacheReadTokens: 130,
-      cacheCreationTokens: 40,
-      reasoningTokens: 30,
-      totalTokens: 387,
+      cacheReadTokens: null,
+      cacheCreationTokens: null,
+      reasoningTokens: null,
+      totalTokens: null,
     })
   })
 
@@ -239,8 +239,70 @@ describe("summarizeUsageHistory", () => {
 
     expect(summary.entryCount).toBe(0)
     expect(summary.topModel).toBeNull()
-    expect(summary.totals.costUsd).toBe(0)
-    expect(summary.totals.totalTokens).toBe(0)
+    expect(summary.totals.costUsd).toBeNull()
+    expect(summary.totals.totalTokens).toBeNull()
+  })
+
+  it("keeps missing totals unknown while preserving authoritative zero totals", () => {
+    const summary = summarizeUsageHistory(
+      [
+        output("codex", [
+          historyEntry({
+            costUsd: undefined,
+            requests: undefined,
+            inputTokens: undefined,
+            outputTokens: undefined,
+            cacheReadTokens: undefined,
+            cacheCreationTokens: undefined,
+            reasoningTokens: undefined,
+            totalTokens: undefined,
+          }),
+          historyEntry({
+            costUsd: 0,
+            requests: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheCreationTokens: 0,
+            reasoningTokens: 0,
+            totalTokens: 0,
+          }),
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+
+    expect(summary.totals).toEqual({
+      costUsd: null,
+      requests: null,
+      inputTokens: null,
+      outputTokens: null,
+      cacheReadTokens: null,
+      cacheCreationTokens: null,
+      reasoningTokens: null,
+      totalTokens: null,
+    })
+
+    const zeroSummary = summarizeUsageHistory(
+      [
+        output("codex", [
+          historyEntry({
+            costUsd: 0,
+            requests: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheCreationTokens: 0,
+            reasoningTokens: 0,
+            totalTokens: 0,
+          }),
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+
+    expect(zeroSummary.totals.costUsd).toBe(0)
+    expect(zeroSummary.totals.totalTokens).toBe(0)
   })
 
   it("builds all four period summaries from the same filters", () => {

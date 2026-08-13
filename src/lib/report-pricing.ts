@@ -43,9 +43,18 @@ export async function saveModelPriceOverrides(overrides: ModelPriceOverrides): P
 export function reportEntryCost(
   record: UsageHistoryRecord,
   overrides: ModelPriceOverrides
-): number {
+): number | null {
   const override = record.model ? overrides[record.model] : undefined
-  if (!override) return record.costUsd ?? 0
+  if (!override) return record.costUsd ?? null
+  if (
+    typeof record.inputTokens !== "number" &&
+    typeof record.outputTokens !== "number" &&
+    typeof record.cacheReadTokens !== "number" &&
+    typeof record.cacheCreationTokens !== "number" &&
+    typeof record.reasoningTokens !== "number"
+  ) {
+    return null
+  }
   const input =
     (record.inputTokens ?? 0) +
     (record.cacheReadTokens ?? 0) +

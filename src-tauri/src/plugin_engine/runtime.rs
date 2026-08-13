@@ -118,6 +118,187 @@ pub struct UsageHistoryEntry {
     pub total_tokens: Option<f64>,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct UsageHistoryTotals {
+    pub(crate) cost_usd: Option<f64>,
+    pub(crate) requests: Option<f64>,
+    pub(crate) input_tokens: Option<f64>,
+    pub(crate) output_tokens: Option<f64>,
+    pub(crate) cache_read_tokens: Option<f64>,
+    pub(crate) cache_creation_tokens: Option<f64>,
+    pub(crate) reasoning_tokens: Option<f64>,
+    pub(crate) total_tokens: Option<f64>,
+    #[serde(skip)]
+    initialized: bool,
+    #[serde(skip)]
+    cost_complete: bool,
+    #[serde(skip)]
+    requests_complete: bool,
+    #[serde(skip)]
+    input_complete: bool,
+    #[serde(skip)]
+    output_complete: bool,
+    #[serde(skip)]
+    cache_read_complete: bool,
+    #[serde(skip)]
+    cache_creation_complete: bool,
+    #[serde(skip)]
+    reasoning_complete: bool,
+    #[serde(skip)]
+    total_complete: bool,
+}
+
+impl UsageHistoryTotals {
+    pub(crate) fn add_entry(&mut self, entry: &UsageHistoryEntry) {
+        if !self.initialized {
+            self.initialized = true;
+            self.cost_complete = true;
+            self.requests_complete = true;
+            self.input_complete = true;
+            self.output_complete = true;
+            self.cache_read_complete = true;
+            self.cache_creation_complete = true;
+            self.reasoning_complete = true;
+            self.total_complete = true;
+        }
+
+        add_metric(&mut self.cost_usd, &mut self.cost_complete, entry.cost_usd);
+        add_metric(
+            &mut self.requests,
+            &mut self.requests_complete,
+            entry.requests,
+        );
+        add_metric(
+            &mut self.input_tokens,
+            &mut self.input_complete,
+            entry.input_tokens,
+        );
+        add_metric(
+            &mut self.output_tokens,
+            &mut self.output_complete,
+            entry.output_tokens,
+        );
+        add_metric(
+            &mut self.cache_read_tokens,
+            &mut self.cache_read_complete,
+            entry.cache_read_tokens,
+        );
+        add_metric(
+            &mut self.cache_creation_tokens,
+            &mut self.cache_creation_complete,
+            entry.cache_creation_tokens,
+        );
+        add_metric(
+            &mut self.reasoning_tokens,
+            &mut self.reasoning_complete,
+            entry.reasoning_tokens,
+        );
+        add_metric(
+            &mut self.total_tokens,
+            &mut self.total_complete,
+            entry_total_tokens(entry),
+        );
+    }
+
+    pub(crate) fn add(&mut self, other: &Self) {
+        if !other.initialized {
+            return;
+        }
+        if !self.initialized {
+            *self = other.clone();
+            return;
+        }
+
+        add_totals(
+            &mut self.cost_usd,
+            &mut self.cost_complete,
+            other.cost_usd,
+            other.cost_complete,
+        );
+        add_totals(
+            &mut self.requests,
+            &mut self.requests_complete,
+            other.requests,
+            other.requests_complete,
+        );
+        add_totals(
+            &mut self.input_tokens,
+            &mut self.input_complete,
+            other.input_tokens,
+            other.input_complete,
+        );
+        add_totals(
+            &mut self.output_tokens,
+            &mut self.output_complete,
+            other.output_tokens,
+            other.output_complete,
+        );
+        add_totals(
+            &mut self.cache_read_tokens,
+            &mut self.cache_read_complete,
+            other.cache_read_tokens,
+            other.cache_read_complete,
+        );
+        add_totals(
+            &mut self.cache_creation_tokens,
+            &mut self.cache_creation_complete,
+            other.cache_creation_tokens,
+            other.cache_creation_complete,
+        );
+        add_totals(
+            &mut self.reasoning_tokens,
+            &mut self.reasoning_complete,
+            other.reasoning_tokens,
+            other.reasoning_complete,
+        );
+        add_totals(
+            &mut self.total_tokens,
+            &mut self.total_complete,
+            other.total_tokens,
+            other.total_complete,
+        );
+    }
+}
+
+fn add_metric(target: &mut Option<f64>, complete: &mut bool, value: Option<f64>) {
+    if !*complete {
+        return;
+    }
+    let Some(value) = value else {
+        *complete = false;
+        *target = None;
+        return;
+    };
+    *target = Some(target.unwrap_or_default() + value);
+}
+
+fn add_totals(
+    target: &mut Option<f64>,
+    complete: &mut bool,
+    other: Option<f64>,
+    other_complete: bool,
+) {
+    if !*complete || !other_complete {
+        *complete = false;
+        *target = None;
+        return;
+    }
+    *target = Some(target.unwrap_or_default() + other.unwrap_or_default());
+}
+
+fn entry_total_tokens(entry: &UsageHistoryEntry) -> Option<f64> {
+    entry.total_tokens.or_else(|| {
+        Some(
+            entry.input_tokens?
+                + entry.output_tokens?
+                + entry.cache_read_tokens?
+                + entry.cache_creation_tokens?
+                + entry.reasoning_tokens?,
+        )
+    })
+}
+
 #[cfg(test)]
 pub fn run_probe(
     plugin: &LoadedPlugin,

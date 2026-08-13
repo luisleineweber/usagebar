@@ -1,6 +1,6 @@
 use super::cache::CachedPluginSnapshot;
 use crate::plugin_engine::freshness::DataFreshnessGroups;
-use crate::plugin_engine::runtime::UsageHistoryEntry;
+use crate::plugin_engine::runtime::{UsageHistoryEntry, UsageHistoryTotals};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -43,45 +43,13 @@ impl HistoryQuery {
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryTotals {
-    cost_usd: f64,
-    requests: f64,
-    input_tokens: f64,
-    output_tokens: f64,
-    cache_read_tokens: f64,
-    cache_creation_tokens: f64,
-    reasoning_tokens: f64,
-    total_tokens: f64,
-}
-
-impl HistoryTotals {
-    fn add(&mut self, entry: &UsageHistoryEntry) {
-        self.cost_usd += entry.cost_usd.unwrap_or_default();
-        self.requests += entry.requests.unwrap_or_default();
-        self.input_tokens += entry.input_tokens.unwrap_or_default();
-        self.output_tokens += entry.output_tokens.unwrap_or_default();
-        self.cache_read_tokens += entry.cache_read_tokens.unwrap_or_default();
-        self.cache_creation_tokens += entry.cache_creation_tokens.unwrap_or_default();
-        self.reasoning_tokens += entry.reasoning_tokens.unwrap_or_default();
-        self.total_tokens += entry.total_tokens.unwrap_or_else(|| {
-            entry.input_tokens.unwrap_or_default()
-                + entry.output_tokens.unwrap_or_default()
-                + entry.cache_read_tokens.unwrap_or_default()
-                + entry.cache_creation_tokens.unwrap_or_default()
-                + entry.reasoning_tokens.unwrap_or_default()
-        });
-    }
-}
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryGroup {
     key: String,
     label: String,
     entry_count: usize,
-    totals: HistoryTotals,
+    totals: UsageHistoryTotals,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -113,7 +81,7 @@ pub struct HistoryResponse {
     schema_version: u32,
     generated_at: String,
     filters: AppliedHistoryFilters,
-    totals: HistoryTotals,
+    totals: UsageHistoryTotals,
     groups: Vec<HistoryGroup>,
     providers: Vec<ProviderHistory>,
 }
@@ -251,7 +219,7 @@ pub fn build_history_response(
     query: &HistoryQuery,
 ) -> HistoryResponse {
     let provider_filter: HashSet<&str> = query.provider_ids.iter().map(String::as_str).collect();
-    let mut totals = HistoryTotals::default();
+    let mut totals = UsageHistoryTotals::default();
     let mut grouped: BTreeMap<String, HistoryGroup> = BTreeMap::new();
     let mut providers = Vec::new();
 
@@ -269,16 +237,16 @@ pub fn build_history_response(
             .collect();
 
         for entry in &entries {
-            totals.add(entry);
+            totals.add_entry(entry);
             let (key, label) = group_key(query.group_by, &snapshot.provider_id, entry);
             let group = grouped.entry(key.clone()).or_insert_with(|| HistoryGroup {
                 key,
                 label,
                 entry_count: 0,
-                totals: HistoryTotals::default(),
+                totals: UsageHistoryTotals::default(),
             });
             group.entry_count += 1;
-            group.totals.add(entry);
+            group.totals.add_entry(entry);
         }
 
         providers.push(ProviderHistory {
@@ -299,7 +267,7 @@ pub fn build_history_response(
     }
 
     HistoryResponse {
-        schema_version: 1,
+        schema_version: 2,
         generated_at: OffsetDateTime::now_utc()
             .format(&Rfc3339)
             .unwrap_or_default(),
@@ -388,7 +356,24 @@ mod tests {
         assert_eq!(response.providers[0].entries.len(), 1);
         assert_eq!(response.groups.len(), 1);
         assert_eq!(response.groups[0].key, "opus");
-        assert_eq!(response.totals.cost_usd, 1.5);
-        assert_eq!(response.totals.total_tokens, 15.0);
+        assert_eq!(response.totals.cost_usd, Some(1.5));
+        assert_eq!(response.totals.total_tokens, Some(15.0));
+    }
+
+    #[test]
+    fn response_serializes_missing_totals_as_null() {
+        let mut snapshot = snapshot();
+        snapshot.history.as_mut().unwrap().entries[0].cost_usd = None;
+        snapshot.history.as_mut().unwrap().entries[0].requests = None;
+        snapshot.history.as_mut().unwrap().entries[0].input_tokens = None;
+        snapshot.history.as_mut().unwrap().entries[0].output_tokens = None;
+        snapshot.history.as_mut().unwrap().entries[0].total_tokens = None;
+
+        let response = build_history_response(vec![snapshot], &HistoryQuery::default());
+        let value = serde_json::to_value(response).unwrap();
+
+        assert!(value["totals"]["costUsd"].is_null());
+        assert!(value["totals"]["requests"].is_null());
+        assert!(value["totals"]["totalTokens"].is_null());
     }
 }
