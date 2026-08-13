@@ -85,92 +85,70 @@ function ProviderRow({
 
   return (
     /*
-     * Why <div role="button"> instead of <button>?
+     * Provider row and enable controls are separate semantic controls.
+     * The native controls stay separate, so their events do not overlap.
      *
-     * @base-ui/react Checkbox.Root renders as a <button> element. Nesting a
-     * <button> inside another <button> is invalid HTML — browsers repair the
-     * tree by splitting them into siblings, which breaks stopPropagation and
-     * causes every checkbox click to also trigger the row's onClick (opening
-     * the detail panel). Using a div keeps the HTML valid and stopPropagation
-     * on the Checkbox works correctly.
-     *
-     * Accessibility: role="button" + tabIndex={0} + onKeyDown restore the
-     * same keyboard contract as a native button.
+     * Each control has its own focus and keyboard behavior.
      */
     <div
-      role="button"
-      tabIndex={0}
       className={cn(
-        "group flex w-full cursor-pointer flex-wrap items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors sm:flex-nowrap sm:items-center",
+        "group flex w-full flex-wrap items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors sm:flex-nowrap sm:items-center",
         selected
           ? "border-border bg-muted/70 text-foreground shadow-sm"
           : "border-transparent bg-transparent hover:border-border/55 hover:bg-muted/35"
       )}
-      onClick={(event) => {
-        const target = event.target
-        if (
-          (target instanceof HTMLInputElement && target.type === "checkbox") ||
-          (target instanceof Element && target.closest("button"))
-        ) {
-          return
-        }
-        onSelect()
-      }}
-      onKeyDown={(e) => {
-        const target = e.target
-        if (
-          (target instanceof HTMLInputElement && target.type === "checkbox") ||
-          (target instanceof Element && target.closest("button"))
-        ) {
-          return
-        }
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          onSelect()
-        }
-      }}
     >
-      {/* Icon + status dot */}
-      <div className="relative">
-        <ProviderIcon
-          iconUrl={plugin.iconUrl}
-          darkIconUrl={plugin.darkIconUrl}
-          iconColorMode={plugin.iconColorMode}
-          brandColor={plugin.brandColor}
-          isDark={isDark}
-          className="size-5"
-          ariaHidden
-          testId="provider-icon"
-        />
-        <span
-          className={cn(
-            "absolute -right-1 -top-1 size-2.5 rounded-full border border-card",
-            isConnected ? "bg-emerald-400" : plugin.enabled ? "bg-amber-400" : "bg-muted"
-          )}
-        />
-      </div>
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 text-left outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] sm:items-center"
+        onClick={onSelect}
+      >
+        {/* Icon + status dot */}
+        <div className="relative">
+          <ProviderIcon
+            iconUrl={plugin.iconUrl}
+            darkIconUrl={plugin.darkIconUrl}
+            iconColorMode={plugin.iconColorMode}
+            brandColor={plugin.brandColor}
+            isDark={isDark}
+            className="size-5"
+            ariaHidden
+            testId="provider-icon"
+          />
+          <span
+            className={cn(
+              "absolute -right-1 -top-1 size-2.5 rounded-full border border-card",
+              isConnected ? "bg-emerald-400" : plugin.enabled ? "bg-amber-400" : "bg-muted"
+            )}
+          />
+        </div>
 
-      {/* Name + subtitle */}
-      <span className="min-w-0 flex-1">
-        <span
-          className={cn("block text-sm font-medium", !plugin.enabled && "text-muted-foreground")}
-        >
-          {plugin.name}
+        {/* Name + subtitle */}
+        <span className="min-w-0 flex-1">
+          <span
+            className={cn("block text-sm font-medium", !plugin.enabled && "text-muted-foreground")}
+          >
+            {plugin.name}
+          </span>
+          <span className="block break-words text-xs leading-5 text-muted-foreground">
+            {getProviderSubtitle(plugin)}
+          </span>
         </span>
-        <span className="block break-words text-xs leading-5 text-muted-foreground">
-          {getProviderSubtitle(plugin)}
-        </span>
-      </span>
 
-      {/*
+        {/*
         ChevronRight — only visible on narrow screens to signal "tap to configure".
         Hidden at xl because the two-column layout makes the right panel always visible.
       */}
-      <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground/50 xl:hidden" />
+        <ChevronRight
+          aria-hidden="true"
+          className="size-4 shrink-0 self-center text-muted-foreground/50 xl:hidden"
+        />
+      </button>
 
       {/* Enable / disable checkbox */}
       <Checkbox
         key={`${plugin.id}-${plugin.enabled}`}
+        aria-label={`Enable ${plugin.name}`}
         checked={plugin.enabled}
         disabled={!plugin.supported}
         className={cn(
@@ -183,9 +161,6 @@ function ProviderRow({
           if (nextEnabled === plugin.enabled) return
           onToggle(plugin.id)
         }}
-        onPointerDown={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
       />
       {plugin.hidden ? (
         <button
@@ -193,10 +168,7 @@ function ProviderRow({
           className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label={`Show ${plugin.name} in sidebar`}
           title="Show in sidebar"
-          onClick={(event) => {
-            event.stopPropagation()
-            onShow(plugin.id)
-          }}
+          onClick={() => onShow(plugin.id)}
         >
           <Eye className="size-4" />
         </button>
@@ -251,8 +223,7 @@ export function ProvidersSettingsPane({
   }, [selectedProviderId])
 
   const selectedProvider =
-    settingsProviders.find((provider) => provider.id === selectedProviderId) ??
-    null
+    settingsProviders.find((provider) => provider.id === selectedProviderId) ?? null
 
   /** Called when the user explicitly taps / clicks a provider row. */
   const handleRowSelect = (id: string) => {

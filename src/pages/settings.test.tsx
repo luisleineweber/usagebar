@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen } from "@testing-library/react"
 import { useState } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -327,7 +327,8 @@ describe("SettingsPage", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
 
     const codexRow = screen.getByRole("button", { name: /codex/i })
-    const checkbox = within(codexRow).getByRole("checkbox")
+    const checkbox = screen.getByRole("checkbox", { name: "Enable Codex" })
+    expect(codexRow).not.toContainElement(checkbox)
     await userEvent.click(checkbox)
     expect(onToggle).toHaveBeenCalledWith("codex")
   })
@@ -344,10 +345,21 @@ describe("SettingsPage", () => {
       />
     )
 
-    const codexRow = screen.getByRole("button", { name: /codex/i })
-    await userEvent.click(within(codexRow).getByRole("checkbox"))
+    await userEvent.click(screen.getByRole("checkbox", { name: "Enable Codex" }))
 
     expect(onSelectedProviderChange).not.toHaveBeenCalled()
+  })
+
+  it("moves settings radio focus with arrow keys", async () => {
+    render(<TestHarness />)
+
+    const current = screen.getByRole("radio", { name: "15 min" })
+    const next = screen.getByRole("radio", { name: "30 min" })
+
+    current.focus()
+    await userEvent.keyboard("{ArrowRight}")
+
+    expect(next).toHaveFocus()
   })
 
   it("does not select the first provider when opening the Providers tab", () => {

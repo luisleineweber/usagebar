@@ -2055,8 +2055,7 @@ describe("App", () => {
     renderSettingsWindow()
 
     await userEvent.click(await screen.findByRole("tab", { name: "Providers" }))
-    const betaRow = await screen.findByRole("button", { name: /beta/i })
-    await userEvent.click(within(betaRow).getByRole("checkbox"))
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Enable Beta" }))
 
     await waitFor(() =>
       expect(eventState.emitMock).toHaveBeenCalledWith("plugin-settings:updated", {

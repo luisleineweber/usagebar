@@ -1,7 +1,9 @@
 import { ExternalLink } from "lucide-react"
+import type { ReactNode } from "react"
 import { openUrl } from "@tauri-apps/plugin-opener"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 import { GlobalShortcutSection } from "@/components/global-shortcut-section"
 import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
@@ -37,6 +39,53 @@ const TWO_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-2"
 const THREE_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-3"
 const SETTINGS_SECTION_CLASS =
   "border-t border-border/55 pt-4 first:border-t-0 first:pt-0 xl:first:border-t xl:first:pt-4"
+
+type SettingsRadioGroupProps<T extends string | number> = {
+  options: readonly { value: T; label: string }[]
+  value: T
+  onValueChange: (value: T) => void
+  className: string
+  ariaLabel: string
+  renderLabel?: (option: { value: T; label: string }, isActive: boolean) => ReactNode
+}
+
+function SettingsRadioGroup<T extends string | number>({
+  options,
+  value,
+  onValueChange,
+  className,
+  ariaLabel,
+  renderLabel,
+}: SettingsRadioGroupProps<T>) {
+  return (
+    <RadioGroup
+      value={value}
+      aria-label={ariaLabel}
+      className={className}
+      onValueChange={(nextValue) => onValueChange(nextValue as T)}
+    >
+      {options.map((option) => {
+        const isActive = option.value === value
+        return (
+          <RadioGroupItem
+            key={option.value}
+            value={option.value}
+            className={cn(
+              "min-h-9 w-full cursor-pointer rounded-md border bg-clip-padding px-2.5 text-sm font-medium transition-all",
+              "inline-flex items-center justify-center whitespace-nowrap",
+              isActive
+                ? "border-transparent bg-primary text-primary-foreground hover:bg-primary/80"
+                : "border-border bg-background hover:bg-muted hover:text-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+              renderLabel && "h-auto flex-col gap-0 py-2"
+            )}
+          >
+            {renderLabel ? renderLabel(option, isActive) : option.label}
+          </RadioGroupItem>
+        )
+      })}
+    </RadioGroup>
+  )
+}
 
 type GeneralSettingsPaneProps = {
   autoUpdateInterval: AutoUpdateIntervalMinutes
@@ -98,29 +147,13 @@ export function GeneralSettingsPane({
         <p className="mb-3 text-sm text-muted-foreground">
           Choose how often UsageBar refreshes provider data.
         </p>
-        <div
+        <SettingsRadioGroup
+          options={AUTO_UPDATE_OPTIONS}
+          value={autoUpdateInterval}
+          onValueChange={onAutoUpdateIntervalChange}
           className={DENSE_SEGMENTED_GROUP_CLASS}
-          role="radiogroup"
-          aria-label="Auto-update interval"
-        >
-          {AUTO_UPDATE_OPTIONS.map((option) => {
-            const isActive = option.value === autoUpdateInterval
-            return (
-              <Button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                variant={isActive ? "default" : "outline"}
-                size="sm"
-                className="min-h-9 w-full"
-                onClick={() => onAutoUpdateIntervalChange(option.value)}
-              >
-                {option.label}
-              </Button>
-            )
-          })}
-        </div>
+          ariaLabel="Auto-update interval"
+        />
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
@@ -128,25 +161,13 @@ export function GeneralSettingsPane({
         <p className="mb-3 text-sm text-muted-foreground">
           Show quota as remaining usage or consumed usage.
         </p>
-        <div className={TWO_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Usage display mode">
-          {DISPLAY_MODE_OPTIONS.map((option) => {
-            const isActive = option.value === displayMode
-            return (
-              <Button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                variant={isActive ? "default" : "outline"}
-                size="sm"
-                className="min-h-9 w-full"
-                onClick={() => onDisplayModeChange(option.value)}
-              >
-                {option.label}
-              </Button>
-            )
-          })}
-        </div>
+        <SettingsRadioGroup
+          options={DISPLAY_MODE_OPTIONS}
+          value={displayMode}
+          onValueChange={onDisplayModeChange}
+          className={TWO_OPTION_GROUP_CLASS}
+          ariaLabel="Usage display mode"
+        />
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
@@ -154,29 +175,20 @@ export function GeneralSettingsPane({
         <p className="mb-3 text-sm text-muted-foreground">
           Choose whether reset times appear as countdowns or clock times.
         </p>
-        <div
+        <SettingsRadioGroup
+          options={RESET_TIMER_DISPLAY_OPTIONS}
+          value={resetTimerDisplayMode}
+          onValueChange={onResetTimerDisplayModeChange}
           className={TWO_OPTION_GROUP_CLASS}
-          role="radiogroup"
-          aria-label="Reset timer display mode"
-        >
-          {RESET_TIMER_DISPLAY_OPTIONS.map((option) => {
-            const isActive = option.value === resetTimerDisplayMode
+          ariaLabel="Reset timer display mode"
+          renderLabel={(option, isActive) => {
             const absoluteTimeExample = getTimeFormatter(timeFormatMode).format(
               new Date(2026, 1, 2, 11, 4)
             )
             const example =
               option.value === "relative" ? "5h 12m" : `today at ${absoluteTimeExample}`
             return (
-              <Button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                variant={isActive ? "default" : "outline"}
-                size="sm"
-                className="flex h-auto min-h-14 w-full flex-col items-center gap-0 py-2"
-                onClick={() => onResetTimerDisplayModeChange(option.value)}
-              >
+              <>
                 <span>{option.label}</span>
                 <span
                   className={cn(
@@ -186,31 +198,25 @@ export function GeneralSettingsPane({
                 >
                   {example}
                 </span>
-              </Button>
+              </>
             )
-          })}
-        </div>
+          }}
+        />
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">Time Format</h3>
         <p className="mb-3 text-sm text-muted-foreground">12-hour or 24-hour clock</p>
-        <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Time format">
-          {TIME_FORMAT_OPTIONS.map((option) => {
-            const isActive = option.value === timeFormatMode
+        <SettingsRadioGroup
+          options={TIME_FORMAT_OPTIONS}
+          value={timeFormatMode}
+          onValueChange={onTimeFormatModeChange}
+          className={THREE_OPTION_GROUP_CLASS}
+          ariaLabel="Time format"
+          renderLabel={(option, isActive) => {
             const example = getTimeFormatter(option.value).format(new Date(2026, 1, 2, 11, 4))
             return (
-              <Button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                aria-label={option.label}
-                variant={isActive ? "default" : "outline"}
-                size="sm"
-                className="flex h-auto min-h-14 w-full flex-col items-center gap-0 py-2"
-                onClick={() => onTimeFormatModeChange(option.value)}
-              >
+              <>
                 <span>{option.label}</span>
                 <span
                   className={cn(
@@ -220,10 +226,10 @@ export function GeneralSettingsPane({
                 >
                   {example}
                 </span>
-              </Button>
+              </>
             )
-          })}
-        </div>
+          }}
+        />
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
@@ -231,27 +237,16 @@ export function GeneralSettingsPane({
         <p className="mb-3 text-sm text-muted-foreground">
           Choose how current provider usage appears in the system tray.
         </p>
-        <div className={DENSE_SEGMENTED_GROUP_CLASS} role="radiogroup" aria-label="Tray icon style">
-          {MENUBAR_ICON_STYLE_OPTIONS.map((option) => {
-            const isActive = option.value === menubarIconStyle
-            return (
-              <Button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                variant={isActive ? "default" : "outline"}
-                size="sm"
-                className="min-h-9 w-full"
-                onClick={() => onMenubarIconStyleChange(option.value)}
-              >
-                {option.label}
-              </Button>
-            )
-          })}
-        </div>
+        <SettingsRadioGroup
+          options={MENUBAR_ICON_STYLE_OPTIONS}
+          value={menubarIconStyle}
+          onValueChange={onMenubarIconStyleChange}
+          className={DENSE_SEGMENTED_GROUP_CLASS}
+          ariaLabel="Tray icon style"
+        />
         <p className="mt-2 text-xs text-muted-foreground">
-          Compact shows remaining usage as a number. Stacked bars compare multiple providers, while Donut combines a provider icon with its usage.
+          Compact shows remaining usage as a number. Stacked bars compare multiple providers, while
+          Donut combines a provider icon with its usage.
         </p>
         <div
           className={
@@ -263,29 +258,13 @@ export function GeneralSettingsPane({
           {menubarIconStyle !== "bars" && (
             <div>
               <h4 className="mb-2 text-sm font-medium">Provider selection</h4>
-              <div
+              <SettingsRadioGroup
+                options={TRAY_PROVIDER_SELECTION_OPTIONS}
+                value={trayProviderSelection}
+                onValueChange={onTrayProviderSelectionChange}
                 className={TWO_OPTION_GROUP_CLASS}
-                role="radiogroup"
-                aria-label="Tray provider selection"
-              >
-                {TRAY_PROVIDER_SELECTION_OPTIONS.map((option) => {
-                  const isActive = option.value === trayProviderSelection
-                  return (
-                    <Button
-                      key={option.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={isActive}
-                      variant={isActive ? "default" : "outline"}
-                      size="sm"
-                      className="min-h-9 w-full"
-                      onClick={() => onTrayProviderSelectionChange(option.value)}
-                    >
-                      {option.label}
-                    </Button>
-                  )
-                })}
-              </div>
+                ariaLabel="Tray provider selection"
+              />
             </div>
           )}
           <div className={menubarIconStyle === "bars" ? "w-full sm:w-48" : undefined}>
@@ -322,54 +301,46 @@ export function GeneralSettingsPane({
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-0 text-base font-semibold">App Theme</h3>
         <p className="mb-3 text-sm text-muted-foreground">Choose the app appearance.</p>
-        <div className={THREE_OPTION_GROUP_CLASS} role="radiogroup" aria-label="Theme mode">
-          {THEME_OPTIONS.map((option) => {
-            const isActive = option.value === themeMode
-            return (
-              <Button
-                key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                variant={isActive ? "default" : "outline"}
-                size="sm"
-                className="min-h-9 w-full"
-                onClick={() => onThemeModeChange(option.value)}
-              >
-                {option.label}
-              </Button>
-            )
-          })}
-        </div>
+        <SettingsRadioGroup
+          options={THEME_OPTIONS}
+          value={themeMode}
+          onValueChange={onThemeModeChange}
+          className={THREE_OPTION_GROUP_CLASS}
+          ariaLabel="Theme mode"
+        />
         <h3 className="mb-0 mt-5 text-base font-semibold">Accent Color</h3>
         <p className="mb-3 text-sm text-muted-foreground">Choose the UsageBar highlight color.</p>
-        <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="Accent color">
+        <RadioGroup
+          value={accentColor}
+          aria-label="Accent color"
+          className="grid grid-cols-5 gap-2"
+          onValueChange={(nextValue) => onAccentColorChange(nextValue as AccentColor)}
+        >
           {ACCENT_COLOR_OPTIONS.map((option) => {
             const isActive = option.value === accentColor
             const displayColor = getDisplayAccentColor(option.value, isDark)
             return (
-              <Button
+              <RadioGroupItem
                 key={option.value}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
+                value={option.value}
                 aria-label={option.label}
-                variant="outline"
-                size="sm"
-                className={cn("min-h-10 w-full px-2", isActive && "ring-2 ring-offset-2")}
+                className={cn(
+                  "min-h-10 w-full cursor-pointer rounded-md border bg-background px-2 text-sm font-medium outline-none transition-all",
+                  "focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                  isActive && "ring-2 ring-offset-2"
+                )}
                 style={{
                   borderColor: displayColor,
                   backgroundColor: isActive ? displayColor : undefined,
                   color: isActive ? getContrastTextColor(displayColor) : displayColor,
                   outlineColor: displayColor,
                 }}
-                onClick={() => onAccentColorChange(option.value)}
               >
                 {option.label}
-              </Button>
+              </RadioGroupItem>
             )
           })}
-        </div>
+        </RadioGroup>
       </section>
 
       <GlobalShortcutSection
