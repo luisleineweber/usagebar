@@ -1,15 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { getVersion } from "@tauri-apps/api/app"
-import { isTauri } from "@tauri-apps/api/core"
+import { invoke, isTauri } from "@tauri-apps/api/core"
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater"
-import { openUrl } from "@tauri-apps/plugin-opener"
 import { relaunch } from "@tauri-apps/plugin-process"
 
 export type UpdateStatus =
   | { status: "idle" }
   | { status: "checking" }
   | { status: "up-to-date" }
-  | { status: "available"; version: string; url?: string }
+  | { status: "available"; version: string; url?: string; error?: string }
   | { status: "downloading"; progress: number } // 0-100, or -1 if indeterminate
   | { status: "installing" }
   | { status: "ready" }
@@ -153,6 +152,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
   const statusRef = useRef<UpdateStatus>({ status: "idle" })
   const updateRef = useRef<Update | null>(null)
   const externalReleaseUrlRef = useRef<string | null>(null)
+  const downloadedInstallerPathRef = useRef<string | null>(null)
   const currentVersionRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
   const inFlightRef = useRef({ checking: false, downloading: false, installing: false })
@@ -264,6 +264,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
           inFlightRef.current.checking = false
           updateRef.current = update
           externalReleaseUrlRef.current = null
+          downloadedInstallerPathRef.current = null
           setStatus({ status: "available", version: updateVersion })
           return
         }
@@ -290,6 +291,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
       if (release) {
         updateRef.current = null
         externalReleaseUrlRef.current = release.url
+        downloadedInstallerPathRef.current = null
         setStatus({ status: "available", version: release.version, url: release.url })
         return
       }
@@ -344,17 +346,38 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
   const triggerInstall = useCallback(async () => {
     const update = updateRef.current
     const releaseUrl = externalReleaseUrlRef.current
-    if (statusRef.current.status === "available" && releaseUrl) {
-      await openUrl(releaseUrl)
-      return
-    }
-
-    if (!update) return
     if (statusRef.current.status === "available") {
       if (inFlightRef.current.downloading || inFlightRef.current.installing) return
+      const availableVersion = statusRef.current.version
 
       inFlightRef.current.downloading = true
       setStatus({ status: "downloading", progress: -1 })
+
+      if (releaseUrl) {
+        try {
+          downloadedInstallerPathRef.current = await invoke<string>("download_github_update", {
+            version: availableVersion,
+          })
+          setStatus({ status: "ready" })
+        } catch (err) {
+          console.error("GitHub update download failed:", err)
+          setStatus({
+            status: "available",
+            version: availableVersion,
+            url: releaseUrl,
+            error: "Download failed",
+          })
+        } finally {
+          inFlightRef.current.downloading = false
+        }
+        return
+      }
+
+      if (!update) {
+        inFlightRef.current.downloading = false
+        setStatus({ status: "error", message: "Update is no longer available" })
+        return
+      }
 
       let totalBytes: number | null = null
       let downloadedBytes = 0
@@ -374,17 +397,16 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
             setStatus({ status: "downloading", progress: pct })
           }
         } else if (event.event === "Finished") {
-          setStatus({ status: "installing" })
+          setStatus({ status: "downloading", progress: 100 })
         }
       }
 
       try {
-        await update.downloadAndInstall(onDownloadEvent)
-        await relaunch()
-        setStatus({ status: "idle" })
+        await update.download(onDownloadEvent)
+        setStatus({ status: "ready" })
       } catch (err) {
-        console.error("Update download or install failed:", err)
-        setStatus({ status: "error", message: "Install failed" })
+        console.error("Update download failed:", err)
+        setStatus({ status: "available", version: update.version, error: "Download failed" })
       } finally {
         inFlightRef.current.downloading = false
       }
@@ -397,8 +419,18 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
     try {
       inFlightRef.current.installing = true
       setStatus({ status: "installing" })
-      await update.install()
-      await relaunch()
+      const downloadedInstallerPath = downloadedInstallerPathRef.current
+      if (downloadedInstallerPath) {
+        await invoke("install_downloaded_update", { installerPath: downloadedInstallerPath })
+        downloadedInstallerPathRef.current = null
+      } else {
+        if (!update) {
+          setStatus({ status: "error", message: "Downloaded update is no longer available" })
+          return
+        }
+        await update.install()
+        await relaunch()
+      }
       setStatus({ status: "idle" })
     } catch (err) {
       console.error("Update install failed:", err)

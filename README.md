@@ -79,7 +79,7 @@ UsageBar is still pre-release. Alpha 8 is intended to let Windows users install 
 - Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
-- Prerelease auto-updates are intentionally conservative because GitHub's `releases/latest` alias does not resolve prereleases. Prerelease builds may open the matching GitHub release page instead of installing in-app.
+- Prerelease auto-updates use the GitHub release API when signed Tauri updater metadata is not available. UsageBar verifies the published asset digest, downloads the Windows installer, then restarts after the app exits.
 - Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations are full-release work, not an Alpha 8 promise.
 
 ## Architecture

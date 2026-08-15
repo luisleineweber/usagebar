@@ -74,9 +74,9 @@ Stable releases require `TAURI_SIGNING_PRIVATE_KEY` and updater signature assets
 
 Current updater channel note:
 
-- GitHub's `releases/latest` alias only resolves stable releases, not prereleases.
-- UsageBar currently keeps updater checks disabled for prerelease app versions like `0.1.0-alpha.1` and `0.1.0-beta.7`.
-- Re-enable prerelease auto-updates only after moving off the stable-only alias or after shipping a stable release channel.
+- Signed Tauri updater metadata is the primary update path.
+- GitHub's `releases/latest` alias does not resolve prereleases, so UsageBar queries the release API when a prerelease has no signed updater metadata.
+- The Windows fallback accepts only the exact `UsageBar_<version>_x64-setup.exe` asset and verifies GitHub's SHA-256 digest before installation.
 
 ## Alpha Gate
 
@@ -108,7 +108,7 @@ This is a public alpha for Windows users who want to test UsageBar before a full
 ### Known limitations
 - Some providers are experimental and may need manual cookie/API-key setup
 - Some costs or usage buckets may be estimated or partial
-- Prerelease updates may open GitHub Releases instead of installing in-app
+- Prerelease updates may use the GitHub installer fallback when signed updater metadata is unavailable
 - UI polish, crash recovery, and signed-build coverage are not final
 
 ### Privacy

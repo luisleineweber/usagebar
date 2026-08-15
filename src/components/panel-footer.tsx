@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { Clock3, Download } from "lucide-react"
+import { Clock3, Download, RotateCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AboutDialog } from "@/components/about-dialog"
 import type { UpdateStatus } from "@/hooks/use-app-update"
@@ -82,7 +82,7 @@ function VersionDisplay({
           size="xs"
           className="rounded-md border-primary/20 bg-primary/5 text-primary shadow-none hover:border-primary/40 hover:bg-primary hover:text-primary-foreground dark:border-page-accent/55 dark:bg-page-accent/10 dark:text-page-accent dark:hover:border-page-accent dark:hover:bg-page-accent dark:hover:text-primary-foreground"
           onClick={onUpdateInstall}
-          title="Download update"
+          title={updateStatus.error ? "Download failed. Try again." : "Download update"}
         >
           <Download className="size-3" aria-hidden />
           Update to {updateStatus.version}
@@ -98,12 +98,8 @@ function VersionDisplay({
       )
     case "ready":
       return (
-        <Button
-          variant="destructive"
-          size="xs"
-          className="update-border-beam"
-          onClick={onUpdateInstall}
-        >
+        <Button variant="default" size="xs" onClick={onUpdateInstall} title="Restart to update">
+          <RotateCw className="size-3" aria-hidden />
           Restart to update
         </Button>
       )

@@ -3,6 +3,7 @@
 ## 2026-08-15
 
 - Managed account identity was Codex-only, so other provider logins could not keep data isolated. Fix: use provider-scoped account profiles and stable instance IDs for auth, cache, history, notifications, and pins. Prevention: test each managed provider with two account instances.
+- The update action downloaded and installed in one step, and unsigned prereleases opened GitHub instead of updating. Fix: download first, show a restart action, and use a verified GitHub installer with a hidden Windows restart helper. Prevention: test signed and prerelease update paths through download, ready, install, and relaunch states.
 
 ## 2026-08-13
 
