@@ -143,10 +143,7 @@ export function GeneralSettingsPane({
   return (
     <div className="grid gap-x-10 gap-y-6 py-1 xl:grid-cols-2 xl:items-start">
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">Auto Refresh</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Choose how often UsageBar refreshes provider data.
-        </p>
+        <h3 className="mb-3 text-base font-semibold">Auto Refresh</h3>
         <SettingsRadioGroup
           options={AUTO_UPDATE_OPTIONS}
           value={autoUpdateInterval}
@@ -157,10 +154,7 @@ export function GeneralSettingsPane({
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">Usage Mode</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Show quota as remaining usage or consumed usage.
-        </p>
+        <h3 className="mb-3 text-base font-semibold">Usage Mode</h3>
         <SettingsRadioGroup
           options={DISPLAY_MODE_OPTIONS}
           value={displayMode}
@@ -171,10 +165,7 @@ export function GeneralSettingsPane({
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">Reset Timers</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Choose whether reset times appear as countdowns or clock times.
-        </p>
+        <h3 className="mb-3 text-base font-semibold">Reset Timers</h3>
         <SettingsRadioGroup
           options={RESET_TIMER_DISPLAY_OPTIONS}
           value={resetTimerDisplayMode}
@@ -205,8 +196,7 @@ export function GeneralSettingsPane({
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">Time Format</h3>
-        <p className="mb-3 text-sm text-muted-foreground">12-hour or 24-hour clock</p>
+        <h3 className="mb-3 text-base font-semibold">Time Format</h3>
         <SettingsRadioGroup
           options={TIME_FORMAT_OPTIONS}
           value={timeFormatMode}
@@ -233,10 +223,7 @@ export function GeneralSettingsPane({
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">Tray Icon</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Choose how current provider usage appears in the system tray.
-        </p>
+        <h3 className="mb-3 text-base font-semibold">Tray Icon</h3>
         <SettingsRadioGroup
           options={MENUBAR_ICON_STYLE_OPTIONS}
           value={menubarIconStyle}
@@ -278,11 +265,8 @@ export function GeneralSettingsPane({
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">Navigation</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Choose which pages are available in the tray panel.
-        </p>
-        <div className="flex items-start gap-2 text-sm text-foreground">
+        <h3 className="mb-3 text-base font-semibold">Navigation</h3>
+        <div className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox
             id="show-history-in-bar"
             key={`show-history-in-bar-${showHistoryInBar}`}
@@ -291,17 +275,13 @@ export function GeneralSettingsPane({
             onCheckedChange={(checked) => onShowHistoryInBarChange(checked === true)}
           />
           <label htmlFor="show-history-in-bar" className="cursor-pointer select-none">
-            <span className="block">Show History in bar</span>
-            <span className="block text-xs text-muted-foreground">
-              Add the History page to the tray panel navigation.
-            </span>
+            Show History in bar
           </label>
         </div>
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">App Theme</h3>
-        <p className="mb-3 text-sm text-muted-foreground">Choose the app appearance.</p>
+        <h3 className="mb-3 text-base font-semibold">App Theme</h3>
         <SettingsRadioGroup
           options={THEME_OPTIONS}
           value={themeMode}
@@ -309,8 +289,7 @@ export function GeneralSettingsPane({
           className={THREE_OPTION_GROUP_CLASS}
           ariaLabel="Theme mode"
         />
-        <h3 className="mb-0 mt-5 text-base font-semibold">Accent Color</h3>
-        <p className="mb-3 text-sm text-muted-foreground">Choose the UsageBar highlight color.</p>
+        <h3 className="mb-3 mt-5 text-base font-semibold">Accent Color</h3>
         <RadioGroup
           value={accentColor}
           aria-label="Accent color"
@@ -352,10 +331,7 @@ export function GeneralSettingsPane({
       <NotificationSettingsSection className={SETTINGS_SECTION_CLASS} />
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">Start on Login</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Open UsageBar automatically after you sign in.
-        </p>
+        <h3 className="mb-3 text-base font-semibold">Start on Login</h3>
         <div className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox
             id="start-on-login"
@@ -371,10 +347,7 @@ export function GeneralSettingsPane({
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-0 text-base font-semibold">Support</h3>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Open the GitHub issue tracker from settings.
-        </p>
+        <h3 className="mb-3 text-base font-semibold">Support</h3>
         <Button
           type="button"
           variant="outline"

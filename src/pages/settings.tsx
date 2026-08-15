@@ -109,9 +109,6 @@ export function SettingsPage({
           UsageBar
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage providers, refresh schedule, display, and system preferences.
-        </p>
 
         {providerConfigLoadError && (
           <div

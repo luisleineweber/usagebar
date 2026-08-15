@@ -117,7 +117,7 @@ export const ACCENT_COLOR_OPTIONS: { value: AccentColor; label: string }[] = [
 ]
 
 export const DISPLAY_MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
-  { value: "left", label: "Left" },
+  { value: "left", label: "Remaining" },
   { value: "used", label: "Used" },
 ]
 
@@ -394,7 +394,9 @@ export async function saveMenubarIconStyle(style: MenubarIconStyle): Promise<voi
 }
 
 function isTrayProviderSelection(value: unknown): value is TrayProviderSelection {
-  return typeof value === "string" && TRAY_PROVIDER_SELECTIONS.includes(value as TrayProviderSelection)
+  return (
+    typeof value === "string" && TRAY_PROVIDER_SELECTIONS.includes(value as TrayProviderSelection)
+  )
 }
 
 export async function loadTrayProviderSelection(): Promise<TrayProviderSelection> {

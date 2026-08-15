@@ -204,6 +204,37 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
   })
 
+  it("does not repeat general setting headings in helper copy", () => {
+    render(<TestHarness />)
+
+    expect(
+      screen.queryByText("Manage providers, refresh schedule, display, and system preferences.")
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Choose how often UsageBar refreshes provider data.")
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Show quota as remaining usage or consumed usage.")
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Choose whether reset times appear as countdowns or clock times.")
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Choose how current provider usage appears in the system tray.")
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Choose which pages are available in the tray panel.")
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText("Choose the app appearance.")).not.toBeInTheDocument()
+    expect(screen.queryByText("Choose the UsageBar highlight color.")).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Open UsageBar automatically after you sign in.")
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Open the GitHub issue tracker from settings.")
+    ).not.toBeInTheDocument()
+  })
+
   it("updates History visibility from the Navigation section", async () => {
     const onShowHistoryInBarChange = vi.fn()
     render(<TestHarness onShowHistoryInBarChange={onShowHistoryInBarChange} />)

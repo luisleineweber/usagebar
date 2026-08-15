@@ -17,10 +17,14 @@ function formatShortcutForDisplay(shortcut: string): string {
 
 // Modifier codes (using event.code for reliable detection)
 const MODIFIER_CODES = new Set([
-  "MetaLeft", "MetaRight",
-  "ControlLeft", "ControlRight",
-  "AltLeft", "AltRight",
-  "ShiftLeft", "ShiftRight",
+  "MetaLeft",
+  "MetaRight",
+  "ControlLeft",
+  "ControlRight",
+  "AltLeft",
+  "AltRight",
+  "ShiftLeft",
+  "ShiftRight",
 ])
 
 // Normalize modifier code to base name
@@ -243,10 +247,7 @@ export function GlobalShortcutSection({
 
   return (
     <section className="border-t border-border/55 pt-4">
-      <h3 className="mb-0 text-base font-semibold">Global Shortcut</h3>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Show panel from anywhere
-      </p>
+      <h3 className="mb-3 text-base font-semibold">Global Shortcut</h3>
       <div className="space-y-2">
         {isRecording ? (
           <div
@@ -273,7 +274,9 @@ export function GlobalShortcutSection({
               !hasShortcut && "text-muted-foreground"
             )}
             onClick={startRecording}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") startRecording() }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") startRecording()
+            }}
             role="button"
             tabIndex={0}
           >
@@ -293,9 +296,7 @@ export function GlobalShortcutSection({
           </div>
         )}
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        Press Escape while recording to clear.
-      </p>
+      <p className="mt-2 text-xs text-muted-foreground">Press Escape while recording to clear.</p>
     </section>
   )
 }
