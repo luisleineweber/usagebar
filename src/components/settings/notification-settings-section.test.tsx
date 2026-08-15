@@ -5,21 +5,19 @@ import { NotificationSettingsSection } from "@/components/settings/notification-
 
 const {
   clearEventsMock,
-  isPermissionGrantedMock,
   isTauriMock,
   listenMock,
   loadEventsMock,
   loadPreferencesMock,
-  requestPermissionMock,
+  requestNotificationPermissionMock,
   savePreferencesMock,
 } = vi.hoisted(() => ({
   clearEventsMock: vi.fn(),
-  isPermissionGrantedMock: vi.fn(),
   isTauriMock: vi.fn(),
   listenMock: vi.fn(),
   loadEventsMock: vi.fn(),
   loadPreferencesMock: vi.fn(),
-  requestPermissionMock: vi.fn(),
+  requestNotificationPermissionMock: vi.fn(),
   savePreferencesMock: vi.fn(),
 }))
 
@@ -33,9 +31,8 @@ vi.mock("@/lib/notification-settings", () => ({
   listenNotificationStateUpdated: listenMock,
 }))
 
-vi.mock("@tauri-apps/plugin-notification", () => ({
-  isPermissionGranted: isPermissionGrantedMock,
-  requestPermission: requestPermissionMock,
+vi.mock("@/lib/notification-delivery", () => ({
+  requestNotificationPermission: requestNotificationPermissionMock,
 }))
 
 const defaultPreferences = {
@@ -50,8 +47,7 @@ describe("NotificationSettingsSection", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     isTauriMock.mockReturnValue(false)
-    isPermissionGrantedMock.mockResolvedValue(true)
-    requestPermissionMock.mockResolvedValue("granted")
+    requestNotificationPermissionMock.mockResolvedValue(true)
     loadPreferencesMock.mockResolvedValue(defaultPreferences)
     savePreferencesMock.mockResolvedValue(undefined)
     loadEventsMock.mockResolvedValue([])
@@ -99,7 +95,7 @@ describe("NotificationSettingsSection", () => {
     render(<NotificationSettingsSection />)
 
     const delivery = await screen.findByRole("checkbox", {
-      name: "Deliver Windows notifications",
+      name: "Send Windows notifications",
     })
     await waitFor(() => expect(delivery).not.toBeChecked())
     await user.click(delivery)
@@ -147,12 +143,11 @@ describe("NotificationSettingsSection", () => {
   it("does not enable native delivery when permission is denied", async () => {
     const user = userEvent.setup()
     isTauriMock.mockReturnValue(true)
-    isPermissionGrantedMock.mockResolvedValue(false)
-    requestPermissionMock.mockResolvedValue("denied")
+    requestNotificationPermissionMock.mockResolvedValue(false)
     render(<NotificationSettingsSection />)
 
     const delivery = await screen.findByRole("checkbox", {
-      name: "Deliver Windows notifications",
+      name: "Send Windows notifications",
     })
     await user.click(delivery)
 

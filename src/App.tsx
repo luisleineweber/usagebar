@@ -125,7 +125,11 @@ function App() {
     pluginSettings,
   })
 
-  useNotificationEvents({ pluginStates, providerStatuses, pluginsMeta })
+  const { activeEvents, dismissNotifications } = useNotificationEvents({
+    pluginStates,
+    providerStatuses,
+    pluginsMeta,
+  })
 
   const { scheduleTrayIconUpdate } = useTrayIcon({
     pluginsMeta,
@@ -327,6 +331,8 @@ function App() {
         onStartOnLoginChange: handleStartOnLoginChange,
       }}
       showHistoryInBar={showHistoryInBar}
+      notificationEvents={activeEvents}
+      onDismissNotification={dismissNotifications}
     />
   )
 }

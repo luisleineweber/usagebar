@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import { isTauri } from "@tauri-apps/api/core"
-import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -15,6 +14,7 @@ import {
   loadRecentUsageEvents,
   saveNotificationPreferences,
 } from "@/lib/notification-settings"
+import { requestNotificationPermission } from "@/lib/notification-delivery"
 
 const THRESHOLDS = [50, 75, 90]
 
@@ -60,9 +60,7 @@ export function NotificationSettingsSection({ className }: { className?: string 
   const toggleEnabled = async (enabled: boolean) => {
     if (enabled && isTauri()) {
       try {
-        let granted = await isPermissionGranted()
-        if (!granted) granted = (await requestPermission()) === "granted"
-        if (!granted) {
+        if (!(await requestNotificationPermission())) {
           setError("Windows notification permission was not granted.")
           return
         }
@@ -77,25 +75,20 @@ export function NotificationSettingsSection({ className }: { className?: string 
 
   return (
     <section className={className} aria-labelledby="notification-settings-heading">
-      <h3 id="notification-settings-heading" className="mb-0 text-base font-semibold">
+      <h3 id="notification-settings-heading" className="mb-3 text-base font-semibold">
         Notifications
       </h3>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Local quota, reset, and provider-status events. Quiet hours suppress Windows delivery but
-        keep events here.
-      </p>
       <div className="flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           id="notification-delivery"
-          aria-label="Deliver Windows notifications"
+          aria-label="Send Windows notifications"
           checked={preferences.enabled}
           onCheckedChange={(checked) => void toggleEnabled(checked === true)}
         />
         <label htmlFor="notification-delivery" className="cursor-pointer select-none">
-          Deliver Windows notifications
+          Send Windows notifications
         </label>
       </div>
-
       <fieldset className="mt-3">
         <legend className="text-xs font-medium text-muted-foreground">Quota thresholds</legend>
         <div className="mt-2 flex flex-wrap gap-3">

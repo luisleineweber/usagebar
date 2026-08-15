@@ -19,6 +19,8 @@ import { useAppUpdate } from "@/hooks/use-app-update"
 import { openSettingsWindow } from "@/lib/settings-window"
 import { useAppUiStore } from "@/stores/app-ui-store"
 import type { ActiveView } from "@/components/side-nav"
+import { UsageEventNotice } from "@/components/usage-event-notice"
+import type { UsageEvent } from "@/lib/notification-events"
 
 type AppShellProps = {
   onRefreshAll: () => void
@@ -34,6 +36,8 @@ type AppShellProps = {
   onNavReorder: (orderedIds: string[]) => void
   appContentProps: AppContentActionProps
   showHistoryInBar: boolean
+  notificationEvents?: UsageEvent[]
+  onDismissNotification?: () => void
 }
 
 const CONTEXT_MENU_WIDTH_PX = 224
@@ -54,6 +58,8 @@ export function AppShell({
   onNavReorder,
   appContentProps,
   showHistoryInBar,
+  notificationEvents = [],
+  onDismissNotification = () => {},
 }: AppShellProps) {
   const { activeView, setActiveView, showAbout, setShowAbout } = useAppUiStore(
     useShallow((state) => ({
@@ -259,6 +265,7 @@ export function AppShell({
             </div>
           </div>
         </div>
+        <UsageEventNotice events={notificationEvents} onDismiss={onDismissNotification} />
         {contextMenu ? (
           <div
             ref={menuRef}

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { isPermissionGranted, sendNotification } from "@tauri-apps/plugin-notification"
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   deriveUsageEvents,
   isQuietHours,
   type NotificationPreferences,
+  type UsageEvent,
 } from "@/lib/notification-events"
+import { deliverUsageEvents } from "@/lib/notification-delivery"
 import {
   appendRecentUsageEvents,
   listenNotificationStateUpdated,
@@ -24,6 +25,7 @@ export function useNotificationEvents({
   providerStatuses: Record<string, ProviderStatus>
   pluginsMeta: PluginMeta[]
 }) {
+  const [activeEvents, setActiveEvents] = useState<UsageEvent[]>([])
   const [preferences, setPreferences] = useState<NotificationPreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES
   )
@@ -71,11 +73,18 @@ export function useNotificationEvents({
       console.error("Failed to persist usage notification events:", error)
     })
     if (!preferences.enabled || isQuietHours(preferences)) return
-    void isPermissionGranted()
-      .then((granted) => {
-        if (!granted) return
-        for (const event of events) sendNotification({ title: event.title, body: event.body })
+    void deliverUsageEvents(events)
+      .then((delivered) => {
+        if (!delivered) setActiveEvents(events)
       })
-      .catch((error) => console.error("Failed to deliver usage notification:", error))
+      .catch((error) => {
+        console.error("Failed to deliver usage notification:", error)
+        setActiveEvents(events)
+      })
   }, [outputs, preferences, providerStatuses])
+
+  return {
+    activeEvents,
+    dismissNotifications: () => setActiveEvents([]),
+  }
 }
