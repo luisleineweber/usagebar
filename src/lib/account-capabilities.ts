@@ -8,11 +8,11 @@ export type ProviderAccountCapabilities = {
 }
 
 export function getProviderAccountCapabilities(
-  providerId: string,
+  _providerId: string,
   definition: ProviderSettingsDefinition
 ): ProviderAccountCapabilities {
   return {
-    managedProfiles: providerId === "codex",
+    managedProfiles: definition.managedAccounts === true,
     ping: true,
     reauthenticate: Boolean(
       definition.secretField || definition.guidedCookieLogin || definition.browserCookieImport

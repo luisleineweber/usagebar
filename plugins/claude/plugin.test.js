@@ -18,6 +18,49 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("uses the captured provider instance to read managed Claude credentials", async () => {
+    const ctx = makeCtx()
+    ctx.instanceRef = { providerId: "claude", instanceId: "profile-claude" }
+    ctx.host.providerSecrets.read.mockImplementation((key) => {
+      if (key !== "account:profile-claude:authJson") return null
+      return JSON.stringify({
+        claudeAiOauth: { accessToken: "managed-token", subscriptionType: "pro" },
+        oauthAccount: { emailAddress: "claude@example.com" },
+      })
+    })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({
+        five_hour: { utilization: 12, resets_at: "2099-01-01T00:00:00.000Z" },
+      }),
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Pro")
+    expect(result.lines.find((line) => line.label === "Session")?.used).toBe(12)
+    expect(ctx.host.providerSecrets.read).toHaveBeenCalledWith(
+      "account:profile-claude:authJson"
+    )
+    expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
+  })
+
+  it("does not fall back to another Claude login for a missing managed profile", async () => {
+    const ctx = makeCtx()
+    ctx.instanceRef = { providerId: "claude", instanceId: "missing-profile" }
+    ctx.host.providerSecrets.read.mockImplementation(() => {
+      throw new Error("not found")
+    })
+    ctx.host.keychain.readGenericPassword.mockReturnValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: "wrong-login" } })
+    )
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Selected Claude account is unavailable")
+    expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
+  })
+
   it("uses the account file as a signed-in fallback when OAuth credentials are missing", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = (path) => path === "~/.claude.json"

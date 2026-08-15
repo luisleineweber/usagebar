@@ -22,12 +22,12 @@ Safety:
 | `amp` | `~/.local/share/amp/secrets.json` | Works partially | Local file can fake signed-in state, but usage still comes from Amp HTTP. |
 | `antigravity` | `~/AppData/Roaming/Antigravity/User/globalStorage/state.vscdb` on Windows, `pluginDataDir/auth.json`, local LS discovery | Works partially | Fake auth DB/state can exercise the offline Cloud Code path; live LS only affects process-backed fractions. |
 | `augment` | stored provider secret `cookieHeader`, `AUGMENT_COOKIE_HEADER` | Works partially | Cookie/env replay can fake auth setup, but credit data still comes from Augment HTTP. |
-| `claude` | `~/.claude/.credentials.json`, `~/.claude.json`, keychain, local `ccusage` runner | Works partially | File replay can fake signed-in state; remote OAuth usage and `ccusage` still matter for realistic output. |
+| `claude` | `~/.claude/.credentials.json`, `~/.claude.json`, keychain, imported provider secret `account:<profileId>:authJson`, local `ccusage` runner | Works partially | File replay can fake signed-in state; managed profiles pin one imported OAuth login; remote OAuth usage and `ccusage` still matter for realistic output. |
 | `codex` | `$CODEX_HOME/auth.json`, `~/.config/codex/auth.json`, `~/.codex/auth.json`, keychain, imported provider secret `account:<profileId>:authJson`, local `ccusage` runner | Works partially | File replay can fake auth/account shape; imported managed profiles let you pin a specific account; realistic usage still often depends on `ccusage`. |
 | `copilot` | `~/AppData/Roaming/GitHub CLI/hosts.yml`, `GH_CONFIG_DIR/hosts.yml`, keychain, `pluginDataDir/auth.json`, `gh auth token` | Works partially | You can fake the host file and cached token file, but final usage comes from GitHub HTTP. |
 | `cursor` | `~/AppData/Roaming/Cursor/User/globalStorage/state.vscdb`, keychain | Works partially | SQLite/keychain replay can fake session discovery, but billing/usage still comes from Cursor HTTP. |
 | `factory` | `~/.factory/auth.v2.file` + `~/.factory/auth.v2.key`, `~/.factory/auth.encrypted`, `~/.factory/auth.json`, keychain | Works partially | v2 encrypted store is now the primary path; local replay can fake login and refresh state, but real usage still comes from HTTP. |
-| `gemini` | `~/.gemini/settings.json`, `~/.gemini/oauth_creds.json`, Gemini CLI `oauth2.js` install path | Works partially | Local files can fake OAuth setup, but quota/plan still come from Google HTTP. |
+| `gemini` | `~/.gemini/settings.json`, `~/.gemini/oauth_creds.json`, imported provider secret `account:<profileId>:authJson`, Gemini CLI `oauth2.js` install path | Works partially | Local files can fake OAuth setup; managed profiles pin one imported OAuth login; quota/plan still come from Google HTTP. |
 | `jetbrains-ai-assistant` | IDE quota XML under `~/AppData/Roaming/JetBrains/.../options/AIAssistantQuotaManager2.xml` or `~/AppData/Roaming/Google/...` | Works fully | This plugin is local-file driven. Replaying the XML is the main test path. |
 | `kilo` | stored provider secret `apiKey`, `KILO_API_KEY` | Works partially | Secret/env replay can fake auth setup, but usage still comes from the Kilo HTTP API. CLI auth fallback is not wired yet. |
 | `kimi` | `~/.kimi/credentials/kimi-code.json` | Works partially | Local credential replay can fake login; usage still comes from HTTP. |
@@ -90,10 +90,12 @@ Safety:
 - `~/.claude/.credentials.json`
 - `~/.claude.json`
 - keychain fallback
+- imported provider secret `account:<profileId>:authJson` when Settings selects a managed Claude account
 - local `ccusage` query
 - What to fake:
 - A credential file with `claudeAiOauth.accessToken`
 - An account file with `oauthAccount`
+- Or an imported managed secret payload when you want to test account pinning.
 - Limitation:
 - Remote Claude usage still requires valid OAuth data.
 - Some output paths come from `ccusage`, so file replay alone does not cover everything.
@@ -147,6 +149,7 @@ Safety:
 - Local inputs read:
 - `~/.gemini/settings.json`
 - `~/.gemini/oauth_creds.json`
+- imported provider secret `account:<profileId>:authJson` when Settings selects a managed Gemini account
 - Gemini CLI `oauth2.js` install path
 - Windows paths include:
 - `~/AppData/Roaming/npm/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js`
@@ -154,6 +157,7 @@ Safety:
 - What to fake:
 - `settings.json` with `authType: "oauth-personal"` or omit it.
 - `oauth_creds.json` with access and refresh token fields.
+- Or an imported managed secret payload when you want to test account pinning.
 - `oauth2.js` containing `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET`.
 - Limitation: the plan/quota still comes from Google HTTP endpoints.
 

@@ -70,9 +70,36 @@
     }
   }
 
-  function saveOauthCreds(ctx, creds) {
+  function loadManagedOauthCreds(ctx, profileId) {
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") {
+      throw "Selected Gemini account is unavailable. The secret store is not accessible."
+    }
+
+    const secretKey = "account:" + profileId + ":authJson"
+    let value
     try {
-      ctx.host.fs.writeText(CREDS_PATH, JSON.stringify(creds, null, 2))
+      value = ctx.host.providerSecrets.read(secretKey)
+    } catch (e) {
+      if (/not found/i.test(String(e))) {
+        throw "Selected Gemini account is unavailable. Re-import or choose another account."
+      }
+      throw "Selected Gemini account could not be read. Try again."
+    }
+
+    const parsed = ctx.util.tryParseJson(value)
+    if (!parsed || typeof parsed !== "object" || (!parsed.access_token && !parsed.refresh_token)) {
+      throw "Selected Gemini account is invalid. Re-import or choose another account."
+    }
+    return { creds: parsed, secretKey }
+  }
+
+  function saveOauthCreds(ctx, creds, secretKey) {
+    try {
+      if (secretKey) {
+        ctx.host.providerSecrets.write(secretKey, JSON.stringify(creds))
+      } else {
+        ctx.host.fs.writeText(CREDS_PATH, JSON.stringify(creds, null, 2))
+      }
     } catch (e) {
       ctx.host.log.warn("failed persisting creds: " + String(e))
     }
@@ -175,7 +202,7 @@
     return Date.now() + REFRESH_BUFFER_MS >= expiryMs
   }
 
-  function refreshToken(ctx, creds) {
+  function refreshToken(ctx, creds, secretKey) {
     if (!creds.refresh_token) return null
     const clientCreds = loadOauthClientCreds(ctx)
     if (!clientCreds) return null
@@ -217,7 +244,7 @@
       creds.expiry_date = Date.now() + data.expires_in * 1000
     }
 
-    saveOauthCreds(ctx, creds)
+    saveOauthCreds(ctx, creds, secretKey)
     return creds.access_token
   }
 
@@ -492,12 +519,18 @@
   function probe(ctx) {
     assertSupportedAuthType(ctx)
 
-    const creds = loadOauthCreds(ctx)
+    const instanceId =
+      ctx.instanceRef && typeof ctx.instanceRef === "object" &&
+      typeof ctx.instanceRef.instanceId === "string"
+        ? ctx.instanceRef.instanceId.trim()
+        : ""
+    const managed = instanceId ? loadManagedOauthCreds(ctx, instanceId) : null
+    const creds = managed ? managed.creds : loadOauthCreds(ctx)
     if (!creds) throw "Not logged in. Run `gemini` and complete the OAuth prompt."
 
     let accessToken = creds.access_token
     if (needsRefresh(creds)) {
-      const refreshed = refreshToken(ctx, creds)
+      const refreshed = refreshToken(ctx, creds, managed && managed.secretKey)
       if (refreshed) accessToken = refreshed
       else if (!accessToken) throw "Not logged in. Run `gemini` and complete the OAuth prompt."
     }

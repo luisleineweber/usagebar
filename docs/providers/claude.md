@@ -115,6 +115,14 @@ On Windows, Settings can import Claude's approved `sessionKey` cookie from an ex
 - The imported cookie header is written directly to UsageBar's DPAPI-protected provider secret store.
 - Unsupported Edge encryption, a locked database, or no matching session leaves guided login and manual cookie entry available.
 
+### Managed account profiles
+
+Settings can import the current Claude Code login into a managed profile. The profile receives a
+stable UUID. When selected, probes read only `account:<profileId>:authJson` from the protected
+provider secret store. A missing or invalid profile fails instead of switching to another login.
+
+The profile UUID also scopes cached snapshots, local history, quota notifications, and surface pins.
+
 ### Token Refresh
 
 Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively on 401/403.

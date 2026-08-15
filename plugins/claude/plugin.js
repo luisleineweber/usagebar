@@ -105,6 +105,50 @@
     }
   }
 
+  function readManagedProfileId(ctx) {
+    const instance = ctx.instanceRef
+    if (!instance || typeof instance !== "object") return null
+    const value = instance.instanceId
+    return typeof value === "string" ? value.trim() || null : null
+  }
+
+  function loadManagedProfileCredentials(ctx, profileId) {
+    if (!ctx.host.providerSecrets || typeof ctx.host.providerSecrets.read !== "function") {
+      throw "Selected Claude account is unavailable. The secret store is not accessible."
+    }
+
+    const secretKey = "account:" + profileId + ":authJson"
+    let value
+    try {
+      value = ctx.host.providerSecrets.read(secretKey)
+    } catch (e) {
+      const message = String(e)
+      if (/not found/i.test(message)) {
+        throw "Selected Claude account is unavailable. Re-import or choose another account."
+      }
+      throw "Selected Claude account could not be read. Try again."
+    }
+
+    const parsed = tryParseCredentialJSON(ctx, value)
+    if (!parsed || !parsed.claudeAiOauth) {
+      throw "Selected Claude account is invalid. Re-import or choose another account."
+    }
+
+    const oauth = parsed.claudeAiOauth
+    if (!oauth.accessToken && !oauth.refreshToken) {
+      throw "Selected Claude account is invalid. Re-import or choose another account."
+    }
+
+    ctx.host.log.info("credentials loaded from managed profile: " + profileId)
+    return {
+      oauth,
+      source: "managed-profile",
+      fullData: parsed,
+      account: extractAccountState(parsed),
+      secretKey,
+    }
+  }
+
   function cookiePairs(cookieHeader) {
     const out = []
     const parts = String(cookieHeader || "").split(";")
@@ -384,6 +428,11 @@
   }
 
   function loadCredentials(ctx) {
+    const managedProfileId = readManagedProfileId(ctx)
+    if (managedProfileId) {
+      return loadManagedProfileCredentials(ctx, managedProfileId)
+    }
+
     // Recent Claude Code versions keep the current session in Keychain and can
     // leave stale legacy credential files behind, so Keychain wins when valid.
     const keychainCredentials = loadKeychainCredentials(ctx)
@@ -401,11 +450,17 @@
     return null
   }
 
-  function saveCredentials(ctx, source, fullData) {
+  function saveCredentials(ctx, source, fullData, secretKey) {
     // MUST use minified JSON - macOS `security -w` hex-encodes values with newlines,
     // which Claude Code can't read back, causing it to invalidate the session.
     const text = JSON.stringify(fullData)
-    if (source === "file") {
+    if (source === "managed-profile") {
+      try {
+        ctx.host.providerSecrets.write(secretKey, text)
+      } catch (e) {
+        ctx.host.log.error("Failed to write managed Claude credentials: " + String(e))
+      }
+    } else if (source === "file") {
       try {
         ctx.host.fs.writeText(CRED_FILE, text)
       } catch (e) {
@@ -486,7 +541,7 @@
 
       // Persist updated credentials
       fullData.claudeAiOauth = oauth
-      saveCredentials(ctx, source, fullData)
+      saveCredentials(ctx, source, fullData, creds.secretKey)
 
       ctx.host.log.info(
         "refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s"

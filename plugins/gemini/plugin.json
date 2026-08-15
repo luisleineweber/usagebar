@@ -48,6 +48,7 @@
   ],
   "capabilities": {
     "fs": true,
+    "providerSecrets": true,
     "http": true,
     "ccusage": true,
     "httpDomains": [

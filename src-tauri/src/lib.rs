@@ -22,6 +22,7 @@ mod plugin_engine;
 #[cfg(not(test))]
 mod probe_commands;
 mod probe_coordinator;
+mod provider_account_store;
 mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]
@@ -40,8 +41,10 @@ use std::sync::{Mutex, OnceLock};
 #[cfg(test)]
 pub(crate) use analytics::{app_started_day_key, should_track_app_started};
 pub(crate) use credential_support::{
-    codex_profile_label, guided_cookie_policy, now_utc_unix_ms, read_provider_config_string,
-    resolve_current_codex_auth, validate_guided_cookie_capture_request,
+    claude_profile_label, codex_profile_label, gemini_profile_label, guided_cookie_policy,
+    now_utc_unix_ms, read_provider_config_string, resolve_current_claude_auth,
+    resolve_current_codex_auth, resolve_current_gemini_auth,
+    validate_guided_cookie_capture_request,
 };
 #[cfg(all(desktop, not(test)))]
 use global_shortcut::update_global_shortcut;
@@ -58,9 +61,10 @@ use tauri_plugin_log::{Target, TargetKind};
 
 #[cfg(not(test))]
 use credential_commands::{
-    capture_provider_cookie_header, delete_codex_account_profile, delete_provider_secret,
-    import_browser_cookies, import_current_codex_account_profile, list_browser_import_sources,
-    list_codex_account_profiles, set_provider_secret,
+    capture_provider_cookie_header, delete_codex_account_profile, delete_provider_account_profile,
+    delete_provider_secret, import_browser_cookies, import_current_codex_account_profile,
+    import_current_provider_account_profile, list_browser_import_sources,
+    list_codex_account_profiles, list_provider_account_profiles, set_provider_secret,
 };
 #[cfg(not(test))]
 use probe_commands::start_probe_batch;
@@ -242,6 +246,9 @@ pub fn run() {
             list_codex_account_profiles,
             import_current_codex_account_profile,
             delete_codex_account_profile,
+            list_provider_account_profiles,
+            import_current_provider_account_profile,
+            delete_provider_account_profile,
             update_global_shortcut
         ])
         .setup(app_startup::setup)

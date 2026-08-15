@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-15
+
+- Managed account identity was Codex-only, so other provider logins could not keep data isolated. Fix: use provider-scoped account profiles and stable instance IDs for auth, cache, history, notifications, and pins. Prevention: test each managed provider with two account instances.
+
 ## 2026-08-13
 
 - The panel timer paused for every open Settings window, including a window minimized to the taskbar. Fix: publish the native minimized state and resume the panel timer when Settings is minimized. Prevention: test open, minimized, restored, and closed Settings states together.

@@ -13,6 +13,9 @@ Tracks Gemini CLI usage through local OAuth credentials and Gemini quota APIs.
 - `~/.gemini/oauth_creds.json` for OAuth tokens
 - Gemini CLI `oauth2.js` for OAuth client ID/secret
 
+Settings can import the current Gemini CLI login into a managed profile. The profile UUID scopes
+the protected OAuth payload and all UsageBar cache, history, notification, and surface-pin data.
+
 ### Windows OAuth client paths
 
 - `~/AppData/Roaming/npm/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/code_assist/oauth2.js`

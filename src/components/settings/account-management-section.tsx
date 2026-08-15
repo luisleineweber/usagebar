@@ -1,7 +1,15 @@
 import { Button } from "@/components/ui/button"
 import { CodexAccountsSection } from "@/components/settings/codex-accounts-section"
+import { ProviderAccountsSection } from "@/components/settings/provider-accounts-section"
 import { getProviderAccountCapabilities } from "@/lib/account-capabilities"
 import type { ProviderConfig, ProviderSettingsDefinition } from "@/lib/provider-settings"
+
+function providerAccountName(providerId: string): string {
+  if (providerId === "claude") return "Claude"
+  if (providerId === "codex") return "Codex"
+  if (providerId === "gemini") return "Gemini"
+  return providerId
+}
 
 export function AccountManagementSection({
   providerId,
@@ -52,7 +60,16 @@ export function AccountManagementSection({
         ) : null}
       </div>
       {capabilities.managedProfiles ? (
-        <CodexAccountsSection config={config} onConfigChange={onConfigChange} />
+        providerId === "codex" ? (
+          <CodexAccountsSection config={config} onConfigChange={onConfigChange} />
+        ) : (
+          <ProviderAccountsSection
+            providerId={providerId}
+            providerName={providerAccountName(providerId)}
+            config={config}
+            onConfigChange={onConfigChange}
+          />
+        )
       ) : null}
     </div>
   )

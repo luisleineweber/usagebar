@@ -35,7 +35,7 @@
 │  ├── Settings window lifecycle                               │
 │  ├── Plugin engine host APIs (HTTP fetch, SQLite, fs-read…) │
 │  ├── Provider secret store (DPAPI-encrypted on Windows)      │
-│  ├── Codex account store                                     │
+│  ├── Provider account store                                  │
 │  └── Local HTTP API  127.0.0.1:6736                         │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -224,6 +224,7 @@ type PluginOutput = {
 | `src/lib/pace-status.ts` | Pace math: `calculatePaceStatus`, `calculateDeficit` |
 | `src-tauri/src/plugin_engine/` | Rust plugin host: execution, capability gating, host API handlers |
 | `src-tauri/src/provider_secret_store.rs` | DPAPI-encrypted credential storage |
+| `src-tauri/src/provider_account_store.rs` | UUID-backed managed account registry |
 | `src-tauri/src/tray.rs` | Tray icon + context menu wiring |
 | `plugins/` | Provider plugin source (one folder per provider) |
 

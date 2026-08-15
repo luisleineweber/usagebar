@@ -201,6 +201,175 @@ pub(crate) struct ResolvedCodexAuth {
     pub(crate) account_id: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ResolvedClaudeAuth {
+    pub(crate) auth_json: String,
+    pub(crate) email: Option<String>,
+    pub(crate) account_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ResolvedGeminiAuth {
+    pub(crate) auth_json: String,
+    pub(crate) email: Option<String>,
+    pub(crate) account_id: Option<String>,
+}
+
+fn normalize_gemini_auth(json: JsonValue) -> Option<ResolvedGeminiAuth> {
+    let object = json.as_object()?;
+    if json_string_field(object, "access_token").is_none()
+        && json_string_field(object, "refresh_token").is_none()
+    {
+        return None;
+    }
+
+    let token_payload = json_string_field(object, "id_token").and_then(decode_base64url_to_json);
+    let payload = token_payload.as_ref().and_then(JsonValue::as_object);
+    let email = payload
+        .and_then(|value| json_string_field(value, "email"))
+        .map(str::to_string);
+    let account_id = payload
+        .and_then(|value| json_string_field(value, "sub"))
+        .map(str::to_string);
+
+    Some(ResolvedGeminiAuth {
+        auth_json: serde_json::to_string_pretty(&json).ok()?,
+        email,
+        account_id,
+    })
+}
+
+pub(crate) fn resolve_current_gemini_auth() -> Result<ResolvedGeminiAuth, String> {
+    let path = dirs::home_dir()
+        .ok_or_else(|| "Could not locate the current user home directory".to_string())?
+        .join(".gemini")
+        .join("oauth_creds.json");
+    let raw = std::fs::read_to_string(&path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            "No current Gemini login was found. Run `gemini` on this machine first.".to_string()
+        } else {
+            format!(
+                "Could not read Gemini auth file {}: {}",
+                path.display(),
+                error
+            )
+        }
+    })?;
+    let auth = json_string_or_object(&raw).and_then(normalize_gemini_auth);
+    auth.ok_or_else(|| {
+        "No current Gemini login was found. Run `gemini` on this machine first.".to_string()
+    })
+}
+
+pub(crate) fn gemini_profile_label(
+    email: Option<&str>,
+    account_id: Option<&str>,
+    now_ms: i64,
+) -> String {
+    if let Some(email) = email {
+        return email.to_string();
+    }
+    if let Some(account_id) = account_id {
+        return format!("Gemini {}", account_id);
+    }
+    format!("Gemini {}", now_ms)
+}
+
+fn claude_credentials_path() -> Option<PathBuf> {
+    Some(dirs::home_dir()?.join(".claude").join(".credentials.json"))
+}
+
+fn normalize_claude_auth(json: JsonValue) -> Option<ResolvedClaudeAuth> {
+    let object = json.as_object()?;
+    let oauth = object.get("claudeAiOauth")?.as_object()?;
+    let access_token = json_string_field(oauth, "accessToken");
+    let refresh_token = json_string_field(oauth, "refreshToken");
+    if access_token.is_none() && refresh_token.is_none() {
+        return None;
+    }
+
+    let account = object.get("oauthAccount").and_then(JsonValue::as_object);
+    let email = account
+        .and_then(|value| json_string_field(value, "emailAddress"))
+        .map(str::to_string);
+    let account_id = account
+        .and_then(|value| {
+            json_string_field(value, "organizationUuid")
+                .or_else(|| json_string_field(value, "organizationId"))
+                .or_else(|| json_string_field(value, "organizationName"))
+        })
+        .map(str::to_string);
+
+    Some(ResolvedClaudeAuth {
+        auth_json: serde_json::to_string_pretty(&json).ok()?,
+        email,
+        account_id,
+    })
+}
+
+fn read_claude_auth_from_path(
+    path: &std::path::Path,
+) -> Result<Option<ResolvedClaudeAuth>, String> {
+    let raw = match std::fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(format!(
+                "Could not read Claude auth file {}: {}",
+                path.display(),
+                error
+            ));
+        }
+    };
+
+    Ok(json_string_or_object(&raw).and_then(normalize_claude_auth))
+}
+
+fn read_claude_auth_from_keychain() -> Result<Option<ResolvedClaudeAuth>, String> {
+    let entry = Entry::new("OpenUsage", "Claude Code-credentials")
+        .map_err(|error| format!("Could not access Claude keychain entry: {}", error))?;
+
+    match entry.get_password() {
+        Ok(value) => Ok(json_string_or_object(&value).and_then(normalize_claude_auth)),
+        Err(error) => {
+            let message = error.to_string();
+            if crate::is_missing_credential_error(&message) {
+                Ok(None)
+            } else {
+                Err(format!("Could not read Claude keychain entry: {}", error))
+            }
+        }
+    }
+}
+
+pub(crate) fn resolve_current_claude_auth() -> Result<ResolvedClaudeAuth, String> {
+    if let Some(auth) = read_claude_auth_from_keychain()? {
+        return Ok(auth);
+    }
+
+    if let Some(path) = claude_credentials_path() {
+        if let Some(auth) = read_claude_auth_from_path(&path)? {
+            return Ok(auth);
+        }
+    }
+
+    Err("No current Claude login was found. Run `claude` on this machine first.".to_string())
+}
+
+pub(crate) fn claude_profile_label(
+    email: Option<&str>,
+    account_id: Option<&str>,
+    now_ms: i64,
+) -> String {
+    if let Some(email) = email {
+        return email.to_string();
+    }
+    if let Some(account_id) = account_id {
+        return format!("Claude {}", account_id);
+    }
+    format!("Claude {}", now_ms)
+}
+
 fn resolve_codex_home_from_env() -> Option<String> {
     let value = std::env::var("CODEX_HOME").ok()?;
     let trimmed = value.trim();
@@ -358,4 +527,43 @@ pub(crate) fn codex_profile_label(
         return format!("Codex {}", account_id);
     }
     format!("Codex {}", now_ms)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalize_claude_auth, normalize_gemini_auth};
+    use base64::Engine;
+
+    #[test]
+    fn normalizes_claude_identity_without_exposing_auth_fields() {
+        let auth = normalize_claude_auth(serde_json::json!({
+            "claudeAiOauth": {
+                "accessToken": "access-token",
+                "refreshToken": "refresh-token"
+            },
+            "oauthAccount": {
+                "emailAddress": "claude@example.com",
+                "organizationUuid": "org-claude"
+            }
+        }))
+        .expect("Claude auth");
+
+        assert_eq!(auth.email.as_deref(), Some("claude@example.com"));
+        assert_eq!(auth.account_id.as_deref(), Some("org-claude"));
+        assert!(auth.auth_json.contains("accessToken"));
+    }
+
+    #[test]
+    fn normalizes_gemini_identity_from_the_id_token() {
+        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(r#"{"email":"gemini@example.com","sub":"user-gemini"}"#);
+        let auth = normalize_gemini_auth(serde_json::json!({
+            "access_token": "access-token",
+            "id_token": format!("header.{}.signature", payload)
+        }))
+        .expect("Gemini auth");
+
+        assert_eq!(auth.email.as_deref(), Some("gemini@example.com"));
+        assert_eq!(auth.account_id.as_deref(), Some("user-gemini"));
+    }
 }

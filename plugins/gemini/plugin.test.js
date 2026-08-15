@@ -49,6 +49,30 @@ describe("gemini plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("uses the captured provider instance to read managed Gemini credentials", async () => {
+    const ctx = makeCtx()
+    ctx.instanceRef = { providerId: "gemini", instanceId: "profile-gemini" }
+    ctx.host.providerSecrets.read.mockImplementation((key) => {
+      if (key !== "account:profile-gemini:authJson") return null
+      return JSON.stringify({ access_token: "managed-token", id_token: makeJwt({ email: "gemini@example.com" }) })
+    })
+    ctx.host.http.request.mockImplementation((opts) => {
+      if (String(opts.url) === LOAD_CODE_ASSIST_URL) {
+        return { status: 200, bodyText: JSON.stringify({ tier: "standard-tier", cloudaicompanionProject: "project-1" }) }
+      }
+      if (String(opts.url) === QUOTA_URL) {
+        return { status: 200, bodyText: JSON.stringify({ quotaBuckets: [{ modelId: "gemini-2.5-pro", remainingFraction: 0.2 }] }) }
+      }
+      throw new Error("unexpected url: " + String(opts.url))
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Account")?.value).toBe("gemini@example.com")
+    expect(ctx.host.providerSecrets.read).toHaveBeenCalledWith("account:profile-gemini:authJson")
+  })
+
   it("refreshes token, parses plan, and returns pro + flash usage", async () => {
     const ctx = makeCtx()
     const nowMs = 1_700_000_000_000

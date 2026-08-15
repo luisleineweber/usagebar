@@ -30,6 +30,7 @@ export type ProviderSettingsOption = {
 
 export type ProviderSettingsDefinition = {
   mode: ProviderSettingsMode
+  managedAccounts?: boolean
   title: string
   summary: string
   statusHint: string
@@ -148,6 +149,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   },
   codex: {
     mode: "editable",
+    managedAccounts: true,
     title: "Codex Setup",
     summary:
       "Tracks Codex CLI usage from local auth, app-managed imported accounts, and optional OpenAI dashboard history from a signed-in dashboard Cookie header.",
@@ -165,6 +167,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   },
   claude: {
     mode: "editable",
+    managedAccounts: true,
     title: "Claude Setup",
     summary:
       "Uses local Claude OAuth credentials first, then can fall back to a signed-in claude.ai web session Cookie header and local ccusage history.",
@@ -222,6 +225,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
   },
   gemini: {
     mode: "automatic",
+    managedAccounts: true,
     title: "Gemini Setup",
     summary: "Detected from Gemini CLI OAuth credentials.",
     statusHint: "No manual setup is required once Gemini CLI is signed in.",
