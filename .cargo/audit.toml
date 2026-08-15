@@ -1,0 +1,8 @@
+# No known advisory is approved for this project.
+[advisories]
+ignore = []
+severity_threshold = "low"
+informational_warnings = []
+
+[yanked]
+enabled = true

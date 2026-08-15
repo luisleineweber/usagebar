@@ -14,6 +14,26 @@ env:
   RUST_TOOLCHAIN: "1.94.1"
 
 jobs:
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Audit JavaScript dependencies
+        run: bun audit --audit-level=low
+
+      - name: Run cargo audit
+        uses: actions-rust-lang/audit@v1
+        with:
+          workingDirectory: src-tauri
+          denyWarnings: true
+          createIssues: false
+
   check:
     name: Build and Test (${{ matrix.os }})
     strategy:
