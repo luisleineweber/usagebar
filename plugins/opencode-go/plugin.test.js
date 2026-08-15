@@ -5,11 +5,13 @@ import { makeCtx } from "../test-helpers.js"
 const AUTH_PATH = "~/.local/share/opencode/auth.json"
 const GO_USAGE_URL = "https://opencode.ai/zen/go/v1/usage"
 
-function goUsageResponse(usage = {
-  rolling: { percent: 12.5, resetsAt: "2026-03-06T14:00:00.000Z" },
-  weekly: { percent: 34, resetsAt: "2026-03-09T00:00:00.000Z" },
-  monthly: { percent: 56.75, resetsAt: "2026-04-06T00:00:00.000Z" },
-}) {
+function goUsageResponse(
+  usage = {
+    rolling: { percent: 12.5, resetsAt: "2026-03-06T14:00:00.000Z" },
+    weekly: { percent: 34, resetsAt: "2026-03-09T00:00:00.000Z" },
+    monthly: { percent: 56.75, resetsAt: "2026-04-06T00:00:00.000Z" },
+  }
+) {
   return response(JSON.stringify({ usage }))
 }
 
@@ -581,6 +583,135 @@ describe("opencode-go plugin", () => {
       type: "progress",
       used: 12.5,
       limit: 100,
+    })
+  })
+
+  it.each([
+    [undefined, "OpenCode Go usage response invalid"],
+    [response("{}", 403), "OpenCode Go usage request forbidden"],
+    [response("{}", 500), "OpenCode Go usage request failed (HTTP 500)"],
+    [response("{}"), "OpenCode Go usage response invalid"],
+    [
+      goUsageResponse({ rolling: { percent: -1 }, weekly: {}, monthly: {} }),
+      "OpenCode Go usage response invalid",
+    ],
+  ])("rejects invalid Go usage boundaries", async (goResponse, message) => {
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    ctx.goUsageResponse = goResponse
+    setHistoryQuery(ctx, [])
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(message)
+  })
+
+  it("reports Go usage transport failures", async () => {
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error("offline")
+    })
+    setHistoryQuery(ctx, [])
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(
+      "OpenCode Go usage request failed. Check your connection."
+    )
+  })
+
+  it("accepts quota windows without reset timestamps", async () => {
+    const ctx = makeCtx()
+    setGoSubscriptionAuth(ctx)
+    ctx.goUsageResponse = goUsageResponse({
+      rolling: { percent: "10", resetsAt: null },
+      weekly: { percent: 20, resetsAt: "invalid" },
+      monthly: { percent: 30 },
+    })
+    setHistoryQuery(ctx, [])
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines).toHaveLength(3)
+    expect(result.lines.every((line) => line.resetsAt === undefined)).toBe(true)
+  })
+
+  it("ignores malformed auth entries and invalid history rows", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
+    const ctx = makeCtx()
+    ctx.host.fs.writeText(AUTH_PATH, "not-json")
+    setHistoryQuery(ctx, [
+      null,
+      { createdMs: 0, modelId: "ignored-free", cost: 0 },
+      { createdMs: Date.parse("2026-05-26T10:00:00.000Z"), modelId: "ignored-free", cost: -1 },
+      {
+        createdMs: String(Date.parse("2026-05-26T11:00:00.000Z")),
+        modelId: "BIG-PICKLE",
+        cost: "0",
+      },
+    ])
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines[0]).toMatchObject({ label: "Free", used: 1 })
+    expect(ctx.host.log.warn).toHaveBeenCalledWith("opencode auth file is not valid json")
+  })
+
+  it("adds complete ccusage model history and skips invalid days", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-05-26T12:00:00.000Z"
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-05-26T11:00:00.000Z"), modelId: "qwen-free", cost: 0 },
+    ])
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: {
+        daily: [
+          { date: "invalid", totalTokens: 99 },
+          {
+            date: "2026-05-25",
+            modelBreakdowns: [
+              {
+                modelName: "qwen-free",
+                inputTokens: 10,
+                outputTokens: 20,
+                cacheReadTokens: 3,
+                cacheCreationTokens: 4,
+                reasoningTokens: 5,
+                totalTokens: 42,
+                totalCost: 0.25,
+              },
+              null,
+            ],
+          },
+        ],
+      },
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(ctx.host.ccusage.query).toHaveBeenCalledWith({ provider: "opencode", since: "20260426" })
+    expect(result.history).toMatchObject({
+      version: 1,
+      source: "ccusage",
+      timeZone: "system-local",
+      entries: [
+        expect.objectContaining({
+          model: "qwen-free",
+          inputTokens: 10,
+          outputTokens: 20,
+          cacheReadTokens: 3,
+          cacheCreationTokens: 4,
+          reasoningTokens: 5,
+          totalTokens: 42,
+          costUsd: 0.25,
+        }),
+      ],
     })
   })
 })
