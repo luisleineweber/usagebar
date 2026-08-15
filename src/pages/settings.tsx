@@ -50,6 +50,7 @@ interface SettingsPageProps {
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
   onStartOnLoginChange: (value: boolean) => void
+  onResetAllSettings: () => Promise<void>
   onProviderConfigChange: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
   onProviderSecretSave: (providerId: string, secretKey: string, value: string) => Promise<void>
   onProviderSecretDelete: (providerId: string, secretKey: string) => Promise<void>
@@ -89,6 +90,7 @@ export function SettingsPage({
   onGlobalShortcutChange,
   startOnLogin,
   onStartOnLoginChange,
+  onResetAllSettings,
   onProviderConfigChange,
   onProviderSecretSave,
   onProviderSecretDelete,
@@ -176,6 +178,7 @@ export function SettingsPage({
           onGlobalShortcutChange={onGlobalShortcutChange}
           startOnLogin={startOnLogin}
           onStartOnLoginChange={onStartOnLoginChange}
+          onResetAllSettings={onResetAllSettings}
         />
       </TabsContent>
 

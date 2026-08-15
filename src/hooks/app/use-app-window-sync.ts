@@ -1,6 +1,8 @@
 import { useEffect, type RefObject } from "react"
 import { listenDisplayPreferenceUpdated } from "@/lib/display-preference-events"
 import { listenPluginSettingsUpdated } from "@/lib/plugin-settings-events"
+import { listenSettingsReset } from "@/lib/settings-reset-events"
+import type { ResetSettings } from "@/lib/settings-reset"
 import type {
   AccentColor,
   DisplayMode,
@@ -27,6 +29,13 @@ type UseAppWindowSyncArgs = {
   setMenubarIconStyle: (value: MenubarIconStyle) => void
   setTrayProviderSelection: (value: TrayProviderSelection) => void
   setShowHistoryInBar: (value: boolean) => void
+  setAutoUpdateInterval: (value: ResetSettings["autoUpdateInterval"]) => void
+  setGlobalShortcut: (value: ResetSettings["globalShortcut"]) => void
+  setStartOnLogin: (value: ResetSettings["startOnLogin"]) => void
+  setAutoUpdateNextAt: (value: number | null) => void
+  setLoadingForPlugins: (ids: string[]) => void
+  startBatch: (pluginIds?: string[]) => Promise<string[] | undefined>
+  setErrorForPlugins: (ids: string[], error: string) => void
 }
 
 export function useAppWindowSync({
@@ -42,6 +51,13 @@ export function useAppWindowSync({
   setMenubarIconStyle,
   setTrayProviderSelection,
   setShowHistoryInBar,
+  setAutoUpdateInterval,
+  setGlobalShortcut,
+  setStartOnLogin,
+  setAutoUpdateNextAt,
+  setLoadingForPlugins,
+  startBatch,
+  setErrorForPlugins,
 }: UseAppWindowSyncArgs) {
   useEffect(() => {
     let unlisten: (() => void) | undefined
@@ -68,6 +84,75 @@ export function useAppWindowSync({
       unlisten?.()
     }
   }, [finishFirstRunRef, scheduleTrayIconUpdate, setPluginSettings])
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    let disposed = false
+
+    void listenSettingsReset((reset: ResetSettings) => {
+      finishFirstRunRef.current()
+      setPluginSettings(reset.pluginSettings)
+      setAutoUpdateInterval(reset.autoUpdateInterval)
+      setThemeMode(reset.themeMode)
+      setAccentColor(reset.accentColor)
+      setDisplayMode(reset.displayMode)
+      setResetTimerDisplayMode(reset.resetTimerDisplayMode)
+      setTimeFormatMode(reset.timeFormatMode)
+      setGlobalShortcut(reset.globalShortcut)
+      setStartOnLogin(reset.startOnLogin)
+      setMenubarIconStyle(reset.menubarIconStyle)
+      setTrayProviderSelection(reset.trayProviderSelection)
+      setSurfacePins(reset.surfacePins)
+      setShowHistoryInBar(reset.showHistoryInBar)
+      setAutoUpdateNextAt(null)
+      setLoadingForPlugins(reset.probePluginIds)
+      scheduleTrayIconUpdate("settings", 0)
+
+      void startBatch(reset.probePluginIds)
+        .then((startedIds) => {
+          if (startedIds && startedIds.length > 0) setLoadingForPlugins(startedIds)
+        })
+        .catch((error) => {
+          console.error("Failed to start probes after settings reset:", error)
+          setErrorForPlugins(reset.probePluginIds, "Failed to start probe")
+        })
+    })
+      .then((dispose) => {
+        if (disposed) {
+          dispose()
+          return
+        }
+        unlisten = dispose
+      })
+      .catch((error) => {
+        console.error("Failed to listen for settings reset:", error)
+      })
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [
+    finishFirstRunRef,
+    scheduleTrayIconUpdate,
+    setAutoUpdateInterval,
+    setAutoUpdateNextAt,
+    setErrorForPlugins,
+    setGlobalShortcut,
+    setLoadingForPlugins,
+    setMenubarIconStyle,
+    setPluginSettings,
+    setResetTimerDisplayMode,
+    setShowHistoryInBar,
+    setStartOnLogin,
+    setSurfacePins,
+    startBatch,
+    setThemeMode,
+    setTimeFormatMode,
+    setAccentColor,
+    setDisplayMode,
+    setTrayProviderSelection,
+  ])
 
   useEffect(() => {
     let unlisten: (() => void) | undefined

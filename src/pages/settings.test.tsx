@@ -99,6 +99,7 @@ const defaultProps = {
   onGlobalShortcutChange: vi.fn(),
   startOnLogin: false,
   onStartOnLoginChange: vi.fn(),
+  onResetAllSettings: vi.fn(async () => undefined),
   onProviderConfigChange: vi.fn(async () => undefined),
   onProviderSecretSave: vi.fn(async () => undefined),
   onProviderSecretDelete: vi.fn(async () => undefined),
@@ -202,6 +203,22 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("checkbox", { name: /show history in bar/i })).toBeChecked()
     expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /report an issue/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /reset all settings/i })).toBeInTheDocument()
+  })
+
+  it("requires confirmation before resetting settings and names preserved credentials", async () => {
+    const onResetAllSettings = vi.fn(async () => undefined)
+    render(<TestHarness onResetAllSettings={onResetAllSettings} />)
+
+    await userEvent.click(screen.getByRole("button", { name: /reset all settings/i }))
+
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("Saved provider credentials")
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }))
+    expect(onResetAllSettings).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole("button", { name: /reset all settings/i }))
+    await userEvent.click(screen.getByRole("button", { name: "Reset settings" }))
+    expect(onResetAllSettings).toHaveBeenCalledOnce()
   })
 
   it("does not repeat general setting headings in helper copy", () => {

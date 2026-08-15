@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useRef, useState } from "react"
+import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { useShallow } from "zustand/react/shallow"
@@ -25,6 +26,8 @@ import { useAppPluginStore } from "@/stores/app-plugin-store"
 import { useAppPreferencesStore } from "@/stores/app-preferences-store"
 import { showPanelForView } from "@/lib/panel-window"
 import { notifyPluginSettingsUpdated } from "@/lib/plugin-settings-events"
+import { notifySettingsReset } from "@/lib/settings-reset-events"
+import { resetAllSettings } from "@/lib/settings-reset"
 import type { SelectedProviderChangeOptions } from "@/lib/settings-window"
 
 type SettingsOpenPayload = {
@@ -369,6 +372,46 @@ export function SettingsWindowApp() {
     finishFirstRun,
   })
 
+  const handleResetAllSettings = useCallback(async () => {
+    const reset = await resetAllSettings(pluginsMeta)
+    await invoke("update_global_shortcut", { shortcut: reset.globalShortcut })
+    await applyStartOnLogin(reset.startOnLogin)
+
+    setPluginSettings(reset.pluginSettings)
+    setAutoUpdateInterval(reset.autoUpdateInterval)
+    setThemeMode(reset.themeMode)
+    setAccentColor(reset.accentColor)
+    setDisplayMode(reset.displayMode)
+    setResetTimerDisplayMode(reset.resetTimerDisplayMode)
+    setTimeFormatMode(reset.timeFormatMode)
+    setGlobalShortcut(reset.globalShortcut)
+    setStartOnLogin(reset.startOnLogin)
+    setMenubarIconStyle(reset.menubarIconStyle)
+    setTrayProviderSelection(reset.trayProviderSelection)
+    setSurfacePins(reset.surfacePins)
+    setShowHistoryInBar(reset.showHistoryInBar)
+    setAutoUpdateNextAt(null)
+
+    await notifySettingsReset(reset)
+  }, [
+    applyStartOnLogin,
+    pluginsMeta,
+    setAccentColor,
+    setAutoUpdateInterval,
+    setAutoUpdateNextAt,
+    setDisplayMode,
+    setGlobalShortcut,
+    setMenubarIconStyle,
+    setPluginSettings,
+    setResetTimerDisplayMode,
+    setShowHistoryInBar,
+    setStartOnLogin,
+    setSurfacePins,
+    setThemeMode,
+    setTimeFormatMode,
+    setTrayProviderSelection,
+  ])
+
   return (
     <div className="min-h-screen bg-background px-6 py-6 text-foreground md:px-10 md:py-10">
       <div className="mx-auto w-full max-w-7xl">
@@ -412,6 +455,7 @@ export function SettingsWindowApp() {
             onGlobalShortcutChange={handleGlobalShortcutChange}
             startOnLogin={startOnLogin}
             onStartOnLoginChange={handleStartOnLoginChange}
+            onResetAllSettings={handleResetAllSettings}
             onProviderConfigChange={handleProviderConfigChange}
             onProviderSecretSave={handleProviderSecretSave}
             onProviderSecretDelete={handleProviderSecretDelete}

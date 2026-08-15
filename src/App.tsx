@@ -186,6 +186,13 @@ function App() {
     setShowHistoryInBar,
     setMenubarIconStyle,
     setTrayProviderSelection,
+    setAutoUpdateInterval,
+    setGlobalShortcut,
+    setStartOnLogin,
+    setAutoUpdateNextAt,
+    setLoadingForPlugins,
+    startBatch,
+    setErrorForPlugins,
   })
 
   const didOpenFirstRunRef = useRef(false)

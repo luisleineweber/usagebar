@@ -8,6 +8,7 @@ import { useDarkMode } from "@/hooks/use-dark-mode"
 import { GlobalShortcutSection } from "@/components/global-shortcut-section"
 import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section"
+import { ResetSettingsSection } from "@/components/settings/reset-settings-section"
 import type { TraySettingsPreview } from "@/lib/tray-preview"
 import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
 import {
@@ -111,6 +112,7 @@ type GeneralSettingsPaneProps = {
   onGlobalShortcutChange: (value: GlobalShortcut) => void
   startOnLogin: boolean
   onStartOnLoginChange: (value: boolean) => void
+  onResetAllSettings: () => Promise<void>
 }
 
 export function GeneralSettingsPane({
@@ -137,6 +139,7 @@ export function GeneralSettingsPane({
   onGlobalShortcutChange,
   startOnLogin,
   onStartOnLoginChange,
+  onResetAllSettings,
 }: GeneralSettingsPaneProps) {
   const isDark = useDarkMode()
 
@@ -360,6 +363,8 @@ export function GeneralSettingsPane({
           <ExternalLink className="size-4" />
         </Button>
       </section>
+
+      <ResetSettingsSection onResetAllSettings={onResetAllSettings} />
     </div>
   )
 }
