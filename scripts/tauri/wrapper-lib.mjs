@@ -72,7 +72,7 @@ export function cleanupStaleDebugBuildMetadata(repoRoot) {
 export function getTauriChildEnv(args, baseEnv = process.env) {
   return {
     ...baseEnv,
-    ...(args[0] === "dev" ? { USAGEBAR_TAURI_DEV: "1" } : {}),
+    USAGEBAR_TAURI_DEV: args[0] === "dev" ? "1" : undefined,
   }
 }
 

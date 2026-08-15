@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { ProviderCard } from "@/components/provider-card"
+import { ProviderDetailSchema } from "@/components/provider-detail-schema"
 import { UsageReport } from "@/components/usage-report"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
@@ -82,6 +83,7 @@ export function ProviderDetailPage({
         showSeparator={false}
         loading={plugin.loading}
         error={plugin.error}
+        stale={Boolean(plugin.error && hasRuntimeData)}
         errorCategory={plugin.errorCategory}
         lines={plugin.data?.lines ?? plugin.lastSettledData?.lines ?? []}
         skeletonLines={plugin.meta.lines}
@@ -95,7 +97,18 @@ export function ProviderDetailPage({
         timeFormatMode={timeFormatMode}
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
-      <UsageReport outputs={reportOutput ? [reportOutput] : []} />
+      <ProviderDetailSchema
+        schema={plugin.meta.detail}
+        values={plugin.data?.details ?? plugin.lastSettledData?.details}
+        displayMode={displayMode}
+        resetTimerDisplayMode={resetTimerDisplayMode}
+        timeFormatMode={timeFormatMode}
+        onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
+      />
+      <UsageReport
+        outputs={reportOutput ? [reportOutput] : []}
+        stale={Boolean(plugin.error && reportOutput)}
+      />
     </div>
   )
 }

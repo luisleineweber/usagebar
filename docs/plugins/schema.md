@@ -84,7 +84,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `entry`            | string | Yes      | Relative path to JS entry file                                                                                  |
 | `icon`             | string | Yes      | Relative path to SVG icon file                                                                                  |
 | `iconColorMode`    | string | No       | `monochrome` uses the brand color mask; `multicolor` keeps the SVG's original colors                            |
-| `iconAspectRatio`  | number | No       | Width divided by height for rectangular icons; natural-fit surfaces use this ratio                            |
+| `iconAspectRatio`  | number | No       | Width divided by height for rectangular icons; natural-fit surfaces use this ratio                              |
 | `platformSupport`  | object | No       | Optional per-platform support/surfacing metadata                                                                |
 | `links`            | array  | No       | Optional quick links shown on detail page                                                                       |
 | `status`           | object | No       | Optional machine-readable provider status source                                                                |
@@ -247,9 +247,10 @@ type MetricLine =
   | {
       type: "progress"
       label: string
-      used: number
-      limit: number
+      used: number | null
+      limit: number | null
       format: { kind: "percent" } | { kind: "dollars" } | { kind: "count"; suffix: string }
+      availability?: "unknown" | "unsupported"
       resetsAt?: string // ISO timestamp
       periodDurationMs?: number // period length in ms for pace tracking
       color?: string
@@ -258,6 +259,9 @@ type MetricLine =
 ```
 
 - `color`: optional hex string (e.g. `#22c55e`)
+- `used` and `limit`: provider-owned values. `0` is authoritative. `null` means the provider did not return the field.
+- `availability: "unsupported"`: the provider does not support this metric. UsageBar shows `Not available`.
+- `availability: "unknown"`: the provider returned the metric, but its value is not known. UsageBar shows `—`.
 - `subtitle`: optional text displayed below the line in smaller muted text
 - `resetsAt`: optional ISO timestamp (UI shows "Resets in ..." automatically)
 - `periodDurationMs`: optional period length in milliseconds (enables pace indicator when combined with `resetsAt`)
@@ -397,6 +401,95 @@ A complete, working plugin that fetches data and displays all three line types.
 - Use `ctx.app.pluginDataDir` for plugin-specific state/config
 - Keep probes fast (users wait on refresh)
 - Validate API responses before accessing nested fields
+
+## Provider Detail Schema
+
+The optional detail object declares the provider detail layout. React code does
+not select fields by provider ID. The plugin returns values in details. Each
+value uses the stable field id from the manifest.
+
+```json
+{
+  "detail": {
+    "sections": [
+      {
+        "id": "billing",
+        "label": "Billing",
+        "fields": [
+          { "id": "account", "label": "Account", "type": "text", "role": "account" },
+          { "id": "spend", "label": "Spend window", "type": "window", "role": "billing" },
+          {
+            "id": "trend",
+            "label": "Recent spend",
+            "type": "chart",
+            "chart": { "kind": "sparkline", "maxPoints": 14 }
+          },
+          { "id": "auth", "label": "Authentication", "type": "notice", "role": "authentication" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Sections and fields render in manifest order. Field IDs must be unique within
+the provider. Unknown detail values are ignored. The host also ignores values
+with a type that does not match the declaration.
+
+Supported field types:
+
+| Type   | Runtime value                              | Use                                           |
+| ------ | ------------------------------------------ | --------------------------------------------- |
+| text   | id, type, value, color?                    | Account, organization, source, and reset text |
+| badge  | id, type, text, color?, subtitle?          | Billing or connection status                  |
+| window | id, type, used?, limit?, format, availability?, resetsAt? | Additional quota or cost window               |
+| chart  | id, type, kind: sparkline, points, format? | Small bounded trend chart                     |
+| notice | id, type, text, tone                       | Authentication or provider warning            |
+
+The default visibility is ifPresent. always reserves the field in the layout,
+but the UI does not invent a value when the plugin has no value.
+
+Supported text formats are text, date, dateTime, duration, percent, currency,
+and count. Currency uses an object with kind currency and a currency code.
+Count uses an object with kind count and a suffix.
+
+Only sparkline charts are supported. maxPoints is limited to 64 points.
+Window and chart numeric formats use the existing percent, dollars, and count
+formats.
+
+Window values follow the same availability rules as progress lines: `0` is an
+authoritative value, a missing or `null` value is unknown, and
+`availability: "unsupported"` renders as `Not available`.
+
+Plugins can use these host builders:
+
+```javascript
+return {
+  lines: [
+    ctx.line.progress({
+      label: "Usage",
+      used: 42,
+      limit: 100,
+      format: { kind: "percent" },
+    }),
+  ],
+  details: [
+    ctx.detail.text({ id: "account", value: "user@example.com" }),
+    ctx.detail.window({
+      id: "spend",
+      used: 12.5,
+      limit: 100,
+      format: { kind: "dollars" },
+      resetsAt: "2026-09-01T00:00:00Z",
+    }),
+    ctx.detail.notice({
+      id: "auth",
+      text: "Signed in with a browser session.",
+      tone: "info",
+    }),
+  ],
+}
+```
 
 ## See Also
 

@@ -50,14 +50,16 @@ export function useAppPluginViews({
           lastManualRefreshAt: null,
           lastSuccessAt: null,
         }
-        return {
+        const nextState: DisplayPluginState = {
           meta,
           ...state,
-          ...(providerStatuses[meta.id] ? { status: providerStatuses[meta.id] } : {}),
           data: state.data,
           loading: state.loading,
           error: state.error,
         }
+        const status = providerStatuses[meta.id]
+        if (status !== undefined) nextState.status = status
+        return nextState
       })
       .filter((plugin): plugin is DisplayPluginState => Boolean(plugin))
   }, [pluginSettings, pluginStates, pluginsMeta, providerStatuses])

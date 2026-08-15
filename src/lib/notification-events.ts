@@ -34,11 +34,23 @@ type OutputMap = Record<string, PluginOutput | undefined>
 type StatusMap = Record<string, ProviderStatus | undefined>
 
 type ProgressLine = Extract<MetricLine, { type: "progress" }>
+type KnownProgressLine = ProgressLine & { used: number; limit: number }
 
-function progressLines(output: PluginOutput | undefined): ProgressLine[] {
+function isKnownProgressLine(line: ProgressLine): line is KnownProgressLine {
+  return (
+    line.availability === undefined &&
+    typeof line.used === "number" &&
+    Number.isFinite(line.used) &&
+    typeof line.limit === "number" &&
+    Number.isFinite(line.limit) &&
+    line.limit > 0
+  )
+}
+
+function progressLines(output: PluginOutput | undefined): KnownProgressLine[] {
   return (
     output?.lines.filter(
-      (line): line is ProgressLine => line.type === "progress" && line.limit > 0
+      (line): line is KnownProgressLine => line.type === "progress" && isKnownProgressLine(line)
     ) ?? []
   )
 }
@@ -125,7 +137,7 @@ export function deriveUsageEvents({
             id: `quota:${eventIdentity(providerId, output)}:${eventPart(line.label)}:${threshold}:${line.resetsAt ?? "none"}`,
             type: "quota",
             providerId,
-            ...(output.instanceRef ? { instanceRef: output.instanceRef } : {}),
+            instanceRef: output.instanceRef,
             title: `${output.displayName} quota warning`,
             body: `${line.label} reached ${Math.round(current)}% used (threshold ${threshold}%).`,
             createdAt: now,
@@ -141,7 +153,7 @@ export function deriveUsageEvents({
           id: `reset:${eventIdentity(providerId, output)}:${eventPart(line.label)}:${line.resetsAt}`,
           type: "reset",
           providerId,
-          ...(output.instanceRef ? { instanceRef: output.instanceRef } : {}),
+          instanceRef: output.instanceRef,
           title: `${output.displayName} quota reset`,
           body: `${line.label} is available again.`,
           createdAt: now,
@@ -163,7 +175,7 @@ export function deriveUsageEvents({
           id: `incident:${eventIdentity(providerId, output)}:${status.indicator}:${status.updatedAt ?? status.checkedAt}`,
           type: "incident",
           providerId,
-          ...(output?.instanceRef ? { instanceRef: output.instanceRef } : {}),
+          instanceRef: output?.instanceRef,
           title: `${displayName} service incident`,
           body: status.description?.trim() || `${status.indicator} provider status`,
           createdAt: now,
@@ -174,7 +186,7 @@ export function deriveUsageEvents({
           id: `resolved:${eventIdentity(providerId, output)}:${status.updatedAt ?? status.checkedAt}`,
           type: "incidentResolved",
           providerId,
-          ...(output?.instanceRef ? { instanceRef: output.instanceRef } : {}),
+          instanceRef: output?.instanceRef,
           title: `${displayName} incident resolved`,
           body: "Provider status returned to normal.",
           createdAt: now,

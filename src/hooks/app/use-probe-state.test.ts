@@ -95,6 +95,21 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex.lastSettledData?.history).toEqual(history)
   })
 
+  it("does not add unknown progress values to local quota history", () => {
+    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
+
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "codex",
+        displayName: "Codex",
+        iconUrl: "/codex.svg",
+        lines: [{ type: "progress", label: "Session", used: null, limit: 100, format: "percent" }],
+      })
+    })
+
+    expect(result.current.pluginStates.codex.history).toBeUndefined()
+  })
+
   it("preserves settled data while a loaded provider refreshes", () => {
     const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
 

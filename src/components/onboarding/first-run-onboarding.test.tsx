@@ -9,16 +9,16 @@ function provider(
   state: Partial<SettingsPluginState["state"]> = {},
   enabled = ["codex", "claude", "cursor"].includes(id)
 ): SettingsPluginState {
-  const names: Record<string, string> = {
-    codex: "Codex",
-    claude: "Claude",
-    cursor: "Cursor",
-    copilot: "GitHub Copilot",
-    ollama: "Ollama",
-  }
+  const names = new Map([
+    ["codex", "Codex"],
+    ["claude", "Claude"],
+    ["cursor", "Cursor"],
+    ["copilot", "GitHub Copilot"],
+    ["ollama", "Ollama"],
+  ])
   const meta = {
     id,
-    name: names[id] ?? id,
+    name: names.get(id) ?? id,
     iconUrl: `/${id}.svg`,
     lines: [],
     primaryCandidates: [],

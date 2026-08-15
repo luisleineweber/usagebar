@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react"
+import type { DragEndEvent } from "@dnd-kit/core"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
@@ -6,12 +7,15 @@ import { invoke } from "@tauri-apps/api/core"
 
 import { SideNav } from "@/components/side-nav"
 
+type MockSensor = { name?: string }
+type MockSensorOptions = { activationConstraint?: { distance?: number } }
+
 const darkModeState = vi.hoisted(() => ({
   useDarkModeMock: vi.fn(() => false),
 }))
 
 const dndState = vi.hoisted(() => ({
-  latestOnDragEnd: null as null | ((event: unknown) => void),
+  latestOnDragEnd: null as null | ((event: DragEndEvent) => void),
 }))
 
 vi.mock("@/hooks/use-dark-mode", () => ({
@@ -24,15 +28,18 @@ vi.mock("@dnd-kit/core", () => ({
     onDragEnd,
   }: {
     children: ReactNode
-    onDragEnd?: (event: unknown) => void
+    onDragEnd?: (event: DragEndEvent) => void
   }) => {
     dndState.latestOnDragEnd = onDragEnd ?? null
     return <div>{children}</div>
   },
   closestCenter: vi.fn(),
   PointerSensor: class {},
-  useSensor: vi.fn((_sensor: unknown, options?: unknown) => ({ sensor: _sensor, options })),
-  useSensors: vi.fn((...sensors: unknown[]) => sensors),
+  useSensor: vi.fn((_sensor: MockSensor, options?: MockSensorOptions) => ({
+    sensor: _sensor,
+    options,
+  })),
+  useSensors: vi.fn((...sensors: MockSensor[]) => sensors),
 }))
 
 vi.mock("@dnd-kit/sortable", () => ({

@@ -548,7 +548,7 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText(/Do not paste Set-Cookie\./)).toBeInTheDocument()
   })
 
-  it("shows explicit OpenCode Go local-history guidance", () => {
+  it("shows explicit OpenCode Go API and local-history guidance", () => {
     render(
       <ProviderSettingsDetail
         plugin={opencodeGoPlugin}
@@ -567,12 +567,12 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByText("OpenCode")).toBeInTheDocument()
     expect(
       screen.getByText(
-        /Tracks OpenCode usage from local auth and SQLite history\. Paid status requires current subscription evidence\./
+        /Tracks account-wide OpenCode Go quota from the official usage API and keeps local history from SQLite and ccusage\./
       )
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        /~\/\.local\/share\/opencode\/auth\.json and ~\/\.local\/share\/opencode\/opencode\.db exist/
+        /~\/\.local\/share\/opencode\/auth\.json contains an opencode-go key\. SQLite and ccusage provide local history\./
       )
     ).toBeInTheDocument()
     expect(screen.queryByLabelText("OpenCode Cookie header")).not.toBeInTheDocument()

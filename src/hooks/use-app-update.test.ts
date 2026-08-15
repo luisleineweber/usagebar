@@ -1,5 +1,6 @@
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi, beforeEach, afterAll } from "vitest"
+import type { DownloadEvent, Update } from "@tauri-apps/plugin-updater"
 
 const { checkMock, invokeMock, relaunchMock } = vi.hoisted(() => ({
   checkMock: vi.fn(),
@@ -266,7 +267,7 @@ describe("useAppUpdate", () => {
   })
 
   it("waits for user action before downloading and installing a signed Tauri update", async () => {
-    const downloadMock = vi.fn(async (onEvent: (event: unknown) => void) => {
+    const downloadMock = vi.fn(async (onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Started", data: { contentLength: 1000 } })
       onEvent({ event: "Progress", data: { chunkLength: 500 } })
       onEvent({ event: "Progress", data: { chunkLength: 500 } })
@@ -349,7 +350,7 @@ describe("useAppUpdate", () => {
   })
 
   it("does not check again when an update is already available", async () => {
-    const downloadMock = vi.fn(async (onEvent: (event: unknown) => void) => {
+    const downloadMock = vi.fn(async (onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Finished", data: {} })
     })
     checkMock.mockResolvedValue({
@@ -393,7 +394,7 @@ describe("useAppUpdate", () => {
 
   it("reports indeterminate progress when content length is unknown", async () => {
     let resolveDownload: (() => void) | null = null
-    const downloadMock = vi.fn((onEvent: (event: unknown) => void) => {
+    const downloadMock = vi.fn((onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Started", data: { contentLength: null } })
       return new Promise<void>((resolve) => {
         resolveDownload = resolve
@@ -440,7 +441,7 @@ describe("useAppUpdate", () => {
   })
 
   it("downloads, installs, and relaunches from the available state", async () => {
-    const downloadMock = vi.fn(async (onEvent: (event: unknown) => void) => {
+    const downloadMock = vi.fn(async (onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Finished", data: {} })
     })
     relaunchMock.mockResolvedValue(undefined)
@@ -459,7 +460,7 @@ describe("useAppUpdate", () => {
   })
 
   it("does not update state after unmount during check", async () => {
-    const resolveRef: { current: ((val: unknown) => void) | null } = { current: null }
+    const resolveRef: { current: ((val: Update | null) => void) | null } = { current: null }
     checkMock.mockReturnValue(
       new Promise((resolve) => {
         resolveRef.current = resolve
@@ -490,7 +491,7 @@ describe("useAppUpdate", () => {
   it("does not trigger install while downloading", async () => {
     let resolveDownload: (() => void) | null = null
     const installMock = vi.fn().mockResolvedValue(undefined)
-    const downloadMock = vi.fn((onEvent: (event: unknown) => void) => {
+    const downloadMock = vi.fn((onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Started", data: { contentLength: 100 } })
       return new Promise<void>((resolve) => {
         resolveDownload = resolve

@@ -398,7 +398,7 @@ fn provider_instance_key(instance_ref: &ProviderInstanceRef) -> String {
 mod tests {
     use super::*;
     use crate::plugin_engine::freshness::{DataFreshness, DataFreshnessState};
-    use crate::plugin_engine::runtime::{ProgressFormat, UsageHistoryEntry};
+    use crate::plugin_engine::runtime::{MetricAvailability, ProgressFormat, UsageHistoryEntry};
 
     fn temp_dir(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -458,6 +458,7 @@ mod tests {
             display_name: "Codex".to_string(),
             plan: Some("Plus".to_string()),
             lines: vec![],
+            details: None,
             icon_url: "codex.svg".to_string(),
             error: None,
             history: None,
@@ -501,6 +502,7 @@ mod tests {
             display_name: "Codex B".to_string(),
             plan: Some("Plus".to_string()),
             lines: vec![],
+            details: None,
             icon_url: "codex.svg".to_string(),
             error: None,
             history: None,
@@ -535,13 +537,15 @@ mod tests {
             plan: Some("Plus".to_string()),
             lines: vec![MetricLine::Progress {
                 label: "Session".to_string(),
-                used: 20.0,
-                limit: 100.0,
+                used: Some(20.0),
+                limit: Some(100.0),
                 format: ProgressFormat::Percent,
+                availability: None,
                 resets_at: None,
                 period_duration_ms: None,
                 color: None,
             }],
+            details: None,
             icon_url: "codex.svg".to_string(),
             error: None,
             history: None,
@@ -662,9 +666,10 @@ mod tests {
             plan: Some("Max 20x".to_string()),
             lines: vec![MetricLine::Progress {
                 label: "Session".to_string(),
-                used: 42.0,
-                limit: 100.0,
+                used: Some(42.0),
+                limit: Some(100.0),
                 format: ProgressFormat::Percent,
+                availability: None,
                 resets_at: Some("2026-03-26T12:00:00Z".to_string()),
                 period_duration_ms: Some(14_400_000),
                 color: None,
@@ -678,6 +683,56 @@ mod tests {
         let deserialized: CachedPluginSnapshot = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.provider_id, "claude");
         assert_eq!(deserialized.lines.len(), 1);
+    }
+
+    #[test]
+    fn snapshot_serialization_preserves_zero_unknown_and_unsupported_progress() {
+        let snapshot = CachedPluginSnapshot {
+            provider_id: "claude".to_string(),
+            instance_ref: None,
+            display_name: "Claude".to_string(),
+            plan: None,
+            lines: vec![
+                MetricLine::Progress {
+                    label: "Zero".to_string(),
+                    used: Some(0.0),
+                    limit: Some(100.0),
+                    format: ProgressFormat::Percent,
+                    availability: None,
+                    resets_at: None,
+                    period_duration_ms: None,
+                    color: None,
+                },
+                MetricLine::Progress {
+                    label: "Unknown".to_string(),
+                    used: None,
+                    limit: Some(100.0),
+                    format: ProgressFormat::Percent,
+                    availability: None,
+                    resets_at: None,
+                    period_duration_ms: None,
+                    color: None,
+                },
+                MetricLine::Progress {
+                    label: "Unsupported".to_string(),
+                    used: None,
+                    limit: None,
+                    format: ProgressFormat::Percent,
+                    availability: Some(MetricAvailability::Unsupported),
+                    resets_at: None,
+                    period_duration_ms: None,
+                    color: None,
+                },
+            ],
+            history: None,
+            fetched_at: "2026-03-26T08:00:00Z".to_string(),
+            freshness: None,
+        };
+
+        let json: serde_json::Value = serde_json::to_value(snapshot).unwrap();
+        assert_eq!(json["lines"][0]["used"], 0.0);
+        assert!(json["lines"][1]["used"].is_null());
+        assert_eq!(json["lines"][2]["availability"], "unsupported");
     }
 
     #[test]

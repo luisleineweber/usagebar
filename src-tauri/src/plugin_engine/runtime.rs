@@ -1,11 +1,12 @@
 use crate::plugin_engine::freshness::DataFreshnessGroups;
 use crate::plugin_engine::host_api;
-use crate::plugin_engine::manifest::LoadedPlugin;
+use crate::plugin_engine::manifest::{DetailChartKind, DetailFieldType, LoadedPlugin};
 use crate::plugin_engine::probe_error::{
     ProbeError, ProbeErrorCategory, classify_legacy_probe_error,
 };
 use rquickjs::{Array, Context, Ctx, Error, Object, Promise, Runtime, Value};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -28,6 +29,13 @@ pub enum ProgressFormat {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MetricAvailability {
+    Unknown,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum MetricLine {
     Text {
@@ -38,9 +46,11 @@ pub enum MetricLine {
     },
     Progress {
         label: String,
-        used: f64,
-        limit: f64,
+        used: Option<f64>,
+        limit: Option<f64>,
         format: ProgressFormat,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        availability: Option<MetricAvailability>,
         #[serde(rename = "resetsAt")]
         resets_at: Option<String>,
         #[serde(rename = "periodDurationMs")]
@@ -52,6 +62,62 @@ pub enum MetricLine {
         text: String,
         color: Option<String>,
         subtitle: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailChartPoint {
+    pub label: String,
+    pub value: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DetailNoticeTone {
+    Info,
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum PluginDetailValue {
+    Text {
+        id: String,
+        value: String,
+        color: Option<String>,
+    },
+    Badge {
+        id: String,
+        text: String,
+        color: Option<String>,
+        subtitle: Option<String>,
+    },
+    Window {
+        id: String,
+        used: Option<f64>,
+        limit: Option<f64>,
+        format: ProgressFormat,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        availability: Option<MetricAvailability>,
+        #[serde(rename = "resetsAt")]
+        resets_at: Option<String>,
+        #[serde(rename = "periodDurationMs")]
+        period_duration_ms: Option<u64>,
+        color: Option<String>,
+    },
+    Chart {
+        id: String,
+        kind: DetailChartKind,
+        points: Vec<DetailChartPoint>,
+        format: Option<ProgressFormat>,
+        color: Option<String>,
+    },
+    Notice {
+        id: String,
+        text: String,
+        tone: DetailNoticeTone,
     },
 }
 
@@ -72,6 +138,8 @@ pub struct PluginOutput {
     pub display_name: String,
     pub plan: Option<String>,
     pub lines: Vec<MetricLine>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<Vec<PluginDetailValue>>,
     pub icon_url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<ProbeError>,
@@ -541,6 +609,7 @@ fn run_probe_unstamped(
             Err(msg) => vec![error_line(msg)],
         };
         let history = parse_history(&result);
+        let details = parse_details(&result, &plugin.manifest.detail);
 
         let error = lines.iter().find_map(|line| match line {
             MetricLine::Badge { label, text, .. } if label == "Error" => Some(ProbeError {
@@ -556,12 +625,282 @@ fn run_probe_unstamped(
             display_name,
             plan,
             lines,
+            details,
             icon_url,
             error,
             history,
             freshness: None,
         }
     })
+}
+
+fn parse_details(
+    result: &Object<'_>,
+    manifest: &Option<crate::plugin_engine::manifest::ManifestDetail>,
+) -> Option<Vec<PluginDetailValue>> {
+    let manifest = manifest.as_ref()?;
+    let details_value: Value = match result.get("details") {
+        Ok(value) => value,
+        Err(_) => return None,
+    };
+    let Some(details) = details_value.into_array() else {
+        log::warn!("plugin details must be an array; omitting details");
+        return None;
+    };
+
+    let mut values = Vec::new();
+    let mut seen = HashSet::new();
+    for index in 0..details.len() {
+        let value: Object = match details.get(index) {
+            Ok(value) => value,
+            Err(_) => {
+                log::warn!("invalid detail at index {}; omitting detail", index);
+                continue;
+            }
+        };
+        let id = match value.get::<_, String>("id") {
+            Ok(id) if !id.trim().is_empty() => id.trim().to_string(),
+            _ => {
+                log::warn!("detail at index {} has no valid id; omitting detail", index);
+                continue;
+            }
+        };
+        if !seen.insert(id.clone()) {
+            log::warn!("duplicate detail id '{}'; omitting duplicate", id);
+            continue;
+        }
+
+        let Some(field) = manifest
+            .sections
+            .iter()
+            .flat_map(|section| section.fields.iter())
+            .find(|field| field.id == id)
+        else {
+            log::warn!(
+                "detail '{}' is not declared in the manifest; omitting detail",
+                id
+            );
+            continue;
+        };
+        let detail_type = value.get::<_, String>("type").unwrap_or_default();
+        let expected_type = match field.field_type {
+            DetailFieldType::Text => "text",
+            DetailFieldType::Badge => "badge",
+            DetailFieldType::Window => "window",
+            DetailFieldType::Chart => "chart",
+            DetailFieldType::Notice => "notice",
+        };
+        if detail_type != expected_type {
+            log::warn!(
+                "detail '{}' has type '{}', expected '{}'; omitting detail",
+                id,
+                detail_type,
+                expected_type
+            );
+            continue;
+        }
+
+        let parsed = match field.field_type {
+            DetailFieldType::Text => parse_detail_text(&value, id.clone()),
+            DetailFieldType::Badge => parse_detail_badge(&value, id.clone()),
+            DetailFieldType::Window => parse_detail_window(&value, id.clone()),
+            DetailFieldType::Chart => parse_detail_chart(&value, id.clone(), field),
+            DetailFieldType::Notice => parse_detail_notice(&value, id.clone()),
+        };
+        match parsed {
+            Ok(value) => values.push(value),
+            Err(message) => log::warn!("invalid detail '{}': {}; omitting detail", id, message),
+        }
+    }
+
+    Some(values)
+}
+
+fn parse_detail_text(object: &Object<'_>, id: String) -> Result<PluginDetailValue, String> {
+    let value = required_detail_string(object, "value")?;
+    Ok(PluginDetailValue::Text {
+        id,
+        value,
+        color: object.get::<_, String>("color").ok(),
+    })
+}
+
+fn parse_detail_badge(object: &Object<'_>, id: String) -> Result<PluginDetailValue, String> {
+    let text = required_detail_string(object, "text")?;
+    Ok(PluginDetailValue::Badge {
+        id,
+        text,
+        color: object.get::<_, String>("color").ok(),
+        subtitle: object.get::<_, String>("subtitle").ok(),
+    })
+}
+
+fn parse_detail_window(object: &Object<'_>, id: String) -> Result<PluginDetailValue, String> {
+    let used = optional_detail_number(object, "used")?;
+    let limit = optional_detail_number(object, "limit")?;
+    if used.is_some_and(|value| value < 0.0) || limit.is_some_and(|value| value <= 0.0) {
+        return Err(
+            "used must be non-negative and limit must be positive when present".to_string(),
+        );
+    }
+    let availability = match object.get::<_, Value>("availability") {
+        Ok(value) if !value.is_null() && !value.is_undefined() => {
+            let value = value
+                .as_string()
+                .ok_or_else(|| "availability must be a string".to_string())?;
+            match value.to_string().unwrap_or_default().as_str() {
+                "unknown" => Some(MetricAvailability::Unknown),
+                "unsupported" => Some(MetricAvailability::Unsupported),
+                other => return Err(format!("invalid availability: {}", other)),
+            }
+        }
+        _ => None,
+    };
+    let format = parse_detail_progress_format(object)?;
+    let resets_at = object
+        .get::<_, String>("resetsAt")
+        .ok()
+        .filter(|value| parse_rfc3339(value, "resetsAt").is_ok());
+    let period_duration_ms = object
+        .get::<_, f64>("periodDurationMs")
+        .ok()
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .map(|value| value as u64);
+    Ok(PluginDetailValue::Window {
+        id,
+        used,
+        limit,
+        format,
+        availability,
+        resets_at,
+        period_duration_ms,
+        color: object.get::<_, String>("color").ok(),
+    })
+}
+
+fn parse_detail_chart(
+    object: &Object<'_>,
+    id: String,
+    field: &crate::plugin_engine::manifest::ManifestDetailField,
+) -> Result<PluginDetailValue, String> {
+    let kind = object
+        .get::<_, String>("kind")
+        .map_err(|_| "kind must be sparkline".to_string())?;
+    if kind != "sparkline" {
+        return Err("kind must be sparkline".to_string());
+    }
+    let points: rquickjs::Array = object
+        .get("points")
+        .map_err(|_| "points must be an array".to_string())?;
+    let max_points = field
+        .chart
+        .as_ref()
+        .map(|chart| chart.max_points)
+        .unwrap_or(24);
+    if max_points == 0 || max_points > 64 {
+        return Err("chart maxPoints must be between 1 and 64".to_string());
+    }
+    let start = points.len().saturating_sub(max_points as usize);
+    let mut parsed_points = Vec::new();
+    for index in start..points.len() {
+        let point: Object = points
+            .get(index)
+            .map_err(|_| format!("point {} must be an object", index))?;
+        let label = required_detail_string(&point, "label")?;
+        let value = required_detail_number(&point, "value")?;
+        parsed_points.push(DetailChartPoint { label, value });
+    }
+    if parsed_points.is_empty() {
+        return Err("points must not be empty".to_string());
+    }
+    Ok(PluginDetailValue::Chart {
+        id,
+        kind: DetailChartKind::Sparkline,
+        points: parsed_points,
+        format: parse_optional_detail_progress_format(object)?,
+        color: object.get::<_, String>("color").ok(),
+    })
+}
+
+fn parse_detail_notice(object: &Object<'_>, id: String) -> Result<PluginDetailValue, String> {
+    let text = required_detail_string(object, "text")?;
+    let tone = match object
+        .get::<_, String>("tone")
+        .unwrap_or_else(|_| "info".to_string())
+        .as_str()
+    {
+        "info" => DetailNoticeTone::Info,
+        "warning" => DetailNoticeTone::Warning,
+        "error" => DetailNoticeTone::Error,
+        _ => return Err("tone must be info, warning, or error".to_string()),
+    };
+    Ok(PluginDetailValue::Notice { id, text, tone })
+}
+
+fn required_detail_string(object: &Object<'_>, field: &str) -> Result<String, String> {
+    let value = object
+        .get::<_, String>(field)
+        .map_err(|_| format!("{} must be a non-empty string", field))?;
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        return Err(format!("{} must be a non-empty string", field));
+    }
+    Ok(value)
+}
+
+fn required_detail_number(object: &Object<'_>, field: &str) -> Result<f64, String> {
+    let value = object
+        .get::<_, f64>(field)
+        .map_err(|_| format!("{} must be a finite number", field))?;
+    if !value.is_finite() {
+        return Err(format!("{} must be a finite number", field));
+    }
+    Ok(value)
+}
+
+fn optional_detail_number(object: &Object<'_>, field: &str) -> Result<Option<f64>, String> {
+    let value: Value = match object.get(field) {
+        Ok(value) => value,
+        Err(_) => return Ok(None),
+    };
+    if value.is_null() || value.is_undefined() {
+        return Ok(None);
+    }
+    let Some(value) = value.as_number() else {
+        return Err(format!("{} must be a finite number when present", field));
+    };
+    if !value.is_finite() {
+        return Err(format!("{} must be a finite number when present", field));
+    }
+    Ok(Some(value))
+}
+
+fn parse_optional_detail_progress_format(
+    object: &Object<'_>,
+) -> Result<Option<ProgressFormat>, String> {
+    match object.get::<_, rquickjs::Value>("format") {
+        Ok(value) if value.is_null() || value.is_undefined() => Ok(None),
+        Ok(_) => Ok(Some(parse_detail_progress_format(object)?)),
+        Err(_) => Ok(None),
+    }
+}
+
+fn parse_detail_progress_format(object: &Object<'_>) -> Result<ProgressFormat, String> {
+    let format: Object = object
+        .get("format")
+        .map_err(|_| "format must be an object".to_string())?;
+    let kind = format
+        .get::<_, String>("kind")
+        .map_err(|_| "format.kind must be a string".to_string())?;
+    match kind.as_str() {
+        "percent" => Ok(ProgressFormat::Percent),
+        "dollars" => Ok(ProgressFormat::Dollars),
+        "count" => {
+            let suffix = required_detail_string(&format, "suffix")?;
+            Ok(ProgressFormat::Count { suffix })
+        }
+        _ => Err("format.kind must be percent, dollars, or count".to_string()),
+    }
 }
 
 /// Parses optional provider activity history without making the probe fail.
@@ -761,6 +1100,23 @@ fn optional_non_negative_number(object: &Object<'_>, field: &str) -> Result<Opti
     Ok(Some(value))
 }
 
+fn optional_progress_number(object: &Object<'_>, field: &str) -> Result<Option<f64>, String> {
+    let value: Value = match object.get(field) {
+        Ok(value) => value,
+        Err(_) => return Ok(None),
+    };
+    if value.is_null() || value.is_undefined() {
+        return Ok(None);
+    }
+    let Some(value) = value.as_number() else {
+        return Err(format!("invalid {} (expected number)", field));
+    };
+    if !value.is_finite() {
+        return Err(format!("invalid {} (expected finite number)", field));
+    }
+    Ok(Some(value))
+}
+
 fn parse_rfc3339(value: &str, field: &str) -> Result<time::OffsetDateTime, String> {
     time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339)
         .map_err(|_| format!("{} must be an RFC3339 timestamp", field))
@@ -794,59 +1150,61 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
                 });
             }
             "progress" => {
-                let used_value: Value = match line.get("used") {
-                    Ok(v) => v,
-                    Err(_) => {
+                let availability = match line.get::<_, Value>("availability") {
+                    Ok(value) if !value.is_null() && !value.is_undefined() => {
+                        let value = value.as_string().ok_or_else(|| {
+                            format!(
+                                "progress line at index {} invalid availability (expected string)",
+                                idx
+                            )
+                        })?;
+                        match value.to_string().unwrap_or_default().as_str() {
+                            "unknown" => Some(MetricAvailability::Unknown),
+                            "unsupported" => Some(MetricAvailability::Unsupported),
+                            other => {
+                                out.push(error_line(format!(
+                                    "progress line at index {} invalid availability: {}",
+                                    idx, other
+                                )));
+                                continue;
+                            }
+                        }
+                    }
+                    _ => None,
+                };
+
+                let used = match optional_progress_number(&line, "used") {
+                    Ok(value) => value,
+                    Err(message) => {
                         out.push(error_line(format!(
-                            "progress line at index {} missing used",
-                            idx
+                            "progress line at index {} {}",
+                            idx, message
                         )));
                         continue;
                     }
                 };
-                let used = match used_value.as_number() {
-                    Some(n) => n,
-                    None => {
+                let limit = match optional_progress_number(&line, "limit") {
+                    Ok(value) => value,
+                    Err(message) => {
                         out.push(error_line(format!(
-                            "progress line at index {} invalid used (expected number)",
-                            idx
+                            "progress line at index {} {}",
+                            idx, message
                         )));
                         continue;
                     }
                 };
 
-                let limit_value: Value = match line.get("limit") {
-                    Ok(v) => v,
-                    Err(_) => {
-                        out.push(error_line(format!(
-                            "progress line at index {} missing limit",
-                            idx
-                        )));
-                        continue;
-                    }
-                };
-                let limit = match limit_value.as_number() {
-                    Some(n) => n,
-                    None => {
-                        out.push(error_line(format!(
-                            "progress line at index {} invalid limit (expected number)",
-                            idx
-                        )));
-                        continue;
-                    }
-                };
-
-                if !used.is_finite() || used < 0.0 {
+                if used.is_some_and(|value| value < 0.0) {
                     out.push(error_line(format!(
-                        "progress line at index {} invalid used: {}",
-                        idx, used
+                        "progress line at index {} invalid used",
+                        idx
                     )));
                     continue;
                 }
-                if !limit.is_finite() || limit <= 0.0 {
+                if limit.is_some_and(|value| value <= 0.0) {
                     out.push(error_line(format!(
-                        "progress line at index {} invalid limit: {}",
-                        idx, limit
+                        "progress line at index {} invalid limit",
+                        idx
                     )));
                     continue;
                 }
@@ -883,10 +1241,11 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
                 };
                 let format = match kind.as_str() {
                     "percent" => {
-                        if limit != 100.0 {
+                        if limit.is_some_and(|value| value != 100.0) {
                             out.push(error_line(format!(
                                 "progress line at index {}: percent format requires limit=100 (got {})",
-                                idx, limit
+                                idx,
+                                limit.unwrap_or_default()
                             )));
                             continue;
                         }
@@ -1026,6 +1385,7 @@ fn parse_lines(result: &Object) -> Result<Vec<MetricLine>, String> {
                     used,
                     limit,
                     format,
+                    availability,
                     resets_at,
                     period_duration_ms,
                     color,
@@ -1090,6 +1450,7 @@ fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput 
         display_name: plugin.manifest.name.clone(),
         plan: plugin.manifest.default_plan.clone(),
         lines: vec![error_line(error.message.clone())],
+        details: None,
         icon_url: plugin.icon_data_url.clone(),
         error: Some(error),
         history: None,
@@ -1167,9 +1528,11 @@ mod tests {
                 icon: "icon.svg".to_string(),
                 dark_icon: None,
                 icon_color_mode: crate::plugin_engine::manifest::IconColorMode::default(),
+                icon_aspect_ratio: None,
                 brand_color: None,
                 default_plan: None,
                 lines: vec![],
+                detail: None,
                 links: vec![],
                 status: None,
                 platform_support: PlatformSupport::default(),
@@ -1290,9 +1653,10 @@ mod tests {
     fn progress_resets_at_serializes_as_resets_at_camelcase() {
         let line = MetricLine::Progress {
             label: "Session".to_string(),
-            used: 1.0,
-            limit: 100.0,
+            used: Some(1.0),
+            limit: Some(100.0),
             format: ProgressFormat::Percent,
+            availability: None,
             resets_at: Some("2099-01-01T00:00:00.000Z".to_string()),
             period_duration_ms: None,
             color: None,
@@ -1305,6 +1669,65 @@ mod tests {
             obj.get("resets_at").is_none(),
             "did not expect resets_at key"
         );
+    }
+
+    #[test]
+    fn run_probe_preserves_zero_and_missing_progress_values() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return {
+                        lines: [
+                            { type: "progress", label: "Zero", used: 0, limit: 100, format: { kind: "percent" } },
+                            { type: "progress", label: "Unknown", limit: 100, format: { kind: "percent" } },
+                            { type: "progress", label: "Unsupported", availability: "unsupported", format: { kind: "percent" } }
+                        ]
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(
+            &plugin,
+            &temp_app_dir("progress-availability"),
+            "0.0.0",
+            None,
+        );
+        assert_eq!(output.lines.len(), 3);
+        assert!(matches!(
+            &output.lines[0],
+            MetricLine::Progress {
+                used: Some(0.0),
+                limit: Some(100.0),
+                availability: None,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &output.lines[1],
+            MetricLine::Progress {
+                used: None,
+                limit: Some(100.0),
+                availability: None,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &output.lines[2],
+            MetricLine::Progress {
+                used: None,
+                limit: None,
+                availability: Some(MetricAvailability::Unsupported),
+                ..
+            }
+        ));
+
+        let json: JsonValue = serde_json::to_value(output).expect("serialize");
+        assert_eq!(json["lines"][0]["used"], 0.0);
+        assert!(json["lines"][1]["used"].is_null());
+        assert_eq!(json["lines"][2]["availability"], "unsupported");
     }
 
     #[test]
@@ -1453,6 +1876,144 @@ mod tests {
                 Some(MetricLine::Text { .. })
             ));
         }
+    }
+
+    #[test]
+    fn run_probe_parses_only_declared_provider_details() {
+        let mut plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe(ctx) {
+                    return {
+                        lines: [{ type: "text", label: "Status", value: "ok" }],
+                        details: [
+                            ctx.detail.text({ id: "email", value: "user@example.com" }),
+                            ctx.detail.window({
+                                id: "quota",
+                                used: 25,
+                                limit: 100,
+                                format: { kind: "percent" },
+                                resetsAt: "2026-09-01T00:00:00Z"
+                            }),
+                            ctx.detail.chart({
+                                id: "trend",
+                                points: [
+                                    { label: "Mon", value: 1 },
+                                    { label: "Tue", value: 2 }
+                                ]
+                            }),
+                            ctx.detail.text({ id: "not-declared", value: "ignore" })
+                        ]
+                    };
+                }
+            };
+            "#,
+        );
+        plugin.manifest.detail = Some(
+            serde_json::from_str(
+                r#"
+                {
+                  "sections": [
+                    {
+                      "id": "account",
+                      "label": "Account",
+                      "fields": [
+                        { "id": "email", "label": "Email", "type": "text" },
+                        { "id": "quota", "label": "Quota", "type": "window" },
+                        {
+                          "id": "trend",
+                          "label": "Trend",
+                          "type": "chart",
+                          "chart": { "kind": "sparkline", "maxPoints": 2 }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                "#,
+            )
+            .expect("detail schema"),
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("details"), "0.0.0", None);
+        let details = output.details.expect("details");
+        assert_eq!(details.len(), 3);
+        assert!(matches!(details[0], PluginDetailValue::Text { .. }));
+        assert!(matches!(details[1], PluginDetailValue::Window { .. }));
+        assert!(matches!(details[2], PluginDetailValue::Chart { .. }));
+    }
+
+    #[test]
+    fn run_probe_preserves_zero_and_missing_detail_window_values() {
+        let mut plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe(ctx) {
+                    return {
+                        lines: [],
+                        details: [
+                            ctx.detail.window({ id: "zero", used: 0, limit: 100, format: { kind: "percent" } }),
+                            ctx.detail.window({ id: "unknown", limit: 100, format: { kind: "percent" } }),
+                            ctx.detail.window({ id: "unsupported", availability: "unsupported", format: { kind: "percent" } })
+                        ]
+                    };
+                }
+            };
+            "#,
+        );
+        plugin.manifest.detail = Some(
+            serde_json::from_str(
+                r#"
+                {
+                  "sections": [{
+                    "id": "quota",
+                    "label": "Quota",
+                    "fields": [
+                      { "id": "zero", "label": "Zero", "type": "window" },
+                      { "id": "unknown", "label": "Unknown", "type": "window" },
+                      { "id": "unsupported", "label": "Unsupported", "type": "window" }
+                    ]
+                  }]
+                }
+                "#,
+            )
+            .expect("detail schema"),
+        );
+
+        let output = run_probe(
+            &plugin,
+            &temp_app_dir("detail-window-availability"),
+            "0.0.0",
+            None,
+        );
+        let details = output.details.expect("details");
+        assert!(matches!(
+            &details[0],
+            PluginDetailValue::Window {
+                used: Some(0.0),
+                limit: Some(100.0),
+                availability: None,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &details[1],
+            PluginDetailValue::Window {
+                used: None,
+                limit: Some(100.0),
+                availability: None,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &details[2],
+            PluginDetailValue::Window {
+                used: None,
+                limit: None,
+                availability: Some(MetricAvailability::Unsupported),
+                ..
+            }
+        ));
     }
 
     #[test]

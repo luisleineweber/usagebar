@@ -86,7 +86,7 @@ const OPENCODE_SOURCE_OPTIONS: ProviderSettingsOption[] = [
   },
 ]
 
-const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> = {
+const PROVIDER_SETTINGS_DEFINITIONS = {
   ollama: {
     mode: "editable",
     title: "Ollama Setup",
@@ -142,8 +142,7 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
     title: "OpenCode Setup",
     summary:
       "Tracks account-wide OpenCode Go quota from the official usage API and keeps local history from SQLite and ccusage.",
-    statusHint:
-      "OpenCode Go quota uses the local opencode-go key. No browser cookie is needed.",
+    statusHint: "OpenCode Go quota uses the local opencode-go key. No browser cookie is needed.",
     connectHint:
       "Install OpenCode Go and sign in on this machine so ~/.local/share/opencode/auth.json contains an opencode-go key. SQLite and ccusage provide local history.",
   },
@@ -682,20 +681,20 @@ const PROVIDER_SETTINGS_DEFINITIONS: Record<string, ProviderSettingsDefinition> 
       placeholder: "wk-...",
     },
   },
-}
+} satisfies Record<string, ProviderSettingsDefinition>
 
-function sanitizeSecretMetadata(value: unknown): Record<string, ProviderSecretMetadata> {
+function sanitizeSecretMetadata(value: unknown) {
   if (!value || typeof value !== "object") return {}
 
-  const entries = Object.entries(value)
-  const out: Record<string, ProviderSecretMetadata> = {}
-  for (const [key, entry] of entries) {
+  const values = Object.entries(value)
+  const entries: Array<[string, ProviderSecretMetadata]> = []
+  for (const [key, entry] of values) {
     if (!entry || typeof entry !== "object") continue
     const updatedAt = (entry as ProviderSecretMetadata).updatedAt
     if (typeof updatedAt !== "number" || !Number.isFinite(updatedAt)) continue
-    out[key] = { updatedAt }
+    entries.push([key, { updatedAt }])
   }
-  return out
+  return Object.fromEntries(entries)
 }
 
 function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
@@ -734,7 +733,7 @@ function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
 
 export function getProviderSettingsDefinition(providerId: string): ProviderSettingsDefinition {
   return (
-    PROVIDER_SETTINGS_DEFINITIONS[providerId] ?? {
+    PROVIDER_SETTINGS_DEFINITIONS[providerId as keyof typeof PROVIDER_SETTINGS_DEFINITIONS] ?? {
       mode: "automatic",
       title: "Provider Setup",
       summary: "This provider currently relies on local auto-detection.",

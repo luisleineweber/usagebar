@@ -1,5 +1,6 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -12,6 +13,101 @@ pub struct ManifestLine {
     /// Lower number = higher priority for primary metric selection.
     /// Only progress lines with primary_order are candidates.
     pub primary_order: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DetailFieldType {
+    Text,
+    Badge,
+    Window,
+    Chart,
+    Notice,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, serde::Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum DetailVisibility {
+    #[default]
+    IfPresent,
+    Always,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DetailRole {
+    Account,
+    Organization,
+    Billing,
+    Quota,
+    Source,
+    Reset,
+    Authentication,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum DetailFormat {
+    Text,
+    Date,
+    DateTime,
+    Duration,
+    Percent,
+    Currency { currency: String },
+    Count { suffix: String },
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DetailChartKind {
+    Sparkline,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct ManifestDetailChart {
+    pub kind: DetailChartKind,
+    #[serde(default = "default_chart_max_points")]
+    pub max_points: u32,
+}
+
+fn default_chart_max_points() -> u32 {
+    24
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct ManifestDetailField {
+    pub id: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub field_type: DetailFieldType,
+    #[serde(default)]
+    pub visibility: DetailVisibility,
+    #[serde(default)]
+    pub role: Option<DetailRole>,
+    #[serde(default)]
+    pub format: Option<DetailFormat>,
+    #[serde(default)]
+    pub chart: Option<ManifestDetailChart>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct ManifestDetailSection {
+    pub id: String,
+    pub label: String,
+    pub fields: Vec<ManifestDetailField>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub struct ManifestDetail {
+    pub sections: Vec<ManifestDetailSection>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -151,6 +247,8 @@ pub struct PluginManifest {
     pub default_plan: Option<String>,
     pub lines: Vec<ManifestLine>,
     #[serde(default)]
+    pub detail: Option<ManifestDetail>,
+    #[serde(default)]
     pub links: Vec<PluginLink>,
     #[serde(default)]
     pub status: Option<PluginStatus>,
@@ -200,6 +298,7 @@ fn load_single_plugin(
     let manifest_path = plugin_dir.join("plugin.json");
     let manifest_text = std::fs::read_to_string(&manifest_path)?;
     let mut manifest: PluginManifest = serde_json::from_str(&manifest_text)?;
+    validate_detail_schema(manifest.detail.as_ref())?;
     manifest.links = sanitize_plugin_links(&manifest.id, std::mem::take(&mut manifest.links));
 
     // Validate primary_order: only progress lines can have it
@@ -253,6 +352,46 @@ fn load_single_plugin(
         icon_data_url,
         dark_icon_data_url,
     })
+}
+
+fn validate_detail_schema(detail: Option<&ManifestDetail>) -> Result<(), String> {
+    let Some(detail) = detail else {
+        return Ok(());
+    };
+    let mut section_ids = HashSet::new();
+    let mut field_ids = HashSet::new();
+    for section in &detail.sections {
+        if section.id.trim().is_empty() || section.label.trim().is_empty() {
+            return Err("detail sections require non-empty id and label".to_string());
+        }
+        if !section_ids.insert(&section.id) {
+            return Err(format!("duplicate detail section id '{}'", section.id));
+        }
+        for field in &section.fields {
+            if field.id.trim().is_empty() || field.label.trim().is_empty() {
+                return Err("detail fields require non-empty id and label".to_string());
+            }
+            if !field_ids.insert(&field.id) {
+                return Err(format!("duplicate detail field id '{}'", field.id));
+            }
+            if field.field_type == DetailFieldType::Chart {
+                if let Some(chart) = &field.chart {
+                    if chart.max_points == 0 || chart.max_points > 64 {
+                        return Err(format!(
+                            "detail chart '{}' maxPoints must be between 1 and 64",
+                            field.id
+                        ));
+                    }
+                }
+            } else if field.chart.is_some() {
+                return Err(format!(
+                    "detail field '{}' declares chart settings but is not a chart",
+                    field.id
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn sanitize_plugin_links(plugin_id: &str, links: Vec<PluginLink>) -> Vec<PluginLink> {
@@ -403,6 +542,57 @@ mod tests {
         assert_eq!(manifest.lines[0].primary_order, Some(1));
         assert_eq!(manifest.lines[1].primary_order, Some(2));
         assert!(manifest.lines[2].primary_order.is_none());
+    }
+
+    #[test]
+    fn provider_detail_schema_is_typed_and_ordered() {
+        let manifest = parse_manifest(
+            r#"
+            {
+              "schemaVersion": 1,
+              "id": "x",
+              "name": "X",
+              "version": "0.0.1",
+              "entry": "plugin.js",
+              "icon": "icon.svg",
+              "capabilities": {},
+              "lines": [],
+              "detail": {
+                "sections": [
+                  {
+                    "id": "account",
+                    "label": "Account",
+                    "fields": [
+                      { "id": "email", "label": "Email", "type": "text", "role": "account" },
+                      { "id": "quota", "label": "Monthly", "type": "window", "role": "quota" },
+                      {
+                        "id": "trend",
+                        "label": "Trend",
+                        "type": "chart",
+                        "chart": { "kind": "sparkline", "maxPoints": 12 }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            "#,
+        );
+
+        let detail = manifest.detail.expect("detail schema");
+        assert_eq!(
+            detail.sections[0].fields[0].field_type,
+            DetailFieldType::Text
+        );
+        assert_eq!(detail.sections[0].fields[1].role, Some(DetailRole::Quota));
+        assert_eq!(
+            detail.sections[0].fields[2]
+                .chart
+                .as_ref()
+                .expect("chart config")
+                .max_points,
+            12
+        );
     }
 
     #[test]

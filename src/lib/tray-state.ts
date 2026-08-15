@@ -2,11 +2,7 @@ import type { PluginState } from "@/hooks/app/types"
 import type { PluginMeta, PluginOutput, ProbeErrorCategory } from "@/lib/plugin-types"
 import type { PluginSettings } from "@/lib/settings"
 
-export type TrayUnknownReason =
-  | "no-provider"
-  | "no-data"
-  | "no-primary-metric"
-  | "invalid-limit"
+export type TrayUnknownReason = "no-provider" | "no-data" | "no-primary-metric" | "invalid-limit"
 
 export type TrayValueState = {
   kind: "value"
@@ -61,7 +57,8 @@ function getPrimaryLine(
   const candidateLabels = getPrimaryLabels(meta)
   for (const label of candidateLabels) {
     const line = data?.lines.find(
-      (candidate): candidate is ProgressLine => isProgressLine(candidate) && candidate.label === label
+      (candidate): candidate is ProgressLine =>
+        isProgressLine(candidate) && candidate.label === label
     )
     if (line) return { label, line, candidateExists: true }
   }
@@ -74,7 +71,15 @@ function getPrimaryLine(
 }
 
 function getRemainingPercent(line: ProgressLine | null): number | null {
-  if (!line || !Number.isFinite(line.used) || !Number.isFinite(line.limit) || line.limit <= 0) {
+  if (
+    !line ||
+    line.availability !== undefined ||
+    typeof line.used !== "number" ||
+    !Number.isFinite(line.used) ||
+    typeof line.limit !== "number" ||
+    !Number.isFinite(line.limit) ||
+    line.limit <= 0
+  ) {
     return null
   }
 
@@ -193,11 +198,14 @@ export function resolveTrayState(args: {
   const preferred = preferredProviderId
     ? candidates.find((candidate) => candidate.providerId === preferredProviderId)
     : undefined
-  return preferred ?? candidates[0] ?? {
-    kind: "unknown",
-    providerId: null,
-    providerName: null,
-    metricLabel: null,
-    reason: "no-provider",
-  }
+  return (
+    preferred ??
+    candidates[0] ?? {
+      kind: "unknown",
+      providerId: null,
+      providerName: null,
+      metricLabel: null,
+      reason: "no-provider",
+    }
+  )
 }

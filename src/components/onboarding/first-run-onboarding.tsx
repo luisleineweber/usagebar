@@ -25,7 +25,13 @@ type ProviderOnboardingGuidance = {
   credentialHelp: string
 }
 
-const PROVIDER_GUIDANCE: Record<string, ProviderOnboardingGuidance> = {
+type ProviderGuidanceMap = {
+  codex: ProviderOnboardingGuidance
+  claude: ProviderOnboardingGuidance
+  cursor: ProviderOnboardingGuidance
+}
+
+const PROVIDER_GUIDANCE: ProviderGuidanceMap = {
   codex: {
     recommended: true,
     steps: [
@@ -58,7 +64,7 @@ const PROVIDER_GUIDANCE: Record<string, ProviderOnboardingGuidance> = {
 }
 
 function getProviderGuidance(provider: SettingsPluginState): ProviderOnboardingGuidance {
-  const known = PROVIDER_GUIDANCE[provider.id]
+  const known = PROVIDER_GUIDANCE[provider.id as keyof ProviderGuidanceMap]
   if (known) return known
   const definition = getProviderSettingsDefinition(provider.id)
   return {
@@ -90,7 +96,7 @@ function getFailureHelp(providerId: string, category?: ProbeErrorCategory | null
     category === "credentialUnreadable"
   ) {
     return (
-      PROVIDER_GUIDANCE[providerId]?.credentialHelp ??
+      PROVIDER_GUIDANCE[providerId as keyof ProviderGuidanceMap]?.credentialHelp ??
       "Open Provider Settings, add the required credentials, then try again."
     )
   }

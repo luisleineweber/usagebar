@@ -513,7 +513,7 @@ describe("usePanel", () => {
       observe() {}
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    } as typeof ResizeObserver
 
     function Harness() {
       const { containerRef, contentColumnRef, scrollRef, contentMeasureRef, footerRef } = usePanel({
@@ -563,7 +563,7 @@ describe("usePanel", () => {
       observe = observeMock
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    } as typeof ResizeObserver
 
     function Harness() {
       const { containerRef, contentColumnRef, scrollRef, contentMeasureRef, footerRef } = usePanel({
@@ -626,7 +626,7 @@ describe("usePanel", () => {
       observe() {}
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    } as typeof ResizeObserver
 
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
@@ -712,7 +712,7 @@ describe("usePanel", () => {
       if (originalClientHeight) {
         Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight)
       } else {
-        delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientHeight
+        Reflect.deleteProperty(HTMLElement.prototype, "clientHeight")
       }
       vi.useRealTimers()
     }
@@ -725,7 +725,7 @@ describe("usePanel", () => {
       observe() {}
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    } as typeof ResizeObserver
 
     let scrollHeightValue = 120
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
@@ -789,7 +789,7 @@ describe("usePanel", () => {
       observe() {}
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    } as typeof ResizeObserver
 
     Object.defineProperty(window, "innerHeight", {
       configurable: true,
@@ -883,7 +883,7 @@ describe("usePanel", () => {
       observe() {}
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    } as typeof ResizeObserver
 
     Object.defineProperty(window, "matchMedia", {
       configurable: true,

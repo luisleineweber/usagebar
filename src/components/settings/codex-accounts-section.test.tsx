@@ -1,11 +1,15 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import type { ReactNode } from "react"
 
-const {
-  listProfilesMock,
-  importProfileMock,
-  deleteProfileMock,
-} = vi.hoisted(() => ({
+type ButtonProps = {
+  children?: ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  className?: string
+}
+
+const { listProfilesMock, importProfileMock, deleteProfileMock } = vi.hoisted(() => ({
   listProfilesMock: vi.fn(),
   importProfileMock: vi.fn(),
   deleteProfileMock: vi.fn(),
@@ -18,9 +22,9 @@ vi.mock("@/lib/codex-accounts", () => ({
 }))
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, disabled, ...rest }: Record<string, unknown>) => (
-    <button onClick={onClick as () => void} disabled={disabled as boolean} {...rest}>
-      {children as React.ReactNode}
+  Button: ({ children, onClick, disabled, ...rest }: ButtonProps) => (
+    <button onClick={onClick} disabled={disabled} {...rest}>
+      {children}
     </button>
   ),
 }))
@@ -28,8 +32,21 @@ vi.mock("@/components/ui/button", () => ({
 import { CodexAccountsSection } from "@/components/settings/codex-accounts-section"
 
 const mockProfiles = [
-  { profileId: "p1", label: "Profile A", email: "user@example.com", accountId: "acct1", sourceKind: "cli", lastImportedAt: 1000 },
-  { profileId: "p2", label: "Profile B", email: "other@example.com", sourceKind: "cli", lastImportedAt: 2000 },
+  {
+    profileId: "p1",
+    label: "Profile A",
+    email: "user@example.com",
+    accountId: "acct1",
+    sourceKind: "cli",
+    lastImportedAt: 1000,
+  },
+  {
+    profileId: "p2",
+    label: "Profile B",
+    email: "other@example.com",
+    sourceKind: "cli",
+    lastImportedAt: 2000,
+  },
 ]
 
 describe("CodexAccountsSection", () => {
@@ -128,7 +145,7 @@ describe("CodexAccountsSection", () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText("import failed")).toBeInTheDocument()
+      expect(screen.getByText("import failed")).toHaveAttribute("role", "alert")
     })
   })
 
@@ -150,10 +167,7 @@ describe("CodexAccountsSection", () => {
       expect(onConfigChange).toHaveBeenCalledWith("codex", {
         selectedAccountProfileId: "p1",
       })
-      expect(screen.getByText("Active Codex account updated.")).toHaveAttribute(
-        "role",
-        "status"
-      )
+      expect(screen.getByText("Active Codex account updated.")).toHaveAttribute("role", "status")
     })
   })
 
@@ -294,9 +308,7 @@ describe("CodexAccountsSection", () => {
   it("does not render stale clear call when onConfigChange is missing", async () => {
     listProfilesMock.mockResolvedValue([mockProfiles[1]])
 
-    render(
-      <CodexAccountsSection config={{ selectedAccountProfileId: "p1" }} />
-    )
+    render(<CodexAccountsSection config={{ selectedAccountProfileId: "p1" }} />)
 
     await waitFor(() => {
       expect(screen.getByText("Profile B")).toBeInTheDocument()

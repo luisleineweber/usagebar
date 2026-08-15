@@ -87,6 +87,19 @@ describe("notification event derivation", () => {
     ])
   })
 
+  it("treats a real zero as a quota baseline", () => {
+    const events = deriveUsageEvents({
+      previousOutputs: { claude: output(0) },
+      outputs: { claude: output(80) },
+      previousStatuses: {},
+      statuses: {},
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+    })
+
+    expect(events.map((event) => event.type)).toEqual(["quota"])
+    expect(events[0]?.body).toContain("80% used")
+  })
+
   it("records quota resets only when the provider reset advances", () => {
     const events = deriveUsageEvents({
       previousOutputs: { claude: output(95, "2026-07-14T00:00:00Z") },
@@ -184,6 +197,43 @@ describe("notification event derivation", () => {
       deriveUsageEvents({
         previousOutputs: { claude: undefined },
         outputs: { missing: undefined, claude: data },
+        previousStatuses: {},
+        statuses: {},
+        preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+      })
+    ).toEqual([])
+  })
+
+  it("does not derive quota events from unknown or unsupported values", () => {
+    const previousUnknown = output(70)
+    previousUnknown.lines = [{ ...previousUnknown.lines[0]!, used: null }]
+    const currentUnknown = output(95)
+    currentUnknown.lines = [{ ...currentUnknown.lines[0]!, used: null }]
+    expect(
+      deriveUsageEvents({
+        previousOutputs: { claude: previousUnknown },
+        outputs: { claude: output(95) },
+        previousStatuses: {},
+        statuses: {},
+        preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+      })
+    ).toEqual([])
+    expect(
+      deriveUsageEvents({
+        previousOutputs: { claude: output(70) },
+        outputs: { claude: currentUnknown },
+        previousStatuses: {},
+        statuses: {},
+        preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+      })
+    ).toEqual([])
+
+    const unsupported = output(95)
+    unsupported.lines = [{ ...unsupported.lines[0]!, availability: "unsupported" }]
+    expect(
+      deriveUsageEvents({
+        previousOutputs: { claude: output(70) },
+        outputs: { claude: unsupported },
         previousStatuses: {},
         statuses: {},
         preferences: DEFAULT_NOTIFICATION_PREFERENCES,

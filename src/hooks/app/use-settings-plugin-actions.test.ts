@@ -90,7 +90,7 @@ describe("useSettingsPluginActions", () => {
 
     const { result } = renderHook(() =>
       useSettingsPluginActions({
-        pluginSettings: { order: undefined as unknown as string[], disabled: [] },
+        pluginSettings: { order: undefined as string[], disabled: [] },
         setPluginSettings,
         setLoadingForPlugins: vi.fn(),
         setErrorForPlugins: vi.fn(),
@@ -138,7 +138,7 @@ describe("useSettingsPluginActions", () => {
         orderReads += 1
         return orderReads === 1 ? ["b", "a"] : undefined
       },
-    } as unknown as { order: string[]; disabled: string[] }
+    } as { order: string[]; disabled: string[] }
 
     const { result } = renderHook(() =>
       useSettingsPluginActions({

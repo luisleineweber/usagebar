@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react"
+import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+
+type MockComponentProps = { children?: ReactNode }
 
 const { overviewPageMock, providerDetailPageMock } = vi.hoisted(() => ({
   overviewPageMock: vi.fn(),
@@ -7,7 +10,7 @@ const { overviewPageMock, providerDetailPageMock } = vi.hoisted(() => ({
 }))
 
 vi.mock("@/pages/overview", () => ({
-  OverviewPage: (props: unknown) => {
+  OverviewPage: (props: MockComponentProps) => {
     overviewPageMock(props)
     return <div data-testid="overview-page" />
   },

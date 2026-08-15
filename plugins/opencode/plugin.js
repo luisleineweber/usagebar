@@ -203,7 +203,7 @@
     throw "OpenCode workspace not found. Set OPENCODE_WORKSPACE_ID."
   }
 
-  function summarizeBillingShape(parsed) {
+  function summarizeBillingData(parsed) {
     if (!parsed || typeof parsed !== "object") return "response was not valid JSON"
     var keys = Object.keys(parsed).slice(0, 8)
     if (keys.length === 0) return "response JSON object was empty"
@@ -546,7 +546,7 @@
     var balance = result.balance
 
     if (balance === null) {
-      var summary = summarizeBillingShape(result.parsed)
+      var summary = summarizeBillingData(result.parsed)
       if (ctx.host.log && typeof ctx.host.log.warn === "function") {
         ctx.host.log.warn(
           "opencode zen billing response missing balance for " + workspaceId + " (" + summary + ")"

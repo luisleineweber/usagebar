@@ -866,6 +866,7 @@ pub fn inject_utils(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
                 },
                 progress: function(opts) {
                     var line = { type: "progress", label: opts.label, used: opts.used, limit: opts.limit, format: opts.format };
+                    if (opts.availability) line.availability = opts.availability;
                     if (opts.resetsAt) line.resetsAt = opts.resetsAt;
                     if (opts.periodDurationMs) line.periodDurationMs = opts.periodDurationMs;
                     if (opts.color) line.color = opts.color;
@@ -876,6 +877,55 @@ pub fn inject_utils(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
                     if (opts.color) line.color = opts.color;
                     if (opts.subtitle) line.subtitle = opts.subtitle;
                     return line;
+                }
+            };
+
+            // Declarative provider-detail builders. The manifest owns layout;
+            // builders only provide values addressed by the declared field id.
+            ctx.detail = {
+                text: function(opts) {
+                    var value = { id: opts.id, type: "text", value: opts.value };
+                    if (opts.color) value.color = opts.color;
+                    return value;
+                },
+                badge: function(opts) {
+                    var value = { id: opts.id, type: "badge", text: opts.text };
+                    if (opts.color) value.color = opts.color;
+                    if (opts.subtitle) value.subtitle = opts.subtitle;
+                    return value;
+                },
+                window: function(opts) {
+                    var value = {
+                        id: opts.id,
+                        type: "window",
+                        used: opts.used,
+                        limit: opts.limit,
+                        format: opts.format
+                    };
+                    if (opts.availability) value.availability = opts.availability;
+                    if (opts.resetsAt) value.resetsAt = opts.resetsAt;
+                    if (opts.periodDurationMs) value.periodDurationMs = opts.periodDurationMs;
+                    if (opts.color) value.color = opts.color;
+                    return value;
+                },
+                chart: function(opts) {
+                    var value = {
+                        id: opts.id,
+                        type: "chart",
+                        kind: "sparkline",
+                        points: opts.points
+                    };
+                    if (opts.format) value.format = opts.format;
+                    if (opts.color) value.color = opts.color;
+                    return value;
+                },
+                notice: function(opts) {
+                    return {
+                        id: opts.id,
+                        type: "notice",
+                        text: opts.text,
+                        tone: opts.tone || "info"
+                    };
                 }
             };
 
@@ -3177,9 +3227,9 @@ Saved lockfile
 
     #[test]
     fn ccusage_query_cache_waits_for_an_in_flight_query() {
+        use std::sync::Arc;
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::mpsc;
-        use std::sync::Arc;
 
         let cache = Arc::new(CcusageQueryCache::default());
         let calls = Arc::new(AtomicUsize::new(0));

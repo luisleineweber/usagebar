@@ -199,7 +199,7 @@
     throw "Could not parse usage data."
   }
 
-  function parsePayloadShape(ctx, payload) {
+  function parsePayloadData(ctx, payload) {
     if (!payload || typeof payload !== "object") return null
 
     const data = payload.data && typeof payload.data === "object" ? payload.data : payload
@@ -337,7 +337,7 @@
       if (!apiKeyInfo) continue
       try {
         const payload = fetchUsagePayload(ctx, apiKeyInfo.value, endpoint)
-        parsed = parsePayloadShape(ctx, payload)
+        parsed = parsePayloadData(ctx, payload)
         if (parsed) {
           successfulEndpoint = endpoint
           break

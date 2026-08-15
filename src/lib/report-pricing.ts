@@ -46,19 +46,11 @@ export function reportEntryCost(
 ): number | null {
   const override = record.model ? overrides[record.model] : undefined
   if (!override) return record.costUsd ?? null
-  if (
-    typeof record.inputTokens !== "number" &&
-    typeof record.outputTokens !== "number" &&
-    typeof record.cacheReadTokens !== "number" &&
-    typeof record.cacheCreationTokens !== "number" &&
-    typeof record.reasoningTokens !== "number"
-  ) {
-    return null
+  if (typeof record.inputTokens !== "number" || typeof record.outputTokens !== "number") {
+    return record.costUsd ?? null
   }
   const input =
-    (record.inputTokens ?? 0) +
-    (record.cacheReadTokens ?? 0) +
-    (record.cacheCreationTokens ?? 0)
+    (record.inputTokens ?? 0) + (record.cacheReadTokens ?? 0) + (record.cacheCreationTokens ?? 0)
   const output = (record.outputTokens ?? 0) + (record.reasoningTokens ?? 0)
   return (
     (input / 1_000_000) * override.inputPerMillion +

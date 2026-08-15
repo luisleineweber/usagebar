@@ -9,18 +9,20 @@ type Glyph = {
   rows: readonly string[]
 }
 
-const DIGITS: Record<string, Glyph> = {
-  "0": { name: "0", rows: ["111", "101", "101", "101", "111"] },
-  "1": { name: "1", rows: ["110", "010", "010", "010", "111"] },
-  "2": { name: "2", rows: ["111", "001", "111", "100", "111"] },
-  "3": { name: "3", rows: ["111", "001", "111", "001", "111"] },
-  "4": { name: "4", rows: ["101", "101", "111", "001", "001"] },
-  "5": { name: "5", rows: ["111", "100", "111", "001", "111"] },
-  "6": { name: "6", rows: ["111", "100", "111", "101", "111"] },
-  "7": { name: "7", rows: ["111", "001", "001", "001", "001"] },
-  "8": { name: "8", rows: ["111", "101", "111", "101", "111"] },
-  "9": { name: "9", rows: ["111", "101", "111", "001", "111"] },
-}
+const DIGITS = new Map(
+  Object.entries({
+    "0": { name: "0", rows: ["111", "101", "101", "101", "111"] },
+    "1": { name: "1", rows: ["110", "010", "010", "010", "111"] },
+    "2": { name: "2", rows: ["111", "001", "111", "100", "111"] },
+    "3": { name: "3", rows: ["111", "001", "111", "001", "111"] },
+    "4": { name: "4", rows: ["101", "101", "111", "001", "001"] },
+    "5": { name: "5", rows: ["111", "100", "111", "001", "111"] },
+    "6": { name: "6", rows: ["111", "100", "111", "101", "111"] },
+    "7": { name: "7", rows: ["111", "001", "001", "001", "001"] },
+    "8": { name: "8", rows: ["111", "101", "111", "101", "111"] },
+    "9": { name: "9", rows: ["111", "101", "111", "001", "111"] },
+  })
+)
 
 const DASH: Glyph = { name: "dash", rows: ["000", "000", "111", "000", "000"] }
 const ERROR: Glyph = { name: "error", rows: ["010", "010", "010", "000", "010"] }
@@ -35,7 +37,7 @@ function getGlyphs(value: TrayNumberGlyph): Glyph[] {
   if (value === "error") return [ERROR]
   return String(clampDisplayedValue(value))
     .split("")
-    .map((digit) => DIGITS[digit] ?? DIGITS["0"])
+    .map((digit) => DIGITS.get(digit) ?? DIGITS.get("0")!)
 }
 
 export function getWindowsTrayIconSizePx(devicePixelRatio: number | undefined): number {
@@ -82,7 +84,8 @@ export function makeTrayNumberSvg(args: {
           ? { kind: "unknown", scheme }
           : { kind: "value", remainingPercentExact: value, scheme }
   )
-  const glyphName = value === "unknown" ? "dash" : value === "error" ? "error" : String(clampDisplayedValue(value))
+  const glyphName =
+    value === "unknown" ? "dash" : value === "error" ? "error" : String(clampDisplayedValue(value))
   const rects: string[] = []
   let xOffset = xStart
 

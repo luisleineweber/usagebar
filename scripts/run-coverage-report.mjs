@@ -11,7 +11,7 @@ function run(command, args, options = {}) {
 const reportEnv = {
   ...process.env,
   USAGEBAR_COVERAGE_REPORT_ONLY: "1",
-  ...(process.argv.includes("--enforce-changed") ? { USAGEBAR_COVERAGE_ENFORCE_CHANGED: "1" } : {}),
+  USAGEBAR_COVERAGE_ENFORCE_CHANGED: process.argv.includes("--enforce-changed") ? "1" : undefined,
 }
 
 const coverageResult = run("bun", ["vitest", "run", "--coverage.enabled"], {

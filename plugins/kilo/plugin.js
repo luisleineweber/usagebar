@@ -453,7 +453,7 @@
             used: primary.used,
             limit: primary.total,
             format: { kind: "dollars" },
-            ...(primary.resetsAt ? { resetsAt: primary.resetsAt } : {}),
+            resetsAt: primary.resetsAt,
           })
         : ctx.line.text({
             label: primary.label,

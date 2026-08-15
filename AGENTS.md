@@ -111,9 +111,9 @@ This is a reference for frequently used skills, but there are many more to explo
 - Update `CHANGELOG.md` with the exact release version before tagging, publishing, or final release preflight.
 - Before publishing or editing a release body, run `gh release view <previous-tag> --json body` and mirror its structure:
   - `What's Changed`
-  - every commit from `<previous-tag>..<new-tag>` as one bullet, using `- Commit summary by @luisleineweber in shortsha`
+  - every commit from `<previous-tag>..<new-tag>` as one bullet, using: if commit "[commit message]-[commit-tag] by @[author]" ; if merge "[pr title]-by @[author] in [pr-tag]"
   - `Alpha Notes`
-  - `New Contributors`
+  - `New Contributors`: "@[author] made their first contribution in [commit-tag/pr-tag]"
   - `Full Changelog: https://github.com/luisleineweber/usagebar/compare/<previous-tag>...<new-tag>`
 - Never leave `Full Changelog` as plain tag names.
 - Before a PR or release, ensure `README.md` lists supported plugins.

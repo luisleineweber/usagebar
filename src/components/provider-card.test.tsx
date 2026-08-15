@@ -10,6 +10,8 @@ import { formatResetTooltipText } from "@/lib/reset-tooltip"
 import { REFRESH_COOLDOWN_MS } from "@/lib/settings"
 import { formatFixedPrecisionNumber } from "@/lib/utils"
 
+type TooltipRenderProps = { children?: ReactNode; className?: string }
+
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(() => Promise.resolve()),
 }))
@@ -22,7 +24,7 @@ vi.mock("@/components/ui/tooltip", () => ({
     ...props
   }: {
     children: ReactNode
-    render?: ((props: Record<string, unknown>) => ReactNode) | ReactNode
+    render?: ((props: TooltipRenderProps) => ReactNode) | ReactNode
   }) => {
     if (typeof render === "function") {
       return render({ ...props, children })
@@ -52,6 +54,20 @@ describe("ProviderCard", () => {
     expect(screen.getByText("Nope")).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: "Retry" }))
     expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it("marks retained values as stale after a refresh error", () => {
+    render(
+      <ProviderCard
+        name="Stale"
+        displayMode="used"
+        error="Update failed"
+        lines={[{ type: "text", label: "Today", value: "$0.00" }]}
+      />
+    )
+
+    expect(screen.getByText("$0.00")).toBeInTheDocument()
+    expect(within(screen.getByRole("alert")).getByText("Stale")).toBeInTheDocument()
   })
 
   it("renders loading skeleton", () => {
@@ -87,12 +103,7 @@ describe("ProviderCard", () => {
 
   it("applies the provider brand color to the header icon", () => {
     render(
-      <ProviderCard
-        name="Codex"
-        iconUrl="codex.svg"
-        brandColor="#000000"
-        displayMode="used"
-      />
+      <ProviderCard name="Codex" iconUrl="codex.svg" brandColor="#000000" displayMode="used" />
     )
 
     expect(screen.getByRole("img", { name: "Codex icon" })).toHaveStyle({
@@ -168,7 +179,7 @@ describe("ProviderCard", () => {
             limit: 1000,
             format: { kind: "count", suffix: "credits" },
           },
-          { type: "unknown", label: "Ignored" } as unknown as MetricLine,
+          { type: "unknown", label: "Ignored" } as MetricLine,
         ]}
       />
     )

@@ -33,7 +33,14 @@ export function resolveSurfacePins({
         (!pin.instanceRef || sameProviderInstance(output?.instanceRef, pin.instanceRef))
     )
     const fraction =
-      line && line.type === "progress" && line.limit > 0
+      line &&
+      line.type === "progress" &&
+      line.availability === undefined &&
+      typeof line.used === "number" &&
+      Number.isFinite(line.used) &&
+      typeof line.limit === "number" &&
+      Number.isFinite(line.limit) &&
+      line.limit > 0
         ? (displayMode === "used" ? line.used : line.limit - line.used) / line.limit
         : null
     const percent = fraction === null ? null : Math.round(Math.max(0, Math.min(1, fraction)) * 100)
@@ -49,7 +56,7 @@ export function SurfacePinWidget(props: SurfacePinWidgetProps) {
     <section className="border-b border-border/55 px-3 py-2.5" aria-label="Pinned metrics">
       <div className="grid gap-2 sm:grid-cols-2">
         {resolvedPins.map(({ pin, providerName, percent }) => {
-          const value = percent === null ? "--%" : `${percent}%`
+          const value = percent === null ? "—" : `${percent}%`
           return (
             <div key={`${pin.providerId}:${pin.metricLabel}`} className="min-w-0">
               <div className="flex items-center justify-between gap-2 text-xs">
@@ -58,7 +65,7 @@ export function SurfacePinWidget(props: SurfacePinWidgetProps) {
                 </span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">{value}</span>
               </div>
-              {pin.presentation === "bar" ? (
+              {pin.presentation === "bar" && percent !== null ? (
                 <div
                   className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"
                   role="progressbar"
@@ -69,7 +76,7 @@ export function SurfacePinWidget(props: SurfacePinWidgetProps) {
                 >
                   <div
                     className="h-full rounded-full bg-foreground"
-                    style={{ width: `${percent ?? 0}%` }}
+                    style={{ width: `${percent}%` }}
                   />
                 </div>
               ) : null}

@@ -45,6 +45,18 @@ export type SurfacePin = {
 
 export type GlobalShortcut = string | null
 
+type RawSurfacePin = {
+  providerId?: unknown
+  instanceId?: unknown
+  instanceRef?: unknown
+  metricLabel?: unknown
+  presentation?: unknown
+}
+
+type RawSurfacePinInstanceRef = {
+  instanceId?: unknown
+}
+
 const SETTINGS_STORE_PATH = "settings.json"
 const PLUGIN_SETTINGS_KEY = "plugins"
 const ONBOARDING_IN_PROGRESS_KEY = "onboardingInProgress"
@@ -165,7 +177,7 @@ export async function loadPluginSettingsRecord(): Promise<LoadedPluginSettings> 
     settings: {
       order: Array.isArray(stored.order) ? stored.order : [],
       disabled: Array.isArray(stored.disabled) ? stored.disabled : [],
-      ...(Array.isArray(stored.hidden) ? { hidden: stored.hidden } : {}),
+      hidden: Array.isArray(stored.hidden) ? stored.hidden : undefined,
     },
     hasStoredSettings: true,
     onboardingInProgress: onboardingInProgress === true,
@@ -274,7 +286,7 @@ export function normalizePluginSettings(
   return {
     order: hasStoredOrder ? order : defaultOrder,
     disabled,
-    ...(hidden.length > 0 ? { hidden } : {}),
+    hidden: hidden.length > 0 ? hidden : undefined,
   }
 }
 
@@ -434,11 +446,11 @@ export function normalizeSurfacePins(value: unknown, plugins: PluginMeta[]): Sur
 
   for (const candidate of value) {
     if (!candidate || typeof candidate !== "object") continue
-    const raw = candidate as Record<string, unknown>
+    const raw = candidate as RawSurfacePin
     const providerId = typeof raw.providerId === "string" ? raw.providerId.trim() : ""
     const rawInstanceRef =
       raw.instanceRef && typeof raw.instanceRef === "object"
-        ? (raw.instanceRef as Record<string, unknown>)
+        ? (raw.instanceRef as RawSurfacePinInstanceRef)
         : undefined
     const instanceId =
       typeof raw.instanceId === "string"
@@ -462,7 +474,7 @@ export function normalizeSurfacePins(value: unknown, plugins: PluginMeta[]): Sur
       continue
     }
     seen.add(key)
-    pins.push({ providerId, ...(instanceRef ? { instanceRef } : {}), metricLabel, presentation })
+    pins.push({ providerId, instanceRef, metricLabel, presentation })
     if (pins.length >= MAX_SURFACE_PINS) break
   }
 
@@ -479,11 +491,11 @@ export async function saveSurfacePins(pins: readonly SurfacePin[]): Promise<void
 }
 
 type LegacyStoreWithDelete = {
-  delete?: (key: string) => Promise<void>
+  delete?: (key: string) => Promise<boolean>
 }
 
 async function deleteStoreKey(key: string): Promise<void> {
-  const maybeDelete = (store as unknown as LegacyStoreWithDelete).delete
+  const maybeDelete: LegacyStoreWithDelete["delete"] = Reflect.get(store, "delete")
   if (typeof maybeDelete === "function") {
     await maybeDelete.call(store, key)
     return

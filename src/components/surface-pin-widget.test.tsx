@@ -80,4 +80,33 @@ describe("SurfacePinWidget", () => {
       resolveSurfacePins({ pins: [accountBPin], plugins: [accountA], displayMode: "used" })
     ).toEqual([{ pin: accountBPin, providerName: "Codex", percent: null }])
   })
+
+  it("does not turn an unknown quota into zero", () => {
+    const unknownPlugin = {
+      ...plugins[0]!,
+      data: {
+        ...plugins[0]!.data!,
+        lines: [
+          {
+            type: "progress" as const,
+            label: "Session",
+            used: null,
+            limit: 100,
+            format: { kind: "percent" as const },
+          },
+        ],
+      },
+    }
+
+    render(
+      <SurfacePinWidget
+        pins={[{ ...pins[1]!, presentation: "bar" }]}
+        plugins={[unknownPlugin]}
+        displayMode="used"
+      />
+    )
+
+    expect(screen.getByText("—")).toBeInTheDocument()
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument()
+  })
 })

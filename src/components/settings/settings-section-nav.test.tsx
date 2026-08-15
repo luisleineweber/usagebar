@@ -61,7 +61,7 @@ describe("SettingsSectionNav", () => {
             target: document.getElementById("notifications"),
             boundingClientRect: { top: 100 },
           },
-        ] as unknown as IntersectionObserverEntry[],
+        ] as IntersectionObserverEntry[],
         {} as IntersectionObserver
       )
     })

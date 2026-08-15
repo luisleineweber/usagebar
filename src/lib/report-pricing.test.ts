@@ -46,6 +46,55 @@ describe("report pricing overrides", () => {
     expect(reportEntryCost({ ...base, model: "gpt-4.1" }, overrides)).toBe(4)
   })
 
+  it("preserves an authoritative recorded zero when override inputs are missing", () => {
+    expect(
+      reportEntryCost(
+        {
+          providerId: "claude",
+          source: "ccusage",
+          timeZone: "UTC",
+          periodStart: "2026-07-13T00:00:00Z",
+          periodEnd: "2026-07-14T00:00:00Z",
+          model: "sonnet",
+          costUsd: 0,
+        },
+        { sonnet: { inputPerMillion: 3, outputPerMillion: 15 } }
+      )
+    ).toBe(0)
+  })
+
+  it("does not treat a missing core token field as zero", () => {
+    expect(
+      reportEntryCost(
+        {
+          providerId: "claude",
+          source: "ccusage",
+          timeZone: "UTC",
+          periodStart: "2026-07-13T00:00:00Z",
+          periodEnd: "2026-07-14T00:00:00Z",
+          model: "sonnet",
+          inputTokens: 1_000_000,
+          costUsd: 7,
+        },
+        { sonnet: { inputPerMillion: 3, outputPerMillion: 15 } }
+      )
+    ).toBe(7)
+    expect(
+      reportEntryCost(
+        {
+          providerId: "claude",
+          source: "ccusage",
+          timeZone: "UTC",
+          periodStart: "2026-07-13T00:00:00Z",
+          periodEnd: "2026-07-14T00:00:00Z",
+          model: "sonnet",
+          inputTokens: 1_000_000,
+        },
+        { sonnet: { inputPerMillion: 3, outputPerMillion: 15 } }
+      )
+    ).toBeNull()
+  })
+
   it("drops invalid and negative prices", () => {
     expect(
       normalizeModelPriceOverrides({ bad: { inputPerMillion: -1, outputPerMillion: 2 } })
@@ -54,7 +103,8 @@ describe("report pricing overrides", () => {
 
   it("does not require native storage outside Tauri", async () => {
     await expect(loadModelPriceOverrides()).resolves.toEqual({})
-    await expect(saveModelPriceOverrides({ sonnet: { inputPerMillion: 3, outputPerMillion: 15 } })).resolves
-      .toBeUndefined()
+    await expect(
+      saveModelPriceOverrides({ sonnet: { inputPerMillion: 3, outputPerMillion: 15 } })
+    ).resolves.toBeUndefined()
   })
 })

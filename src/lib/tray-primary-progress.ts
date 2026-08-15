@@ -15,13 +15,29 @@ export type TrayPrimaryBar = {
   fraction?: number
 }
 
-type ProgressLine = Extract<
-  PluginOutput["lines"][number],
-  { type: "progress"; label: string; used: number; limit: number }
->
+type ProgressLine = Extract<PluginOutput["lines"][number], { type: "progress" }>
 
 function isProgressLine(line: PluginOutput["lines"][number]): line is ProgressLine {
   return line.type === "progress"
+}
+
+function progressFraction(
+  line: ProgressLine | undefined,
+  displayMode: DisplayMode
+): number | undefined {
+  if (
+    !line ||
+    line.availability !== undefined ||
+    typeof line.used !== "number" ||
+    !Number.isFinite(line.used) ||
+    typeof line.limit !== "number" ||
+    !Number.isFinite(line.limit) ||
+    line.limit <= 0
+  ) {
+    return undefined
+  }
+  const shownAmount = displayMode === "used" ? line.used : line.limit - line.used
+  return clamp01(shownAmount / line.limit)
 }
 
 export function getTrayPrimaryBars(args: {
@@ -68,11 +84,7 @@ export function getTrayPrimaryBars(args: {
         const primaryLine = data.lines.find(
           (line): line is ProgressLine => isProgressLine(line) && line.label === primaryLabel
         )
-        if (primaryLine && primaryLine.limit > 0) {
-          const shownAmount =
-            displayMode === "used" ? primaryLine.used : primaryLine.limit - primaryLine.used
-          fraction = clamp01(shownAmount / primaryLine.limit)
-        }
+        fraction = progressFraction(primaryLine, displayMode)
       }
     }
 
@@ -103,10 +115,7 @@ export function getTrayPinnedBars(args: {
           (!pin.instanceRef ||
             sameProviderInstance(pluginStates[pin.providerId]?.data?.instanceRef, pin.instanceRef))
       )
-      const fraction =
-        line && line.limit > 0
-          ? clamp01((displayMode === "used" ? line.used : line.limit - line.used) / line.limit)
-          : undefined
+      const fraction = progressFraction(line, displayMode)
       return {
         id: `${pin.providerId}${pin.instanceRef?.instanceId ? `:${pin.instanceRef.instanceId}` : ""}:${pin.metricLabel}`,
         fraction,

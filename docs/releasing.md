@@ -100,21 +100,25 @@ Suggested Alpha 1 release-note shape:
 This is a public alpha for Windows users who want to test UsageBar before a full release.
 
 ### Supported
+
 - Windows NSIS installer
 - Provider setup for ...
 - Manual refresh
 - Local settings storage
 
 ### Known limitations
+
 - Some providers are experimental and may need manual cookie/API-key setup
 - Some costs or usage buckets may be estimated or partial
 - Prerelease updates may use the GitHub installer fallback when signed updater metadata is unavailable
 - UI polish, crash recovery, and signed-build coverage are not final
 
 ### Privacy
+
 UsageBar stores app settings and app-owned provider secrets locally under `%APPDATA%\com.sunstory.usagebar` on Windows. Provider secrets saved by UsageBar are encrypted with Windows DPAPI. Provider credentials and usage payloads are not intentionally sent to UsageBar-owned services.
 
 ### Feedback
+
 Report bugs at https://github.com/luisleineweber/usagebar/issues/new and include app version, Windows version, provider, error text, timestamp, and sanitized logs. Do not include API keys, cookies, or raw credential files.
 ```
 

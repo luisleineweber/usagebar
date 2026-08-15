@@ -62,6 +62,7 @@ pub struct PluginMeta {
     pub icon_url: String,
     pub dark_icon_url: Option<String>,
     pub icon_color_mode: crate::plugin_engine::manifest::IconColorMode,
+    pub icon_aspect_ratio: Option<f32>,
     pub brand_color: Option<String>,
     pub default_plan: Option<String>,
     pub support_state: String,
@@ -70,6 +71,7 @@ pub struct PluginMeta {
     pub status_page_url: Option<String>,
     pub status: Option<PluginStatusDto>,
     pub lines: Vec<ManifestLineDto>,
+    pub detail: Option<crate::plugin_engine::manifest::ManifestDetail>,
     pub links: Vec<PluginLinkDto>,
     /// Ordered list of primary metric candidates (sorted by primaryOrder).
     /// Frontend picks the first one that exists in runtime data.
@@ -133,6 +135,7 @@ pub(crate) fn list_plugins(state: tauri::State<'_, Mutex<crate::AppState>>) -> V
                 icon_url: plugin.icon_data_url,
                 dark_icon_url: plugin.dark_icon_data_url,
                 icon_color_mode: plugin.manifest.icon_color_mode,
+                icon_aspect_ratio: plugin.manifest.icon_aspect_ratio,
                 brand_color: plugin.manifest.brand_color,
                 default_plan: plugin.manifest.default_plan,
                 support_state: support.support_state.to_string(),
@@ -159,6 +162,7 @@ pub(crate) fn list_plugins(state: tauri::State<'_, Mutex<crate::AppState>>) -> V
                         scope: line.scope.clone(),
                     })
                     .collect(),
+                detail: plugin.manifest.detail.clone(),
                 links: plugin
                     .manifest
                     .links

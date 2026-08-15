@@ -3,7 +3,7 @@ export type ProviderOnboardingVariant = {
   steps: string[]
 }
 
-const COOKIE_ONBOARDING_GUIDANCE: Record<string, ProviderOnboardingVariant[]> = {
+const COOKIE_ONBOARDING_GUIDANCE = {
   ollama: [
     {
       title: "Option 1: Sign in to Ollama (recommended)",
@@ -129,7 +129,7 @@ const COOKIE_ONBOARDING_GUIDANCE: Record<string, ProviderOnboardingVariant[]> = 
       ],
     },
   ],
-}
+} satisfies Record<string, ProviderOnboardingVariant[]>
 
 const DEFAULT_COOKIE_GUIDANCE: ProviderOnboardingVariant[] = [
   {
@@ -145,5 +145,8 @@ const DEFAULT_COOKIE_GUIDANCE: ProviderOnboardingVariant[] = [
 ]
 
 export function getProviderCookieGuidance(providerId: string): ProviderOnboardingVariant[] {
-  return COOKIE_ONBOARDING_GUIDANCE[providerId] ?? DEFAULT_COOKIE_GUIDANCE
+  return (
+    COOKIE_ONBOARDING_GUIDANCE[providerId as keyof typeof COOKIE_ONBOARDING_GUIDANCE] ??
+    DEFAULT_COOKIE_GUIDANCE
+  )
 }

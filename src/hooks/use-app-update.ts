@@ -241,7 +241,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
       const currentVersion = await getCurrentVersion()
       let update: Update | null = null
       let canUseSignedUpdater = updaterEnabledRef.current
-      let signedUpdaterError: unknown = null
+      let signedUpdaterCheckFailed = false
       if (!updaterEligibilityResolvedRef.current) {
         canUseSignedUpdater = await resolveUpdaterEligibility()
       }
@@ -250,7 +250,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
         try {
           update = await check()
         } catch (error) {
-          signedUpdaterError = error
+          signedUpdaterCheckFailed = true
           // Prerelease builds may intentionally be published without signed
           // updater artifacts. In that case the GitHub release API below is
           // still authoritative for discovering the next prerelease.
@@ -278,7 +278,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
         release = await findNewerGitHubRelease(repo, currentVersion)
       } catch (error) {
         if (canUseSignedUpdater) {
-          if (signedUpdaterError) {
+          if (signedUpdaterCheckFailed) {
             throw error
           }
           console.warn("GitHub release fallback failed after signed updater check:", error)

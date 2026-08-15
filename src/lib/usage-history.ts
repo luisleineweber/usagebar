@@ -107,20 +107,21 @@ export function getUsageHistoryWindow(
 type CalendarDate = { year: number; month: number; day: number }
 
 function zonedFormatter(timeZone: string, withTime = false): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat("en-US", {
+  const options: Intl.DateTimeFormatOptions = {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    ...(withTime
-      ? {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hourCycle: "h23" as const,
-        }
-      : {}),
-  })
+  }
+  if (withTime) {
+    Object.assign(options, {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23" as const,
+    })
+  }
+  return new Intl.DateTimeFormat("en-US", options)
 }
 
 function numericParts(formatter: Intl.DateTimeFormat, date: Date): Record<string, number> {
@@ -203,7 +204,7 @@ export function filterUsageHistory(
       records.push({
         ...entry,
         providerId: output.providerId,
-        ...(output.instanceRef ? { instanceRef: output.instanceRef } : {}),
+        instanceRef: output.instanceRef,
         source: output.history.source,
         timeZone: output.history.timeZone,
       })

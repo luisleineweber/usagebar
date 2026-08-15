@@ -15,7 +15,11 @@ export function HistoryPage({ plugins }: { plugins: DisplayPluginState[] }) {
           Cost, tokens, requests, and model mix from provider-owned local or account history.
         </p>
       </div>
-      <UsageReport outputs={outputs} showProviderFilter />
+      <UsageReport
+        outputs={outputs}
+        showProviderFilter
+        stale={plugins.some((plugin) => plugin.error && (plugin.data || plugin.lastSettledData))}
+      />
     </div>
   )
 }

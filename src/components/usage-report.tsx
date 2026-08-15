@@ -18,6 +18,7 @@ type ReportGrouping = "day" | "project"
 type UsageReportProps = {
   outputs: PluginOutput[]
   showProviderFilter?: boolean
+  stale?: boolean
   nowMs?: number
 }
 
@@ -157,7 +158,8 @@ function TrendChart({
   const step = points.length > 1 ? width / (points.length - 1) : width / 2
   const coordinates = points.map((point, index) => {
     const x = points.length > 1 ? index * step : width / 2
-    const y = point.value !== null && max > 0 ? baseline - (point.value / max) * plotHeight : baseline
+    const y =
+      point.value !== null && max > 0 ? baseline - (point.value / max) * plotHeight : baseline
     return { ...point, x, y }
   })
 
@@ -282,9 +284,9 @@ function ProjectBreakdown({
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-border/70">
             <div
               className="h-full rounded-full bg-primary dark:bg-page-accent"
-                style={{
-                  width: `${value !== null && max > 0 ? Math.max((value / max) * 100, 2) : 0}%`,
-                }}
+              style={{
+                width: `${value !== null && max > 0 ? Math.max((value / max) * 100, 2) : 0}%`,
+              }}
             />
           </div>
         </div>
@@ -324,7 +326,12 @@ function SelectFilter({
   )
 }
 
-export function UsageReport({ outputs, showProviderFilter = false, nowMs }: UsageReportProps) {
+export function UsageReport({
+  outputs,
+  showProviderFilter = false,
+  stale = false,
+  nowMs,
+}: UsageReportProps) {
   const [period, setPeriod] = useState<UsageHistoryPeriod>("30d")
   const [metric, setMetric] = useState<ReportMetric>("cost")
   const [providerId, setProviderId] = useState("")
@@ -381,7 +388,10 @@ export function UsageReport({ outputs, showProviderFilter = false, nowMs }: Usag
     <section className="border-t border-border/70 pt-3" aria-label="Usage history">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Usage history</h3>
+          <h3 className="text-sm font-semibold">
+            Usage history
+            {stale ? <span className="ml-2 text-xs text-muted-foreground">Stale</span> : null}
+          </h3>
           <p className="text-xs text-muted-foreground">
             Cached local activity, grouped by calendar day.
           </p>

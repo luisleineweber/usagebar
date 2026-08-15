@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { MouseEvent } from "react"
+import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+
+type MockComponentProps = { children?: ReactNode }
 
 const { appContentMock, invokeMock, openSettingsWindowMock, panelFooterMock, sideNavMock } =
   vi.hoisted(() => ({
@@ -58,7 +61,7 @@ vi.mock("@/components/app/app-content", () => ({
   },
 }))
 vi.mock("@/components/panel-footer", () => ({
-  PanelFooter: (props: unknown) => {
+  PanelFooter: (props: MockComponentProps) => {
     panelFooterMock(props)
     return <footer>footer</footer>
   },
@@ -85,7 +88,9 @@ const plugin = {
   lastSuccessAt: 20,
 } as DisplayPluginState
 
-function renderShell(overrides: Record<string, unknown> = {}) {
+function renderShell(
+  overrides: Partial<{ showHistoryInBar: boolean; hasResolvedViews: boolean }> = {}
+) {
   const props = {
     onRefreshAll: vi.fn(),
     navPlugins: [{ id: "codex", name: "Codex", iconUrl: "/codex.svg" }],

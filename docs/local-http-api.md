@@ -103,6 +103,8 @@ Unknown routes return `404 Not Found`.
 
 The `lines` array uses the same metric line types as plugin output: `progress`, `text`, and `badge`.
 
+For progress lines, `0` is an authoritative value. A `null` `used` or `limit` means that the provider did not return that field. `availability: "unsupported"` means that the provider does not support the metric. Do not convert these values to zero. Retained data is marked by `freshness.*.state: "retained"`.
+
 `fetchedAt` is an ISO 8601 timestamp indicating when the snapshot was last successfully fetched.
 
 `iconUrl` is intentionally omitted to keep API payloads small.

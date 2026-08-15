@@ -707,14 +707,14 @@
           ).trim()
           const metrics = historyMetrics(breakdown)
           if (Object.keys(metrics).length === 0) continue
-          entries.push({ ...period, ...(model ? { model } : {}), ...metrics })
+          entries.push({ ...period, model: model || undefined, ...metrics })
         }
       } else {
         const metrics = historyMetrics(day)
         if (Object.keys(metrics).length === 0) continue
         entries.push({
           ...period,
-          ...(day.project ? { project: String(day.project) } : {}),
+          project: day.project ? String(day.project) : undefined,
           ...metrics,
         })
       }

@@ -45,58 +45,62 @@ function codeToDisplayKey(code: string): string {
   // Handle numpad (Numpad1 -> Num1)
   if (code.startsWith("Numpad")) return "Num" + code.slice(6)
   // Handle special keys
-  const specialKeys: Record<string, string> = {
-    Space: "Space",
-    Enter: "Enter",
-    Backspace: "Backspace",
-    Tab: "Tab",
-    ArrowUp: "Up",
-    ArrowDown: "Down",
-    ArrowLeft: "Left",
-    ArrowRight: "Right",
-    Escape: "Esc",
-    Delete: "Del",
-    Insert: "Ins",
-    Home: "Home",
-    End: "End",
-    PageUp: "PgUp",
-    PageDown: "PgDn",
-    BracketLeft: "[",
-    BracketRight: "]",
-    Backslash: "\\",
-    Semicolon: ";",
-    Quote: "'",
-    Comma: ",",
-    Period: ".",
-    Slash: "/",
-    Backquote: "`",
-    Minus: "-",
-    Equal: "=",
-  }
-  return specialKeys[code] || code
+  const specialKeys = new Map(
+    Object.entries({
+      Space: "Space",
+      Enter: "Enter",
+      Backspace: "Backspace",
+      Tab: "Tab",
+      ArrowUp: "Up",
+      ArrowDown: "Down",
+      ArrowLeft: "Left",
+      ArrowRight: "Right",
+      Escape: "Esc",
+      Delete: "Del",
+      Insert: "Ins",
+      Home: "Home",
+      End: "End",
+      PageUp: "PgUp",
+      PageDown: "PgDn",
+      BracketLeft: "[",
+      BracketRight: "]",
+      Backslash: "\\",
+      Semicolon: ";",
+      Quote: "'",
+      Comma: ",",
+      Period: ".",
+      Slash: "/",
+      Backquote: "`",
+      Minus: "-",
+      Equal: "=",
+    })
+  )
+  return specialKeys.get(code) ?? code
 }
 
 // Convert event.code to Tauri shortcut key format
 function codeToTauriKey(code: string): string {
   if (code.startsWith("Key")) return code.slice(3)
   if (code.startsWith("Digit")) return code.slice(5)
-  const specialKeys: Record<string, string> = {
-    Space: "Space",
-    Enter: "Return",
-    Backspace: "Backspace",
-    Tab: "Tab",
-    ArrowUp: "Up",
-    ArrowDown: "Down",
-    ArrowLeft: "Left",
-    ArrowRight: "Right",
-    Delete: "Delete",
-    Insert: "Insert",
-    Home: "Home",
-    End: "End",
-    PageUp: "PageUp",
-    PageDown: "PageDown",
-  }
-  return specialKeys[code] || code
+  const specialKeys = new Map(
+    Object.entries({
+      Space: "Space",
+      Enter: "Return",
+      Backspace: "Backspace",
+      Tab: "Tab",
+      ArrowUp: "Up",
+      ArrowDown: "Down",
+      ArrowLeft: "Left",
+      ArrowRight: "Right",
+      Delete: "Delete",
+      Insert: "Insert",
+      Home: "Home",
+      End: "End",
+      PageUp: "PageUp",
+      PageDown: "PageDown",
+    })
+  )
+  return specialKeys.get(code) ?? code
 }
 
 // Build shortcut array from currently pressed keys (modifiers + main key)

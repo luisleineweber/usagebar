@@ -10,16 +10,29 @@ function appendUsageHistory(
   output: PluginOutput,
   capturedAt: number
 ): ProviderUsageHistory | undefined {
-  const points = output.lines
-    .filter((line) => line.type === "progress")
-    .map((line) => ({
-      capturedAt,
-      label: line.label,
-      used: line.used,
-      limit: line.limit,
-      format: line.format,
-      color: line.color,
-    }))
+  const points = output.lines.flatMap((line) => {
+    if (
+      line.type !== "progress" ||
+      line.availability !== undefined ||
+      typeof line.used !== "number" ||
+      !Number.isFinite(line.used) ||
+      typeof line.limit !== "number" ||
+      !Number.isFinite(line.limit) ||
+      line.limit <= 0
+    ) {
+      return []
+    }
+    return [
+      {
+        capturedAt,
+        label: line.label,
+        used: line.used,
+        limit: line.limit,
+        format: line.format,
+        color: line.color,
+      },
+    ]
+  })
 
   if (points.length === 0) return history
 

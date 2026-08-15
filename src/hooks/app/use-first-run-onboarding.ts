@@ -35,7 +35,7 @@ export function useFirstRunOnboarding({
       const nextSettings: PluginSettings = {
         order: pluginSettings.order,
         disabled: pluginSettings.order.filter((id) => !selectedIds.has(id)),
-        ...(hidden.length > 0 ? { hidden } : {}),
+        hidden: hidden.length > 0 ? hidden : undefined,
       }
 
       await saveOnboardingInProgress(true)

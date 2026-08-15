@@ -57,6 +57,7 @@ export function OverviewPage({
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}
           error={plugin.error}
+          stale={Boolean(plugin.error && (plugin.data || plugin.lastSettledData))}
           errorCategory={plugin.errorCategory}
           lines={plugin.data?.lines ?? plugin.lastSettledData?.lines ?? []}
           skeletonLines={plugin.meta.lines}

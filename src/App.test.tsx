@@ -1,7 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import type { DragEndEvent } from "@dnd-kit/core"
 import type { ReactNode } from "react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
+import type { PluginOutput } from "@/lib/plugin-types"
+
+type MockEvent = { payload?: unknown; event?: string; data?: unknown }
+type MockMenuConfig = { close?: () => Promise<void> }
+type MockSensor = { name?: string }
+type MockSensorOptions = { activationConstraint?: { distance?: number } }
 
 const state = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -51,7 +58,7 @@ const state = vi.hoisted(() => ({
   renderTrayBarsIconMock: vi.fn(),
   renderTrayNumberIconMock: vi.fn(),
   probeHandlers: null as null | {
-    onResult: (output: unknown) => void
+    onResult: (output: PluginOutput) => void
     onBatchComplete: () => void
   },
   trayGetByIdMock: vi.fn(),
@@ -63,7 +70,7 @@ const state = vi.hoisted(() => ({
 }))
 
 const dndState = vi.hoisted(() => ({
-  latestOnDragEnd: null as null | ((event: unknown) => void),
+  latestOnDragEnd: null as null | ((event: DragEndEvent) => void),
 }))
 
 const updaterState = vi.hoisted(() => ({
@@ -72,11 +79,11 @@ const updaterState = vi.hoisted(() => ({
 }))
 
 const eventState = vi.hoisted(() => {
-  const handlers = new Map<string, (event: unknown) => void>()
+  const handlers = new Map<string, (event: MockEvent) => void>()
   return {
     handlers,
     emitMock: vi.fn(async () => undefined),
-    listenMock: vi.fn(async (eventName: string, handler: (event: unknown) => void) => {
+    listenMock: vi.fn(async (eventName: string, handler: (event: MockEvent) => void) => {
       handlers.set(eventName, handler)
       return () => {
         handlers.delete(eventName)
@@ -107,7 +114,7 @@ vi.mock("@dnd-kit/core", () => ({
     onDragEnd,
   }: {
     children: ReactNode
-    onDragEnd?: (event: unknown) => void
+    onDragEnd?: (event: DragEndEvent) => void
   }) => {
     dndState.latestOnDragEnd = onDragEnd ?? null
     return <div>{children}</div>
@@ -115,11 +122,11 @@ vi.mock("@dnd-kit/core", () => ({
   closestCenter: vi.fn(),
   PointerSensor: class {},
   KeyboardSensor: class {},
-  useSensor: vi.fn((_sensor: unknown, options?: unknown) => ({
+  useSensor: vi.fn((_sensor: MockSensor, options?: MockSensorOptions) => ({
     sensor: _sensor,
     options,
   })),
-  useSensors: vi.fn((...sensors: unknown[]) => sensors),
+  useSensors: vi.fn((...sensors: MockSensor[]) => sensors),
 }))
 
 vi.mock("@dnd-kit/sortable", () => ({
@@ -182,19 +189,16 @@ vi.mock("@tauri-apps/api/menu", () => ({
     },
   },
   PredefinedMenuItem: {
-    new: async (config: unknown) => {
+    new: async (config: MockMenuConfig) => {
       menuState.predefinedMenuItemNewMock(config)
       return {
-        ...((typeof config === "object" && config !== null ? config : {}) as Record<
-          string,
-          unknown
-        >),
+        ...config,
         close: menuState.predefinedMenuItemCloseMock,
       }
     },
   },
   Menu: {
-    new: async (config: unknown) => {
+    new: async (config: MockMenuConfig) => {
       menuState.menuNewMock(config)
       return {
         popup: menuState.menuPopupMock,
@@ -289,7 +293,7 @@ vi.mock("@/lib/tray-number-icon", async () => {
 
 vi.mock("@/hooks/use-probe-events", () => ({
   useProbeEvents: (handlers: {
-    onResult: (output: unknown) => void
+    onResult: (output: PluginOutput) => void
     onBatchComplete: () => void
   }) => {
     state.probeHandlers = handlers
@@ -447,7 +451,7 @@ describe("App", () => {
     eventState.handlers.clear()
     eventState.listenMock.mockReset()
     eventState.listenMock.mockImplementation(
-      async (eventName: string, handler: (event: unknown) => void) => {
+      async (eventName: string, handler: (event: MockEvent) => void) => {
         eventState.handlers.set(eventName, handler)
         return () => {
           eventState.handlers.delete(eventName)
@@ -534,7 +538,7 @@ describe("App", () => {
   })
 
   afterEach(() => {
-    delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollHeight
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight")
   })
 
   const triggerPluginContextAction = async (
@@ -580,7 +584,7 @@ describe("App", () => {
       matches: false,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
-    } as unknown as MediaQueryList
+    } as MediaQueryList
     const mmSpy = vi.spyOn(window, "matchMedia").mockReturnValue(mq)
 
     renderSettingsWindow()
@@ -1816,11 +1820,11 @@ describe("App", () => {
       }
       observe() {
         observeSpy()
-        this.cb([], this as unknown as ResizeObserver)
+        this.cb([], this as ResizeObserver)
       }
       unobserve() {}
       disconnect() {}
-    } as unknown as typeof ResizeObserver
+    } as typeof ResizeObserver
 
     render(<App />)
     await waitFor(() => expect(observeSpy).toHaveBeenCalled())

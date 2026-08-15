@@ -28,17 +28,17 @@ import {
 // Pace status → visual config
 // ---------------------------------------------------------------------------
 
-const PACE_VISUALS: Record<PaceStatus, { dotClass: string }> = {
+const PACE_VISUALS = {
   ahead: { dotClass: "bg-green-500" },
   "on-track": { dotClass: "bg-yellow-500" },
   behind: { dotClass: "bg-red-500" },
-}
+} satisfies Record<PaceStatus, { dotClass: string }>
 
-const PACE_LABELS: Record<PaceStatus, string> = {
+const PACE_LABELS = {
   ahead: "Ahead",
   "on-track": "On track",
   behind: "At risk",
-}
+} satisfies Record<PaceStatus, string>
 
 // ---------------------------------------------------------------------------
 // PaceIndicator — colored dot with tooltip breakdown
@@ -150,13 +150,41 @@ export function MetricLineRenderer({
   }
 
   if (line.type === "progress") {
+    const isUnsupported = line.availability === "unsupported"
+    const isUnavailable = line.availability !== undefined
+    const used = line.used
+    const limit = line.limit
+    if (
+      isUnavailable ||
+      typeof used !== "number" ||
+      !Number.isFinite(used) ||
+      typeof limit !== "number" ||
+      !Number.isFinite(limit) ||
+      limit <= 0
+    ) {
+      const unavailableLabel = isUnsupported ? "Not available" : "—"
+      return (
+        <div>
+          <div className="flex justify-between items-center h-[22px]">
+            <span className="text-sm text-muted-foreground flex-shrink-0">{line.label}</span>
+            <span
+              className="text-xs text-muted-foreground"
+              title={isUnsupported ? "Not available" : "Unknown"}
+            >
+              {unavailableLabel}
+            </span>
+          </div>
+        </div>
+      )
+    }
+
     const resetsAtMs = line.resetsAt ? Date.parse(line.resetsAt) : Number.NaN
     const periodDurationMs = line.periodDurationMs
     const hasPaceContext = Number.isFinite(resetsAtMs) && Number.isFinite(periodDurationMs)
     const hasTimeMarkerContext = hasPaceContext && periodDurationMs! > 0
 
-    const shownAmount = displayMode === "used" ? line.used : Math.max(0, line.limit - line.used)
-    const percent = Math.round(clamp01(shownAmount / line.limit) * 10000) / 100
+    const shownAmount = displayMode === "used" ? used : Math.max(0, limit - used)
+    const percent = Math.round(clamp01(shownAmount / limit) * 10000) / 100
     const displaySuffix = displayMode === "left" ? " left" : " used"
 
     const primaryText =
@@ -183,13 +211,13 @@ export function MetricLineRenderer({
     const secondaryText =
       resetLabel ??
       (line.format.kind === "percent"
-        ? `${line.limit}% cap`
+        ? `${limit}% cap`
         : line.format.kind === "dollars"
-          ? `$${formatFixedPrecisionNumber(line.limit)} limit`
-          : `${formatCountNumber(line.limit)} ${line.format.suffix}`)
+          ? `$${formatFixedPrecisionNumber(limit)} limit`
+          : `${formatCountNumber(limit)} ${line.format.suffix}`)
 
     const paceResult = hasPaceContext
-      ? calculatePaceStatus(line.used, line.limit, resetsAtMs, periodDurationMs!, now)
+      ? calculatePaceStatus(used, limit, resetsAtMs, periodDurationMs!, now)
       : null
     const paceStatus = paceResult?.status ?? null
     const paceMarkerValue =
@@ -201,13 +229,13 @@ export function MetricLineRenderer({
             return displayMode === "used" ? elapsedPercent : 100 - elapsedPercent
           })()
         : undefined
-    const isLimitReached = line.used >= line.limit
+    const isLimitReached = used >= limit
     const paceDetailText =
       hasPaceContext && !isLimitReached
         ? buildPaceDetailText({
             paceResult,
-            used: line.used,
-            limit: line.limit,
+            used,
+            limit,
             periodDurationMs: periodDurationMs!,
             resetsAtMs,
             nowMs: now,
@@ -217,7 +245,7 @@ export function MetricLineRenderer({
 
     const deficit =
       hasPaceContext && !isLimitReached
-        ? calculateDeficit(line.used, line.limit, resetsAtMs, periodDurationMs!, now)
+        ? calculateDeficit(used, limit, resetsAtMs, periodDurationMs!, now)
         : null
     const deficitText =
       deficit !== null ? formatDeficitText(deficit, line.format, displayMode) : null
@@ -225,8 +253,8 @@ export function MetricLineRenderer({
       hasPaceContext && !isLimitReached
         ? formatRunsOutText({
             paceResult,
-            used: line.used,
-            limit: line.limit,
+            used,
+            limit,
             periodDurationMs: periodDurationMs!,
             resetsAtMs,
             nowMs: now,

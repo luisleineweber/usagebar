@@ -53,6 +53,7 @@ interface ProviderCardProps {
   showSeparator?: boolean
   loading?: boolean
   error?: string | null
+  stale?: boolean
   errorCategory?: ProbeErrorCategory | null
   lines?: MetricLine[]
   skeletonLines?: ManifestLine[]
@@ -99,6 +100,7 @@ export function ProviderCard({
   showSeparator = true,
   loading = false,
   error = null,
+  stale = false,
   errorCategory = null,
   lines = [],
   skeletonLines = [],
@@ -113,6 +115,7 @@ export function ProviderCard({
   status,
 }: ProviderCardProps) {
   const hasRetainedContent = lines.length > 0
+  const isStale = stale || Boolean(error && hasRetainedContent)
   const isRefreshingWithData = loading && hasRetainedContent
   const cooldownRemainingMs = useMemo(() => {
     if (!lastManualRefreshAt) return 0
@@ -332,6 +335,7 @@ export function ProviderCard({
                 >
                   <AlertCircle className="h-3 w-3 flex-shrink-0" />
                   <span className="truncate">{error}</span>
+                  {isStale ? <span className="shrink-0">Stale</span> : null}
                 </div>
               )}
             />

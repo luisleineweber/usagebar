@@ -7,13 +7,13 @@ type PluginErrorProps = {
   category?: ProbeErrorCategory | null
 }
 
-const CREDENTIAL_ERROR_LABELS: Partial<Record<ProbeErrorCategory, string>> = {
+const CREDENTIAL_ERROR_LABELS = {
   credentialMissing: "Credentials missing",
   credentialUnavailable: "Credentials unavailable",
   credentialUnreadable: "Credentials unreadable",
   credentialInvalid: "Credentials invalid",
   credentialExpired: "Credentials expired",
-}
+} satisfies Partial<Record<ProbeErrorCategory, string>>
 
 function formatMessage(message: string) {
   const parts = message.split(/`([^`]+)`/)
@@ -32,7 +32,9 @@ function formatMessage(message: string) {
 }
 
 export function PluginError({ message, category }: PluginErrorProps) {
-  const categoryLabel = category ? CREDENTIAL_ERROR_LABELS[category] : null
+  const categoryLabel = category
+    ? CREDENTIAL_ERROR_LABELS[category as keyof typeof CREDENTIAL_ERROR_LABELS]
+    : null
   return (
     <Alert
       variant="destructive"

@@ -1,7 +1,7 @@
 use crate::local_http_api::cache::CachedPluginSnapshot;
-use crate::plugin_engine::freshness::DataFreshnessGroups;
+use crate::plugin_engine::freshness::{DataFreshness, DataFreshnessGroups, DataFreshnessState};
 use crate::plugin_engine::runtime::{
-    MetricLine, ProgressFormat, UsageHistoryEntry, UsageHistoryTotals,
+    MetricAvailability, MetricLine, ProgressFormat, UsageHistoryEntry, UsageHistoryTotals,
 };
 use serde::Serialize;
 use time::{Duration, OffsetDateTime, format_description::well_known::Rfc3339};
@@ -111,16 +111,22 @@ fn render_usage_provider(snapshot: &CachedPluginSnapshot) -> String {
     {
         output.push_str(&format!(" ({})", plan.trim()));
     }
+    let quota_stale = is_retained(
+        snapshot
+            .freshness
+            .as_ref()
+            .and_then(|freshness| freshness.quota.as_ref()),
+    );
     for line in &snapshot.lines {
         output.push_str("\n  ");
-        output.push_str(&render_line(line));
+        output.push_str(&render_line(line, quota_stale));
     }
     output.push_str("\n  Fetched: ");
     output.push_str(&snapshot.fetched_at);
     output
 }
 
-fn render_line(line: &MetricLine) -> String {
+fn render_line(line: &MetricLine, stale: bool) -> String {
     match line {
         MetricLine::Text { label, value, .. } => format!("{label}: {value}"),
         MetricLine::Badge { label, text, .. } => format!("{label}: {text}"),
@@ -129,10 +135,16 @@ fn render_line(line: &MetricLine) -> String {
             used,
             limit,
             format,
+            availability,
             resets_at,
             ..
         } => {
-            let value = progress_value(*used, *limit, format);
+            let value = progress_value(*used, *limit, availability.as_ref(), format);
+            let value = if stale {
+                format!("{value} (stale)")
+            } else {
+                value
+            };
             match resets_at {
                 Some(reset) => format!("{label}: {value} (resets {reset})"),
                 None => format!("{label}: {value}"),
@@ -141,14 +153,23 @@ fn render_line(line: &MetricLine) -> String {
     }
 }
 
-fn progress_value(used: f64, limit: f64, format: &ProgressFormat) -> String {
+fn progress_value(
+    used: Option<f64>,
+    limit: Option<f64>,
+    availability: Option<&crate::plugin_engine::runtime::MetricAvailability>,
+    format: &ProgressFormat,
+) -> String {
+    match availability {
+        Some(MetricAvailability::Unknown) => return "Unknown".to_string(),
+        Some(MetricAvailability::Unsupported) => return "Not available".to_string(),
+        None => {}
+    }
+    let (Some(used), Some(limit)) = (used, limit) else {
+        return "Unknown".to_string();
+    };
     match format {
         ProgressFormat::Percent => {
-            let percent = if limit > 0.0 {
-                used / limit * 100.0
-            } else {
-                0.0
-            };
+            let percent = used / limit * 100.0;
             format!("{}% used", number(percent))
         }
         ProgressFormat::Dollars => format!("${} / ${}", money(used), money(limit)),
@@ -228,7 +249,17 @@ pub(crate) fn history(
 
     let mut sections = Vec::new();
     for provider in providers {
-        let mut section = format!("{} history ({} days)", provider.display_name, days);
+        let stale = is_retained(
+            provider
+                .freshness
+                .as_ref()
+                .and_then(|freshness| freshness.history.as_ref()),
+        );
+        let mut section = format!("{} history ({} days", provider.display_name, days);
+        if stale {
+            section.push_str(", stale");
+        }
+        section.push(')');
         section.push_str("\n  Total: ");
         section.push_str(&history_metrics(&provider.totals));
         for entry in &provider.entries {
@@ -326,11 +357,17 @@ fn statusline_provider(snapshot: &CachedPluginSnapshot) -> String {
                 used,
                 limit,
                 format,
+                availability,
                 ..
             } => Some(format!(
                 "{} {}",
                 compact(label),
-                compact(&progress_value(*used, *limit, format))
+                compact(&progress_value(
+                    *used,
+                    *limit,
+                    availability.as_ref(),
+                    format
+                ))
             )),
             _ => None,
         })
@@ -347,7 +384,25 @@ fn statusline_provider(snapshot: &CachedPluginSnapshot) -> String {
             })
         })
         .unwrap_or_else(|| "cached".to_string());
-    format!("{} {}", compact(&snapshot.display_name), value)
+    let stale = is_retained(
+        snapshot
+            .freshness
+            .as_ref()
+            .and_then(|freshness| freshness.quota.as_ref()),
+    );
+    format!(
+        "{} {}{}",
+        compact(&snapshot.display_name),
+        value,
+        if stale { " (stale)" } else { "" }
+    )
+}
+
+fn is_retained(freshness: Option<&DataFreshness>) -> bool {
+    matches!(
+        freshness.map(|freshness| &freshness.state),
+        Some(DataFreshnessState::Retained)
+    )
 }
 
 fn compact(value: &str) -> String {
@@ -389,9 +444,10 @@ mod tests {
             lines: vec![
                 MetricLine::Progress {
                     label: "Session".to_string(),
-                    used: 42.0,
-                    limit: 100.0,
+                    used: Some(42.0),
+                    limit: Some(100.0),
                     format: ProgressFormat::Percent,
+                    availability: None,
                     resets_at: Some("2026-07-11T00:00:00Z".to_string()),
                     period_duration_ms: None,
                     color: None,
@@ -433,6 +489,66 @@ mod tests {
         assert_eq!(
             usage(&[snapshot()], false).unwrap(),
             "Claude (Pro)\n  Session: 42% used (resets 2026-07-11T00:00:00Z)\n  Today: $1.25\n  Fetched: 2026-07-10T12:00:00Z"
+        );
+    }
+
+    #[test]
+    fn usage_boundaries_keep_zero_separate_from_unknown() {
+        let statusline_snapshot = snapshot();
+        let mut snapshot = statusline_snapshot.clone();
+        snapshot.lines[0] = MetricLine::Progress {
+            label: "Zero".to_string(),
+            used: Some(0.0),
+            limit: Some(100.0),
+            format: ProgressFormat::Percent,
+            availability: None,
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        };
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Unknown".to_string(),
+            used: None,
+            limit: Some(100.0),
+            format: ProgressFormat::Percent,
+            availability: None,
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Explicit unknown".to_string(),
+            used: Some(0.0),
+            limit: Some(100.0),
+            format: ProgressFormat::Percent,
+            availability: Some(MetricAvailability::Unknown),
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        snapshot.lines.push(MetricLine::Progress {
+            label: "Unsupported".to_string(),
+            used: None,
+            limit: None,
+            format: ProgressFormat::Percent,
+            availability: Some(MetricAvailability::Unsupported),
+            resets_at: None,
+            period_duration_ms: None,
+            color: None,
+        });
+        let text = usage(&[snapshot.clone()], false).unwrap();
+        assert!(text.contains("Zero: 0% used"));
+        assert!(text.contains("Unknown: Unknown"));
+        assert!(text.contains("Explicit unknown: Unknown"));
+        assert!(text.contains("Unsupported: Not available"));
+
+        let json: serde_json::Value =
+            serde_json::from_str(&usage(&[snapshot], true).unwrap()).unwrap();
+        assert_eq!(json["providers"][0]["lines"][0]["used"], 0.0);
+        assert!(json["providers"][0]["lines"][2]["used"].is_null());
+        assert_eq!(
+            statusline(&[statusline_snapshot], false).unwrap(),
+            "Claude Session 42% used"
         );
     }
 
