@@ -85,6 +85,21 @@ describe("ProviderCard", () => {
     })
   })
 
+  it("applies the provider brand color to the header icon", () => {
+    render(
+      <ProviderCard
+        name="Codex"
+        iconUrl="codex.svg"
+        brandColor="#000000"
+        displayMode="used"
+      />
+    )
+
+    expect(screen.getByRole("img", { name: "Codex icon" })).toHaveStyle({
+      backgroundColor: "rgb(0, 0, 0)",
+    })
+  })
+
   it("shows last-updated state on retry tooltip", () => {
     vi.useFakeTimers()
     const now = new Date("2026-02-02T12:00:00.000Z")

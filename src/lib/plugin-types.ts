@@ -115,6 +115,7 @@ export type PluginMeta = {
   iconUrl: string
   darkIconUrl?: string
   iconColorMode?: PluginIconColorMode
+  iconAspectRatio?: number
   brandColor?: string
   defaultPlan?: string
   supportState?: PluginSupportState

@@ -51,6 +51,8 @@ export function OverviewPage({
           iconUrl={plugin.meta.iconUrl}
           darkIconUrl={plugin.meta.darkIconUrl}
           iconColorMode={plugin.meta.iconColorMode}
+          iconAspectRatio={plugin.meta.iconAspectRatio}
+          brandColor={plugin.meta.brandColor}
           plan={plugin.data?.plan ?? plugin.lastSettledData?.plan ?? plugin.meta.defaultPlan}
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}

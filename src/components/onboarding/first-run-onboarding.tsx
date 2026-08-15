@@ -115,9 +115,11 @@ function OnboardingProviderIcon({
       iconUrl={provider.iconUrl}
       darkIconUrl={provider.darkIconUrl}
       iconColorMode={provider.iconColorMode}
+      iconAspectRatio={provider.iconAspectRatio}
+      fit="natural"
       brandColor={provider.brandColor}
       isDark={isDark}
-      className="size-7"
+      className={provider.iconAspectRatio ? "h-4 w-4" : "size-7"}
       ariaHidden
     />
   )

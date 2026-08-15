@@ -109,9 +109,11 @@ function ProviderRow({
             iconUrl={plugin.iconUrl}
             darkIconUrl={plugin.darkIconUrl}
             iconColorMode={plugin.iconColorMode}
+            iconAspectRatio={plugin.iconAspectRatio}
+            fit="natural"
             brandColor={plugin.brandColor}
             isDark={isDark}
-            className="size-5"
+            className={plugin.iconAspectRatio ? "h-3 w-3" : "size-5"}
             ariaHidden
             testId="provider-icon"
           />

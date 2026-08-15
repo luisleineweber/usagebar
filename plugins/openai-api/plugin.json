@@ -5,8 +5,7 @@
   "version": "0.0.1",
   "entry": "plugin.js",
   "icon": "icon.svg",
-  "iconAspectRatio": 3.583333,
-  "brandColor": "#10A37F",
+  "brandColor": "#000000",
   "defaultPlan": "Pay-as-you-go",
   "platformSupport": {
     "windows": {

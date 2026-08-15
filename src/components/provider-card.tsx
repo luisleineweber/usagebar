@@ -46,6 +46,8 @@ interface ProviderCardProps {
   iconUrl?: string
   darkIconUrl?: string
   iconColorMode?: PluginIconColorMode
+  iconAspectRatio?: number
+  brandColor?: string
   plan?: string
   links?: PluginLink[]
   showSeparator?: boolean
@@ -90,6 +92,8 @@ export function ProviderCard({
   iconUrl,
   darkIconUrl,
   iconColorMode,
+  iconAspectRatio,
+  brandColor,
   plan,
   links = [],
   showSeparator = true,
@@ -174,6 +178,9 @@ export function ProviderCard({
                 iconUrl={iconUrl}
                 darkIconUrl={darkIconUrl}
                 iconColorMode={iconColorMode}
+                iconAspectRatio={iconAspectRatio}
+                fit="natural"
+                brandColor={brandColor}
                 label={`${name} icon`}
                 className="size-4 text-foreground/80"
               />

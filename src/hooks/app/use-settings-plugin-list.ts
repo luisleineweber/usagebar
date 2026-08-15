@@ -10,6 +10,7 @@ export type SettingsPluginState = {
   iconUrl: string
   darkIconUrl?: string
   iconColorMode?: PluginMeta["iconColorMode"]
+  iconAspectRatio?: number
   brandColor?: string
   enabled: boolean
   hidden: boolean
@@ -48,6 +49,7 @@ export function useSettingsPluginList({
           iconUrl: meta.iconUrl,
           darkIconUrl: meta.darkIconUrl,
           iconColorMode: meta.iconColorMode,
+          iconAspectRatio: meta.iconAspectRatio,
           brandColor: meta.brandColor,
           enabled: !pluginSettings.disabled.includes(id),
           hidden: pluginSettings.hidden?.includes(id) === true,

@@ -369,9 +369,11 @@ export function ProviderSettingsDetail({
             iconUrl={plugin.iconUrl}
             darkIconUrl={plugin.darkIconUrl}
             iconColorMode={plugin.iconColorMode}
+            iconAspectRatio={plugin.iconAspectRatio}
+            fit="natural"
             brandColor={plugin.brandColor}
             isDark={isDark}
-            className="size-8"
+            className={plugin.iconAspectRatio ? "h-4 w-4" : "size-8"}
             ariaHidden
             testId="provider-icon"
           />

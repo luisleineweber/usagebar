@@ -50,4 +50,47 @@ describe("ProviderIcon", () => {
     expect(icon).toHaveStyle({ maskImage: "url(codex.svg)" })
     expect(icon).toHaveStyle({ backgroundColor: "rgb(116, 170, 156)" })
   })
+
+  it("uses black in light mode and white in dark mode for a monochrome black brand", () => {
+    const { rerender } = render(
+      <ProviderIcon
+        iconUrl="codex.svg"
+        brandColor="#000000"
+        isDark={false}
+        label="Codex"
+        className="size-6"
+      />
+    )
+
+    const icon = screen.getByRole("img", { name: "Codex" })
+    expect(icon).toHaveStyle({ backgroundColor: "rgb(0, 0, 0)" })
+
+    rerender(
+      <ProviderIcon
+        iconUrl="codex.svg"
+        brandColor="#000000"
+        isDark
+        label="Codex"
+        className="size-6"
+      />
+    )
+
+    expect(icon).toHaveStyle({ backgroundColor: "rgb(255, 255, 255)" })
+  })
+
+  it("preserves a rectangular wordmark when natural fit is requested", () => {
+    render(
+      <ProviderIcon
+        iconUrl="openai-api.svg"
+        iconAspectRatio={86 / 24}
+        fit="natural"
+        brandColor="#000000"
+        label="OpenAI API"
+        className="size-4"
+      />
+    )
+
+    const icon = screen.getByRole("img", { name: "OpenAI API" })
+    expect(icon).toHaveStyle({ width: "auto" })
+  })
 })
