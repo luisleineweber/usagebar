@@ -116,6 +116,11 @@ pub(crate) async fn start_probe_batch(
         });
     }
 
+    // A batch can contain multiple plugins backed by the same local usage source. Share one cache
+    // across their runtime workers so only the first matching query starts ccusage. The cache is
+    // intentionally dropped with the batch; the next refresh must inspect current local files.
+    let ccusage_cache = Arc::new(plugin_engine::host_api::CcusageQueryCache::default());
+
     let coordinator = {
         let locked = state.lock().map_err(|e| e.to_string())?;
         Arc::clone(&locked.probe_coordinator)
@@ -149,6 +154,7 @@ pub(crate) async fn start_probe_batch(
         let capacity_plugin_id = plugin_id.clone();
         let worker_plugin = plugin.clone();
         let worker_instance_ref = instance_ref.clone();
+        let worker_ccusage_cache = Arc::clone(&ccusage_cache);
         let panic_plugin = plugin.clone();
         let join_plugin = plugin.clone();
         let timeout_plugin = plugin.clone();
@@ -160,12 +166,13 @@ pub(crate) async fn start_probe_batch(
                 Ok(_permit) => {
                     let worker = tauri::async_runtime::spawn_blocking(move || {
                         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            plugin_engine::runtime::run_probe_for_instance(
+                            plugin_engine::runtime::run_probe_for_instance_with_cache(
                                 &worker_plugin,
                                 &data_dir,
                                 &version,
                                 Some(&worker_handle),
                                 &worker_instance_ref,
+                                Some(worker_ccusage_cache),
                             )
                         }));
 

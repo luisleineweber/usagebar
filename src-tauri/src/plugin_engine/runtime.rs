@@ -7,6 +7,7 @@ use crate::plugin_engine::probe_error::{
 use rquickjs::{Array, Context, Ctx, Error, Object, Promise, Runtime, Value};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const PROBE_MEMORY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
@@ -313,6 +314,7 @@ pub fn run_probe(
         app_handle,
         None,
         PROBE_EXECUTION_LIMIT,
+        None,
     )
 }
 
@@ -323,15 +325,16 @@ fn run_probe_with_timeout(
     app_version: &str,
     timeout: Duration,
 ) -> PluginOutput {
-    run_probe_unstamped(plugin, app_data_dir, app_version, None, None, timeout)
+    run_probe_unstamped(plugin, app_data_dir, app_version, None, None, timeout, None)
 }
 
-pub fn run_probe_for_instance(
+pub fn run_probe_for_instance_with_cache(
     plugin: &LoadedPlugin,
     app_data_dir: &Path,
     app_version: &str,
     app_handle: Option<&RuntimeAppHandle>,
     instance_ref: &ProviderInstanceRef,
+    ccusage_cache: Option<Arc<host_api::CcusageQueryCache>>,
 ) -> PluginOutput {
     let mut output = run_probe_unstamped(
         plugin,
@@ -340,6 +343,7 @@ pub fn run_probe_for_instance(
         app_handle,
         Some(instance_ref),
         PROBE_EXECUTION_LIMIT,
+        ccusage_cache,
     );
     output.instance_ref = Some(instance_ref.clone());
     output
@@ -352,6 +356,7 @@ fn run_probe_unstamped(
     app_handle: Option<&RuntimeAppHandle>,
     instance_ref: Option<&ProviderInstanceRef>,
     execution_limit: Duration,
+    ccusage_cache: Option<Arc<host_api::CcusageQueryCache>>,
 ) -> PluginOutput {
     let fallback = error_output(plugin, "runtime error".to_string());
     let timeout_message = probe_timeout_message(execution_limit);
@@ -379,7 +384,7 @@ fn run_probe_unstamped(
     let app_data = app_data_dir.to_path_buf();
 
     ctx.with(|ctx| {
-        if host_api::inject_host_api_with_instance(
+        if host_api::inject_host_api_with_instance_and_cache(
             &ctx,
             &plugin_id,
             &app_data,
@@ -387,6 +392,7 @@ fn run_probe_unstamped(
             app_handle.cloned(),
             &plugin.manifest.capabilities,
             instance_ref.cloned(),
+            ccusage_cache,
         )
         .is_err()
         {
@@ -1317,12 +1323,13 @@ mod tests {
             instance_id: Some("profile-a".to_string()),
         };
 
-        let output = run_probe_for_instance(
+        let output = run_probe_for_instance_with_cache(
             &plugin,
             &temp_app_dir("instance-ref"),
             "0.0.0",
             None,
             &instance_ref,
+            None,
         );
 
         assert_eq!(output.instance_ref, Some(instance_ref));

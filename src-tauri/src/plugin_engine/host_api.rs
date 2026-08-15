@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 #[cfg(not(test))]
 type HostAppHandle = tauri::AppHandle;
 #[cfg(test)]
@@ -239,7 +239,7 @@ pub fn inject_host_api<'js>(
     app_handle: Option<HostAppHandle>,
     capabilities: &HostCapabilities,
 ) -> rquickjs::Result<()> {
-    inject_host_api_with_instance(
+    inject_host_api_with_instance_and_cache(
         ctx,
         plugin_id,
         app_data_dir,
@@ -247,10 +247,12 @@ pub fn inject_host_api<'js>(
         app_handle,
         capabilities,
         None,
+        None,
     )
 }
 
-pub fn inject_host_api_with_instance<'js>(
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn inject_host_api_with_instance_and_cache<'js>(
     ctx: &Ctx<'js>,
     plugin_id: &str,
     app_data_dir: &Path,
@@ -258,6 +260,7 @@ pub fn inject_host_api_with_instance<'js>(
     app_handle: Option<HostAppHandle>,
     capabilities: &HostCapabilities,
     instance_ref: Option<ProviderInstanceRef>,
+    ccusage_cache: Option<Arc<CcusageQueryCache>>,
 ) -> rquickjs::Result<()> {
     let globals = ctx.globals();
     let probe_ctx = Object::new(ctx.clone())?;
@@ -327,7 +330,7 @@ pub fn inject_host_api_with_instance<'js>(
         inject_ls(ctx, &host, plugin_id)?;
     }
     if capabilities.ccusage {
-        inject_ccusage(ctx, &host, plugin_id)?;
+        inject_ccusage_with_cache(ctx, &host, plugin_id, ccusage_cache)?;
     }
 
     probe_ctx.set("host", host)?;
@@ -3113,6 +3116,116 @@ Saved lockfile
         assert_eq!(collect_calls.get(), 2);
         assert_eq!(invalidate_calls.get(), 1);
         assert_eq!(run_calls.get(), 2);
+    }
+
+    #[test]
+    fn ccusage_query_cache_reuses_success_for_same_query() {
+        let cache = CcusageQueryCache::default();
+        let calls = std::cell::Cell::new(0);
+        let opts = CcusageQueryOpts {
+            since: Some(" 20260701 ".to_string()),
+            ..Default::default()
+        };
+
+        let first = run_ccusage_query_cached_with(&cache, &opts, CcusageProvider::OpenCode, || {
+            calls.set(calls.get() + 1);
+            Ok(r#"{"daily":[]}"#.to_string())
+        });
+        let second = run_ccusage_query_cached_with(
+            &cache,
+            &CcusageQueryOpts {
+                since: Some("20260701".to_string()),
+                ..Default::default()
+            },
+            CcusageProvider::OpenCode,
+            || {
+                calls.set(calls.get() + 1);
+                Ok(r#"{"daily":[{"date":"unexpected"}]}"#.to_string())
+            },
+        );
+
+        assert_eq!(first, Ok(r#"{"daily":[]}"#.to_string()));
+        assert_eq!(second, first);
+        assert_eq!(calls.get(), 1);
+    }
+
+    #[test]
+    fn ccusage_query_cache_does_not_share_different_queries_or_failures() {
+        let cache = CcusageQueryCache::default();
+        let calls = std::cell::Cell::new(0);
+        let opts = CcusageQueryOpts::default();
+
+        let first = run_ccusage_query_cached_with(&cache, &opts, CcusageProvider::Claude, || {
+            calls.set(calls.get() + 1);
+            Err("runner_failed")
+        });
+        let second = run_ccusage_query_cached_with(&cache, &opts, CcusageProvider::Claude, || {
+            calls.set(calls.get() + 1);
+            Ok(r#"{"daily":[]}"#.to_string())
+        });
+        let other_provider =
+            run_ccusage_query_cached_with(&cache, &opts, CcusageProvider::Codex, || {
+                calls.set(calls.get() + 1);
+                Ok(r#"{"daily":[]}"#.to_string())
+            });
+
+        assert_eq!(first, Err("runner_failed"));
+        assert_eq!(second, Ok(r#"{"daily":[]}"#.to_string()));
+        assert_eq!(other_provider, Ok(r#"{"daily":[]}"#.to_string()));
+        assert_eq!(calls.get(), 3);
+    }
+
+    #[test]
+    fn ccusage_query_cache_waits_for_an_in_flight_query() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::mpsc;
+        use std::sync::Arc;
+
+        let cache = Arc::new(CcusageQueryCache::default());
+        let calls = Arc::new(AtomicUsize::new(0));
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let first_cache = Arc::clone(&cache);
+        let first_calls = Arc::clone(&calls);
+        let first = std::thread::spawn(move || {
+            run_ccusage_query_cached_with(
+                &first_cache,
+                &CcusageQueryOpts::default(),
+                CcusageProvider::Claude,
+                || {
+                    first_calls.fetch_add(1, Ordering::SeqCst);
+                    started_tx.send(()).expect("signal query start");
+                    release_rx.recv().expect("release query");
+                    Ok(r#"{"daily":[]}"#.to_string())
+                },
+            )
+        });
+        started_rx.recv().expect("first query started");
+
+        let second_cache = Arc::clone(&cache);
+        let second_calls = Arc::clone(&calls);
+        let second = std::thread::spawn(move || {
+            run_ccusage_query_cached_with(
+                &second_cache,
+                &CcusageQueryOpts::default(),
+                CcusageProvider::Claude,
+                || {
+                    second_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(r#"{"daily":[{"date":"unexpected"}]}"#.to_string())
+                },
+            )
+        });
+        release_tx.send(()).expect("release first query");
+
+        assert_eq!(
+            first.join().expect("first query join"),
+            Ok(r#"{"daily":[]}"#.to_string())
+        );
+        assert_eq!(
+            second.join().expect("second query join"),
+            Ok(r#"{"daily":[]}"#.to_string())
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]

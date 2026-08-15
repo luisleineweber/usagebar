@@ -20,7 +20,38 @@ struct CcusageQueryOpts {
     mode: Option<String>,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct CcusageQueryCacheKey {
+    provider: CcusageProvider,
+    since: Option<String>,
+    until: Option<String>,
+    home_path: Option<String>,
+    offline: bool,
+    mode: Option<String>,
+}
+
+enum CcusageQueryCacheEntry {
+    InFlight,
+    Ready(String),
+}
+
+/// Results are shared only within one probe batch. This removes duplicate local scans for provider
+/// aliases while keeping every refresh authoritative against the current local files.
+pub(crate) struct CcusageQueryCache {
+    entries: Mutex<HashMap<CcusageQueryCacheKey, CcusageQueryCacheEntry>>,
+    ready: Condvar,
+}
+
+impl Default for CcusageQueryCache {
+    fn default() -> Self {
+        Self {
+            entries: Mutex::new(HashMap::new()),
+            ready: Condvar::new(),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 enum CcusageProvider {
     Claude,
     Codex,
@@ -212,6 +243,89 @@ fn ccusage_home_override(opts: &CcusageQueryOpts, provider: CcusageProvider) -> 
             .map(str::trim)
             .filter(|s| !s.is_empty()),
         _ => None,
+    }
+}
+
+fn ccusage_query_cache_option(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn ccusage_query_cache_key(
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+) -> CcusageQueryCacheKey {
+    let mode = opts
+        .mode
+        .as_deref()
+        .map(str::trim)
+        .filter(|mode| matches!(*mode, "auto" | "calculate" | "display"))
+        .map(ToOwned::to_owned);
+
+    CcusageQueryCacheKey {
+        provider,
+        since: ccusage_query_cache_option(opts.since.as_deref()),
+        until: ccusage_query_cache_option(opts.until.as_deref()),
+        home_path: ccusage_home_override(opts, provider).map(ToOwned::to_owned),
+        offline: opts.offline == Some(true),
+        mode,
+    }
+}
+
+fn run_ccusage_query_cached_with<F>(
+    cache: &CcusageQueryCache,
+    opts: &CcusageQueryOpts,
+    provider: CcusageProvider,
+    run: F,
+) -> Result<String, &'static str>
+where
+    F: FnOnce() -> Result<String, &'static str>,
+{
+    let key = ccusage_query_cache_key(opts, provider);
+    let mut entries = cache
+        .entries
+        .lock()
+        .expect("ccusage query cache lock poisoned");
+
+    loop {
+        match entries.get(&key) {
+            Some(CcusageQueryCacheEntry::Ready(payload)) => return Ok(payload.clone()),
+            Some(CcusageQueryCacheEntry::InFlight) => {
+                entries = cache
+                    .ready
+                    .wait(entries)
+                    .expect("ccusage query cache lock poisoned");
+            }
+            None => {
+                entries.insert(key.clone(), CcusageQueryCacheEntry::InFlight);
+                break;
+            }
+        }
+    }
+    drop(entries);
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(run));
+    let mut entries = cache
+        .entries
+        .lock()
+        .expect("ccusage query cache lock poisoned");
+    match result {
+        Ok(result) => {
+            if let Ok(payload) = &result {
+                entries.insert(key, CcusageQueryCacheEntry::Ready(payload.clone()));
+            } else {
+                entries.remove(&key);
+            }
+            cache.ready.notify_all();
+            result
+        }
+        Err(payload) => {
+            entries.remove(&key);
+            cache.ready.notify_all();
+            std::panic::resume_unwind(payload);
+        }
     }
 }
 
@@ -875,13 +989,15 @@ fn run_ccusage_query(
     )
 }
 
-fn inject_ccusage<'js>(
+fn inject_ccusage_with_cache<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
     plugin_id: &str,
+    ccusage_cache: Option<Arc<CcusageQueryCache>>,
 ) -> rquickjs::Result<()> {
     let ccusage_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
+    let shared_cache = ccusage_cache;
 
     ccusage_obj.set(
         "_queryRaw",
@@ -896,7 +1012,13 @@ fn inject_ccusage<'js>(
                     }
                 };
                 let provider = resolve_ccusage_provider(&opts, &pid);
-                match run_ccusage_query(&opts, provider, &pid) {
+                let result = match shared_cache.as_ref() {
+                    Some(cache) => run_ccusage_query_cached_with(cache, &opts, provider, || {
+                        run_ccusage_query(&opts, provider, &pid)
+                    }),
+                    None => run_ccusage_query(&opts, provider, &pid),
+                };
+                match result {
                     Ok(result) => {
                         let data: serde_json::Value = match serde_json::from_str(&result) {
                             Ok(v) => v,
