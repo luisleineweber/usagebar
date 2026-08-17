@@ -2,6 +2,7 @@
 
 ## 2026-08-15
 
+- CI plugin tests depended on an ignored generated bundle that clean checkouts did not create. Fix: bundle plugins as an explicit CI test prerequisite and publish the full RustSec report. Prevention: run tests from a clean checkout path, not from local generated artifacts.
 - Managed account identity was Codex-only, so other provider logins could not keep data isolated. Fix: use provider-scoped account profiles and stable instance IDs for auth, cache, history, notifications, and pins. Prevention: test each managed provider with two account instances.
 - The update action downloaded and installed in one step, and unsigned prereleases opened GitHub instead of updating. Fix: download first, show a restart action, and use a verified GitHub installer with a hidden Windows restart helper. Prevention: test signed and prerelease update paths through download, ready, install, and relaunch states.
 - Progress availability must preserve provider-confirmed zero separately from missing or unsupported values. Fix: carry nullable progress values through the runtime, UI, tray, CLI, HTTP, history, and notifications. Prevention: test zero, unknown, unsupported, retained, and failed states at every output boundary.

@@ -31,8 +31,31 @@ jobs:
         uses: actions-rust-lang/audit@v1
         with:
           workingDirectory: src-tauri
-          denyWarnings: true
+          denyWarnings: false
           createIssues: false
+
+      - name: Export cargo audit report
+        if: always()
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set +e
+          cargo audit --json > ../cargo-audit.json
+          audit_status=$?
+          set -e
+          node ../scripts/report-cargo-audit.mjs ../cargo-audit.json | tee -a "$GITHUB_STEP_SUMMARY"
+          report_status=${PIPESTATUS[0]}
+          if [[ "$audit_status" -ne 0 ]]; then
+            exit "$audit_status"
+          fi
+          exit "$report_status"
+
+      - name: Upload cargo audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-audit-report
+          path: cargo-audit.json
 
   check:
     name: Build and Test (${{ matrix.os }})
@@ -88,6 +111,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Bundle plugins for tests
+        run: bun run bundle:plugins
 
       - name: Enforce frontend quality contract
         run: bun run check:frontend
