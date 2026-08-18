@@ -139,6 +139,36 @@ describe("UsageReport", () => {
     expect(screen.queryByRole("group", { name: /Cost trend/i })).not.toBeInTheDocument()
   })
 
+  it("shows a useful empty state and offers a longer period when the range has no activity", async () => {
+    const user = userEvent.setup()
+    const data = output()
+    data.history!.entries = [
+      {
+        ...data.history!.entries[0],
+        periodStart: "2026-06-15T00:00:00.000Z",
+        periodEnd: "2026-06-16T00:00:00.000Z",
+      },
+      {
+        ...data.history!.entries[1],
+        periodStart: "2026-06-16T00:00:00.000Z",
+        periodEnd: "2026-06-17T00:00:00.000Z",
+      },
+    ]
+
+    render(<UsageReport outputs={[data]} nowMs={NOW_MS} />)
+
+    await user.click(screen.getByRole("button", { name: "7d" }))
+
+    expect(screen.getByRole("status", { name: "No activity in this period" })).toHaveTextContent(
+      "No activity in this period"
+    )
+    await user.click(screen.getByRole("button", { name: "View 30 days" }))
+
+    expect(
+      screen.queryByRole("status", { name: "No activity in this period" })
+    ).not.toBeInTheDocument()
+  })
+
   it("does not label unavailable provider request counts as zero", () => {
     const data = output()
     data.history!.entries = data.history!.entries.map(

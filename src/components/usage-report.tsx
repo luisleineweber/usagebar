@@ -11,6 +11,7 @@ import {
 } from "@/lib/usage-history"
 import { cn } from "@/lib/utils"
 import { reportEntryCost, type ModelPriceOverrides } from "@/lib/report-pricing"
+import { UsageReportEmptyState } from "@/components/usage-report-empty-state"
 
 type ReportMetric = "cost" | "tokens" | "requests"
 type ReportGrouping = "day" | "project"
@@ -381,6 +382,7 @@ export function UsageReport({
         ? summary.totals.requests
         : summary.totals.totalTokens
   const sources = [...new Set(records.map((record) => record.source))]
+  const hasActiveFilters = Boolean(providerId || model || project)
 
   if (!outputs.some((output) => output.history?.entries.length)) return null
 
@@ -493,7 +495,18 @@ export function UsageReport({
       ) : null}
 
       <div className="mt-2 rounded-lg bg-muted/55 px-2 py-1.5">
-        {groupBy === "project" ? (
+        {records.length === 0 ? (
+          <UsageReportEmptyState
+            hasFilters={hasActiveFilters}
+            period={period}
+            onClearFilters={() => {
+              setProviderId("")
+              setModel("")
+              setProject("")
+            }}
+            onShowLongerPeriod={() => setPeriod("30d")}
+          />
+        ) : groupBy === "project" ? (
           <ProjectBreakdown records={records} metric={metric} overrides={priceOverrides} />
         ) : (
           <TrendChart records={records} metric={metric} overrides={priceOverrides} />
@@ -506,9 +519,7 @@ export function UsageReport({
         onChange={setPriceOverrides}
       />
 
-      {records.length === 0 ? (
-        <p className="mt-2 text-xs text-muted-foreground">No matching activity in this period.</p>
-      ) : (
+      {records.length > 0 ? (
         <div className="mt-2 grid grid-cols-3 divide-x divide-border text-center text-xs">
           <div className="px-1">
             <strong className="block tabular-nums">
@@ -532,7 +543,7 @@ export function UsageReport({
             <span className="text-muted-foreground">Requests</span>
           </div>
         </div>
-      )}
+      ) : null}
 
       {summary.topModel ? (
         <p className="mt-2 text-xs text-muted-foreground">
