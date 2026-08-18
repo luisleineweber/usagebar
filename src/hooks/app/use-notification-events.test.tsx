@@ -10,11 +10,13 @@ const {
   deliverUsageEventsMock,
   listenNotificationStateUpdatedMock,
   loadNotificationPreferencesMock,
+  loadRecentUsageEventsMock,
 } = vi.hoisted(() => ({
   appendRecentUsageEventsMock: vi.fn(),
   deliverUsageEventsMock: vi.fn(),
   listenNotificationStateUpdatedMock: vi.fn(),
   loadNotificationPreferencesMock: vi.fn(),
+  loadRecentUsageEventsMock: vi.fn(),
 }))
 
 vi.mock("@/lib/notification-delivery", () => ({
@@ -25,6 +27,7 @@ vi.mock("@/lib/notification-settings", () => ({
   appendRecentUsageEvents: appendRecentUsageEventsMock,
   listenNotificationStateUpdated: listenNotificationStateUpdatedMock,
   loadNotificationPreferences: loadNotificationPreferencesMock,
+  loadRecentUsageEvents: loadRecentUsageEventsMock,
 }))
 
 const preferences = {
@@ -45,11 +48,20 @@ const pluginsMeta: PluginMeta[] = [
   },
 ]
 
-function output(used: number): PluginOutput {
+function output(used: number, resetsAt = "2026-07-14T00:00:00Z"): PluginOutput {
   return {
     providerId: "claude",
     displayName: "Claude",
-    lines: [{ type: "progress", label: "Session", used, limit: 100, format: { kind: "percent" } }],
+    lines: [
+      {
+        type: "progress",
+        label: "Session",
+        used,
+        limit: 100,
+        format: { kind: "percent" },
+        resetsAt,
+      },
+    ],
     iconUrl: "/claude.svg",
   }
 }
@@ -68,6 +80,7 @@ describe("useNotificationEvents", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     loadNotificationPreferencesMock.mockResolvedValue(preferences)
+    loadRecentUsageEventsMock.mockResolvedValue([])
     listenNotificationStateUpdatedMock.mockResolvedValue(() => {})
     appendRecentUsageEventsMock.mockResolvedValue([])
     deliverUsageEventsMock.mockResolvedValue(false)
@@ -142,6 +155,57 @@ describe("useNotificationEvents", () => {
 
     act(() => result.current.dismissNotifications())
     expect(result.current.activeEvents).toEqual([])
+  })
+
+  it("plays a quota warning only once before the provider reset", async () => {
+    loadNotificationPreferencesMock.mockResolvedValue({ ...preferences, resets: false })
+    const { rerender } = renderHook(
+      ({ used, resetsAt }: { used: number; resetsAt: string }) =>
+        useNotificationEvents({
+          pluginStates: { claude: pluginState(output(used, resetsAt)) },
+          providerStatuses: {},
+          pluginsMeta,
+        }),
+      { initialProps: { used: 70, resetsAt: "2026-07-14T00:00:00Z" } }
+    )
+
+    await waitFor(() => expect(loadNotificationPreferencesMock).toHaveBeenCalledOnce())
+    rerender({ used: 80, resetsAt: "2026-07-14T00:00:00Z" })
+    await waitFor(() => expect(deliverUsageEventsMock).toHaveBeenCalledOnce())
+
+    rerender({ used: 70, resetsAt: "2026-07-14T00:00:00Z" })
+    rerender({ used: 80, resetsAt: "2026-07-14T00:00:00Z" })
+    rerender({ used: 70, resetsAt: "2026-07-21T00:00:00Z" })
+    rerender({ used: 80, resetsAt: "2026-07-21T00:00:00Z" })
+    await waitFor(() => expect(deliverUsageEventsMock).toHaveBeenCalledTimes(2))
+    expect(deliverUsageEventsMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not replay a stored usage event after a provider reload", async () => {
+    loadRecentUsageEventsMock.mockResolvedValue([
+      {
+        id: "quota:claude:session:75:2026-07-14T00:00:00Z",
+        type: "quota",
+        providerId: "claude",
+        title: "Claude quota warning",
+        body: "Session reached 80% used.",
+        createdAt: 1,
+      },
+    ])
+    const { rerender } = renderHook(
+      ({ used }: { used: number }) =>
+        useNotificationEvents({
+          pluginStates: { claude: pluginState(output(used)) },
+          providerStatuses: {},
+          pluginsMeta,
+        }),
+      { initialProps: { used: 70 } }
+    )
+
+    await waitFor(() => expect(loadRecentUsageEventsMock).toHaveBeenCalledOnce())
+    rerender({ used: 80 })
+    await waitFor(() => expect(appendRecentUsageEventsMock).toHaveBeenCalledOnce())
+    expect(deliverUsageEventsMock).not.toHaveBeenCalled()
   })
 
   it("updates preferences from notification events and skips disabled delivery", async () => {

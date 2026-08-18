@@ -11,6 +11,7 @@ import {
   appendRecentUsageEvents,
   listenNotificationStateUpdated,
   loadNotificationPreferences,
+  loadRecentUsageEvents,
 } from "@/lib/notification-settings"
 import type { PluginMeta, PluginOutput } from "@/lib/plugin-types"
 import type { ProviderStatus } from "@/lib/provider-status"
@@ -26,11 +27,13 @@ export function useNotificationEvents({
   pluginsMeta: PluginMeta[]
 }) {
   const [activeEvents, setActiveEvents] = useState<UsageEvent[]>([])
+  const [notificationHistoryLoaded, setNotificationHistoryLoaded] = useState(false)
   const [preferences, setPreferences] = useState<NotificationPreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES
   )
   const previousOutputs = useRef<Record<string, PluginOutput | undefined>>({})
   const previousStatuses = useRef<Record<string, ProviderStatus | undefined>>({})
+  const handledEventIds = useRef<Set<string>>(new Set())
   const outputs = useMemo(
     () =>
       Object.fromEntries(
@@ -42,11 +45,19 @@ export function useNotificationEvents({
   useEffect(() => {
     let disposed = false
     let unlisten: (() => void) | undefined
-    void loadNotificationPreferences().then((value) => {
-      if (!disposed) setPreferences(value)
-    })
+    void Promise.all([loadNotificationPreferences(), loadRecentUsageEvents()]).then(
+      ([nextPreferences, recentEvents]) => {
+        if (disposed) return
+        setPreferences(nextPreferences)
+        for (const event of recentEvents) handledEventIds.current.add(event.id)
+        setNotificationHistoryLoaded(true)
+      }
+    )
     void listenNotificationStateUpdated((update) => {
       if (update.type === "preferences") setPreferences(update.preferences)
+      else if (update.type === "events") {
+        for (const event of update.events) handledEventIds.current.add(event.id)
+      }
     }).then((dispose) => {
       if (disposed) dispose()
       else unlisten = dispose
@@ -65,6 +76,8 @@ export function useNotificationEvents({
       statuses: providerStatuses,
       preferences,
     })
+    if (!notificationHistoryLoaded) return
+
     previousOutputs.current = outputs
     previousStatuses.current = providerStatuses
     if (events.length === 0) return
@@ -73,15 +86,20 @@ export function useNotificationEvents({
       console.error("Failed to persist usage notification events:", error)
     })
     if (!preferences.enabled || isQuietHours(preferences)) return
-    void deliverUsageEvents(events)
+
+    const eventsToDeliver = events.filter((event) => !handledEventIds.current.has(event.id))
+    if (eventsToDeliver.length === 0) return
+    for (const event of eventsToDeliver) handledEventIds.current.add(event.id)
+
+    void deliverUsageEvents(eventsToDeliver)
       .then((delivered) => {
-        if (!delivered) setActiveEvents(events)
+        if (!delivered) setActiveEvents(eventsToDeliver)
       })
       .catch((error) => {
         console.error("Failed to deliver usage notification:", error)
-        setActiveEvents(events)
+        setActiveEvents(eventsToDeliver)
       })
-  }, [outputs, preferences, providerStatuses])
+  }, [notificationHistoryLoaded, outputs, preferences, providerStatuses])
 
   return {
     activeEvents,

@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-18
+
+- Notification event IDs were derived but not checked before delivery, so repeated provider refreshes could replay the same warning. Fix: track handled event IDs, key quota warnings by reset time, and key service incidents by provider and local day. Prevention: test repeated threshold crossings, reset changes, stored events, and same-day incident updates.
+
 ## 2026-08-15
 
 - CI plugin tests depended on an ignored generated bundle that clean checkouts did not create. Fix: bundle plugins as an explicit CI test prerequisite and publish the full RustSec report. Prevention: run tests from a clean checkout path, not from local generated artifacts.

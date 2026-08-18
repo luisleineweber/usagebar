@@ -62,6 +62,14 @@ function eventPart(value: string): string {
     .replace(/[^a-z0-9]+/gu, "-")
 }
 
+function localDayKey(timestamp: number): string {
+  const date = new Date(timestamp)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 function eventIdentity(providerId: string, output: PluginOutput | undefined): string {
   const instanceId = output?.instanceRef?.instanceId
   return instanceId ? `${providerId}:${eventPart(instanceId)}` : providerId
@@ -169,10 +177,18 @@ export function deriveUsageEvents({
       const displayName = outputs[providerId]?.displayName ?? providerId
       const hasIssue = status.indicator !== "none"
       const hadIssue = previous ? previous.indicator !== "none" : false
-      if (hasIssue && (!previous || !hadIssue || previous.indicator !== status.indicator)) {
+      const issueContinuedIntoNextDay =
+        previous && hadIssue && localDayKey(previous.checkedAt) !== localDayKey(now)
+      if (
+        hasIssue &&
+        (!previous ||
+          !hadIssue ||
+          previous.indicator !== status.indicator ||
+          issueContinuedIntoNextDay)
+      ) {
         const output = outputs[providerId]
         events.push({
-          id: `incident:${eventIdentity(providerId, output)}:${status.indicator}:${status.updatedAt ?? status.checkedAt}`,
+          id: `incident:${providerId}:${localDayKey(now)}`,
           type: "incident",
           providerId,
           instanceRef: output?.instanceRef,

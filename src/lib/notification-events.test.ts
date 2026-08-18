@@ -279,7 +279,7 @@ describe("notification event derivation", () => {
       preferences: DEFAULT_NOTIFICATION_PREFERENCES,
     })
     expect(changedIncident[0]).toMatchObject({
-      id: "incident:kilo:major:10",
+      id: expect.stringMatching(/^incident:kilo:\d{4}-\d{2}-\d{2}$/u),
       body: "major provider status",
     })
 
@@ -302,9 +302,61 @@ describe("notification event derivation", () => {
         previousOutputs: {},
         outputs: {},
         previousStatuses: { claude: status("minor") },
+        statuses: { claude: status("minor") },
+        preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+        now: 10,
+      })
+    ).toEqual([])
+    expect(
+      deriveUsageEvents({
+        previousOutputs: {},
+        outputs: {},
+        previousStatuses: { claude: status("minor") },
         statuses: { missing: undefined, claude: status("minor") },
         preferences: { ...DEFAULT_NOTIFICATION_PREFERENCES, incidents: false },
       })
     ).toEqual([])
+  })
+
+  it("uses one incident identity per provider and local day", () => {
+    const previousStatuses = { claude: status("minor") }
+    const sameDay = deriveUsageEvents({
+      previousOutputs: {},
+      outputs: {},
+      previousStatuses,
+      statuses: { claude: status("major") },
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+      now: new Date(2026, 6, 14, 10).getTime(),
+    })
+    const nextDay = deriveUsageEvents({
+      previousOutputs: {},
+      outputs: {},
+      previousStatuses,
+      statuses: { claude: status("major") },
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+      now: new Date(2026, 6, 15, 10).getTime(),
+    })
+
+    expect(sameDay[0]?.id).toBe("incident:claude:2026-07-14")
+    expect(nextDay[0]?.id).toBe("incident:claude:2026-07-15")
+  })
+
+  it("reports a continuing incident once when a new day starts", () => {
+    const previousCheckedAt = new Date(2026, 6, 14, 23, 55).getTime()
+    const currentCheckedAt = new Date(2026, 6, 15, 0, 5).getTime()
+    const events = deriveUsageEvents({
+      previousOutputs: {},
+      outputs: {},
+      previousStatuses: {
+        claude: { ...status("minor"), checkedAt: previousCheckedAt },
+      },
+      statuses: {
+        claude: { ...status("minor"), checkedAt: currentCheckedAt },
+      },
+      preferences: DEFAULT_NOTIFICATION_PREFERENCES,
+      now: currentCheckedAt,
+    })
+
+    expect(events[0]?.id).toBe("incident:claude:2026-07-15")
   })
 })
