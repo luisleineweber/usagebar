@@ -59,16 +59,21 @@ export function entryTotalTokens(entry: UsageHistoryEntry): number | null {
   if (typeof entry.totalTokens === "number" && Number.isFinite(entry.totalTokens)) {
     return entry.totalTokens
   }
-  const tokenValues = [
+  const requiredTokenValues = [
     entry.inputTokens,
     entry.outputTokens,
     entry.cacheReadTokens,
     entry.cacheCreationTokens,
-    entry.reasoningTokens,
   ].map(finiteOrNull)
-  return tokenValues.every((value) => value !== null)
-    ? tokenValues.reduce((total, value) => total + (value ?? 0), 0)
-    : null
+  if (requiredTokenValues.some((value) => value === null)) return null
+
+  // ccusage does not report reasoning tokens for every provider. Keep them optional,
+  // but keep the input, output, and cache fields authoritative for the derived total.
+  const reasoningTokens = finiteOrNull(entry.reasoningTokens)
+  return (
+    requiredTokenValues.reduce<number>((total, value) => total + (value ?? 0), 0) +
+    (reasoningTokens ?? 0)
+  )
 }
 
 function selected(value: string | undefined, allowed: ReadonlySet<string> | null): boolean {

@@ -275,3 +275,14 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - Notification test actions: use the production event title and body so manual verification exercises the real warning content.
 - Settings copy: remove heading summaries when controls already explain the setting. Keep only risk, credential, and provider-behavior guidance.
 - Anti-Slop scope: generic rules flagged valid JavaScript provider guards and loose test mocks. Limit Oxlint Anti-Slop to production TypeScript and keep parser exceptions contract-aware; run ESLint for JavaScript and tests.
+- History filters: native Windows select popups ignore the product theme and show a gray active row. Use the existing Base UI Select for themed popup states, and test keyboard and pointer selection.
+- Usage token totals: ccusage can omit both `totalTokens` and `reasoningTokens` while reporting input, output, and cache tokens. Derive the total from the required base fields and keep reasoning optional.
+- Usage history headings: remove explanatory subtitles when the heading and visible controls already explain the section.
+- Usage history header: align a single-line title to the top of a two-line summary instead of centering it vertically.
+- Usage history controls: place period filters under the title so a two-line summary on the right does not create empty space below the heading.
+- Usage history title: use a small 15px increase when compact hierarchy needs more emphasis.
+- History page: use the page heading for the report and hide the repeated section heading in the shared report component.
+- History page spacing: remove redundant description and shared-section padding when the page already owns the heading.
+- History page header: keep the title and summary in one report header when removing a duplicate page title.
+- History page border: keep shared report spacing but disable the provider-card divider on standalone pages.
+- History page top spacing: reduce only the standalone report padding; keep provider-card spacing unchanged.

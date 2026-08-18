@@ -8,16 +8,13 @@ export function HistoryPage({ plugins }: { plugins: DisplayPluginState[] }) {
     .filter((output): output is PluginOutput => Boolean(output))
 
   return (
-    <div className="space-y-3 py-3">
-      <div>
-        <h2 className="text-lg font-semibold">History</h2>
-        <p className="text-xs leading-5 text-muted-foreground">
-          Cost, tokens, requests, and model mix from provider-owned local or account history.
-        </p>
-      </div>
+    <div className="py-3">
       <UsageReport
         outputs={outputs}
         showProviderFilter
+        sectionHeading="Usage History"
+        headingLevel="h2"
+        showSectionBorder={false}
         stale={plugins.some((plugin) => plugin.error && (plugin.data || plugin.lastSettledData))}
       />
     </div>

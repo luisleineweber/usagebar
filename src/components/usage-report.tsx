@@ -1,4 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react"
+import { Select } from "@base-ui/react/select"
+import { Check, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ReportPricingEditor, loadModelPriceOverrides } from "@/components/report-pricing-editor"
 import type { PluginOutput } from "@/lib/plugin-types"
@@ -19,6 +21,9 @@ type ReportGrouping = "day" | "project"
 type UsageReportProps = {
   outputs: PluginOutput[]
   showProviderFilter?: boolean
+  sectionHeading?: string
+  headingLevel?: "h2" | "h3"
+  showSectionBorder?: boolean
   stale?: boolean
   nowMs?: number
 }
@@ -307,29 +312,59 @@ function SelectFilter({
   values: string[]
   onChange: (value: string) => void
 }) {
+  const items = [
+    { label: `All ${label.toLowerCase()}`, value: null },
+    ...values.map((option) => ({ label: option, value: option })),
+  ]
+
   return (
-    <label className="min-w-0 flex-1 text-[11px] font-medium text-muted-foreground">
-      <span className="sr-only">{label}</span>
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        <option value="">All {label.toLowerCase()}</option>
-        {values.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select.Root
+      items={items}
+      value={value || null}
+      onValueChange={(nextValue) => onChange(typeof nextValue === "string" ? nextValue : "")}
+    >
+      <div className="min-w-0 flex-1">
+        <Select.Label className="sr-only">{label}</Select.Label>
+        <Select.Trigger
+          aria-label={label}
+          className="flex h-8 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none transition-colors hover:bg-muted data-[pressed]:bg-muted focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50"
+        >
+          <Select.Value placeholder={`All ${label.toLowerCase()}`} />
+          <Select.Icon className="shrink-0 text-muted-foreground">
+            <ChevronDown className="size-3.5" />
+          </Select.Icon>
+        </Select.Trigger>
+      </div>
+      <Select.Portal>
+        <Select.Positioner className="z-50" sideOffset={4}>
+          <Select.Popup className="min-w-(--anchor-width) overflow-hidden rounded-md border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg outline-none">
+            <Select.List className="max-h-60 overflow-y-auto">
+              {items.map((item) => (
+                <Select.Item
+                  key={item.value ?? "all"}
+                  value={item.value}
+                  className="relative flex min-h-7 cursor-default items-center gap-2 rounded-sm px-2 py-1.5 outline-none select-none data-highlighted:bg-page-accent data-highlighted:text-foreground data-selected:bg-page-accent/10 data-selected:font-medium"
+                >
+                  <Select.ItemIndicator className="flex size-3 shrink-0 items-center justify-center">
+                    <Check className="size-3" />
+                  </Select.ItemIndicator>
+                  <Select.ItemText>{item.label}</Select.ItemText>
+                </Select.Item>
+              ))}
+            </Select.List>
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
   )
 }
 
 export function UsageReport({
   outputs,
   showProviderFilter = false,
+  sectionHeading = "Usage history",
+  headingLevel = "h3",
+  showSectionBorder = true,
   stale = false,
   nowMs,
 }: UsageReportProps) {
@@ -386,17 +421,38 @@ export function UsageReport({
 
   if (!outputs.some((output) => output.history?.entries.length)) return null
 
+  const SectionHeading = headingLevel
+
   return (
-    <section className="border-t border-border/70 pt-3" aria-label="Usage history">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">
-            Usage history
+    <section
+      className={cn(
+        showSectionBorder ? "pt-3" : "pt-1",
+        showSectionBorder && "border-t border-border/70"
+      )}
+      aria-label={sectionHeading}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <SectionHeading
+            className={cn("font-semibold", headingLevel === "h2" ? "text-lg" : "text-[15px]")}
+          >
+            {sectionHeading}
             {stale ? <span className="ml-2 text-xs text-muted-foreground">Stale</span> : null}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            Cached local activity, grouped by calendar day.
-          </p>
+          </SectionHeading>
+          <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="History period">
+            {PERIOD_OPTIONS.map((option) => (
+              <Button
+                key={option.value}
+                type="button"
+                size="xs"
+                variant={period === option.value ? "default" : "outline"}
+                aria-pressed={period === option.value}
+                onClick={() => setPeriod(option.value)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
         </div>
         <div className="text-right tabular-nums">
           <strong className="block text-base">{formatMetric(selectedValue, metric)}</strong>
@@ -406,21 +462,6 @@ export function UsageReport({
               : PERIOD_OPTIONS.find((option) => option.value === period)?.label.toLowerCase()}
           </span>
         </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label="History period">
-        {PERIOD_OPTIONS.map((option) => (
-          <Button
-            key={option.value}
-            type="button"
-            size="xs"
-            variant={period === option.value ? "default" : "outline"}
-            aria-pressed={period === option.value}
-            onClick={() => setPeriod(option.value)}
-          >
-            {option.label}
-          </Button>
-        ))}
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="History metric">

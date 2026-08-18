@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 import { UsageReport } from "@/components/usage-report"
@@ -66,6 +66,34 @@ describe("UsageReport", () => {
     expect(screen.getByText(/Source: openai-organization/i)).toBeInTheDocument()
     expect(screen.getByRole("group", { name: /Cost trend/i })).toBeInTheDocument()
     expect(screen.getByText(/Top model:/i)).toHaveTextContent("gpt-5")
+  })
+
+  it("uses compact spacing without a border on a standalone history page", () => {
+    render(<UsageReport outputs={[output()]} nowMs={NOW_MS} showSectionBorder={false} />)
+
+    const region = screen.getByRole("region", { name: "Usage history" })
+    expect(region).not.toHaveClass("border-t")
+    expect(region).toHaveClass("pt-1")
+  })
+
+  it("uses a themed model popup instead of the native select menu", async () => {
+    const user = userEvent.setup()
+    render(<UsageReport outputs={[output()]} nowMs={NOW_MS} />)
+
+    const trigger = screen.getByRole("combobox", { name: "Models" })
+    expect(trigger.tagName).not.toBe("SELECT")
+
+    trigger.focus()
+    await user.keyboard("{Enter}")
+
+    const listbox = screen.getByRole("listbox")
+    const selectedOption = within(listbox).getByRole("option", { name: "gpt-4.1" })
+    expect(selectedOption).toHaveClass("data-highlighted:bg-page-accent")
+    expect(selectedOption).toHaveClass("data-selected:bg-page-accent/10")
+    expect(selectedOption).toHaveClass("data-selected:font-medium")
+
+    await user.click(within(listbox).getByRole("option", { name: "gpt-5" }))
+    expect(trigger).toHaveTextContent("gpt-5")
   })
 
   it("reveals date, tokens, and cost when a chart point is hovered or focused", async () => {

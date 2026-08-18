@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { PluginOutput, UsageHistoryEntry } from "@/lib/plugin-types"
 import {
+  entryTotalTokens,
   filterUsageHistory,
   getUsageHistoryWindow,
   summarizeUsageHistory,
@@ -162,6 +163,25 @@ describe("filterUsageHistory", () => {
 })
 
 describe("summarizeUsageHistory", () => {
+  it("sums Claude token rows when reasoning tokens are not reported", () => {
+    const entry = historyEntry({
+      inputTokens: 40,
+      outputTokens: 50,
+      cacheReadTokens: 10,
+      cacheCreationTokens: 0,
+      reasoningTokens: undefined,
+      totalTokens: undefined,
+    })
+
+    expect(entryTotalTokens(entry)).toBe(100)
+    expect(
+      summarizeUsageHistory([output("claude", [entry])], {
+        period: "today",
+        nowMs: NOW_MS,
+      }).totals.totalTokens
+    ).toBe(100)
+  })
+
   it("keeps aggregate fields unknown when any selected entry omits them", () => {
     const summary = summarizeUsageHistory(
       [
