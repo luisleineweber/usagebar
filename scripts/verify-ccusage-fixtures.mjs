@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
@@ -15,6 +16,7 @@ if (!version) throw new Error("could not read CCUSAGE_VERSION from ccusage_host_
 const since = "20260801"
 const until = "20260804"
 const runner = process.platform === "win32" ? process.env.ComSpec || "cmd.exe" : "npx"
+const runnerCwd = mkdtempSync(path.join(os.tmpdir(), "usagebar-ccusage-fixtures-"))
 
 function readJson(relativePath) {
   return JSON.parse(readFileSync(path.join(fixtureRoot, relativePath), "utf8"))
@@ -61,7 +63,7 @@ function runFixture({ provider, envName, relativeHome, expectedPath }) {
       ? ["/d", "/s", "/c", ["npx.cmd", ...commandArgs].join(" ")]
       : commandArgs,
     {
-      cwd: repoRoot,
+      cwd: runnerCwd,
       env: { ...process.env, [envName]: home },
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
@@ -84,15 +86,19 @@ function runFixture({ provider, envName, relativeHome, expectedPath }) {
   console.log(`${provider} fixture passed with ccusage@${version}`)
 }
 
-runFixture({
-  provider: "codex",
-  envName: "CODEX_HOME",
-  relativeHome: "codex",
-  expectedPath: "expected/codex.daily.json",
-})
-runFixture({
-  provider: "opencode",
-  envName: "OPENCODE_DATA_DIR",
-  relativeHome: "opencode",
-  expectedPath: "expected/opencode.daily.json",
-})
+try {
+  runFixture({
+    provider: "codex",
+    envName: "CODEX_HOME",
+    relativeHome: "codex",
+    expectedPath: "expected/codex.daily.json",
+  })
+  runFixture({
+    provider: "opencode",
+    envName: "OPENCODE_DATA_DIR",
+    relativeHome: "opencode",
+    expectedPath: "expected/opencode.daily.json",
+  })
+} finally {
+  rmSync(runnerCwd, { recursive: true, force: true })
+}
