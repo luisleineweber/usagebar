@@ -1,5 +1,10 @@
 # Lessons
 
+## 2026-08-20
+
+- The stable publish workflow used a Tauri private key that did not match the repository public key. Fix: generate one key pair, synchronize both GitHub secrets and the checked-in public key, and inspect the publish log for mismatch warnings. Prevention: treat updater key mismatch warnings as a release blocker.
+- The Tauri action could not create a GitHub release with the repository Actions token. Fix: create the release with the authenticated repository owner before rerunning the asset upload. Prevention: verify release creation permissions before relying on tag-triggered publishing.
+
 ## 2026-08-19
 
 - The planned `v0.0.1` release had no current installer evidence. Fix: add a dated record with explicit blockers and required artifact fields. Prevention: require a pass result against the exact release installer before publication.
