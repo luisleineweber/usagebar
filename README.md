@@ -74,7 +74,7 @@ You can also read cached usage locally through the [HTTP API](docs/local-http-ap
 
 ## Release Status And Current Limitations
 
-UsageBar v0.0.1 is a Windows-first public release. The installer is unsigned; Authenticode signing is deferred.
+UsageBar v0.1.1 is a Windows-first public release. The installer is unsigned; Authenticode signing is deferred.
 
 - Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
@@ -157,7 +157,7 @@ bun run test -- --run
 For a Windows release build on this machine:
 
 ```bash
-bun run release:check -- --release-tag v0.0.1
+bun run release:check -- --release-tag v0.1.1
 bun run build:release -- --bundles nsis
 ```
 

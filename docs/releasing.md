@@ -5,7 +5,7 @@ This repo treats a release as a tagged, reproducible build with matching version
 Current release:
 
 ```text
-v0.0.1
+v0.1.1
 ```
 
 ## Preflight
@@ -13,7 +13,7 @@ v0.0.1
 Before cutting a tag:
 
 ```bash
-bun run release:check -- --release-tag v0.0.1 --require-clean
+bun run release:check -- --release-tag v0.1.1 --require-clean
 ```
 
 The preflight currently verifies:
@@ -56,7 +56,7 @@ SmartScreen note: Authenticode signing is necessary but not always sufficient. E
 
 Authenticode is not a stable-release gate while the project has no Windows code-signing certificate. Stable releases still require signed Tauri updater metadata.
 
-The [v0.0.1 installer smoke-test record](testing/installer-smoke-test-0.0.1.md) must identify the exact installer. Include its SHA-256, signature state, source commit, and release URL. Record install, launch, update, CLI, and uninstall results from that file. Release notes must state that `Unknown publisher` and SmartScreen warnings can occur.
+The [v0.1.1 installer smoke-test record](testing/installer-smoke-test-0.1.1.md) must identify the exact installer. Include its SHA-256, signature state, source commit, and release URL. Record install, launch, update, CLI, and uninstall results from that file. Release notes must state that `Unknown publisher` and SmartScreen warnings can occur.
 
 ## GitHub Publish
 
@@ -64,7 +64,7 @@ The publish workflow lives in [.github/workflows/publish.yml](../.github/workflo
 
 You can publish in two ways:
 
-1. Push a `v*` tag, for example `v0.0.1`
+1. Push a `v*` tag, for example `v0.1.1`
 2. Trigger `Publish` manually with `workflow_dispatch` and provide `release_tag`
 
 The workflow runs the same release preflight, builds platform artifacts, and verifies that the GitHub release contains:
@@ -81,7 +81,7 @@ Current updater channel note:
 
 ## Release Gate
 
-Before publishing v0.0.1, verify and record:
+Before publishing v0.1.1, verify and record:
 
 - Windows installer exists as a GitHub release asset or local NSIS artifact.
 - If the installer is unsigned, release notes must say `Unknown publisher` / SmartScreen warnings are expected for this technical preview.

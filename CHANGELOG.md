@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.1
+
+### Highlights
+
+- Corrected the stable release version so Alpha 8 can detect and install it.
+- Kept the signed updater metadata and Windows installer release path from v0.0.1.
+
+### Notes
+
+- Windows installers remain unsigned until the project gets an Authenticode certificate. Windows can show `Unknown publisher` or SmartScreen warnings.
+- Stable releases use signed Tauri updater metadata.
+
 ## 0.0.1
 
 ### Highlights
