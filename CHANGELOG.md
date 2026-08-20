@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.1.1
+
+### Highlights
+
+- Corrected the stable release version so Alpha 8 can detect and install it.
+- Kept the signed updater metadata and Windows installer release path from v0.0.1.
+
+### Notes
+
+- Windows installers remain unsigned until the project gets an Authenticode certificate. Windows can show `Unknown publisher` or SmartScreen warnings.
+- Stable releases use signed Tauri updater metadata.
+
+## 0.0.1
+
+### Highlights
+
+- Added a complete in-app update flow that downloads the Windows installer, verifies it, restarts the app, and removes stale uninstall entries.
+- Added managed accounts for supported providers and moved OpenCode Go usage to its official usage endpoint.
+- Added usage-event notifications with duplicate protection and clearer quota, incident, and recovery alerts.
+- Improved usage history with accurate token totals, explicit unknown totals, and a clearer empty state.
+- Added a reset-all-settings action and reduced repeated copy across Settings.
+- Improved tray behavior with stable resize anchoring, provider scroll hints, and the correct OpenAI API icon.
+
+### Reliability and security
+
+- Limited provider probe execution and shared local ccusage results across each refresh batch.
+- Enforced deny-by-default plugin capabilities and updated vulnerable dependencies.
+- Added dependency audits and more reliable security reporting to CI.
+- Improved keyboard control semantics, accessible names, async feedback announcements, contrast, and reduced-motion behavior.
+- Expanded interaction coverage and enforced changed-line coverage for executable code.
+
+### Notes
+
+- Windows installers remain unsigned until the project gets an Authenticode certificate. Windows can show `Unknown publisher` or SmartScreen warnings.
+- Stable releases still use signed Tauri updater metadata.
+
 ## 0.1.0-alpha.8
 
 ### Highlights

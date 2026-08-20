@@ -2,22 +2,18 @@
 
 This repo treats a release as a tagged, reproducible build with matching version metadata, current release notes, and a verified artifact path.
 
-The next stranger-facing milestone should be an alpha, not a full release, unless the installer, updater, provider setup, privacy/telemetry copy, error states, docs, feedback path, and recovery behavior have all been verified end to end.
-
-Current alpha label:
+Current release:
 
 ```text
-v0.1.0-alpha.8
+v0.1.1
 ```
-
-If the repo stays on the existing beta line instead, document the reason in `CHANGELOG.md` and release notes before tagging.
 
 ## Preflight
 
 Before cutting a tag:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-alpha.8 --require-clean
+bun run release:check -- --release-tag v0.1.1 --require-clean
 ```
 
 The preflight currently verifies:
@@ -32,24 +28,23 @@ The preflight currently verifies:
 
 Build the Windows installer locally before the first publish of a version:
 
-```bash
+```powershell
+$env:USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER = "1"
 bun run build:release -- --bundles nsis
 ```
 
-If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local builds can still complete without Tauri updater signatures. Windows installer builds require Authenticode material by default. When that material is configured, the helper signs the final NSIS/MSI artifact after the build so the setup executable has a real publisher.
-
-Alpha 8 exception: unsigned Windows prerelease installers are allowed as technical-preview artifacts while Authenticode signing is deferred. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local unsigned builds. GitHub prerelease publishes set this automatically for tags that contain a prerelease suffix such as `v0.1.0-alpha.8`. These artifacts can show `Unknown publisher`, can trigger Windows SmartScreen's "unrecognized app" warning, and must be described as unsigned in release notes.
+If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local builds can complete without Tauri updater signatures. Local Windows builds need an explicit unsigned-build opt-in when no Authenticode material exists. GitHub publishes set this option for prerelease and stable tags. Unsigned artifacts can show `Unknown publisher` and can trigger Windows SmartScreen's "unrecognized app" warning.
 
 ## Windows Code Signing
 
-Windows release artifacts need two separate signatures:
+Windows release artifacts support two separate signatures:
 
 - Tauri updater signatures: `TAURI_SIGNING_PRIVATE_KEY` and optional `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 - Windows Authenticode signatures: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, or an already-installed certificate selected by `WINDOWS_CERTIFICATE_THUMBPRINT`.
 
-`src-tauri/tauri.conf.json` calls [scripts/sign-windows.ps1](../scripts/sign-windows.ps1) through Tauri's Windows `signCommand`. `scripts/build-release.mjs` also runs the same script over generated NSIS/MSI artifacts after local builds when Windows signing material exists. In CI and locally, unsigned Windows installer builds require `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; otherwise missing Authenticode material is a hard failure.
+`src-tauri/tauri.conf.json` calls [scripts/sign-windows.ps1](../scripts/sign-windows.ps1) through Tauri's Windows `signCommand`. `scripts/build-release.mjs` also runs the script over generated NSIS/MSI artifacts after local builds when Windows signing material exists. GitHub publishes set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`. Local unsigned builds must set it explicitly.
 
-Recommended GitHub secrets:
+Optional GitHub secrets:
 
 - `WINDOWS_CERTIFICATE_BASE64`: base64-encoded `.pfx` code-signing certificate.
 - `WINDOWS_CERTIFICATE_PASSWORD`: `.pfx` export password.
@@ -57,20 +52,26 @@ Recommended GitHub secrets:
 
 SmartScreen note: Authenticode signing is necessary but not always sufficient. EV certificates usually get immediate SmartScreen reputation. OV certificates and new certificates can still warn until Microsoft has enough reputation for the certificate or submitted binary.
 
+## Stable Release Gate
+
+Authenticode is not a stable-release gate while the project has no Windows code-signing certificate. Stable releases still require signed Tauri updater metadata.
+
+The [v0.1.1 installer smoke-test record](testing/installer-smoke-test-0.1.1.md) must identify the exact installer. Include its SHA-256, signature state, source commit, and release URL. Record install, launch, update, CLI, and uninstall results from that file. Release notes must state that `Unknown publisher` and SmartScreen warnings can occur.
+
 ## GitHub Publish
 
 The publish workflow lives in [.github/workflows/publish.yml](../.github/workflows/publish.yml).
 
 You can publish in two ways:
 
-1. Push a `v*` tag, for example `v0.1.0-alpha.8`
+1. Push a `v*` tag, for example `v0.1.1`
 2. Trigger `Publish` manually with `workflow_dispatch` and provide `release_tag`
 
 The workflow runs the same release preflight, builds platform artifacts, and verifies that the GitHub release contains:
 
 - a Windows setup executable ending in `setup.exe`
 
-Stable releases require `TAURI_SIGNING_PRIVATE_KEY` and updater signature assets. For prerelease tags, the workflow passes `--no-sign` when that key is unavailable and publishes an unsigned technical-preview installer without updater assets. Prerelease tags also set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` so Authenticode signing remains optional.
+Stable releases require `TAURI_SIGNING_PRIVATE_KEY` and updater signature assets. For prerelease tags, the workflow passes `--no-sign` and publishes without updater assets. All Windows publishes allow an unsigned installer while Authenticode signing remains unavailable.
 
 Current updater channel note:
 
@@ -78,9 +79,9 @@ Current updater channel note:
 - GitHub's `releases/latest` alias does not resolve prereleases, so UsageBar queries the release API when a prerelease has no signed updater metadata.
 - The Windows fallback accepts only the exact `UsageBar_<version>_x64-setup.exe` asset and verifies GitHub's SHA-256 digest before installation.
 
-## Alpha Gate
+## Release Gate
 
-Before publishing Alpha 8, verify and record:
+Before publishing v0.1.1, verify and record:
 
 - Windows installer exists as a GitHub release asset or local NSIS artifact.
 - If the installer is unsigned, release notes must say `Unknown publisher` / SmartScreen warnings are expected for this technical preview.

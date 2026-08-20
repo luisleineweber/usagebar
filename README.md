@@ -50,7 +50,7 @@ Status meanings:
 | [**MiniMax**](docs/providers/minimax.md)                               | Experimental   | Coding Plan session usage, explicit reported plan when available                                                                                                                |
 | [**Mistral**](docs/providers/mistral.md)                               | Experimental   | La Plateforme usage and billing details via official Admin API key, with session-cookie fallback                                                                                |
 | [**Ollama**](docs/providers/ollama.md)                                 | Supported      | Plan, session, weekly                                                                                                                                                           |
-| [**OpenCode**](docs/providers/opencode-go.md)                          | Supported      | OpenCode Go account-wide 5h, weekly, and monthly quota from the official usage API; local history and optional OpenCode Zen balance                                             |
+| [**OpenCode**](docs/providers/opencode-go.md)                          | Supported      | OpenCode Go account-wide 5h, weekly, and monthly quota from the official usage API; local history and optional OpenCode Zen balance                              |
 | [**OpenAI API**](docs/providers/openai-api.md)                         | Experimental   | Organization API spend windows, completions tokens, requests, and top model from the OpenAI Admin API                                                                           |
 | [**OpenRouter**](docs/providers/openrouter.md)                         | Experimental   | Credits, balance, request-rate detail                                                                                                                                           |
 | [**Perplexity**](docs/providers/perplexity.md)                         | Experimental   | Recurring, purchased, and bonus credit pools via manual cookie/env auth                                                                                                         |
@@ -72,15 +72,17 @@ UsageBar sits in your Windows tray and gives you one quick view of your AI codin
 
 You can also read cached usage locally through the [HTTP API](docs/local-http-api.md) or [CLI](docs/cli.md), review supported history/reporting, manage credentials, and configure quota notifications.
 
-## Alpha Readiness And Current Limitations
+## Current Limitations
 
-UsageBar is still pre-release. Alpha 8 is intended to let Windows users install from GitHub, enable supported providers, refresh usage, inspect local history/reporting, manage credentials, and configure local quota notifications. The installer is unsigned; Authenticode signing is deferred.
+UsageBar v0.1.1 is a Windows-first public release.
 
+- Windows installers are unsigned until Authenticode signing is configured. Windows can show `Unknown publisher` or SmartScreen warnings.
+- We welcome provider feedback about setup, usage data, and account support.
 - Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
-- Prerelease auto-updates use the GitHub release API when signed Tauri updater metadata is not available. UsageBar verifies the published asset digest, downloads the Windows installer, then restarts after the app exits.
-- Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations are full-release work, not an Alpha 8 promise.
+- Signed updater metadata is the primary update path. UsageBar verifies the published asset digest, downloads the Windows installer, then restarts after the app exits.
+- Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations remain future work.
 
 ## Architecture
 
@@ -105,14 +107,9 @@ UsageBar is local-first. App settings, provider order, display preferences, and 
 - Telemetry uses the app's analytics integration only for product diagnostics; provider usage payloads and credentials are not telemetry data.
 - Crash logs are local support artifacts under `%LOCALAPPDATA%\com.sunstory.usagebar` unless a user explicitly attaches sanitized logs to a report. Automatic crash upload is not part of the Alpha 1 promise.
 
-## Fork Direction
-
-This repository is no longer trying to stay narrowly aligned with upstream pull-request boundaries. The priority here is a clean Windows tray app, a plugin-first provider model, and pragmatic product decisions for this fork.
-
-That means the fork can change UX, provider strategy, release packaging, and architecture when that is the right tradeoff for Windows.
-
 ## Contributing
 
+- **Experimental providers.** Since they are in an experimental phase, we welcome feedback on your experience.
 - **Add a provider.** Each one is just a plugin. See the [Plugin API](docs/plugins/api.md).
 - **Read usage locally.** See the [Local HTTP API](docs/local-http-api.md).
 - **Use terminal output.** See the [UsageBar CLI](docs/cli.md).
@@ -159,16 +156,16 @@ bun run test -- --run
 
 ### Local release build
 
-For a Windows prerelease build on this machine:
+For a Windows release build on this machine:
 
 ```bash
-bun run release:check -- --release-tag v0.1.0-alpha.8
+bun run release:check -- --release-tag v0.1.1
 bun run build:release -- --bundles nsis
 ```
 
-If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so the local build can skip Tauri updater signatures. Windows installer builds require Authenticode material by default: `WINDOWS_CERTIFICATE_BASE64` plus `WINDOWS_CERTIFICATE_PASSWORD`, `WINDOWS_CERTIFICATE`, or `WINDOWS_CERTIFICATE_THUMBPRINT`. The helper signs the final setup executable after the build so the Windows launch prompt can show the certificate publisher. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
+If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so the local build can skip Tauri updater signatures. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local builds without an Authenticode certificate. The helper signs the final setup executable when Windows signing material exists. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
 
-For Alpha 8 unsigned technical-preview builds, set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1`; those installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Stable/public-confidence Windows builds should be Authenticode-signed; see [docs/releasing.md](docs/releasing.md).
+GitHub publishes unsigned Windows installers until the project gets an Authenticode certificate. These installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Stable releases still require signed Tauri updater metadata; see [docs/releasing.md](docs/releasing.md).
 
 Before pushing a release tag, run the same preflight with `--require-clean` so the tag is cut from a clean worktree.
 

@@ -242,10 +242,39 @@ describe("SideNav", () => {
     fireEvent.scroll(list)
 
     expect(screen.getByTestId("provider-scroll-indicator")).toBeInTheDocument()
+    expect(screen.queryByTestId("provider-scroll-indicator-top")).not.toBeInTheDocument()
 
     Object.defineProperty(list, "scrollTop", { configurable: true, value: 100 })
     fireEvent.scroll(list)
 
     expect(screen.queryByTestId("provider-scroll-indicator")).not.toBeInTheDocument()
+    expect(screen.getByTestId("provider-scroll-indicator-top")).toBeInTheDocument()
+  })
+
+  it("shows a top scroll hint when providers remain above the visible list", () => {
+    render(
+      <SideNav
+        activeView="home"
+        onViewChange={() => {}}
+        plugins={[{ id: "a", name: "A", iconUrl: "a.svg" }]}
+      />
+    )
+
+    const list = screen.getByTestId("provider-list")
+    Object.defineProperties(list, {
+      clientHeight: { configurable: true, value: 100 },
+      scrollHeight: { configurable: true, value: 200 },
+      scrollTop: { configurable: true, value: 50 },
+    })
+
+    fireEvent.scroll(list)
+
+    expect(screen.getByTestId("provider-scroll-indicator-top")).toBeInTheDocument()
+    expect(screen.getByTestId("provider-scroll-indicator")).toBeInTheDocument()
+
+    Object.defineProperty(list, "scrollTop", { configurable: true, value: 0 })
+    fireEvent.scroll(list)
+
+    expect(screen.queryByTestId("provider-scroll-indicator-top")).not.toBeInTheDocument()
   })
 })

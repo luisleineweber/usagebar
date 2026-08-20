@@ -44,7 +44,9 @@ fn provider_secret_legacy_entry_spec(service: &str) -> ProviderSecretEntrySpec<'
     }
 }
 
-fn open_provider_secret_entry(spec: ProviderSecretEntrySpec<'_>) -> Result<Entry, keyring::Error> {
+pub(super) fn open_provider_secret_entry(
+    spec: ProviderSecretEntrySpec<'_>,
+) -> Result<Entry, keyring::Error> {
     match spec.target {
         Some(target) => Entry::new_with_target(target, spec.service, spec.user),
         None => Entry::new(spec.service, spec.user),

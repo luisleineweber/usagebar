@@ -78,12 +78,6 @@ jobs:
       - name: Release preflight
         run: node ./scripts/release-preflight.mjs --release-tag "$RELEASE_TAG"
 
-      - name: Allow unsigned prerelease installer
-        if: runner.os == 'Windows' && contains(env.RELEASE_TAG, '-')
-        run: |
-          echo "USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1" >> "$GITHUB_ENV"
-          echo "Prerelease $RELEASE_TAG will publish an unsigned Windows installer until Authenticode signing is configured."
-
       - name: Verify updater signing key is configured
         if: runner.os == 'Windows' && !contains(env.RELEASE_TAG, '-')
         env:
@@ -100,34 +94,6 @@ jobs:
           echo "No Tauri updater signing key configured; publishing this technical-preview installer without updater signatures."
           echo "USAGEBAR_ALLOW_UNSIGNED_UPDATER=1" >> "$GITHUB_ENV"
 
-      - name: Verify Windows Authenticode signing secrets are configured
-        if: runner.os == 'Windows'
-        env:
-          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
-          USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER: ${{ env.USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER }}
-        run: |
-          if [[ "$USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER" == "1" ]]; then
-            echo "Skipping Authenticode secret requirement for unsigned prerelease installer."
-            exit 0
-          fi
-
-          if [[ -n "$WINDOWS_CERTIFICATE_THUMBPRINT" ]]; then
-            exit 0
-          fi
-
-          if [[ -z "$WINDOWS_CERTIFICATE_BASE64" && -z "$WINDOWS_CERTIFICATE" ]]; then
-            echo "Missing Windows Authenticode certificate secret. Set WINDOWS_CERTIFICATE_BASE64."
-            exit 1
-          fi
-
-          if [[ -z "$WINDOWS_CERTIFICATE_PASSWORD" ]]; then
-            echo "Missing WINDOWS_CERTIFICATE_PASSWORD secret."
-            exit 1
-          fi
-
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -139,7 +105,7 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
           WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
-          USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER: ${{ env.USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER }}
+          USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER: "1"
         with:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: ${{ env.RELEASE_TAG }}

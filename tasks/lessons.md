@@ -1,5 +1,21 @@
 # Lessons
 
+## 2026-08-20
+
+- The stable publish workflow used a Tauri private key that did not match the repository public key. Fix: generate one key pair, synchronize both GitHub secrets and the checked-in public key, and inspect the publish log for mismatch warnings. Prevention: treat updater key mismatch warnings as a release blocker.
+- The Tauri action could not create a GitHub release with the repository Actions token. Fix: create the release with the authenticated repository owner before rerunning the asset upload. Prevention: verify release creation permissions before relying on tag-triggered publishing.
+
+## 2026-08-19
+
+- The planned `v0.0.1` release had no current installer evidence. Fix: add a dated record with explicit blockers and required artifact fields. Prevention: require a pass result against the exact release installer before publication.
+- A request for a new `0.0.1` changelog was mistaken for a request to keep the Alpha 8 release version. Fix: add a separate upcoming `0.0.1` section from changes after the latest prerelease tag. Prevention: distinguish release-note authoring from version-metadata changes and edit only the requested release artifact.
+- A metadata mismatch made the default `0.0.1` Tauri version look authoritative, although no stable release notes or signed-installer smoke record existed. Fix: use the documented Alpha 8 release record as the source and align all package metadata and release copy to it. Prevention: verify the changelog, release documentation, and signed-artifact evidence before selecting a stable version.
+- The updater collected the full installer response without a size limit and used a client without a request timeout. Fix: stream into a byte-counted buffer, reject excessive `Content-Length`, and set a total request timeout. Prevention: test declared size, streamed size, and stalled update responses together.
+- Stable publishing required an Authenticode certificate that the project does not have. Fix: allow unsigned installers for all publish channels while keeping stable updater signatures mandatory. Prevention: do not make unavailable credentials a release gate; state the Windows warning in release notes.
+- Linux production builds used a private keyring helper through a crate-root import. Fix: expose the helper to its parent module. Prevention: compile each supported target in CI.
+- CI installed a pinned Rust toolchain without formatter or linter components. Fix: install `rustfmt` and `clippy` explicitly. Prevention: declare all required components with the toolchain action.
+- The Rust lockfile kept patched transitive releases out of CI. Fix: refresh it with the pinned toolchain. Prevention: run RustSec after each dependency refresh.
+
 ## 2026-08-18
 
 - Notification event IDs were derived but not checked before delivery, so repeated provider refreshes could replay the same warning. Fix: track handled event IDs, key quota warnings by reset time, and key service incidents by provider and local day. Prevention: test repeated threshold crossings, reset changes, stored events, and same-day incident updates.
@@ -286,3 +302,4 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - History page header: keep the title and summary in one report header when removing a duplicate page title.
 - History page border: keep shared report spacing but disable the provider-card divider on standalone pages.
 - History page top spacing: reduce only the standalone report padding; keep provider-card spacing unchanged.
+- ccusage fixture runner: `npx` read the repository package overrides and failed with `EOVERRIDE`. Run external package tools from an isolated temporary directory so project npm settings cannot affect them.

@@ -1,5 +1,6 @@
 #[cfg(target_os = "windows")]
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 #[cfg(target_os = "windows")]
 use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
@@ -11,6 +12,8 @@ const GITHUB_RELEASES_API: &str =
     "https://api.github.com/repos/luisleineweber/usagebar/releases/tags";
 const GITHUB_DOWNLOAD_PREFIX: &str =
     "https://github.com/luisleineweber/usagebar/releases/download/";
+const UPDATE_REQUEST_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const MAX_INSTALLER_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 struct GithubRelease {
@@ -29,7 +32,7 @@ struct GithubAsset {
 pub async fn download_github_update(app: AppHandle, version: String) -> Result<String, String> {
     let version = normalize_version(&version)?;
     let tag = format!("v{version}");
-    let client = reqwest::Client::new();
+    let client = build_update_client(UPDATE_REQUEST_TIMEOUT)?;
     let release_url = format!("{GITHUB_RELEASES_API}/{tag}");
     let response = client
         .get(release_url)
@@ -81,10 +84,7 @@ pub async fn download_github_update(app: AppHandle, version: String) -> Result<S
         ));
     }
 
-    let installer_bytes = installer_response
-        .bytes()
-        .await
-        .map_err(|error| format!("Update download failed: {error}"))?;
+    let installer_bytes = read_installer_response(installer_response, MAX_INSTALLER_BYTES).await?;
     verify_digest(&asset, &installer_bytes)?;
 
     let temp_dir = app
@@ -98,6 +98,49 @@ pub async fn download_github_update(app: AppHandle, version: String) -> Result<S
         .map_err(|error| format!("Could not save the update installer: {error}"))?;
 
     Ok(installer_path.to_string_lossy().into_owned())
+}
+
+fn build_update_client(timeout: Duration) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .map_err(|error| format!("Could not configure the update client: {error}"))
+}
+
+async fn read_installer_response(
+    mut response: reqwest::Response,
+    max_bytes: usize,
+) -> Result<Vec<u8>, String> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > max_bytes as u64)
+    {
+        return Err(format!(
+            "Update installer exceeds the {} MiB size limit",
+            max_bytes / (1024 * 1024)
+        ));
+    }
+
+    let capacity = response
+        .content_length()
+        .and_then(|length| usize::try_from(length).ok())
+        .unwrap_or(0)
+        .min(max_bytes);
+    let mut bytes = Vec::with_capacity(capacity);
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| format!("Update download failed: {error}"))?
+    {
+        if chunk.len() > max_bytes.saturating_sub(bytes.len()) {
+            return Err(format!(
+                "Update installer exceeds the {} MiB size limit",
+                max_bytes / (1024 * 1024)
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
 }
 
 #[tauri::command]
@@ -213,9 +256,40 @@ fn encode_powershell_script(script: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        io::{BufRead, BufReader, Write},
+        net::TcpListener,
+        thread,
+        time::Duration,
+    };
+
     use sha2::{Digest, Sha256};
 
-    use super::{GithubAsset, is_windows_setup_asset, normalize_version, verify_digest};
+    use super::{
+        GithubAsset, build_update_client, is_windows_setup_asset, normalize_version,
+        read_installer_response, verify_digest,
+    };
+
+    fn serve_once(response: &'static [u8], delay: Duration) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(&mut stream);
+            loop {
+                let mut line = String::new();
+                let read = reader.read_line(&mut line).unwrap();
+                assert_ne!(read, 0, "client closed before sending request headers");
+                if line == "\r\n" {
+                    break;
+                }
+            }
+            drop(reader);
+            thread::sleep(delay);
+            let _ = stream.write_all(response);
+        });
+        format!("http://{address}")
+    }
 
     #[test]
     fn normalizes_release_versions() {
@@ -253,5 +327,54 @@ mod tests {
 
         assert!(verify_digest(&asset, bytes).is_ok());
         assert!(verify_digest(&asset, b"tampered").is_err());
+    }
+
+    #[tokio::test]
+    async fn rejects_an_installer_that_exceeds_the_streamed_size_limit() {
+        let url = serve_once(
+            b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\ninstaller",
+            Duration::ZERO,
+        );
+        let response = build_update_client(Duration::from_secs(1))
+            .unwrap()
+            .get(url)
+            .send()
+            .await
+            .unwrap();
+
+        let error = read_installer_response(response, 8).await.unwrap_err();
+
+        assert!(error.contains("size limit"));
+    }
+
+    #[tokio::test]
+    async fn rejects_an_installer_with_an_excessive_content_length() {
+        let url = serve_once(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n",
+            Duration::ZERO,
+        );
+        let response = build_update_client(Duration::from_secs(1))
+            .unwrap()
+            .get(url)
+            .send()
+            .await
+            .unwrap();
+
+        let error = read_installer_response(response, 8).await.unwrap_err();
+
+        assert!(error.contains("size limit"));
+    }
+
+    #[tokio::test]
+    async fn update_client_times_out_a_stalled_request() {
+        let url = serve_once(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            Duration::from_millis(250),
+        );
+        let client = build_update_client(Duration::from_millis(25)).unwrap();
+
+        let error = client.get(url).send().await.unwrap_err();
+
+        assert!(error.is_timeout());
     }
 }
