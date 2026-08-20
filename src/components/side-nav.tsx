@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { BarChart3, Check, ChevronDown, GripVertical, Settings } from "lucide-react"
+import { BarChart3, Check, ChevronDown, ChevronUp, GripVertical, Settings } from "lucide-react"
 import {
   DndContext,
   PointerSensor,
@@ -186,6 +186,7 @@ export function SideNav({
   const isDark = useDarkMode()
   const providerListRef = useRef<HTMLDivElement>(null)
   const [hasProvidersBelow, setHasProvidersBelow] = useState(false)
+  const [hasProvidersAbove, setHasProvidersAbove] = useState(false)
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -220,6 +221,7 @@ export function SideNav({
     if (!list) return
 
     setHasProvidersBelow(list.scrollTop + list.clientHeight < list.scrollHeight - 1)
+    setHasProvidersAbove(list.scrollTop > 1)
   }, [])
 
   useEffect(() => {
@@ -297,6 +299,16 @@ export function SideNav({
             </SortableContext>
           </DndContext>
         </div>
+
+        {hasProvidersAbove ? (
+          <div
+            data-testid="provider-scroll-indicator-top"
+            aria-hidden="true"
+            className="pointer-events-none absolute left-0 top-0 z-10 flex h-5 w-12 items-start justify-center bg-gradient-to-b from-muted via-muted/90 to-transparent pt-0.5 text-muted-foreground dark:from-card dark:via-card/90"
+          >
+            <ChevronUp className="size-3.5" />
+          </div>
+        ) : null}
 
         {hasProvidersBelow ? (
           <div
