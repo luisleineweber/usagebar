@@ -1,21 +1,26 @@
 # Windows Installer Smoke Test: v0.1.1
 
-Checked: 2026-08-20T16:15:00+02:00  
-Platform: Windows  
-Result: **LOCAL BASIC WINDOWS SMOKE PASSED; PENDING PUBLISH**
+Checked: 2026-08-20T16:35:00+02:00
+Platform: Windows
+Result: **PUBLISHED; BASIC WINDOWS SMOKE PASSED**
 
 ## Release Input
 
 - Expected tag: `v0.1.1`
-- Source commit: `0d7b31eb`
+- Final source commit: `b232542eae03d8a6ad27c33eb541ea1518bab97e`
 - Local installer: `src-tauri/target/release/bundle/nsis/UsageBar_0.1.1_x64-setup.exe`
 - Local installer size: `8,534,920` bytes
 - Local installer SHA-256: `1642F46F2A350657D494657A9A55E8E635E7105008366EF230CF2F63BC5F1A75`
 - Local installer signature: `NotSigned` (`Get-AuthenticodeSignature`)
-- GitHub release URL: pending publish
-- GitHub installer: pending publish
+- GitHub release URL: https://github.com/luisleineweber/usagebar/releases/tag/v0.1.1
+- GitHub installer: `UsageBar_0.1.1_x64-setup.exe`
+- GitHub installer size: `8,580,163` bytes
+- GitHub installer SHA-256: `8D56297CA6F26E6F5D71EAF5B2C996DD152FF17E5D3BFE6A8D3DB454E08BC3D`
+- GitHub installer signature: `NotSigned` (`Get-AuthenticodeSignature`)
+- GitHub updater manifest: `latest.json`, `1,279` bytes, SHA-256 `F003EC730BABE4066321E895FFBF2DB9D48483804B14A1EF98F5C3FA7980E786`
+- GitHub updater signature asset: `UsageBar_0.1.1_x64-setup.exe.sig`, `420` bytes, SHA-256 `6986523A52EE8D5482619E1B8354BB375A33DF3EECFFF3B910C48A5510D7E21`
 
-The local v0.1.1 release preflight, NSIS build, silent install, launch, and CLI checks passed.
+The local and GitHub v0.1.1 release preflight, NSIS build, silent install, launch, and CLI checks passed. The GitHub workflow published the installer, `latest.json`, and updater signature asset.
 
 ## Signing Readiness
 
@@ -30,8 +35,8 @@ The stable updater uses signed Tauri metadata. The Windows installer remains uns
 - [x] Local NSIS installer exists with the exact size and SHA-256 above.
 - [x] Local installer signature state is recorded as `NotSigned`.
 - [x] Source commit is recorded.
-- [ ] Verify the GitHub installer SHA-256 and size.
-- [ ] Verify `latest.json` and updater signature assets exist.
+- [x] Verify the GitHub installer SHA-256 and size.
+- [x] Verify `latest.json` and updater signature assets exist.
 
 ## Installer Checks
 
