@@ -72,10 +72,12 @@ UsageBar sits in your Windows tray and gives you one quick view of your AI codin
 
 You can also read cached usage locally through the [HTTP API](docs/local-http-api.md) or [CLI](docs/cli.md), review supported history/reporting, manage credentials, and configure quota notifications.
 
-## Release Status And Current Limitations
+## Current Limitations
 
-UsageBar v0.1.1 is a Windows-first public release. The installer is unsigned; Authenticode signing is deferred.
+UsageBar v0.1.1 is a Windows-first public release.
 
+- Windows installers are unsigned until Authenticode signing is configured. Windows can show `Unknown publisher` or SmartScreen warnings.
+- We welcome provider feedback about setup, usage data, and account support.
 - Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
