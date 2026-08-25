@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi, beforeEach, afterAll } from "vitest"
-import type { DownloadEvent, Update } from "@tauri-apps/plugin-updater"
+import type { DownloadEvent } from "@tauri-apps/plugin-updater"
 
 const { checkMock, invokeMock, relaunchMock } = vi.hoisted(() => ({
   checkMock: vi.fn(),
@@ -32,6 +32,34 @@ import { compareVersions, isEligibleUpdateCandidate, useAppUpdate } from "@/hook
 declare global {
   // eslint-disable-next-line no-var
   var isTauri: boolean | undefined
+}
+
+function mockStableRelease(version: string): void {
+  vi.mocked(fetch).mockResolvedValueOnce({
+    ok: true,
+    json: async () => [
+      {
+        draft: false,
+        prerelease: false,
+        tag_name: `v${version}`,
+        html_url: `https://github.com/luisleineweber/usagebar/releases/tag/v${version}`,
+      },
+    ],
+  } as Response)
+}
+
+function mockPrerelease(version: string): void {
+  vi.mocked(fetch).mockResolvedValueOnce({
+    ok: true,
+    json: async () => [
+      {
+        draft: false,
+        prerelease: true,
+        tag_name: `v${version}`,
+        html_url: `https://github.com/luisleineweber/usagebar/releases/tag/v${version}`,
+      },
+    ],
+  } as Response)
 }
 
 describe("useAppUpdate", () => {
@@ -66,7 +94,7 @@ describe("useAppUpdate", () => {
   })
 
   it("starts checking on mount", async () => {
-    checkMock.mockReturnValue(new Promise(() => {})) // never resolves
+    vi.mocked(fetch).mockReturnValueOnce(new Promise<Response>(() => {})) // never resolves
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await act(() => Promise.resolve())
     await act(() => Promise.resolve())
@@ -108,10 +136,11 @@ describe("useAppUpdate", () => {
     vi.useRealTimers()
   })
 
-  it("uses the signed updater for prerelease versions", async () => {
-    getVersionMock.mockResolvedValue("0.1.0-beta.5")
+  it("uses signed updater metadata only after finding a newer stable release", async () => {
+    getVersionMock.mockResolvedValue("1.0.0")
+    mockStableRelease("1.1.0")
     checkMock.mockResolvedValue({
-      version: "0.1.0-beta.6",
+      version: "1.1.0",
       download: vi.fn(),
       install: vi.fn(),
     })
@@ -124,28 +153,18 @@ describe("useAppUpdate", () => {
     expect(checkMock).toHaveBeenCalled()
     expect(result.current.updateStatus).toEqual({
       status: "available",
-      version: "0.1.0-beta.6",
+      version: "1.1.0",
     })
   })
 
   it("uses GitHub releases as a fallback for prerelease versions without updater metadata", async () => {
     getVersionMock.mockResolvedValue("0.1.0-beta.5")
-    checkMock.mockResolvedValue(null)
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          tag_name: "v0.1.0-beta.6",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-beta.6",
-        },
-      ],
-    } as Response)
+    mockPrerelease("0.1.0-beta.6")
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
 
-    expect(checkMock).toHaveBeenCalled()
+    expect(checkMock).not.toHaveBeenCalled()
     expect(result.current.updateStatus).toEqual({
       status: "available",
       version: "0.1.0-beta.6",
@@ -153,20 +172,9 @@ describe("useAppUpdate", () => {
     })
   })
 
-  it("uses GitHub releases when the unsigned prerelease updater check rejects", async () => {
+  it("uses GitHub releases for prereleases without signed metadata", async () => {
     getVersionMock.mockResolvedValue("0.1.0-alpha.7")
-    checkMock.mockRejectedValueOnce(new Error("latest.json returned 404"))
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          prerelease: true,
-          tag_name: "v0.1.0-alpha.8",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.8",
-        },
-      ],
-    } as Response)
+    mockPrerelease("0.1.0-alpha.8")
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
@@ -180,18 +188,7 @@ describe("useAppUpdate", () => {
 
   it("downloads a GitHub prerelease and waits for the restart action", async () => {
     getVersionMock.mockResolvedValue("0.1.0-alpha.7")
-    checkMock.mockRejectedValueOnce(new Error("latest.json returned 404"))
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          prerelease: true,
-          tag_name: "v0.1.0-alpha.8",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.8",
-        },
-      ],
-    } as Response)
+    mockPrerelease("0.1.0-alpha.8")
     invokeMock
       .mockResolvedValueOnce("C:\\Users\\test\\AppData\\Local\\Temp\\UsageBar_update.exe")
       .mockResolvedValueOnce(undefined)
@@ -213,18 +210,7 @@ describe("useAppUpdate", () => {
 
   it("stays up-to-date when GitHub confirms an unsigned prerelease is current", async () => {
     getVersionMock.mockResolvedValue("0.1.0-alpha.7")
-    checkMock.mockRejectedValueOnce(new Error("latest.json returned 404"))
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          prerelease: true,
-          tag_name: "v0.1.0-alpha.7",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.7",
-        },
-      ],
-    } as Response)
+    mockPrerelease("0.1.0-alpha.7")
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
@@ -232,16 +218,47 @@ describe("useAppUpdate", () => {
     expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
   })
 
+  it("does not request latest.json when the release API finds no update", async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.mocked(fetch)
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+
+    await act(() => Promise.resolve())
+    await act(() => Promise.resolve())
+    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
+    expect(checkMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    fetchMock.mockClear()
+    await act(async () => {
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000 - 1)
+      await Promise.resolve()
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(checkMock).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
   it("clears a pending up-to-date timeout on re-check", async () => {
     vi.useFakeTimers()
     const clearTimeoutSpy = vi.spyOn(window, "clearTimeout")
 
     // First check: no update -> schedules up-to-date timeout.
-    checkMock.mockResolvedValueOnce(null)
     // Second check: hang so we can observe "checking".
-    let resolveSecond: ((value: null) => void) | undefined
-    checkMock.mockReturnValueOnce(
-      new Promise<null>((resolve) => {
+    let resolveSecond: ((value: Response) => void) | undefined
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => [],
+    } as Response)
+    vi.mocked(fetch).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
         resolveSecond = resolve
       })
     )
@@ -259,7 +276,7 @@ describe("useAppUpdate", () => {
     expect(result.current.updateStatus).toEqual({ status: "checking" })
 
     // Cleanup: resolve second check so the hook can settle.
-    resolveSecond?.(null)
+    resolveSecond?.({ ok: true, json: async () => [] } as Response)
     await act(() => Promise.resolve())
 
     clearTimeoutSpy.mockRestore()
@@ -267,6 +284,7 @@ describe("useAppUpdate", () => {
   })
 
   it("waits for user action before downloading and installing a signed Tauri update", async () => {
+    mockStableRelease("1.1.0")
     const downloadMock = vi.fn(async (onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Started", data: { contentLength: 1000 } })
       onEvent({ event: "Progress", data: { chunkLength: 500 } })
@@ -313,7 +331,7 @@ describe("useAppUpdate", () => {
 
     await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
 
-    expect(checkMock).toHaveBeenCalled()
+    expect(checkMock).not.toHaveBeenCalled()
     expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
   })
 
@@ -350,6 +368,7 @@ describe("useAppUpdate", () => {
   })
 
   it("does not check again when an update is already available", async () => {
+    mockStableRelease("1.1.0")
     const downloadMock = vi.fn(async (onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Finished", data: {} })
     })
@@ -393,6 +412,7 @@ describe("useAppUpdate", () => {
   })
 
   it("reports indeterminate progress when content length is unknown", async () => {
+    mockStableRelease("1.1.0")
     let resolveDownload: (() => void) | null = null
     const downloadMock = vi.fn((onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Started", data: { contentLength: null } })
@@ -422,6 +442,7 @@ describe("useAppUpdate", () => {
   })
 
   it("transitions to error on download or install failure", async () => {
+    mockStableRelease("1.1.0")
     const downloadMock = vi.fn().mockRejectedValue(new Error("download failed"))
     checkMock.mockResolvedValue({
       version: "1.1.0",
@@ -441,6 +462,7 @@ describe("useAppUpdate", () => {
   })
 
   it("downloads, installs, and relaunches from the available state", async () => {
+    mockStableRelease("1.1.0")
     const downloadMock = vi.fn(async (onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Finished", data: {} })
     })
@@ -460,8 +482,8 @@ describe("useAppUpdate", () => {
   })
 
   it("does not update state after unmount during check", async () => {
-    const resolveRef: { current: ((val: Update | null) => void) | null } = { current: null }
-    checkMock.mockReturnValue(
+    const resolveRef: { current: ((val: Response) => void) | null } = { current: null }
+    vi.mocked(fetch).mockReturnValueOnce(
       new Promise((resolve) => {
         resolveRef.current = resolve
       })
@@ -470,7 +492,7 @@ describe("useAppUpdate", () => {
     const { result, unmount } = renderHook(() => useAppUpdate({ isDev: false }))
     const statusAtUnmount = result.current.updateStatus
     unmount()
-    resolveRef.current?.({ version: "1.0.0", download: vi.fn(), install: vi.fn() })
+    resolveRef.current?.({ ok: true, json: async () => [] } as Response)
     await act(() => Promise.resolve())
     expect(result.current.updateStatus).toEqual(statusAtUnmount)
   })
@@ -489,6 +511,7 @@ describe("useAppUpdate", () => {
   })
 
   it("does not trigger install while downloading", async () => {
+    mockStableRelease("1.1.0")
     let resolveDownload: (() => void) | null = null
     const installMock = vi.fn().mockResolvedValue(undefined)
     const downloadMock = vi.fn((onEvent: (event: DownloadEvent) => void) => {
@@ -521,6 +544,7 @@ describe("useAppUpdate", () => {
   })
 
   it("prevents concurrent install attempts", async () => {
+    mockStableRelease("1.1.0")
     let resolveInstall: (() => void) | null = null
     const downloadMock = vi.fn().mockResolvedValue(undefined)
     const installMock = vi.fn(

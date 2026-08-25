@@ -27,6 +27,7 @@ interface UseAppUpdateOptions {
 }
 
 const DEFAULT_RELEASE_REPO = "luisleineweber/usagebar"
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export function isPrereleaseVersion(version: string): boolean {
   return version.trim().includes("-")
@@ -240,27 +241,49 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
     try {
       const currentVersion = await getCurrentVersion()
       let update: Update | null = null
-      let canUseSignedUpdater = updaterEnabledRef.current
-      let signedUpdaterCheckFailed = false
-      if (!updaterEligibilityResolvedRef.current) {
-        canUseSignedUpdater = await resolveUpdaterEligibility()
+      let release: GitHubReleaseCandidate | null = null
+      let githubReleaseCheckFailed = false
+      try {
+        release = await findNewerGitHubRelease(repo, currentVersion)
+      } catch (error) {
+        githubReleaseCheckFailed = true
+        console.warn("GitHub release check failed; trying signed updater:", error)
       }
+      if (!mountedRef.current) return
 
-      if (canUseSignedUpdater) {
-        try {
+      // The GitHub release API is the normal discovery path. It avoids
+      // downloading latest.json when no release is newer. If the API is
+      // unavailable, use the signed updater as a stable fallback.
+      if (githubReleaseCheckFailed) {
+        if (!updaterEligibilityResolvedRef.current) {
+          await resolveUpdaterEligibility()
+        }
+        if (updaterEnabledRef.current) {
           update = await check()
+        }
+      } else if (release && !isPrereleaseVersion(release.version)) {
+        // Only load signed updater metadata after the release API found a
+        // newer stable release. This keeps stable updates signed without
+        // polling latest.json when the app is already current.
+        try {
+          if (!updaterEligibilityResolvedRef.current) {
+            await resolveUpdaterEligibility()
+          }
+          if (updaterEnabledRef.current) {
+            update = await check()
+          }
         } catch (error) {
-          signedUpdaterCheckFailed = true
-          // Prerelease builds may intentionally be published without signed
-          // updater artifacts. In that case the GitHub release API below is
-          // still authoritative for discovering the next prerelease.
+          // A stable release can still use the verified GitHub installer
+          // fallback if its updater metadata is temporarily unavailable.
           console.warn("Signed updater check failed; trying GitHub release fallback:", error)
         }
       }
+
       if (!mountedRef.current) return
       if (update) {
         const updateVersion = normalizeVersion(update.version)
-        if (isEligibleUpdateCandidate(updateVersion, currentVersion)) {
+        const matchesRelease = release == null || updateVersion === release.version
+        if (matchesRelease && isEligibleUpdateCandidate(updateVersion, currentVersion)) {
           inFlightRef.current.checking = false
           updateRef.current = update
           externalReleaseUrlRef.current = null
@@ -273,20 +296,11 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
         )
       }
 
-      let release: GitHubReleaseCandidate | null = null
-      try {
-        release = await findNewerGitHubRelease(repo, currentVersion)
-      } catch (error) {
-        if (canUseSignedUpdater) {
-          if (signedUpdaterCheckFailed) {
-            throw error
-          }
-          console.warn("GitHub release fallback failed after signed updater check:", error)
-        } else {
-          throw error
-        }
+      if (githubReleaseCheckFailed && release == null) {
+        setUpToDateThenIdle()
+        return
       }
-      if (!mountedRef.current) return
+
       inFlightRef.current.checking = false
       if (release) {
         updateRef.current = null
@@ -324,12 +338,9 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
 
       void checkForUpdates()
 
-      intervalId = window.setInterval(
-        () => {
-          void checkForUpdates()
-        },
-        15 * 60 * 1000
-      )
+      intervalId = window.setInterval(() => {
+        void checkForUpdates()
+      }, UPDATE_CHECK_INTERVAL_MS)
     })
 
     return () => {
