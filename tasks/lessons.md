@@ -1,5 +1,13 @@
 # Lessons
 
+## 2026-08-28
+
+- A fixed `releases/latest` updater endpoint cannot discover prerelease releases. Fix: publish signed `latest.json` to a fixed `updater` channel and use the signed download-then-restart flow for every release. Prevention: test prerelease discovery, signature assets, and both update actions.
+
+## 2026-08-24
+
+- The updater requested signed `latest.json` metadata every 15 minutes, even when no release was newer. Fix: query the GitHub Releases API first, load signed metadata only for a newer stable release, and poll once per day. Prevention: test the no-update path and the polling boundary without allowing `latest.json` requests.
+
 ## 2026-08-20
 
 - The stable publish workflow used a Tauri private key that did not match the repository public key. Fix: generate one key pair, synchronize both GitHub secrets and the checked-in public key, and inspect the publish log for mismatch warnings. Prevention: treat updater key mismatch warnings as a release blocker.

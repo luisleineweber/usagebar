@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { getVersion } from "@tauri-apps/api/app"
-import { invoke, isTauri } from "@tauri-apps/api/core"
+import { isTauri } from "@tauri-apps/api/core"
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater"
 import { relaunch } from "@tauri-apps/plugin-process"
 
@@ -8,7 +8,7 @@ export type UpdateStatus =
   | { status: "idle" }
   | { status: "checking" }
   | { status: "up-to-date" }
-  | { status: "available"; version: string; url?: string; error?: string }
+  | { status: "available"; version: string; error?: string }
   | { status: "downloading"; progress: number } // 0-100, or -1 if indeterminate
   | { status: "installing" }
   | { status: "ready" }
@@ -20,16 +20,8 @@ interface UseAppUpdateReturn {
   triggerInstall: () => void
   checkForUpdates: () => void
 }
-
 interface UseAppUpdateOptions {
   isDev?: boolean
-  repo?: string
-}
-
-const DEFAULT_RELEASE_REPO = "luisleineweber/usagebar"
-
-export function isPrereleaseVersion(version: string): boolean {
-  return version.trim().includes("-")
 }
 
 function normalizeVersion(version: string): string {
@@ -110,49 +102,11 @@ export function isEligibleUpdateCandidate(
   return compareVersions(candidateVersion, currentVersion) > 0
 }
 
-type GitHubRelease = {
-  tag_name?: string
-  html_url?: string
-  draft?: boolean
-}
-
-type GitHubReleaseCandidate = {
-  version: string
-  url: string
-}
-
-async function findNewerGitHubRelease(
-  repo: string,
-  currentVersion: string
-): Promise<GitHubReleaseCandidate | null> {
-  const response = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=20`, {
-    headers: { Accept: "application/vnd.github+json" },
-  })
-  if (!response.ok) {
-    throw new Error(`GitHub release check failed with ${response.status}`)
-  }
-
-  const releases = (await response.json()) as GitHubRelease[]
-  return (
-    releases
-      .filter((release) => !release.draft && release.tag_name && release.html_url)
-      .map((release) => ({
-        version: normalizeVersion(release.tag_name ?? ""),
-        url: release.html_url ?? "",
-      }))
-      .filter((release) => isEligibleUpdateCandidate(release.version, currentVersion))
-      .sort((left, right) => compareVersions(right.version, left.version))[0] ?? null
-  )
-}
-
 export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateReturn {
   const isDev = options.isDev ?? import.meta.env.DEV
-  const repo = options.repo ?? DEFAULT_RELEASE_REPO
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ status: "idle" })
   const statusRef = useRef<UpdateStatus>({ status: "idle" })
   const updateRef = useRef<Update | null>(null)
-  const externalReleaseUrlRef = useRef<string | null>(null)
-  const downloadedInstallerPathRef = useRef<string | null>(null)
   const currentVersionRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
   const inFlightRef = useRef({ checking: false, downloading: false, installing: false })
@@ -239,32 +193,18 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
     setStatus({ status: "checking" })
     try {
       const currentVersion = await getCurrentVersion()
-      let update: Update | null = null
       let canUseSignedUpdater = updaterEnabledRef.current
-      let signedUpdaterCheckFailed = false
       if (!updaterEligibilityResolvedRef.current) {
         canUseSignedUpdater = await resolveUpdaterEligibility()
       }
 
-      if (canUseSignedUpdater) {
-        try {
-          update = await check()
-        } catch (error) {
-          signedUpdaterCheckFailed = true
-          // Prerelease builds may intentionally be published without signed
-          // updater artifacts. In that case the GitHub release API below is
-          // still authoritative for discovering the next prerelease.
-          console.warn("Signed updater check failed; trying GitHub release fallback:", error)
-        }
-      }
+      const update = canUseSignedUpdater ? await check() : null
       if (!mountedRef.current) return
       if (update) {
         const updateVersion = normalizeVersion(update.version)
         if (isEligibleUpdateCandidate(updateVersion, currentVersion)) {
           inFlightRef.current.checking = false
           updateRef.current = update
-          externalReleaseUrlRef.current = null
-          downloadedInstallerPathRef.current = null
           setStatus({ status: "available", version: updateVersion })
           return
         }
@@ -273,31 +213,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
         )
       }
 
-      let release: GitHubReleaseCandidate | null = null
-      try {
-        release = await findNewerGitHubRelease(repo, currentVersion)
-      } catch (error) {
-        if (canUseSignedUpdater) {
-          if (signedUpdaterCheckFailed) {
-            throw error
-          }
-          console.warn("GitHub release fallback failed after signed updater check:", error)
-        } else {
-          throw error
-        }
-      }
-      if (!mountedRef.current) return
       inFlightRef.current.checking = false
-      if (release) {
-        updateRef.current = null
-        externalReleaseUrlRef.current = release.url
-        downloadedInstallerPathRef.current = null
-        setStatus({ status: "available", version: release.version, url: release.url })
-        return
-      }
-
-      // A successful GitHub response is authoritative even when the signed
-      // updater could not load prerelease metadata.
       setUpToDateThenIdle()
     } catch (err) {
       inFlightRef.current.checking = false
@@ -308,7 +224,6 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
   }, [
     getCurrentVersion,
     isDev,
-    repo,
     resolveUpdaterEligibility,
     setStatus,
     setUnavailableThenIdle,
@@ -345,39 +260,12 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
 
   const triggerInstall = useCallback(async () => {
     const update = updateRef.current
-    const releaseUrl = externalReleaseUrlRef.current
+    if (!update) return
     if (statusRef.current.status === "available") {
       if (inFlightRef.current.downloading || inFlightRef.current.installing) return
-      const availableVersion = statusRef.current.version
 
       inFlightRef.current.downloading = true
       setStatus({ status: "downloading", progress: -1 })
-
-      if (releaseUrl) {
-        try {
-          downloadedInstallerPathRef.current = await invoke<string>("download_github_update", {
-            version: availableVersion,
-          })
-          setStatus({ status: "ready" })
-        } catch (err) {
-          console.error("GitHub update download failed:", err)
-          setStatus({
-            status: "available",
-            version: availableVersion,
-            url: releaseUrl,
-            error: "Download failed",
-          })
-        } finally {
-          inFlightRef.current.downloading = false
-        }
-        return
-      }
-
-      if (!update) {
-        inFlightRef.current.downloading = false
-        setStatus({ status: "error", message: "Update is no longer available" })
-        return
-      }
 
       let totalBytes: number | null = null
       let downloadedBytes = 0
@@ -396,7 +284,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
             const pct = Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
             setStatus({ status: "downloading", progress: pct })
           }
-        } else if (event.event === "Finished") {
+        } else if (event.event === "Finished" && totalBytes) {
           setStatus({ status: "downloading", progress: 100 })
         }
       }
@@ -406,7 +294,11 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
         setStatus({ status: "ready" })
       } catch (err) {
         console.error("Update download failed:", err)
-        setStatus({ status: "available", version: update.version, error: "Download failed" })
+        setStatus({
+          status: "available",
+          version: normalizeVersion(update.version),
+          error: "Download failed",
+        })
       } finally {
         inFlightRef.current.downloading = false
       }
@@ -419,18 +311,8 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
     try {
       inFlightRef.current.installing = true
       setStatus({ status: "installing" })
-      const downloadedInstallerPath = downloadedInstallerPathRef.current
-      if (downloadedInstallerPath) {
-        await invoke("install_downloaded_update", { installerPath: downloadedInstallerPath })
-        downloadedInstallerPathRef.current = null
-      } else {
-        if (!update) {
-          setStatus({ status: "error", message: "Downloaded update is no longer available" })
-          return
-        }
-        await update.install()
-        await relaunch()
-      }
+      await update.install()
+      await relaunch()
       setStatus({ status: "idle" })
     } catch (err) {
       console.error("Update install failed:", err)

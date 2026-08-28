@@ -5,7 +5,6 @@ mod analytics;
 mod app_nap;
 #[cfg(not(test))]
 mod app_startup;
-mod app_update;
 mod atomic_file;
 mod browser_cookie_import;
 pub mod cli;
@@ -60,8 +59,6 @@ use tauri::{Emitter, Manager};
 #[cfg(not(test))]
 use tauri_plugin_log::{Target, TargetKind};
 
-#[cfg(not(test))]
-use app_update::{download_github_update, install_downloaded_update};
 #[cfg(not(test))]
 use credential_commands::{
     capture_provider_cookie_header, delete_codex_account_profile, delete_provider_account_profile,
@@ -253,8 +250,6 @@ pub fn run() {
             import_current_provider_account_profile,
             delete_provider_account_profile,
             update_global_shortcut,
-            download_github_update,
-            install_downloaded_update,
         ])
         .setup(app_startup::setup)
         .build(tauri::generate_context!())

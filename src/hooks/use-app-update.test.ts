@@ -2,21 +2,18 @@ import { renderHook, act, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi, beforeEach, afterAll } from "vitest"
 import type { DownloadEvent, Update } from "@tauri-apps/plugin-updater"
 
-const { checkMock, invokeMock, relaunchMock } = vi.hoisted(() => ({
+const { checkMock, relaunchMock } = vi.hoisted(() => ({
   checkMock: vi.fn(),
-  invokeMock: vi.fn(),
   relaunchMock: vi.fn(),
 }))
 const { getVersionMock } = vi.hoisted(() => ({
   getVersionMock: vi.fn(),
 }))
+vi.mock("@tauri-apps/api/core", () => ({
+  isTauri: () => Boolean(globalThis.isTauri),
+}))
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: getVersionMock,
-}))
-
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: invokeMock,
-  isTauri: () => Boolean(globalThis.isTauri),
 }))
 
 vi.mock("@tauri-apps/plugin-updater", () => ({
@@ -39,23 +36,13 @@ describe("useAppUpdate", () => {
 
   beforeEach(() => {
     checkMock.mockReset()
-    invokeMock.mockReset()
-    invokeMock.mockResolvedValue("C:\\Users\\test\\AppData\\Local\\Temp\\UsageBar_update.exe")
     relaunchMock.mockReset()
     getVersionMock.mockReset()
     getVersionMock.mockResolvedValue("1.0.0")
     checkMock.mockResolvedValue(null)
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => [],
-      }))
-    )
     // `@tauri-apps/api/core` considers `globalThis.isTauri` the runtime flag.
     globalThis.isTauri = true
-  })
-
+})
   afterAll(() => {
     vi.unstubAllGlobals()
     if (originalIsTauri === undefined) {
@@ -128,108 +115,17 @@ describe("useAppUpdate", () => {
     })
   })
 
-  it("uses GitHub releases as a fallback for prerelease versions without updater metadata", async () => {
-    getVersionMock.mockResolvedValue("0.1.0-beta.5")
-    checkMock.mockResolvedValue(null)
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          tag_name: "v0.1.0-beta.6",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-beta.6",
-        },
-      ],
-    } as Response)
-
-    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
-    await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
-
-    expect(checkMock).toHaveBeenCalled()
-    expect(result.current.updateStatus).toEqual({
-      status: "available",
-      version: "0.1.0-beta.6",
-      url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-beta.6",
-    })
-  })
-
-  it("uses GitHub releases when the unsigned prerelease updater check rejects", async () => {
+  it("reports updater metadata failures instead of opening GitHub", async () => {
     getVersionMock.mockResolvedValue("0.1.0-alpha.7")
     checkMock.mockRejectedValueOnce(new Error("latest.json returned 404"))
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          prerelease: true,
-          tag_name: "v0.1.0-alpha.8",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.8",
-        },
-      ],
-    } as Response)
 
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
-    await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
+    await waitFor(() => expect(result.current.updateStatus.status).toBe("error"))
 
     expect(result.current.updateStatus).toEqual({
-      status: "available",
-      version: "0.1.0-alpha.8",
-      url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.8",
+      status: "error",
+      message: "Update check failed",
     })
-  })
-
-  it("downloads a GitHub prerelease and waits for the restart action", async () => {
-    getVersionMock.mockResolvedValue("0.1.0-alpha.7")
-    checkMock.mockRejectedValueOnce(new Error("latest.json returned 404"))
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          prerelease: true,
-          tag_name: "v0.1.0-alpha.8",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.8",
-        },
-      ],
-    } as Response)
-    invokeMock
-      .mockResolvedValueOnce("C:\\Users\\test\\AppData\\Local\\Temp\\UsageBar_update.exe")
-      .mockResolvedValueOnce(undefined)
-
-    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
-    await waitFor(() => expect(result.current.updateStatus.status).toBe("available"))
-
-    await act(() => result.current.triggerInstall())
-    expect(invokeMock).toHaveBeenCalledWith("download_github_update", {
-      version: "0.1.0-alpha.8",
-    })
-    expect(result.current.updateStatus).toEqual({ status: "ready" })
-
-    await act(() => result.current.triggerInstall())
-    expect(invokeMock).toHaveBeenLastCalledWith("install_downloaded_update", {
-      installerPath: "C:\\Users\\test\\AppData\\Local\\Temp\\UsageBar_update.exe",
-    })
-  })
-
-  it("stays up-to-date when GitHub confirms an unsigned prerelease is current", async () => {
-    getVersionMock.mockResolvedValue("0.1.0-alpha.7")
-    checkMock.mockRejectedValueOnce(new Error("latest.json returned 404"))
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          prerelease: true,
-          tag_name: "v0.1.0-alpha.7",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-alpha.7",
-        },
-      ],
-    } as Response)
-
-    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
-    await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
-
-    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
   })
 
   it("clears a pending up-to-date timeout on re-check", async () => {
@@ -266,17 +162,18 @@ describe("useAppUpdate", () => {
     vi.useRealTimers()
   })
 
-  it("waits for user action before downloading and installing a signed Tauri update", async () => {
+  it("downloads first and installs only after a second user action", async () => {
     const downloadMock = vi.fn(async (onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Started", data: { contentLength: 1000 } })
       onEvent({ event: "Progress", data: { chunkLength: 500 } })
       onEvent({ event: "Progress", data: { chunkLength: 500 } })
       onEvent({ event: "Finished", data: {} })
     })
+    const installMock = vi.fn().mockResolvedValue(undefined)
     checkMock.mockResolvedValue({
       version: "1.1.0",
       download: downloadMock,
-      install: vi.fn(),
+      install: installMock,
     })
     relaunchMock.mockResolvedValue(undefined)
 
@@ -288,33 +185,14 @@ describe("useAppUpdate", () => {
 
     await act(() => result.current.triggerInstall())
     expect(downloadMock).toHaveBeenCalled()
+    expect(installMock).not.toHaveBeenCalled()
     expect(relaunchMock).not.toHaveBeenCalled()
     expect(result.current.updateStatus).toEqual({ status: "ready" })
 
     await act(() => result.current.triggerInstall())
+    expect(installMock).toHaveBeenCalled()
     expect(relaunchMock).toHaveBeenCalled()
     expect(result.current.updateStatus).toEqual({ status: "idle" })
-  })
-
-  it("ignores older same-core beta releases for an alpha build", async () => {
-    getVersionMock.mockResolvedValue("0.1.0-alpha.1")
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => [
-        {
-          draft: false,
-          tag_name: "v0.1.0-beta.6",
-          html_url: "https://github.com/luisleineweber/usagebar/releases/tag/v0.1.0-beta.6",
-        },
-      ],
-    } as Response)
-
-    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
-
-    await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
-
-    expect(checkMock).toHaveBeenCalled()
-    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
   })
 
   it("ignores signed updater candidates that are equal to the current version", async () => {
@@ -334,18 +212,6 @@ describe("useAppUpdate", () => {
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
 
-    expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
-  })
-
-  it("keeps stable signed updater checks up-to-date when GitHub fallback fails", async () => {
-    getVersionMock.mockResolvedValue("1.0.0")
-    checkMock.mockResolvedValue(null)
-    vi.mocked(fetch).mockRejectedValueOnce(new Error("rate limited"))
-
-    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
-    await waitFor(() => expect(result.current.updateStatus.status).toBe("up-to-date"))
-
-    expect(checkMock).toHaveBeenCalled()
     expect(result.current.updateStatus).toEqual({ status: "up-to-date" })
   })
 
@@ -385,7 +251,6 @@ describe("useAppUpdate", () => {
 
   it("transitions to error when check throws", async () => {
     checkMock.mockRejectedValue(new Error("network error"))
-    vi.mocked(fetch).mockRejectedValueOnce(new Error("GitHub unavailable"))
     const { result } = renderHook(() => useAppUpdate({ isDev: false }))
     await act(() => Promise.resolve())
     await act(() => Promise.resolve())
@@ -421,7 +286,7 @@ describe("useAppUpdate", () => {
     })
   })
 
-  it("transitions to error on download or install failure", async () => {
+  it("returns to an actionable update after a download failure", async () => {
     const downloadMock = vi.fn().mockRejectedValue(new Error("download failed"))
     checkMock.mockResolvedValue({
       version: "1.1.0",
@@ -440,7 +305,7 @@ describe("useAppUpdate", () => {
     })
   })
 
-  it("downloads, installs, and relaunches from the available state", async () => {
+  it("keeps the downloaded update ready until restart", async () => {
     const downloadMock = vi.fn(async (onEvent: (event: DownloadEvent) => void) => {
       onEvent({ event: "Finished", data: {} })
     })
