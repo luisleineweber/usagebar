@@ -18,6 +18,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: usagebar-publish
+  cancel-in-progress: false
+
 env:
   BUN_VERSION: "1.3.13"
   RUST_TOOLCHAIN: "1.94.1"
@@ -78,8 +82,14 @@ jobs:
       - name: Release preflight
         run: node ./scripts/release-preflight.mjs --release-tag "$RELEASE_TAG"
 
+      - name: Allow unsigned prerelease installer
+        if: runner.os == 'Windows' && contains(env.RELEASE_TAG, '-')
+        run: |
+          echo "USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1" >> "$GITHUB_ENV"
+          echo "Prerelease $RELEASE_TAG will publish an unsigned Windows installer until Authenticode signing is configured."
+
       - name: Verify updater signing key is configured
-        if: runner.os == 'Windows' && !contains(env.RELEASE_TAG, '-')
+        if: runner.os == 'Windows'
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
@@ -88,11 +98,33 @@ jobs:
             exit 1
           fi
 
-      - name: Allow unsigned prerelease updater artifacts
-        if: runner.os == 'Windows' && contains(env.RELEASE_TAG, '-')
+      - name: Verify Windows Authenticode signing secrets are configured
+        if: runner.os == 'Windows'
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+          USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER: ${{ env.USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER }}
         run: |
-          echo "No Tauri updater signing key configured; publishing this technical-preview installer without updater signatures."
-          echo "USAGEBAR_ALLOW_UNSIGNED_UPDATER=1" >> "$GITHUB_ENV"
+          if [[ "$USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER" == "1" ]]; then
+            echo "Skipping Authenticode secret requirement for unsigned prerelease installer."
+            exit 0
+          fi
+
+          if [[ -n "$WINDOWS_CERTIFICATE_THUMBPRINT" ]]; then
+            exit 0
+          fi
+
+          if [[ -z "$WINDOWS_CERTIFICATE_BASE64" && -z "$WINDOWS_CERTIFICATE" ]]; then
+            echo "Missing Windows Authenticode certificate secret. Set WINDOWS_CERTIFICATE_BASE64."
+            exit 1
+          fi
+
+          if [[ -z "$WINDOWS_CERTIFICATE_PASSWORD" ]]; then
+            echo "Missing WINDOWS_CERTIFICATE_PASSWORD secret."
+            exit 1
+          fi
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -105,14 +137,14 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
           WINDOWS_TIMESTAMP_URL: ${{ secrets.WINDOWS_TIMESTAMP_URL }}
-          USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER: "1"
+          USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER: ${{ env.USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER }}
         with:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: ${{ env.RELEASE_TAG }}
           releaseDraft: false
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           includeUpdaterJson: true
-          args: ${{ matrix.args }} ${{ contains(env.RELEASE_TAG, '-') && '--no-sign' || '' }}
+          args: ${{ matrix.args }}
 
       - name: Verify updater assets uploaded
         env:
@@ -120,12 +152,33 @@ jobs:
         run: |
           ASSETS=$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
 
-          if [[ "$USAGEBAR_ALLOW_UNSIGNED_UPDATER" != "1" ]]; then
-            printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
-            printf '%s\n' "$ASSETS" | grep -Eq '\.sig$' || { echo "Missing updater signatures (.sig)"; exit 1; }
-          else
-            echo "Unsigned prerelease: updater manifest and signature assets are not required."
-          fi
+          printf '%s\n' "$ASSETS" | grep -Fxq 'latest.json' || { echo "Missing updater manifest: latest.json"; exit 1; }
+          printf '%s\n' "$ASSETS" | grep -Eq '\.sig$' || { echo "Missing updater signatures (.sig)"; exit 1; }
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             printf '%s\n' "$ASSETS" | grep -Eq 'setup\.exe$' || { echo "Missing Windows setup executable"; exit 1; }
           fi
+
+      - name: Publish updater channel manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CHANNEL_TAG="updater"
+          CHANNEL_DIR="$RUNNER_TEMP/usagebar-updater-channel"
+          mkdir -p "$CHANNEL_DIR"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$CHANNEL_DIR"
+
+          if ! gh release view "$CHANNEL_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$CHANNEL_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --title "UsageBar updater channel" \
+              --notes "Machine-readable updater metadata. Install UsageBar from the versioned releases."
+          fi
+
+          gh release upload "$CHANNEL_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            "$CHANNEL_DIR/latest.json" \
+            --clobber
+
+          CHANNEL_ASSET=$(gh release view "$CHANNEL_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
+          printf '%s\n' "$CHANNEL_ASSET" | grep -Fxq 'latest.json' || { echo "Updater channel is missing latest.json"; exit 1; }

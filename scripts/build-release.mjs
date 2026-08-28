@@ -46,21 +46,23 @@ if (signingKeyValue && existsSync(signingKeyValue)) {
 
 const resolvedArgs = [...args]
 if (!env.TAURI_SIGNING_PRIVATE_KEY && !resolvedArgs.includes("--no-sign")) {
-  resolvedArgs.push("--no-sign")
-  console.log("No TAURI_SIGNING_PRIVATE_KEY found; building without Tauri updater signatures.")
+  console.error(
+    "Missing TAURI_SIGNING_PRIVATE_KEY. Set the updater signing key or pass --no-sign for an explicit installer-only smoke build."
+  )
+  process.exit(1)
 }
 
 function hasWindowsSigningMaterial() {
   return Boolean(
-    env.WINDOWS_CERTIFICATE_THUMBPRINT ||
-      env.WINDOWS_CERTIFICATE_BASE64 ||
-      env.WINDOWS_CERTIFICATE
+    env.WINDOWS_CERTIFICATE_THUMBPRINT || env.WINDOWS_CERTIFICATE_BASE64 || env.WINDOWS_CERTIFICATE
   )
 }
 
 function allowsUnsignedWindowsInstaller() {
-  return env.USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER === "1" ||
+  return (
+    env.USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER === "1" ||
     env.USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER?.toLowerCase() === "true"
+  )
 }
 
 function requestsWindowsInstaller() {
@@ -128,19 +130,23 @@ function signWindowsInstallerArtifacts(artifactDirs) {
   console.log("Signing Windows installer artifacts after build:")
 
   for (const artifact of artifacts) {
-    const signer = spawnSync("powershell", [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      windowsSignScript,
-      "-TargetPath",
-      artifact,
-    ], {
-      cwd: repoRoot,
-      env,
-      stdio: "inherit",
-    })
+    const signer = spawnSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        windowsSignScript,
+        "-TargetPath",
+        artifact,
+      ],
+      {
+        cwd: repoRoot,
+        env,
+        stdio: "inherit",
+      }
+    )
 
     if (signer.error) {
       console.error("Failed to launch Windows installer signing:", signer.error)
@@ -194,7 +200,6 @@ child.on("exit", (code, signal) => {
 
   process.exit(code ?? 0)
 })
-
 child.on("error", (error) => {
   console.error("Failed to launch Tauri release build:", error)
   process.exit(1)

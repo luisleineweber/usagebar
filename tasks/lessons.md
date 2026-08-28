@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-28
+
+- A fixed `releases/latest` updater endpoint cannot discover prerelease releases. Fix: publish signed `latest.json` to a fixed `updater` channel and use the signed download-then-restart flow for every release. Prevention: test prerelease discovery, signature assets, and both update actions.
+
 ## 2026-08-24
 
 - The updater requested signed `latest.json` metadata every 15 minutes, even when no release was newer. Fix: query the GitHub Releases API first, load signed metadata only for a newer stable release, and poll once per day. Prevention: test the no-update path and the polling boundary without allowing `latest.json` requests.

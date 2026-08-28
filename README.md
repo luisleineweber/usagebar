@@ -81,7 +81,7 @@ UsageBar v0.1.1 is a Windows-first public release.
 - Windows is the primary tested platform for this fork. macOS and Linux remain secondary until the Windows release path is boring.
 - Provider coverage is uneven: `Supported` means the Windows path is intended to work; `Experimental` means setup, API shape, or live-account validation may still change.
 - Some providers report usage directly; others estimate from local history, known quota pools, telemetry logs, or manually supplied session cookies. Provider docs describe the source per integration.
-- Signed updater metadata is the primary update path. UsageBar verifies the published asset digest, downloads the Windows installer, then restarts after the app exits.
+- Published releases use a signed updater channel. UsageBar downloads an available update, then installs it after you select `Restart to update`.
 - Authenticode-signed Windows artifacts, live Edge-account validation, and full crash-recovery expectations remain future work.
 
 ## Architecture
@@ -163,9 +163,9 @@ bun run release:check -- --release-tag v0.1.1
 bun run build:release -- --bundles nsis
 ```
 
-If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so the local build can skip Tauri updater signatures. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local builds without an Authenticode certificate. The helper signs the final setup executable when Windows signing material exists. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
+Release builds require `TAURI_SIGNING_PRIVATE_KEY`. Pass `--no-sign` only for an explicit local installer smoke build. Set `USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER=1` for local builds without an Authenticode certificate. The helper signs the final setup executable when Windows signing material exists. The setup executable lands under `src-tauri/target/release/bundle/nsis/`.
 
-GitHub publishes unsigned Windows installers until the project gets an Authenticode certificate. These installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. Stable releases still require signed Tauri updater metadata; see [docs/releasing.md](docs/releasing.md).
+GitHub publishes unsigned Windows installers until the project gets an Authenticode certificate. These installers can show `Unknown publisher` and trigger Windows SmartScreen's "unrecognized app" warning. All published releases still require signed Tauri updater metadata; see [docs/releasing.md](docs/releasing.md).
 
 Before pushing a release tag, run the same preflight with `--require-clean` so the tag is cut from a clean worktree.
 
