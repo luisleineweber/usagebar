@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-08-31
+
+- The RustSec report failed CI for informational unmaintained-crate warnings, while a yanked transitive `chacha20` release also remained in the lockfile. Fix: update `chacha20` to `0.10.2`, make the reporter block only vulnerability, unsound, and yanked findings, and document the Tauri GTK3 `glib` exception. Prevention: keep informational findings visible, but separate them from blocking security findings.
+
 ## 2026-08-28
 
 - A fixed `releases/latest` updater endpoint cannot discover prerelease releases. Fix: publish signed `latest.json` to a fixed `updater` channel and use the signed download-then-restart flow for every release. Prevention: test prerelease discovery, signature assets, and both update actions.

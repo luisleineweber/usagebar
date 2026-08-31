@@ -40,7 +40,10 @@ jobs:
         shell: bash
         run: |
           set +e
-          cargo audit --json > ../cargo-audit.json
+          # GTK3 is required by Tauri's Linux WebView backend. Its glib 0.18
+          # bindings contain an unsound VariantStrIter API that this app does
+          # not use, and GTK3 cannot move to glib >= 0.20 independently.
+          cargo audit --ignore RUSTSEC-2024-0429 --json > ../cargo-audit.json
           audit_status=$?
           set -e
           node ../scripts/report-cargo-audit.mjs ../cargo-audit.json | tee -a "$GITHUB_STEP_SUMMARY"
