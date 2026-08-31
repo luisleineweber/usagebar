@@ -8,8 +8,8 @@ const event: UsageEvent = {
   id: "event-1",
   type: "quota",
   providerId: "claude",
-  title: "Claude quota warning",
-  body: "Session reached 75% used.",
+  title: "⚠️ Claude: Quota warning",
+  body: "Session usage has reached 75% of its limit.",
   createdAt: 10,
 }
 
@@ -20,8 +20,10 @@ describe("UsageEventNotice", () => {
 
     render(<UsageEventNotice events={[event]} onDismiss={onDismiss} />)
 
-    expect(screen.getByRole("status")).toHaveTextContent("Claude quota warning")
-    expect(screen.getByRole("status")).toHaveTextContent("Session reached 75% used.")
+    expect(screen.getByRole("status")).toHaveTextContent("⚠️ Claude: Quota warning")
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Session usage has reached 75% of its limit."
+    )
 
     await user.click(screen.getByRole("button", { name: "Dismiss notifications" }))
 

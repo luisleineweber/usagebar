@@ -20,8 +20,8 @@ function usageEvent(id: string): UsageEvent {
     id,
     type: "quota",
     providerId: "claude",
-    title: "Claude quota warning",
-    body: "Session reached 75% used.",
+    title: "⚠️ Claude: Quota warning",
+    body: "Session usage has reached 75% of its limit.",
     createdAt: 10,
   }
 }
@@ -38,8 +38,8 @@ describe("notification delivery", () => {
     await expect(deliverUsageEvents([usageEvent("one"), usageEvent("two")])).resolves.toBe(true)
 
     expect(sendNotificationMock).toHaveBeenNthCalledWith(1, {
-      title: "Claude quota warning",
-      body: "Session reached 75% used.",
+      title: "⚠️ Claude: Quota warning",
+      body: "Session usage has reached 75% of its limit.",
     })
     expect(sendNotificationMock).toHaveBeenCalledTimes(2)
   })
@@ -69,5 +69,4 @@ describe("notification delivery", () => {
 
     await expect(deliverUsageEvents([usageEvent("error")])).resolves.toBe(false)
   })
-
 })

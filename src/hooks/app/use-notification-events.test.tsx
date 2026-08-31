@@ -187,8 +187,8 @@ describe("useNotificationEvents", () => {
         id: "quota:claude:session:75:2026-07-14T00:00:00Z",
         type: "quota",
         providerId: "claude",
-        title: "Claude quota warning",
-        body: "Session reached 80% used.",
+        title: "⚠️ Claude: Quota warning",
+        body: "Session usage has reached 80% of its limit.",
         createdAt: 1,
       },
     ])
