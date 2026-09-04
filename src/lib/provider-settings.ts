@@ -28,6 +28,13 @@ export type ProviderSettingsOption = {
   hint: string
 }
 
+export type ProviderSetupCheck = {
+  id: string
+  label: string
+  source: string
+  description: string
+}
+
 export type ProviderSettingsDefinition = {
   mode: ProviderSettingsMode
   managedAccounts?: boolean
@@ -35,6 +42,7 @@ export type ProviderSettingsDefinition = {
   summary: string
   statusHint: string
   connectHint?: string
+  setupChecks?: ProviderSetupCheck[]
   browserCookieImport?: {
     description: string
   }
@@ -174,6 +182,14 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
       "Run Claude Code locally and sign in with OAuth. The claude.ai Cookie header is an optional fallback only.",
     connectHint:
       "Run `claude` CLI and sign in on this machine, then retry. UsageBar prefers local Claude OAuth credentials and local usage history.",
+    setupChecks: [
+      {
+        id: "claude-oauth",
+        label: "Claude Code login",
+        source: "Local file or credential store",
+        description: "UsageBar checks local OAuth presence. The credential value is never shown.",
+      },
+    ],
     browserCookieImport: {
       description:
         "Opt in to a one-time import of the approved claude.ai session cookie from a selected Microsoft Edge profile. UsageBar does not scan in the background and never returns cookie values to the interface.",
@@ -194,6 +210,20 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
       "Source/status is visible here; manual token editing is deferred until refresh persistence is modeled.",
     connectHint:
       "Open Cursor and sign in on this machine, then refresh to detect the saved auth state.",
+    setupChecks: [
+      {
+        id: "cursor-sqlite",
+        label: "Cursor SQLite",
+        source: "Local SQLite database",
+        description: "Only token presence is checked. The database stays on this device.",
+      },
+      {
+        id: "cursor-keychain",
+        label: "Cursor credential store",
+        source: "Windows Credential Manager",
+        description: "Only token presence is checked. The credential value is never shown.",
+      },
+    ],
   },
   codebuff: {
     mode: "editable",
@@ -239,6 +269,14 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
       "Run gh auth login if Copilot is missing. For org-managed licenses, set a billing scope such as org:my-org or enterprise:my-enterprise.",
     connectHint:
       "Run gh auth login or sign in to Copilot locally, then refresh. For organization or enterprise billing reports, save a billing scope and use a token with billing/admin read access.",
+    setupChecks: [
+      {
+        id: "copilot-token",
+        label: "Copilot token",
+        source: "GitHub CLI credential store",
+        description: "UsageBar checks the local gh login without displaying the token.",
+      },
+    ],
     textField: {
       key: "workspaceId",
       label: "Billing scope",
@@ -311,6 +349,20 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
       "Run `kimi login` for Kimi Code membership quota. Optionally save a Moonshot/Kimi Open Platform API key here or set MOONSHOT_API_KEY to include API balance.",
     connectHint:
       "Use this single provider for Kimi/Moonshot. Run `kimi login` for session and weekly quota; save a Moonshot API key only if you also want official API billing balance.",
+    setupChecks: [
+      {
+        id: "kimi-cli-login",
+        label: "Kimi CLI login",
+        source: "Local file",
+        description: "UsageBar checks the local kimi credential file. The file is never uploaded.",
+      },
+      {
+        id: "kimi-api-key",
+        label: "Moonshot API key",
+        source: "App vault or environment",
+        description: "Only key presence is checked. The key is never shown in Settings.",
+      },
+    ],
     secretField: {
       key: "apiKey",
       label: "Moonshot API key",
@@ -663,6 +715,20 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
       "Run `gcloud auth application-default login` and configure a project before launching UsageBar.",
     connectHint:
       "Run `gcloud auth application-default login`, then `gcloud config set project PROJECT_ID` or set GOOGLE_CLOUD_PROJECT, and ensure the project allows Cloud Monitoring time-series reads.",
+    setupChecks: [
+      {
+        id: "vertex-gcloud-adc",
+        label: "gcloud ADC login",
+        source: "Local file",
+        description: "UsageBar checks application-default credentials on this device.",
+      },
+      {
+        id: "vertex-project",
+        label: "Google Cloud project",
+        source: "Environment or local gcloud config",
+        description: "Only the project setting presence is checked.",
+      },
+    ],
   },
   warp: {
     mode: "editable",

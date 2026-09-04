@@ -1,6 +1,6 @@
 # Host API Reference
 
-This document describes the host APIs available to plugins via the `ctx` object passed to `probe(ctx)`.
+This document describes the host APIs available to plugins via the `ctx` object passed to `detectSetup(ctx)` and `probe(ctx)`.
 
 ## Context Object
 
@@ -368,6 +368,8 @@ try {
 **Warning:** Be careful with SQL injection. Always escape user-provided values.
 
 ## Execution Timing
+
+If a plugin defines `detectSetup(ctx)`, UsageBar calls it before `probe(ctx)`. The detector is for local setup checks only. Return an array of `{ id, state }` objects, where `state` is `found`, `missing`, or `unavailable`. Do not return credential values. The detector can use only the host APIs declared by the plugin manifest.
 
 `probe(ctx)` is called when:
 

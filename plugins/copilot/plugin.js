@@ -257,6 +257,16 @@
     )
   }
 
+  function detectSetup(ctx) {
+    const activeLogin = loadGhActiveLogin(ctx)
+    return [
+      {
+        id: "copilot-token",
+        state: loadToken(ctx, activeLogin) ? "found" : "missing",
+      },
+    ]
+  }
+
   function fetchUsage(ctx, token) {
     return ctx.util.request({
       method: "GET",
@@ -856,5 +866,5 @@
     return { plan: plan, lines: lines }
   }
 
-  globalThis.__openusage_plugin = { id: "copilot", probe }
+  globalThis.__openusage_plugin = { id: "copilot", probe, detectSetup }
 })()

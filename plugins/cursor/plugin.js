@@ -154,6 +154,31 @@
     }
   }
 
+  function detectSetup(ctx) {
+    const dbPath = stateDbPath(ctx)
+    let sqliteState = "missing"
+    if (ctx.host.fs && ctx.host.fs.exists(dbPath)) {
+      const access = readStateValue(ctx, "cursorAuth/accessToken")
+      const refresh = readStateValue(ctx, "cursorAuth/refreshToken")
+      if (access.value || refresh.value) sqliteState = "found"
+      else if (access.error || refresh.error) sqliteState = "unavailable"
+    }
+
+    const keychain = readKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE)
+    const keychainRefresh = readKeychainValue(ctx, KEYCHAIN_REFRESH_TOKEN_SERVICE)
+    const keychainState =
+      keychain.value || keychainRefresh.value
+        ? "found"
+        : keychain.error || keychainRefresh.error
+          ? "unavailable"
+          : "missing"
+
+    return [
+      { id: "cursor-sqlite", state: sqliteState },
+      { id: "cursor-keychain", state: keychainState },
+    ]
+  }
+
   function persistAccessToken(ctx, source, accessToken) {
     if (source === "keychain") {
       return writeKeychainValue(ctx, KEYCHAIN_ACCESS_TOKEN_SERVICE, accessToken)
@@ -793,5 +818,5 @@
     return { plan: plan, lines: lines }
   }
 
-  globalThis.__openusage_plugin = { id: "cursor", probe }
+  globalThis.__openusage_plugin = { id: "cursor", probe, detectSetup }
 })()

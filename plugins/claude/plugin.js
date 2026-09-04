@@ -450,6 +450,15 @@
     return null
   }
 
+  function detectSetup(ctx) {
+    try {
+      return [{ id: "claude-oauth", state: loadCredentials(ctx) ? "found" : "missing" }]
+    } catch (e) {
+      ctx.host.log.warn("setup scan could not read Claude credentials: " + String(e))
+      return [{ id: "claude-oauth", state: "unavailable" }]
+    }
+  }
+
   function saveCredentials(ctx, source, fullData, secretKey) {
     // MUST use minified JSON - macOS `security -w` hex-encodes values with newlines,
     // which Claude Code can't read back, causing it to invalidate the session.
@@ -1203,5 +1212,5 @@
     }
   }
 
-  globalThis.__openusage_plugin = { id: "claude", probe }
+  globalThis.__openusage_plugin = { id: "claude", probe, detectSetup }
 })()

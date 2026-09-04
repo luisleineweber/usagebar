@@ -759,6 +759,33 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByLabelText("Kimi Code (Moonshot) Moonshot API key")).toBeInTheDocument()
   })
 
+  it("shows setup source status and provenance", () => {
+    render(
+      <ProviderSettingsDetail
+        plugin={kimiPlugin}
+        enabled
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+          setupDetection: [
+            { id: "kimi-cli-login", state: "found" },
+            { id: "kimi-api-key", state: "missing" },
+          ],
+        }}
+        onEnabledChange={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    expect(screen.getByRole("heading", { name: "Setup assistant" })).toBeInTheDocument()
+    expect(screen.getByRole("group", { name: "Kimi CLI login: Found" })).toBeInTheDocument()
+    expect(screen.getByRole("group", { name: "Moonshot API key: Not found" })).toBeInTheDocument()
+    expect(screen.getAllByText(/Never uploaded/i)).toHaveLength(2)
+  })
+
   it("shows explicit Kilo API-key guidance", () => {
     render(
       <ProviderSettingsDetail

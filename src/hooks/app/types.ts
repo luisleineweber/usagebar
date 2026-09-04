@@ -3,6 +3,7 @@ import type {
   ProbeErrorCategory,
   ProviderInstanceRef,
   ProviderUsageHistory,
+  SetupDetection,
 } from "@/lib/plugin-types"
 
 export type PluginState = {
@@ -15,4 +16,5 @@ export type PluginState = {
   errorCategory?: ProbeErrorCategory | null
   lastManualRefreshAt: number | null
   lastSuccessAt: number | null
+  setupDetection?: SetupDetection[]
 }

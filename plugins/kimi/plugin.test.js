@@ -40,6 +40,21 @@ describe("kimi plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("reports local setup sources without returning credential values", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText(CRED_PATH, JSON.stringify({ access_token: "local-token" }))
+    setEnv(ctx, { MOONSHOT_API_KEY: "moonshot-secret" })
+
+    const plugin = await loadPlugin()
+
+    expect(plugin.detectSetup(ctx)).toEqual([
+      { id: "kimi-cli-login", state: "found" },
+      { id: "kimi-api-key", state: "found" },
+    ])
+    expect(JSON.stringify(plugin.detectSetup(ctx))).not.toContain("local-token")
+    expect(JSON.stringify(plugin.detectSetup(ctx))).not.toContain("moonshot-secret")
+  })
+
   it("renders Moonshot API balance when only an API key is configured", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MOONSHOT_API_KEY: "moonshot-key" })

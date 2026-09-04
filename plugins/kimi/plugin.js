@@ -186,6 +186,24 @@
     return null
   }
 
+  function detectSetup(ctx) {
+    let cliState = "missing"
+    if (ctx.host.fs.exists(CRED_PATH)) {
+      try {
+        const parsed = ctx.util.tryParseJson(ctx.host.fs.readText(CRED_PATH))
+        cliState = parsed && (parsed.access_token || parsed.refresh_token) ? "found" : "unavailable"
+      } catch (e) {
+        ctx.host.log.warn("setup scan could not read Kimi credentials: " + String(e))
+        cliState = "unavailable"
+      }
+    }
+
+    return [
+      { id: "kimi-cli-login", state: cliState },
+      { id: "kimi-api-key", state: loadApiKey(ctx) ? "found" : "missing" },
+    ]
+  }
+
   function fetchBalance(ctx, apiKey) {
     return ctx.util.request({
       method: "GET",
@@ -514,6 +532,7 @@
   var probeCore = probe
   globalThis.__openusage_plugin = {
     id: "kimi",
+    detectSetup,
     probe: function (ctx) {
       return addCcusageHistory(ctx, probeCore(ctx))
     },

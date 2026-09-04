@@ -32,6 +32,7 @@ pub mod manifest;
 pub mod probe_error;
 pub(crate) mod redaction;
 pub mod runtime;
+pub(crate) mod setup_detection;
 
 use manifest::LoadedPlugin;
 use std::path::{Path, PathBuf};

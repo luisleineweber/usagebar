@@ -89,6 +89,16 @@ describe("copilot plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in. Run `gh auth login` first.")
   })
 
+  it("reports gh CLI token presence without returning the token", async () => {
+    const ctx = makePluginTestContext()
+    setGhCliKeychain(ctx, "gho_local_token")
+
+    const plugin = await loadPlugin()
+
+    expect(plugin.detectSetup(ctx)).toEqual([{ id: "copilot-token", state: "found" }])
+    expect(JSON.stringify(plugin.detectSetup(ctx))).not.toContain("gho_local_token")
+  })
+
   it("loads token from OpenUsage keychain", async () => {
     const ctx = makePluginTestContext()
     setKeychainToken(ctx, "ghu_keychain")

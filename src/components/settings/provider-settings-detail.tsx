@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 import { AccountManagementSection } from "@/components/settings/account-management-section"
 import { ReportingSourceSettings } from "@/components/settings/reporting-source-settings"
+import { SetupAssistant } from "@/components/settings/setup-assistant"
 import type { PluginState } from "@/hooks/app/types"
 import { captureProviderCookieHeader } from "@/lib/guided-cookie-login"
 import {
@@ -172,6 +173,7 @@ export function ProviderSettingsDetail({
       : plugin.supportState === "experimental" && plugin.supportMessage
         ? `${plugin.supportMessage} ${baseSetupHint}`
         : baseSetupHint
+  const setupChecks = definition.setupChecks ?? []
   const hasEditableSettings = Boolean(
     definition.sourceOptions ||
     definition.secretField ||
@@ -500,6 +502,15 @@ export function ProviderSettingsDetail({
             )}
           </div>
         </div>
+
+        {setupChecks.length > 0 ? (
+          <SetupAssistant
+            checks={setupChecks}
+            detections={state?.setupDetection}
+            loading={Boolean(state?.loading)}
+            onScan={onRetry}
+          />
+        ) : null}
 
         <div className={groupClass}>
           <h4 className={groupTitleClass}>

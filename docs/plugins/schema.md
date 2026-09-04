@@ -13,8 +13,9 @@ For each enabled plugin:
   -> Create fresh QuickJS sandbox
   -> Inject host APIs (`ctx.host.*`)
   -> Evaluate plugin.js
+  -> Call optional `detectSetup(ctx)`
   -> Call `probe(ctx)`
-  -> Parse returned `{ lines: MetricLine[] }`
+  -> Parse returned setup checks and `{ lines: MetricLine[] }`
        |
 Return `PluginOutput[]` to frontend
        |
@@ -26,6 +27,7 @@ Key points:
 - Each probe runs in **isolated QuickJS runtime** (no shared state between plugins or calls)
 - Plugins are **synchronous or Promise-based** (unresolved promises timeout)
 - **Auto-update timer** - runs on app load and on configurable interval (5/15/30/60 min)
+- **Setup detection** - optional local checks run before each probe. They return only safe status values, never credentials.
 
 ## Plugin Directory Layout
 
@@ -227,9 +229,24 @@ Plugins must register themselves on the global object:
 ```javascript
 globalThis.__openusage_plugin = {
   id: "my-provider",  // Must match manifest.id
+  detectSetup: function(ctx) { ... }, // Optional local setup checks
   probe: function(ctx) { ... }
 }
 ```
+
+### Setup Detection
+
+Plugins may expose `detectSetup(ctx)` to report local authentication sources before the usage probe runs. The function must return (or resolve to) an array with only an `id` and one of these states:
+
+```javascript
+[
+  { id: "cli-login", state: "found" },
+  { id: "api-key", state: "missing" },
+  { id: "keychain", state: "unavailable" },
+]
+```
+
+The host validates this safe shape and sends it to the settings UI. Detectors may read local files, environment variables, SQLite databases, or other declared host APIs, but they must not return credential values. `found` means the source contains usable setup data, `missing` means no setup data was found, and `unavailable` means the source could not be checked. Setup detection is local-only. UsageBar does not upload the values or the detector result.
 
 ## Output Schema
 

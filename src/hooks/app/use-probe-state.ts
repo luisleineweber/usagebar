@@ -94,6 +94,7 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
+          setupDetection: existing?.setupDetection,
         }
       }
       return next
@@ -126,6 +127,7 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
+          setupDetection: existing?.setupDetection,
         }
       }
       return next
@@ -183,6 +185,7 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
             lastManualRefreshAt:
               !errorMessage && isManual ? capturedAt : (existing?.lastManualRefreshAt ?? null),
             lastSuccessAt: !errorMessage ? capturedAt : (existing?.lastSuccessAt ?? null),
+            setupDetection: output.setupDetection ?? existing?.setupDetection,
           },
         }
       })

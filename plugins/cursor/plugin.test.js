@@ -36,6 +36,26 @@ describe("cursor plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  it("reports SQLite and keychain setup sources independently", async () => {
+    const ctx = makeCtx()
+    ctx.app.platform = "windows"
+    const dbPath = "~/AppData/Roaming/Cursor/User/globalStorage/state.vscdb"
+    ctx.host.fs.writeText(dbPath, "database marker")
+    ctx.host.sqlite.query.mockReturnValue(JSON.stringify([{ value: "sqlite-token" }]))
+    ctx.host.keychain.readGenericPassword.mockImplementation((service) =>
+      service === "cursor-access-token" ? "keychain-token" : null
+    )
+
+    const plugin = await loadPlugin()
+
+    expect(plugin.detectSetup(ctx)).toEqual([
+      { id: "cursor-sqlite", state: "found" },
+      { id: "cursor-keychain", state: "found" },
+    ])
+    expect(JSON.stringify(plugin.detectSetup(ctx))).not.toContain("sqlite-token")
+    expect(JSON.stringify(plugin.detectSetup(ctx))).not.toContain("keychain-token")
+  })
+
   it("surfaces credential source failures instead of reporting signed out", async () => {
     const ctx = makeCtx()
     ctx.host.sqlite.query.mockImplementation(() => {

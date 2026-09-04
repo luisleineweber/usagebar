@@ -4,6 +4,7 @@ use crate::plugin_engine::manifest::{DetailChartKind, DetailFieldType, LoadedPlu
 use crate::plugin_engine::probe_error::{
     ProbeError, ProbeErrorCategory, classify_legacy_probe_error,
 };
+use crate::plugin_engine::setup_detection::{self, SetupDetection};
 use rquickjs::{Array, Context, Ctx, Error, Object, Promise, Runtime, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -147,6 +148,8 @@ pub struct PluginOutput {
     pub history: Option<UsageHistory>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub freshness: Option<DataFreshnessGroups>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub setup_detection: Option<Vec<SetupDetection>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -549,52 +552,95 @@ fn run_probe_unstamped(
             }
         };
 
-        let probe_ctx: Value = globals
+        let setup_probe_ctx: Value = globals
             .get("__openusage_ctx")
             .unwrap_or_else(|_| Value::new_undefined(ctx.clone()));
 
+        let setup_detection = match setup_detection::run(&plugin_obj, setup_probe_ctx) {
+            Ok(detection) => detection,
+            Err(error) => {
+                log::warn!("setup detector failed for {}: {}", plugin_id, error);
+                Some(Vec::new())
+            }
+        };
+
+        let probe_ctx: Value = globals
+            .get("__openusage_ctx")
+            .unwrap_or_else(|_| Value::new_undefined(ctx.clone()));
         let result_value: Value = match probe_fn.call((probe_ctx,)) {
             Ok(r) => r,
             Err(_) => {
                 if Instant::now() >= deadline_at {
-                    return error_output(plugin, timeout_message.clone());
+                    return with_setup_detection(
+                        error_output(plugin, timeout_message.clone()),
+                        &setup_detection,
+                    );
                 }
-                return probe_error_output(plugin, extract_probe_error(&ctx));
+                return with_setup_detection(
+                    probe_error_output(plugin, extract_probe_error(&ctx)),
+                    &setup_detection,
+                );
             }
         };
         if Instant::now() >= deadline_at {
-            return error_output(plugin, timeout_message.clone());
+            return with_setup_detection(
+                error_output(plugin, timeout_message.clone()),
+                &setup_detection,
+            );
         }
         let result: Object = if result_value.is_promise() {
             let promise: Promise = match result_value.into_promise() {
                 Some(promise) => promise,
                 None => {
-                    return error_output(plugin, "probe() returned invalid promise".to_string());
+                    return with_setup_detection(
+                        error_output(plugin, "probe() returned invalid promise".to_string()),
+                        &setup_detection,
+                    );
                 }
             };
             match promise.finish::<Object>() {
                 Ok(obj) => obj,
                 Err(Error::WouldBlock) => {
                     if Instant::now() >= deadline_at {
-                        return error_output(plugin, timeout_message.clone());
+                        return with_setup_detection(
+                            error_output(plugin, timeout_message.clone()),
+                            &setup_detection,
+                        );
                     }
-                    return error_output(plugin, "probe() returned unresolved promise".to_string());
+                    return with_setup_detection(
+                        error_output(plugin, "probe() returned unresolved promise".to_string()),
+                        &setup_detection,
+                    );
                 }
                 Err(_) => {
                     if Instant::now() >= deadline_at {
-                        return error_output(plugin, timeout_message.clone());
+                        return with_setup_detection(
+                            error_output(plugin, timeout_message.clone()),
+                            &setup_detection,
+                        );
                     }
-                    return probe_error_output(plugin, extract_probe_error(&ctx));
+                    return with_setup_detection(
+                        probe_error_output(plugin, extract_probe_error(&ctx)),
+                        &setup_detection,
+                    );
                 }
             }
         } else {
             match result_value.into_object() {
                 Some(obj) => obj,
-                None => return error_output(plugin, "probe() returned non-object".to_string()),
+                None => {
+                    return with_setup_detection(
+                        error_output(plugin, "probe() returned non-object".to_string()),
+                        &setup_detection,
+                    );
+                }
             }
         };
         if Instant::now() >= deadline_at {
-            return error_output(plugin, timeout_message.clone());
+            return with_setup_detection(
+                error_output(plugin, timeout_message.clone()),
+                &setup_detection,
+            );
         }
 
         let plan: Option<String> = result
@@ -630,6 +676,7 @@ fn run_probe_unstamped(
             error,
             history,
             freshness: None,
+            setup_detection,
         }
     })
 }
@@ -1455,7 +1502,16 @@ fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput 
         error: Some(error),
         history: None,
         freshness: None,
+        setup_detection: None,
     }
+}
+
+fn with_setup_detection(
+    mut output: PluginOutput,
+    setup_detection: &Option<Vec<SetupDetection>>,
+) -> PluginOutput {
+    output.setup_detection = setup_detection.clone();
+    output
 }
 
 fn extract_probe_error(ctx: &Ctx<'_>) -> ProbeError {
@@ -1574,6 +1630,38 @@ mod tests {
         );
         let output = run_probe(&plugin, &temp_app_dir("sync"), "0.0.0", None);
         assert_eq!(error_text(output), "boom");
+    }
+
+    #[test]
+    fn run_probe_carries_local_setup_detection_on_success_and_error() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                detectSetup() {
+                    return [
+                        { id: "local-login", state: "found" },
+                        { id: "api-key", state: "missing" }
+                    ];
+                },
+                probe() {
+                    throw "not logged in";
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("setup-detection"), "0.0.0", None);
+        let detection = output.setup_detection.expect("setup detection");
+        assert_eq!(detection.len(), 2);
+        assert_eq!(detection[0].id, "local-login");
+        assert!(matches!(
+            detection[0].state,
+            crate::plugin_engine::setup_detection::SetupDetectionState::Found
+        ));
+        assert!(matches!(
+            detection[1].state,
+            crate::plugin_engine::setup_detection::SetupDetectionState::Missing
+        ));
     }
 
     #[test]

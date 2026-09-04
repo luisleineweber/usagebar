@@ -128,6 +128,30 @@
     }
   }
 
+  function detectSetup(ctx) {
+    const roots = gcloudRoots(ctx)
+    const credentialFile = readFirstFile(ctx, roots, "application_default_credentials.json")
+    let credentialState = "missing"
+    if (credentialFile) {
+      const parsed = ctx.util.tryParseJson(credentialFile.text)
+      credentialState =
+        parsed &&
+        readString(parsed.client_id) &&
+        readString(parsed.client_secret) &&
+        readString(parsed.refresh_token)
+          ? "found"
+          : "unavailable"
+    }
+
+    return [
+      { id: "vertex-gcloud-adc", state: credentialState },
+      {
+        id: "vertex-project",
+        state: loadProjectId(ctx, roots) ? "found" : "missing",
+      },
+    ]
+  }
+
   function needsRefresh(ctx, credentials) {
     if (!credentials.accessToken) return true
     const expiryMs = ctx.util.parseDateMs(credentials.expiryIso)
@@ -350,5 +374,5 @@
     return buildResult(ctx, credentials, quota)
   }
 
-  globalThis.__openusage_plugin = { id: "vertex-ai", probe }
+  globalThis.__openusage_plugin = { id: "vertex-ai", probe, detectSetup }
 })()

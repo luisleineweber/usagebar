@@ -13,6 +13,7 @@
     }
   },
   "capabilities": {
+    "fs": true,
     "sqliteRead": true,
     "sqliteWrite": true,
     "keychain": true,
