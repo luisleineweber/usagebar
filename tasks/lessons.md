@@ -1,5 +1,10 @@
 # Lessons
 
+## 2026-10-08
+
+- Guided login opened a blank window because a synchronous Tauri command waited for cookie capture on the native event loop. Fix: use an async command and run the blocking capture wait on a worker thread. Prevention: run the native Windows IPC test in CI; check that a page script runs and that closing the login window returns cancellation.
+- Abacus AI and Perplexity still opened blank windows because their initial URLs started a cookie read inside a native navigation event. The same read blocked Zed and OpenCode Zen at their target URLs. Fix: send completed page events to the existing capture worker, read cookies there, and keep the window open when sign-in cookies are absent. Prevention: test page scripts, empty-cookie cancellation, and approved-cookie capture for all four providers with real Windows WebView2.
+
 ## 2026-08-20
 
 - The stable publish workflow used a Tauri private key that did not match the repository public key. Fix: generate one key pair, synchronize both GitHub secrets and the checked-in public key, and inspect the publish log for mismatch warnings. Prevention: treat updater key mismatch warnings as a release blocker.

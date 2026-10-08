@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
-use tauri::webview::{Cookie, Url, WebviewWindowBuilder};
+use tauri::webview::{Cookie, PageLoadEvent, Url, WebviewWindowBuilder};
 use tauri::{AppHandle, Manager, WebviewUrl};
 use uuid::Uuid;
 
@@ -63,7 +63,7 @@ enum BrowserChannelMessage {
 }
 
 enum CookieCaptureMessage {
-    Success(GuidedCookieCaptureResponse),
+    PageLoaded(String),
     Error(String),
 }
 
@@ -71,9 +71,7 @@ struct CookieCaptureWindowConfig {
     title: String,
     login_url: String,
     success_url_contains: String,
-    cookie_urls: Vec<String>,
-    cookie_names: Vec<String>,
-    sender: Arc<Mutex<Option<mpsc::Sender<CookieCaptureMessage>>>>,
+    sender: mpsc::Sender<CookieCaptureMessage>,
 }
 
 pub fn request_with_cookies(
@@ -182,17 +180,13 @@ pub fn capture_cookies_interactively(
     };
     let label = format!("openusage-cookie-login-{}-{}", provider_id, Uuid::new_v4());
     let (tx, rx) = mpsc::channel::<CookieCaptureMessage>();
-    let sender = Arc::new(Mutex::new(Some(tx)));
-
     let app_for_build = app_handle.clone();
     let label_for_build = label.clone();
     let config = CookieCaptureWindowConfig {
         title: title.to_string(),
         login_url,
         success_url_contains: success_url_contains.to_string(),
-        cookie_urls,
-        cookie_names,
-        sender: Arc::clone(&sender),
+        sender: tx.clone(),
     };
 
     app_handle
@@ -200,19 +194,44 @@ pub fn capture_cookies_interactively(
             if let Err(error) =
                 build_cookie_capture_window(&app_for_build, &label_for_build, config)
             {
-                send_cookie_capture_message(
-                    &sender,
-                    CookieCaptureMessage::Error(format!("guided login setup failed: {}", error)),
-                );
+                let _ = tx.send(CookieCaptureMessage::Error(format!(
+                    "guided login setup failed: {}",
+                    error
+                )));
                 close_hidden_browser(&app_for_build, &label_for_build);
             }
         })
         .map_err(|error| format!("guided login unavailable: {}", error))?;
 
-    match rx.recv() {
-        Ok(CookieCaptureMessage::Success(response)) => Ok(response),
-        Ok(CookieCaptureMessage::Error(error)) => Err(error),
-        Err(_) => Err("guided login cancelled unexpectedly".to_string()),
+    // WebView2 cookie reads must run outside native page event handlers.
+    loop {
+        match rx.recv() {
+            Ok(CookieCaptureMessage::PageLoaded(final_url)) => {
+                let result = app_handle
+                    .get_webview_window(&label)
+                    .ok_or_else(|| "guided login window disappeared".to_string())
+                    .and_then(|window| {
+                        cookie_header_for_urls(&window, &cookie_urls, &cookie_names)
+                    });
+                match result {
+                    Ok(Some((cookie_header, cookie_count))) => {
+                        close_hidden_browser(app_handle, &label);
+                        return Ok(GuidedCookieCaptureResponse {
+                            cookie_header,
+                            final_url,
+                            cookie_count,
+                        });
+                    }
+                    Ok(None) => continue,
+                    Err(error) => {
+                        close_hidden_browser(app_handle, &label);
+                        return Err(error);
+                    }
+                }
+            }
+            Ok(CookieCaptureMessage::Error(error)) => return Err(error),
+            Err(_) => return Err("guided login cancelled unexpectedly".to_string()),
+        }
     }
 }
 
@@ -225,16 +244,10 @@ fn build_cookie_capture_window(
         title,
         login_url,
         success_url_contains,
-        cookie_urls,
-        cookie_names,
         sender,
     } = config;
-    let app_for_nav = app_handle.clone();
-    let label_for_nav = label.to_string();
     let success_marker = success_url_contains;
-    let cookie_urls_for_nav = cookie_urls;
-    let cookie_names_for_nav = cookie_names;
-    let sender_for_nav = Arc::clone(&sender);
+    let sender_for_load = sender.clone();
 
     let window = WebviewWindowBuilder::new(
         app_handle,
@@ -248,40 +261,13 @@ fn build_cookie_capture_window(
     .title(title)
     .inner_size(1040.0, 760.0)
     .visible(true)
-    .on_navigation(move |url| {
-        let current = url.to_string();
-        if !current.contains(&success_marker) {
-            return true;
+    .on_page_load(move |_, payload| {
+        if payload.event() == PageLoadEvent::Finished
+            && payload.url().as_str().contains(&success_marker)
+        {
+            let _ =
+                sender_for_load.send(CookieCaptureMessage::PageLoaded(payload.url().to_string()));
         }
-
-        let Some(window) = app_for_nav.get_webview_window(&label_for_nav) else {
-            send_cookie_capture_message(
-                &sender_for_nav,
-                CookieCaptureMessage::Error("guided login window disappeared".to_string()),
-            );
-            return false;
-        };
-
-        let result = cookie_header_for_urls(&window, &cookie_urls_for_nav, &cookie_names_for_nav)
-            .map(
-                |(cookie_header, cookie_count)| GuidedCookieCaptureResponse {
-                    cookie_header,
-                    final_url: current.clone(),
-                    cookie_count,
-                },
-            );
-
-        match result {
-            Ok(response) => send_cookie_capture_message(
-                &sender_for_nav,
-                CookieCaptureMessage::Success(response),
-            ),
-            Err(error) => {
-                send_cookie_capture_message(&sender_for_nav, CookieCaptureMessage::Error(error))
-            }
-        }
-        close_hidden_browser(&app_for_nav, &label_for_nav);
-        false
     })
     .build()
     .map_err(|error| format!("failed to build guided login window: {}", error))?;
@@ -290,12 +276,9 @@ fn build_cookie_capture_window(
     let label_for_close = label.to_string();
     window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-            send_cookie_capture_message(
-                &sender,
-                CookieCaptureMessage::Error(
-                    "guided login was closed before cookies were captured".to_string(),
-                ),
-            );
+            let _ = sender.send(CookieCaptureMessage::Error(
+                "guided login was closed before cookies were captured".to_string(),
+            ));
             close_hidden_browser(&app_for_close, &label_for_close);
         }
     });
@@ -307,7 +290,7 @@ fn cookie_header_for_urls(
     window: &tauri::WebviewWindow,
     cookie_urls: &[String],
     cookie_names: &[String],
-) -> Result<(String, usize), String> {
+) -> Result<Option<(String, usize)>, String> {
     let mut pairs = Vec::<String>::new();
     let mut seen = std::collections::HashMap::<String, String>::new();
 
@@ -323,18 +306,21 @@ fn cookie_header_for_urls(
             if name.is_empty() || !cookie_names.iter().any(|allowed| allowed == name) {
                 continue;
             }
-            super::push_approved_cookie(&mut seen, &mut pairs, name, cookie.value())?;
+            super::approved_cookies::push_approved_cookie(
+                &mut seen,
+                &mut pairs,
+                name,
+                cookie.value(),
+            )?;
         }
     }
 
     if pairs.is_empty() {
-        return Err(
-            "guided login reached the target page but no cookies were available".to_string(),
-        );
+        return Ok(None);
     }
 
     let cookie_count = pairs.len();
-    Ok((pairs.join("; "), cookie_count))
+    Ok(Some((pairs.join("; "), cookie_count)))
 }
 
 fn build_hidden_browser_request(
@@ -551,16 +537,6 @@ fn parse_bridge_result(url: &Url) -> Result<BrowserChannelMessage, String> {
 fn send_browser_message(
     sender: &Arc<Mutex<Option<mpsc::Sender<BrowserChannelMessage>>>>,
     message: BrowserChannelMessage,
-) {
-    let maybe_sender = sender.lock().ok().and_then(|mut slot| slot.take());
-    if let Some(tx) = maybe_sender {
-        let _ = tx.send(message);
-    }
-}
-
-fn send_cookie_capture_message(
-    sender: &Arc<Mutex<Option<mpsc::Sender<CookieCaptureMessage>>>>,
-    message: CookieCaptureMessage,
 ) {
     let maybe_sender = sender.lock().ok().and_then(|mut slot| slot.take());
     if let Some(tx) = maybe_sender {

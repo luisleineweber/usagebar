@@ -16,6 +16,8 @@ mod credential_support;
 mod dev_data_migration;
 #[cfg(not(test))]
 mod global_shortcut;
+#[cfg(not(test))]
+mod guided_cookie_login;
 mod local_http_api;
 mod panel;
 mod plugin_commands;
@@ -64,11 +66,13 @@ use tauri_plugin_log::{Target, TargetKind};
 use app_update::{download_github_update, install_downloaded_update};
 #[cfg(not(test))]
 use credential_commands::{
-    capture_provider_cookie_header, delete_codex_account_profile, delete_provider_account_profile,
-    delete_provider_secret, import_browser_cookies, import_current_codex_account_profile,
+    delete_codex_account_profile, delete_provider_account_profile, delete_provider_secret,
+    import_browser_cookies, import_current_codex_account_profile,
     import_current_provider_account_profile, list_browser_import_sources,
     list_codex_account_profiles, list_provider_account_profiles, set_provider_secret,
 };
+#[cfg(not(test))]
+use guided_cookie_login::capture_provider_cookie_header;
 #[cfg(not(test))]
 use probe_commands::start_probe_batch;
 

@@ -19,6 +19,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "usagebar-cli"
 path = "src/bin/usagebar-cli.rs"
 
+[[test]]
+name = "guided_cookie_login"
+harness = false
+
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

@@ -159,3 +159,7 @@ jobs:
       - name: Compile Rust backend tests (Windows)
         if: runner.os == 'Windows'
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --no-run
+
+      - name: Test native guided login (Windows)
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --test guided_cookie_login
