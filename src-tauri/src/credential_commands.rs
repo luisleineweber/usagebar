@@ -3,6 +3,7 @@ use tauri::Manager;
 use crate::browser_cookie_import;
 use crate::codex_account_store;
 use crate::provider_account_store;
+#[cfg(target_os = "windows")]
 use crate::provider_secret_store;
 
 #[derive(Clone, serde::Serialize)]
@@ -36,7 +37,7 @@ fn managed_profile_secret_key(profile_id: &str) -> String {
 }
 
 fn save_managed_profile_secret(
-    app_data_dir: &std::path::Path,
+    _app_data_dir: &std::path::Path,
     provider_id: &str,
     profile_id: &str,
     auth_json: &str,
@@ -46,7 +47,7 @@ fn save_managed_profile_secret(
     #[cfg(target_os = "windows")]
     {
         provider_secret_store::save_provider_secret(
-            app_data_dir,
+            _app_data_dir,
             provider_id,
             &secret_key,
             auth_json,
@@ -74,21 +75,20 @@ fn save_managed_profile_secret(
 }
 
 fn delete_managed_profile_secret(
-    app_data_dir: &std::path::Path,
+    _app_data_dir: &std::path::Path,
     provider_id: &str,
     profile_id: &str,
 ) -> Result<(), String> {
     let secret_key = managed_profile_secret_key(profile_id);
 
     #[cfg(target_os = "windows")]
-    provider_secret_store::delete_provider_secret(app_data_dir, provider_id, &secret_key).map_err(
-        |error| {
+    provider_secret_store::delete_provider_secret(_app_data_dir, provider_id, &secret_key)
+        .map_err(|error| {
             format!(
                 "Could not remove imported {} profile auth: {}",
                 provider_id, error
             )
-        },
-    )?;
+        })?;
 
     let service = crate::provider_secret_service(provider_id, &secret_key);
     crate::delete_provider_secret_service(&service).map_err(|error| {
@@ -145,7 +145,7 @@ pub(crate) async fn import_browser_cookies(
 
 #[tauri::command]
 pub(crate) fn set_provider_secret(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     provider_id: String,
     secret_key: String,
     value: String,
@@ -163,7 +163,8 @@ pub(crate) fn set_provider_secret(
 
     let service = crate::provider_secret_service(trimmed_provider, trimmed_secret);
     let label = crate::provider_secret_label(trimmed_provider, trimmed_secret);
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
+    #[cfg(target_os = "windows")]
+    let app_data_dir = _app_handle.path().app_data_dir().map_err(|error| {
         format!(
             "Could not access the app data directory for {}: {}",
             label, error
@@ -247,7 +248,7 @@ pub(crate) fn set_provider_secret(
 
 #[tauri::command]
 pub(crate) fn delete_provider_secret(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     provider_id: String,
     secret_key: String,
 ) -> Result<(), String> {
@@ -266,7 +267,7 @@ pub(crate) fn delete_provider_secret(
 
     #[cfg(target_os = "windows")]
     {
-        let app_data_dir = app_handle.path().app_data_dir().map_err(|error| {
+        let app_data_dir = _app_handle.path().app_data_dir().map_err(|error| {
             format!(
                 "Could not access the app data directory while removing {}: {}",
                 crate::provider_secret_label(trimmed_provider, trimmed_secret),

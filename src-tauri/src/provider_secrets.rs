@@ -86,11 +86,11 @@ pub(super) fn provider_secret_legacy_services(provider_id: &str, secret_key: &st
 }
 
 pub(super) fn delete_provider_secret_service(service: &str) -> Result<(), String> {
-    let mut specs = vec![provider_secret_entry_spec(service)];
-    #[cfg(target_os = "windows")]
-    {
-        specs.push(provider_secret_legacy_entry_spec(service));
-    }
+    let specs = [
+        provider_secret_entry_spec(service),
+        #[cfg(target_os = "windows")]
+        provider_secret_legacy_entry_spec(service),
+    ];
 
     for spec in specs {
         let entry = open_provider_secret_entry(spec)

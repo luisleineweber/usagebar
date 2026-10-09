@@ -26,6 +26,7 @@ mod plugin_engine;
 mod probe_commands;
 mod probe_coordinator;
 mod provider_account_store;
+#[cfg(target_os = "windows")]
 mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]

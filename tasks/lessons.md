@@ -1,5 +1,13 @@
 # Lessons
 
+## 2026-10-09
+
+- The dependency audit found unsafe versions of Vitest, brace-expansion, source-map-js, and undici. Fix: update only the affected packages and keep Vitest coverage on the same version. Prevention: run the CI audit against the lockfile after package changes.
+- A failed JavaScript audit skipped the Rust audit setup, but the report step still called the missing cargo-audit tool. Fix: run the Rust audit even when the JavaScript audit fails. Prevention: keep independent audits active after an earlier audit failure.
+- The skipped Rust audit hid an unsafe rustls version and a withdrawn chacha20 version. Fix: update only those two lockfile entries. Prevention: require both dependency audits to pass before PR completion.
+- Linux Rust lint failed because Windows imports, data, and mutable lists compiled without Windows callers. Fix: compile Windows code only where needed, use fixed credential lists, and remove unused non-Windows secret-store functions. Prevention: keep the Linux and Windows all-target Clippy checks active in CI.
+- One App test made four preference changes and exceeded the time limit even when run alone. Fix: test each preference change separately with the same event checks and time limit. Prevention: use one interaction per async test when the interactions test separate behavior.
+
 ## 2026-10-08
 
 - GitHub CLI selected the upstream remote because this repository had no default. Fix: set luisleineweber/usagebar as the default and use explicit --repo for PR commands. Prevention: check the selected repository before creating or finding a PR.

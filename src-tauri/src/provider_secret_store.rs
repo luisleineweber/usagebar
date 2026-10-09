@@ -17,11 +17,6 @@ fn provider_secret_file_path(app_data_dir: &Path) -> PathBuf {
     app_data_dir.join("provider-secrets.json")
 }
 
-#[cfg(not(target_os = "windows"))]
-fn unsupported_platform_error() -> String {
-    "Secure provider secret storage is not supported on this platform".to_string()
-}
-
 fn load_provider_secret_file(app_data_dir: &Path) -> Result<ProviderSecretFile, String> {
     let path = provider_secret_file_path(app_data_dir);
     match std::fs::read_to_string(&path) {
@@ -202,16 +197,6 @@ pub fn save_provider_secret(
     windows::save_provider_secret(app_data_dir, provider_id, secret_key, value)
 }
 
-#[cfg(not(target_os = "windows"))]
-pub fn save_provider_secret(
-    _app_data_dir: &Path,
-    _provider_id: &str,
-    _secret_key: &str,
-    _value: &str,
-) -> Result<(), String> {
-    Err(unsupported_platform_error())
-}
-
 #[cfg(target_os = "windows")]
 pub fn read_provider_secret(
     app_data_dir: &Path,
@@ -219,15 +204,6 @@ pub fn read_provider_secret(
     secret_key: &str,
 ) -> Result<Option<String>, String> {
     windows::read_provider_secret(app_data_dir, provider_id, secret_key)
-}
-
-#[cfg(not(target_os = "windows"))]
-pub fn read_provider_secret(
-    _app_data_dir: &Path,
-    _provider_id: &str,
-    _secret_key: &str,
-) -> Result<Option<String>, String> {
-    Err(unsupported_platform_error())
 }
 
 #[cfg(target_os = "windows")]
@@ -239,24 +215,12 @@ pub fn delete_provider_secret(
     windows::delete_provider_secret(app_data_dir, provider_id, secret_key)
 }
 
-#[cfg(not(target_os = "windows"))]
-pub fn delete_provider_secret(
-    _app_data_dir: &Path,
-    _provider_id: &str,
-    _secret_key: &str,
-) -> Result<(), String> {
-    Err(unsupported_platform_error())
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         ProviderSecretFile, load_provider_secret_file, provider_secret_storage_key,
         save_provider_secret_file,
     };
-
-    #[cfg(not(target_os = "windows"))]
-    use super::unsupported_platform_error;
 
     #[test]
     fn provider_secret_storage_key_is_stable() {
@@ -286,11 +250,5 @@ mod tests {
         assert_eq!(loaded.entries, second.entries);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
         let _ = std::fs::remove_dir_all(dir);
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    #[test]
-    fn unsupported_platform_error_is_actionable() {
-        assert!(unsupported_platform_error().contains("not supported on this platform"));
     }
 }
