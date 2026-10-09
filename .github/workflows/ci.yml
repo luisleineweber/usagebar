@@ -28,6 +28,7 @@ jobs:
         run: bun audit --audit-level=low
 
       - name: Run cargo audit
+        if: always()
         uses: actions-rust-lang/audit@v1
         with:
           workingDirectory: src-tauri
