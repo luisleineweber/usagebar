@@ -28,6 +28,7 @@ jobs:
         run: bun audit --audit-level=low
 
       - name: Run cargo audit
+        if: always()
         uses: actions-rust-lang/audit@v1
         with:
           workingDirectory: src-tauri
@@ -159,3 +160,7 @@ jobs:
       - name: Compile Rust backend tests (Windows)
         if: runner.os == 'Windows'
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --no-run
+
+      - name: Test native guided login (Windows)
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --test guided_cookie_login

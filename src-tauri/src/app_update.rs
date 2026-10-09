@@ -148,7 +148,7 @@ pub fn install_downloaded_update(app: AppHandle, installer_path: String) -> Resu
     #[cfg(not(target_os = "windows"))]
     {
         let _ = (app, installer_path);
-        return Err("Direct GitHub installer updates are supported on Windows only".to_string());
+        Err("Direct GitHub installer updates are supported on Windows only".to_string())
     }
 
     #[cfg(target_os = "windows")]
