@@ -389,8 +389,30 @@ describe("ProviderCard", () => {
       />
     )
 
-    expect(screen.getByText("100% cap")).toBeInTheDocument()
+    expect(screen.getByText("10% used")).toBeInTheDocument()
+    expect(screen.queryByText(/cap|Full/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^Next reset:/)).not.toBeInTheDocument()
+  })
+
+  it("shows 'Full' for an unused percent quota without reset", () => {
+    render(
+      <ProviderCard
+        name="Unused"
+        displayMode="left"
+        lines={[
+          {
+            type: "progress",
+            label: "Designs",
+            used: 0,
+            limit: 100,
+            format: { kind: "percent" },
+          },
+        ]}
+      />
+    )
+
+    expect(screen.getByText("100% left")).toBeInTheDocument()
+    expect(screen.getByText("Full")).toBeInTheDocument()
   })
 
   it("shows 'Resets soon' when reset is under 5 minutes away", () => {
