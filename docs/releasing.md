@@ -20,7 +20,9 @@ The preflight currently verifies:
 
 - `package.json`, [src-tauri/tauri.conf.json](../src-tauri/tauri.conf.json), and [src-tauri/Cargo.toml](../src-tauri/Cargo.toml) agree on the same version
 - the release tag matches that version
-- the Tauri product branding is `UsageBar` and the updater endpoint is the fixed signed channel at `https://github.com/luisleineweber/usagebar/releases/download/updater/latest.json`
+- the Tauri product branding is `UsageBar`
+- the stable build reads the `updater` channel and [src-tauri/tauri.prerelease.conf.json](../src-tauri/tauri.prerelease.conf.json) points prerelease builds at the `updater-prerelease` channel
+- the updater public key keeps key ID `1172A2A8FDB20C1F`, which signed every published release
 - [CHANGELOG.md](../CHANGELOG.md) contains a section for the version being released
 - bundled plugins exist under `src-tauri/resources/bundled_plugins`
 
@@ -29,7 +31,7 @@ The preflight currently verifies:
 Build the Windows installer locally before the first publish of a version:
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content .\\usagebar.key -Raw
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content .\usagebar.key -Raw
 $env:USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER = "1"
 bun run build:release -- --bundles nsis
 ```
@@ -74,13 +76,16 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 
 All published releases require `TAURI_SIGNING_PRIVATE_KEY`, `latest.json`, and updater signature assets. Prerelease tags still allow an unsigned Windows installer while Authenticode signing remains unavailable.
 
-The release workflow copies the signed `latest.json` from each versioned release to the fixed `updater` release. The app reads that channel, downloads first, and installs only after you select `Restart to update`.
+The release workflow copies the signed `latest.json` from each versioned release to fixed channel releases. The app reads its channel, downloads first, and installs only after you select `Restart to update`.
 
 Current updater channel:
 
 - GitHub's `releases/latest` alias does not resolve prereleases.
-- The publish workflow copies each signed `latest.json` to the fixed `updater` release.
-- UsageBar reads `https://github.com/luisleineweber/usagebar/releases/download/updater/latest.json`.
+- Stable releases update both the `updater` and `updater-prerelease` channels.
+- Prereleases update only the `updater-prerelease` channel, so stable installs never receive a prerelease.
+- Prerelease builds use `--config src-tauri/tauri.prerelease.conf.json`; [scripts/updater-channel.mjs](../scripts/updater-channel.mjs) selects the channel from the release tag.
+- Both channel releases stay GitHub prereleases so `releases/latest` still resolves to the newest stable release. v0.1.1 installs read that alias.
+- Do not rotate the updater key. Installed builds reject updates signed with another key.
 
 ## Release Gate
 
@@ -114,7 +119,7 @@ This is a public alpha for Windows users who want to test UsageBar before a full
 
 - Some providers are experimental and may need manual cookie/API-key setup
 - Some costs or usage buckets may be estimated or partial
-- Prerelease updates use the signed updater channel
+- Prerelease updates use the signed prerelease updater channel
 - UI polish, crash recovery, and signed-build coverage are not final
 
 ### Privacy

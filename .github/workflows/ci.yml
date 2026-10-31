@@ -140,6 +140,9 @@ jobs:
       - name: Run Tauri wrapper tests
         run: node --test scripts/tauri/wrapper.test.mjs
 
+      - name: Run updater channel tests
+        run: node --test scripts/updater-channel.test.mjs
+
       - name: Prepare CLI sidecar
         run: bun run prepare:cli-sidecar
 

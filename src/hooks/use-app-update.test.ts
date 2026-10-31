@@ -42,7 +42,8 @@ describe("useAppUpdate", () => {
     checkMock.mockResolvedValue(null)
     // `@tauri-apps/api/core` considers `globalThis.isTauri` the runtime flag.
     globalThis.isTauri = true
-})
+  })
+
   afterAll(() => {
     vi.unstubAllGlobals()
     if (originalIsTauri === undefined) {

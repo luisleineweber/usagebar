@@ -2,11 +2,9 @@
 
 ## 2026-08-28
 
-- A fixed `releases/latest` updater endpoint cannot discover prerelease releases. Fix: publish signed `latest.json` to a fixed `updater` channel and use the signed download-then-restart flow for every release. Prevention: test prerelease discovery, signature assets, and both update actions.
-
-## 2026-08-24
-
-- The updater requested signed `latest.json` metadata every 15 minutes, even when no release was newer. Fix: query the GitHub Releases API first, load signed metadata only for a newer stable release, and poll once per day. Prevention: test the no-update path and the polling boundary without allowing `latest.json` requests.
+- A fixed `releases/latest` updater endpoint cannot discover prerelease releases. Fix: publish signed `latest.json` to fixed channel releases and use the signed download-then-restart flow for every release. Prevention: test prerelease discovery, signature assets, and both update actions.
+- One shared updater channel offered prereleases to stable installs, because a newer core version is always eligible. Fix: stable releases feed `updater` and `updater-prerelease`; prereleases feed only `updater-prerelease`. Prevention: `scripts/updater-channel.test.mjs` runs in CI.
+- The updater rework replaced the public key that signed v0.1.1. Installed v0.1.1 builds would reject every later update. Fix: keep key ID `1172A2A8FDB20C1F`. Prevention: release preflight fails when the key ID changes.
 
 ## 2026-08-20
 

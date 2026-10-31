@@ -82,6 +82,11 @@ jobs:
       - name: Release preflight
         run: node ./scripts/release-preflight.mjs --release-tag "$RELEASE_TAG"
 
+      - name: Select updater channel
+        run: |
+          echo "UPDATER_BUILD_ARGS=$(node ./scripts/updater-channel.mjs build-args "$RELEASE_TAG")" >> "$GITHUB_ENV"
+          echo "UPDATER_CHANNEL_TAGS=$(node ./scripts/updater-channel.mjs channels "$RELEASE_TAG")" >> "$GITHUB_ENV"
+
       - name: Allow unsigned prerelease installer
         if: runner.os == 'Windows' && contains(env.RELEASE_TAG, '-')
         run: |
@@ -144,7 +149,7 @@ jobs:
           releaseDraft: false
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
           includeUpdaterJson: true
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ env.UPDATER_BUILD_ARGS }}
 
       - name: Verify updater assets uploaded
         env:
@@ -158,27 +163,30 @@ jobs:
             printf '%s\n' "$ASSETS" | grep -Eq 'setup\.exe$' || { echo "Missing Windows setup executable"; exit 1; }
           fi
 
-      - name: Publish updater channel manifest
+      - name: Publish updater channel manifests
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          CHANNEL_TAG="updater"
           CHANNEL_DIR="$RUNNER_TEMP/usagebar-updater-channel"
           mkdir -p "$CHANNEL_DIR"
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir "$CHANNEL_DIR"
 
-          if ! gh release view "$CHANNEL_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$CHANNEL_TAG" \
+          for CHANNEL_TAG in $UPDATER_CHANNEL_TAGS; do
+            # Channel releases stay prereleases so `releases/latest` keeps
+            # resolving to the newest versioned stable release.
+            if ! gh release view "$CHANNEL_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release create "$CHANNEL_TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --prerelease \
+                --title "UsageBar $CHANNEL_TAG channel" \
+                --notes "Machine-readable updater metadata. Install UsageBar from the versioned releases."
+            fi
+
+            gh release upload "$CHANNEL_TAG" \
               --repo "$GITHUB_REPOSITORY" \
-              --prerelease \
-              --title "UsageBar updater channel" \
-              --notes "Machine-readable updater metadata. Install UsageBar from the versioned releases."
-          fi
+              "$CHANNEL_DIR/latest.json" \
+              --clobber
 
-          gh release upload "$CHANNEL_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            "$CHANNEL_DIR/latest.json" \
-            --clobber
-
-          CHANNEL_ASSET=$(gh release view "$CHANNEL_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
-          printf '%s\n' "$CHANNEL_ASSET" | grep -Fxq 'latest.json' || { echo "Updater channel is missing latest.json"; exit 1; }
+            CHANNEL_ASSET=$(gh release view "$CHANNEL_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
+            printf '%s\n' "$CHANNEL_ASSET" | grep -Fxq 'latest.json' || { echo "$CHANNEL_TAG channel is missing latest.json"; exit 1; }
+          done
