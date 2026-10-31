@@ -86,4 +86,4 @@ for (const { type, entry } of entries) {
   console.log("")
 }
 
-process.exitCode = entries.length > 0 ? 1 : 0
+process.exitCode = counts.vulnerability > 0 ? 1 : 0

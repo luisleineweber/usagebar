@@ -1,5 +1,10 @@
 # Lessons
 
+## 2026-11-01
+
+- New advisories made the dependency audit fail for Vite, Vitest, undici, minimatch, quinn-proto, rustls, rustls-webpki, webpki-root-certs, and zip. Fix: update only the affected packages and disable the unused zip feature of the updater plugin, because releases ship signed Windows installers without archives. Prevention: run `bun audit` and `cargo audit` locally after each lockfile change.
+- The cargo audit report failed on unmaintained and unsound warnings without a fix, although the audit step allows warnings. Fix: fail the report only for vulnerabilities and still list all warnings. Prevention: `scripts/report-cargo-audit.test.mjs` runs in CI.
+
 ## 2026-10-09
 
 - The dependency audit found unsafe versions of Vitest, brace-expansion, source-map-js, and undici. Fix: update only the affected packages and keep Vitest coverage on the same version. Prevention: run the CI audit against the lockfile after package changes.

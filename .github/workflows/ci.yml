@@ -144,6 +144,9 @@ jobs:
       - name: Run updater channel tests
         run: node --test scripts/updater-channel.test.mjs
 
+      - name: Run cargo audit report tests
+        run: node --test scripts/report-cargo-audit.test.mjs
+
       - name: Prepare CLI sidecar
         run: bun run prepare:cli-sidecar
 
