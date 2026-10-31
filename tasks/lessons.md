@@ -1,5 +1,10 @@
 # Lessons
 
+## 2026-10-31
+
+- The cargo audit report script failed on unmaintained and unsound warnings, although the audit step used `denyWarnings: false`. The required Dependency audit check failed on every PR and on `main`. Fix: fail the report only on vulnerabilities and keep warnings in the summary. Prevention: `scripts/report-cargo-audit.test.mjs` runs in CI and covers both cases.
+- New advisories made the audit fail without a code change. The zip fix was only in `tauri-plugin-updater` 2.14.1, which needs Tauri 2.12. Fix: update the affected JavaScript packages, Rust patch versions, and Tauri with its JavaScript packages to the same minor version. Prevention: run both audits with a fresh advisory database before PR completion.
+
 ## 2026-10-09
 
 - The dependency audit found unsafe versions of Vitest, brace-expansion, source-map-js, and undici. Fix: update only the affected packages and keep Vitest coverage on the same version. Prevention: run the CI audit against the lockfile after package changes.

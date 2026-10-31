@@ -35,6 +35,10 @@ jobs:
           denyWarnings: false
           createIssues: false
 
+      - name: Test cargo audit report
+        if: always()
+        run: node --test scripts/report-cargo-audit.test.mjs
+
       - name: Export cargo audit report
         if: always()
         working-directory: src-tauri
