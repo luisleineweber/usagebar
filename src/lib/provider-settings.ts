@@ -198,16 +198,16 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
       key: "cookieHeader",
       label: "Claude web Cookie header",
       description:
-        "Paste the full Cookie request header from claude.ai. It must include sessionKey. Do not paste Set-Cookie.",
+        "Sign in at claude.ai, press F12, select Network, and reload the page. Open a claude.ai request, then copy the Cookie value from Request Headers. It must include sessionKey. Do not copy Set-Cookie.",
       placeholder: "sessionKey=sk-ant-...;",
     },
   },
   cursor: {
     mode: "detected",
     title: "Cursor Setup",
-    summary: "Current plugin resolves auth from local state DB or keychain.",
-    statusHint:
-      "Source/status is visible here; manual token editing is deferred until refresh persistence is modeled.",
+    summary:
+      "Reads your Cursor sign-in from the local Cursor database or Windows Credential Manager.",
+    statusHint: "UsageBar reads the Cursor sign-in on this device. No manual setup is needed.",
     connectHint:
       "Open Cursor and sign in on this machine, then refresh to detect the saved auth state.",
     setupChecks: [
@@ -281,7 +281,7 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
       key: "workspaceId",
       label: "Billing scope",
       description:
-        "Optional. Use org:ORG or enterprise:SLUG to read official premium-request usage from that billing account. Leave blank for personal user billing.",
+        "Optional. Enter org:ORG or enterprise:SLUG for organization or enterprise billing. Leave blank for personal billing.",
       placeholder: "org:my-org",
     },
   },
@@ -795,6 +795,10 @@ function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
     updatedAt,
     secrets: Object.keys(secrets).length > 0 ? secrets : undefined,
   }
+}
+
+export function hasProviderSettingsDefinition(providerId: string): boolean {
+  return providerId in PROVIDER_SETTINGS_DEFINITIONS
 }
 
 export function getProviderSettingsDefinition(providerId: string): ProviderSettingsDefinition {

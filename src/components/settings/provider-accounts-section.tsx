@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
+import { ManagedAccountsView } from "@/components/settings/managed-accounts-view"
 import { getErrorMessage } from "@/lib/error-utils"
 import {
   deleteProviderAccountProfile,
@@ -106,73 +106,17 @@ export function ProviderAccountsSection({
   }
 
   return (
-    <div className="border-t border-border/55 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          {providerName} Accounts
-        </h4>
-        <Button type="button" size="xs" onClick={() => void handleImport()} disabled={loading}>
-          Import current login
-        </Button>
-      </div>
-
-      <div className="mt-3 space-y-2">
-        {profiles.length === 0 ? (
-          <div className="border-t border-dashed border-border/55 py-3 text-sm text-muted-foreground">
-            No imported {providerName} accounts.
-          </div>
-        ) : (
-          profiles.map((profile) => {
-            const selected = profile.profileId === selectedProfileId
-            return (
-              <div
-                key={profile.profileId}
-                className="flex flex-wrap items-center justify-between gap-3 border-t border-border/55 py-3"
-              >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => void handleSelect(profile.profileId)}
-                >
-                  <div className="truncate text-sm font-medium text-foreground">
-                    {profile.label}
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {profile.email ?? profile.accountId ?? profile.sourceKind}
-                  </div>
-                </button>
-                <div className="flex items-center gap-2">
-                  {selected && (
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
-                      Active
-                    </span>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    onClick={() => void handleDelete(profile.profileId)}
-                    disabled={loading}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
-
-      {message && (
-        <p role="status" className="mt-3 text-xs text-primary">
-          {message}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="mt-3 text-xs text-destructive">
-          {error}
-        </p>
-      )}
-    </div>
+    <ManagedAccountsView
+      providerId={providerId}
+      providerName={providerName}
+      profiles={profiles}
+      selectedProfileId={selectedProfileId}
+      loading={loading}
+      message={message}
+      error={error}
+      onImport={() => void handleImport()}
+      onSelect={(profileId) => void handleSelect(profileId)}
+      onDelete={(profileId) => void handleDelete(profileId)}
+    />
   )
 }

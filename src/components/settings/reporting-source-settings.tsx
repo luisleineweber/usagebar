@@ -41,7 +41,8 @@ export function ReportingSourceSettings({
         Local Reporting
       </h4>
       <p className="mt-1 text-sm text-muted-foreground">
-        Configure the local ccusage history source and pricing behavior. No transcript content leaves this device.
+        Configure the local ccusage history source and pricing behavior. No transcript content
+        leaves this device.
       </p>
       <label className="mt-3 block text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
         Custom data path
@@ -56,9 +57,11 @@ export function ReportingSourceSettings({
         />
         <Button
           type="button"
-          size="xs"
+          size="default"
           disabled={saving}
-          onClick={() => void update({ historyPath: path.trim() || undefined }, "History path saved.")}
+          onClick={() =>
+            void update({ historyPath: path.trim() || undefined }, "History path saved.")
+          }
         >
           Save
         </Button>
@@ -93,7 +96,7 @@ export function ReportingSourceSettings({
               checked === true ? "Offline pricing enabled." : "Online pricing enabled."
             )
           }
-          />
+        />
         <label htmlFor={`${providerId}-offline-pricing`} className="cursor-pointer">
           Use bundled offline pricing data
         </label>

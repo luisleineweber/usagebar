@@ -1,40 +1,53 @@
 import { Button } from "@/components/ui/button"
 import { CodexAccountsSection } from "@/components/settings/codex-accounts-section"
 import { ProviderAccountsSection } from "@/components/settings/provider-accounts-section"
+import { ProviderConnectionBadge } from "@/components/settings/provider-connection-badge"
 import { getProviderAccountCapabilities } from "@/lib/account-capabilities"
+import type { ProviderConnectionState } from "@/lib/provider-connection-state"
 import type { ProviderConfig, ProviderSettingsDefinition } from "@/lib/provider-settings"
 
-function providerAccountName(providerId: string): string {
-  if (providerId === "claude") return "Claude"
-  if (providerId === "codex") return "Codex"
-  if (providerId === "gemini") return "Gemini"
-  return providerId
+function connectionDetail(state: ProviderConnectionState, stale: boolean): string {
+  switch (state) {
+    case "connected":
+      return stale
+        ? "The last successful check was more than 30 minutes ago."
+        : "The last check succeeded."
+    case "error":
+      return "The last check failed. See Runtime status for the reason."
+    case "setupNeeded":
+      return "No check has completed yet."
+    case "disabled":
+      return "This provider is turned off."
+  }
 }
 
 export function AccountManagementSection({
   providerId,
+  providerName,
   definition,
-  connected,
+  connectionState,
   stale,
   config,
   credentialStored,
   onConfigChange,
-  onPing,
   onReauthenticate,
   onRemoveCredential,
 }: {
   providerId: string
+  providerName: string
   definition: ProviderSettingsDefinition
-  connected: boolean
+  connectionState: ProviderConnectionState
   stale: boolean
   config?: ProviderConfig
   credentialStored: boolean
   onConfigChange?: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
-  onPing: () => void
   onReauthenticate: () => void
   onRemoveCredential: () => void
 }) {
   const capabilities = getProviderAccountCapabilities(providerId, definition)
+  // Credential actions act on an app-stored credential. Without one there is nothing to renew.
+  const showReauthenticate = capabilities.reauthenticate && credentialStored
+  const showRemoveCredential = capabilities.removeCredential && credentialStored
   return (
     <div className="border-t border-border/55 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -43,29 +56,38 @@ export function AccountManagementSection({
             Account & Connection
           </h4>
           <p className="mt-1 text-sm text-muted-foreground">
-            {connected ? (stale ? "Last successful data is stale." : "Provider connection is healthy.") : "Provider is not connected."}
+            {connectionDetail(connectionState, stale)}
           </p>
         </div>
-        <span className={connected && !stale ? "text-xs font-medium text-primary" : "text-xs font-medium text-destructive"}>
-          {connected ? (stale ? "Stale" : "Connected") : "Attention needed"}
-        </span>
+        <ProviderConnectionBadge state={connectionState} />
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {capabilities.ping ? <Button type="button" size="xs" variant="outline" onClick={onPing}>Ping now</Button> : null}
-        {capabilities.reauthenticate ? <Button type="button" size="xs" variant="outline" onClick={onReauthenticate}>Re-authenticate</Button> : null}
-        {capabilities.removeCredential && credentialStored ? (
-          <Button type="button" size="xs" variant="outline" className="text-destructive hover:text-destructive" onClick={onRemoveCredential}>
-            Remove credential
-          </Button>
-        ) : null}
-      </div>
+      {showReauthenticate || showRemoveCredential ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {showReauthenticate ? (
+            <Button type="button" size="sm" variant="outline" onClick={onReauthenticate}>
+              Re-authenticate
+            </Button>
+          ) : null}
+          {showRemoveCredential ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={onRemoveCredential}
+            >
+              Remove credential
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {capabilities.managedProfiles ? (
         providerId === "codex" ? (
           <CodexAccountsSection config={config} onConfigChange={onConfigChange} />
         ) : (
           <ProviderAccountsSection
             providerId={providerId}
-            providerName={providerAccountName(providerId)}
+            providerName={providerName}
             config={config}
             onConfigChange={onConfigChange}
           />

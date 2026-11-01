@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react"
-import { describe, expect, it, vi } from "vitest"
+import { render, screen } from "@testing-library/react"
+import { describe, expect, it } from "vitest"
 import { SetupAssistant } from "@/components/settings/setup-assistant"
 
 const checks = [
@@ -27,7 +27,6 @@ describe("SetupAssistant", () => {
           { id: "kimi-api-key", state: "missing" },
         ]}
         loading={false}
-        onScan={vi.fn()}
       />
     )
 
@@ -38,15 +37,11 @@ describe("SetupAssistant", () => {
     expect(screen.getAllByText(/never uploaded/i)).toHaveLength(2)
   })
 
-  it("reports pending checks while scanning and disables the scan action", () => {
-    const onScan = vi.fn()
-    render(<SetupAssistant checks={checks} loading detections={undefined} onScan={onScan} />)
+  it("reports pending checks while a provider check runs, without its own check action", () => {
+    render(<SetupAssistant checks={checks} loading detections={undefined} />)
 
-    expect(screen.getAllByText("Waiting for scan")).toHaveLength(2)
-    const button = screen.getByRole("button", { name: "Scanning…" })
-    expect(button).toBeDisabled()
-    fireEvent.click(button)
-    expect(onScan).not.toHaveBeenCalled()
+    expect(screen.getAllByText("Waiting for check")).toHaveLength(2)
+    expect(screen.queryByRole("button")).not.toBeInTheDocument()
   })
 
   it("reports unavailable checks when a detector cannot provide a result", () => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
+import { ManagedAccountsView } from "@/components/settings/managed-accounts-view"
 import { getErrorMessage } from "@/lib/error-utils"
 import {
   deleteCodexAccountProfile,
@@ -12,10 +12,6 @@ import type { ProviderConfig } from "@/lib/provider-settings"
 type CodexAccountsSectionProps = {
   config?: ProviderConfig
   onConfigChange?: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
-}
-
-function accountCaption(profile: CodexAccountProfile): string {
-  return profile.email ?? profile.accountId ?? profile.sourceKind
 }
 
 export function CodexAccountsSection({ config, onConfigChange }: CodexAccountsSectionProps) {
@@ -48,7 +44,8 @@ export function CodexAccountsSection({ config, onConfigChange }: CodexAccountsSe
   }, [])
 
   useEffect(() => {
-    if (!selectedProfileId || profiles.some((profile) => profile.profileId === selectedProfileId)) return
+    if (!selectedProfileId || profiles.some((profile) => profile.profileId === selectedProfileId))
+      return
     if (!onConfigChange) return
 
     void onConfigChange("codex", { selectedAccountProfileId: undefined }).catch((clearError) => {
@@ -107,74 +104,17 @@ export function CodexAccountsSection({ config, onConfigChange }: CodexAccountsSe
   }
 
   return (
-    <div className="border-t border-border/55 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Codex Accounts
-          </h4>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Import the current Codex CLI login into an app-managed profile when you want UsageBar to stay pinned to one account.
-          </p>
-        </div>
-        <Button type="button" size="xs" onClick={() => void handleImport()} disabled={loading}>
-          Import current login
-        </Button>
-      </div>
-
-      <div className="mt-3 space-y-2">
-        {profiles.length === 0 ? (
-          <div className="border-t border-dashed border-border/55 py-3 text-sm text-muted-foreground">
-            No imported Codex accounts yet. The provider still falls back to the detected local login until you import one.
-          </div>
-        ) : (
-          profiles.map((profile) => {
-            const selected = profile.profileId === selectedProfileId
-            return (
-              <div
-                key={profile.profileId}
-                className="flex flex-wrap items-center justify-between gap-3 border-t border-border/55 py-3"
-              >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => void handleSelect(profile.profileId)}
-                >
-                  <div className="truncate text-sm font-medium text-foreground">{profile.label}</div>
-                  <div className="truncate text-xs text-muted-foreground">{accountCaption(profile)}</div>
-                </button>
-                <div className="flex items-center gap-2">
-                  {selected && (
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-primary">
-                      Active
-                    </span>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    onClick={() => void handleDelete(profile.profileId)}
-                    disabled={loading}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
-
-      {message && (
-        <p role="status" className="mt-3 text-xs text-primary">
-          {message}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="mt-3 text-xs text-destructive">
-          {error}
-        </p>
-      )}
-    </div>
+    <ManagedAccountsView
+      providerId={"codex"}
+      providerName={"Codex"}
+      profiles={profiles}
+      selectedProfileId={selectedProfileId}
+      loading={loading}
+      message={message}
+      error={error}
+      onImport={() => void handleImport()}
+      onSelect={(profileId) => void handleSelect(profileId)}
+      onDelete={(profileId) => void handleDelete(profileId)}
+    />
   )
 }

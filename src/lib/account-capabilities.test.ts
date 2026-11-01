@@ -8,21 +8,18 @@ describe("provider account capabilities", () => {
       getProviderAccountCapabilities("codex", getProviderSettingsDefinition("codex"))
     ).toMatchObject({
       managedProfiles: true,
-      ping: true,
       reauthenticate: true,
     })
     expect(
       getProviderAccountCapabilities("claude", getProviderSettingsDefinition("claude"))
     ).toMatchObject({
       managedProfiles: true,
-      ping: true,
       removeCredential: true,
     })
     expect(
       getProviderAccountCapabilities("gemini", getProviderSettingsDefinition("gemini"))
     ).toMatchObject({
       managedProfiles: true,
-      ping: true,
     })
   })
 })

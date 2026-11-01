@@ -315,3 +315,8 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - History page border: keep shared report spacing but disable the provider-card divider on standalone pages.
 - History page top spacing: reduce only the standalone report padding; keep provider-card spacing unchanged.
 - ccusage fixture runner: `npx` read the repository package overrides and failed with `EOVERRIDE`. Run external package tools from an isolated temporary directory so project npm settings cannot affect them.
+- Provider detail state: the page derived "connected" from `state.data`, but a failed probe keeps earlier data, so Error and Connected could show together, and each block used its own label. Fix: derive one state from `getProviderConnectionState` and render the same badge in the header and Account & Connection. Prevention: test a failed check that keeps earlier data.
+- Provider detail actions: Retry, Ping now, and Scan again all started the same probe, and re-authentication showed without a stored credential. Use one action name ("Check again"), tie it to the enabled state, and show credential actions only when a credential is stored.
+- Settings control names: aria-labels built as `${provider} ${label}` duplicated names such as "Claude Claude web Cookie header". Associate the visible label with `htmlFor`/`aria-labelledby` so the accessible name always equals the visible text.
+- Nested settings sections: a child section with its own `py-4` inside a parent `py-4` doubled the bottom gap. Nested subsections use `mt-4 border-t pt-4`; the parent owns the bottom spacing.
+- Bulk Prettier writes on a glob reformatted unrelated files with LF line endings. Format only the files changed for the task.

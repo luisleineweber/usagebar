@@ -1,5 +1,4 @@
-import { AlertCircle, CheckCircle2, CircleX, LoaderCircle, ScanSearch } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { AlertCircle, CheckCircle2, CircleX, LoaderCircle } from "lucide-react"
 import type { SetupDetection } from "@/lib/plugin-types"
 import type { ProviderSetupCheck } from "@/lib/provider-settings"
 import { cn } from "@/lib/utils"
@@ -20,7 +19,7 @@ function statusCopy(state: ReturnType<typeof getDetectionState>): string {
   if (state === "found") return "Found"
   if (state === "missing") return "Not found"
   if (state === "unavailable") return "Could not inspect"
-  return "Waiting for scan"
+  return "Waiting for check"
 }
 
 function StatusIcon({ state }: { state: ReturnType<typeof getDetectionState> }) {
@@ -37,12 +36,10 @@ export function SetupAssistant({
   checks,
   detections,
   loading,
-  onScan,
 }: {
   checks: ProviderSetupCheck[]
   detections?: SetupDetection[]
   loading: boolean
-  onScan?: () => void
 }) {
   return (
     <section
@@ -50,22 +47,15 @@ export function SetupAssistant({
       aria-labelledby="provider-setup-assistant-heading"
       aria-busy={loading}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h4 id="provider-setup-assistant-heading" className="text-sm font-semibold">
-            Setup assistant
-          </h4>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Local checks show which sign-in sources are ready. Secrets stay on this device.
-          </p>
-        </div>
-        {onScan ? (
-          <Button type="button" size="xs" variant="outline" onClick={onScan} disabled={loading}>
-            <ScanSearch className="size-3.5" aria-hidden="true" />
-            {loading ? "Scanning…" : "Scan again"}
-          </Button>
-        ) : null}
-      </div>
+      <h4
+        id="provider-setup-assistant-heading"
+        className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+      >
+        Setup assistant
+      </h4>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Local checks show which sign-in sources are ready. Secrets stay on this device.
+      </p>
 
       <div className="mt-3 space-y-2">
         {checks.map((check) => {
