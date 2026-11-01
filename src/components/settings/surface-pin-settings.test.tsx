@@ -33,7 +33,7 @@ describe("SurfacePinSettings", () => {
     expect(screen.queryByText(/Metric [12]/)).not.toBeInTheDocument()
   })
 
-  it("explains the latest provider in the live preview", () => {
+  it("explains the restart fallback of the last opened provider", () => {
     render(
       <SurfacePinSettings
         menubarIconStyle="provider"
@@ -44,7 +44,7 @@ describe("SurfacePinSettings", () => {
 
     expect(
       screen.getByText(
-        "Starts with the first provider. After you leave a provider, Dashboard and History show that latest provider until you leave another one. This resets after restart."
+        "Shows the first provider until you open one after a restart."
       )
     ).toBeInTheDocument()
     expect(screen.queryByText(/Preview:/)).not.toBeInTheDocument()

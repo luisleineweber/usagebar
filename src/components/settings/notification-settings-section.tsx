@@ -15,8 +15,46 @@ import {
   saveNotificationPreferences,
 } from "@/lib/notification-settings"
 import { requestNotificationPermission } from "@/lib/notification-delivery"
+import { cn } from "@/lib/utils"
 
 const THRESHOLDS = [50, 75, 90]
+const LEGEND_CLASS = "text-xs font-medium text-muted-foreground"
+const TIME_INPUT_CLASS =
+  "h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground disabled:cursor-not-allowed"
+
+type NotificationOptionProps = {
+  id: string
+  label: string
+  checked: boolean
+  disabled?: boolean
+  onCheckedChange: (checked: boolean) => void
+}
+
+function NotificationOption({
+  id,
+  label,
+  checked,
+  disabled = false,
+  onCheckedChange,
+}: NotificationOptionProps) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-foreground">
+      <Checkbox
+        id={id}
+        aria-label={label}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(nextChecked) => onCheckedChange(nextChecked === true)}
+      />
+      <label
+        htmlFor={id}
+        className={cn("select-none", disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer")}
+      >
+        {label}
+      </label>
+    </div>
+  )
+}
 
 export function NotificationSettingsSection({ className }: { className?: string }) {
   const [preferences, setPreferences] = useState(DEFAULT_NOTIFICATION_PREFERENCES)
@@ -73,96 +111,80 @@ export function NotificationSettingsSection({ className }: { className?: string 
     await update({ ...preferences, enabled })
   }
 
+  // Quiet hours only suppress delivery. Event types also control the recent events list.
+  const quietHoursTimesDisabled = !preferences.enabled || !preferences.quietHours.enabled
+
   return (
     <section className={className} aria-labelledby="notification-settings-heading">
       <h3 id="notification-settings-heading" className="mb-3 text-base font-semibold">
         Notifications
       </h3>
-      <div className="flex items-center gap-2 text-sm text-foreground">
-        <Checkbox
-          id="notification-delivery"
-          aria-label="Send Windows notifications"
-          checked={preferences.enabled}
-          onCheckedChange={(checked) => void toggleEnabled(checked === true)}
-        />
-        <label htmlFor="notification-delivery" className="cursor-pointer select-none">
-          Send Windows notifications
-        </label>
-      </div>
+      <NotificationOption
+        id="notification-delivery"
+        label="Send Windows notifications"
+        checked={preferences.enabled}
+        onCheckedChange={(checked) => void toggleEnabled(checked)}
+      />
       <fieldset className="mt-3">
-        <legend className="text-xs font-medium text-muted-foreground">Quota thresholds</legend>
+        <legend className={LEGEND_CLASS}>Quota thresholds</legend>
         <div className="mt-2 flex flex-wrap gap-3">
           {THRESHOLDS.map((threshold) => (
-            <div key={threshold} className="flex items-center gap-2 text-sm">
-              <Checkbox
-                id={`notification-threshold-${threshold}`}
-                aria-label={`${threshold}% used`}
-                checked={preferences.quotaThresholds.includes(threshold)}
-                onCheckedChange={(checked) => {
-                  const quotaThresholds = checked
-                    ? [...preferences.quotaThresholds, threshold].sort((a, b) => a - b)
-                    : preferences.quotaThresholds.filter((value) => value !== threshold)
-                  void update({ ...preferences, quotaThresholds })
-                }}
-              />
-              <label htmlFor={`notification-threshold-${threshold}`} className="cursor-pointer">
-                {threshold}% used
-              </label>
-            </div>
+            <NotificationOption
+              key={threshold}
+              id={`notification-threshold-${threshold}`}
+              label={`${threshold}% used`}
+              checked={preferences.quotaThresholds.includes(threshold)}
+              onCheckedChange={(checked) => {
+                const quotaThresholds = checked
+                  ? [...preferences.quotaThresholds, threshold].sort((a, b) => a - b)
+                  : preferences.quotaThresholds.filter((value) => value !== threshold)
+                void update({ ...preferences, quotaThresholds })
+              }}
+            />
           ))}
         </div>
       </fieldset>
 
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-        <div className="flex items-center gap-2 text-sm">
-          <Checkbox
+      <fieldset className="mt-3">
+        <legend className={LEGEND_CLASS}>Other events</legend>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+          <NotificationOption
             id="notification-incidents"
-            aria-label="Incidents and recovery"
+            label="Incidents and recovery"
             checked={preferences.incidents}
-            onCheckedChange={(checked) =>
-              void update({ ...preferences, incidents: checked === true })
-            }
+            onCheckedChange={(incidents) => void update({ ...preferences, incidents })}
           />
-          <label htmlFor="notification-incidents" className="cursor-pointer">
-            Incidents and recovery
-          </label>
-        </div>
-        <div className="flex items-center gap-2 text-sm">
-          <Checkbox
+          <NotificationOption
             id="notification-resets"
-            aria-label="Quota resets"
+            label="Quota resets"
             checked={preferences.resets}
-            onCheckedChange={(checked) => void update({ ...preferences, resets: checked === true })}
+            onCheckedChange={(resets) => void update({ ...preferences, resets })}
           />
-          <label htmlFor="notification-resets" className="cursor-pointer">
-            Quota resets
-          </label>
         </div>
-      </div>
+      </fieldset>
 
       <div className="mt-3 rounded-lg border border-border/60 p-3">
-        <div className="flex items-center gap-2 text-sm">
-          <Checkbox
-            id="notification-quiet-hours"
-            aria-label="Quiet hours"
-            checked={preferences.quietHours.enabled}
-            onCheckedChange={(checked) =>
-              void update({
-                ...preferences,
-                quietHours: { ...preferences.quietHours, enabled: checked === true },
-              })
-            }
-          />
-          <label htmlFor="notification-quiet-hours" className="cursor-pointer">
-            Quiet hours
-          </label>
-        </div>
-        <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <NotificationOption
+          id="notification-quiet-hours"
+          label="Quiet hours"
+          checked={preferences.quietHours.enabled}
+          disabled={!preferences.enabled}
+          onCheckedChange={(enabled) =>
+            void update({ ...preferences, quietHours: { ...preferences.quietHours, enabled } })
+          }
+        />
+        <div
+          className={cn(
+            "mt-2 flex items-center gap-2 text-xs text-muted-foreground",
+            quietHoursTimesDisabled && "opacity-50"
+          )}
+        >
           <input
             aria-label="Quiet hours start"
             type="time"
             value={preferences.quietHours.start}
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+            disabled={quietHoursTimesDisabled}
+            className={TIME_INPUT_CLASS}
             onChange={(event) =>
               void update({
                 ...preferences,
@@ -175,7 +197,8 @@ export function NotificationSettingsSection({ className }: { className?: string 
             aria-label="Quiet hours end"
             type="time"
             value={preferences.quietHours.end}
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+            disabled={quietHoursTimesDisabled}
+            className={TIME_INPUT_CLASS}
             onChange={(event) =>
               void update({
                 ...preferences,

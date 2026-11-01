@@ -44,9 +44,9 @@ export function SurfacePinSettings({
   const explanation =
     menubarIconStyle === "bars"
       ? "Stacked bars show the first four providers."
-      : trayProviderSelection === "first"
-        ? "Always shows the first enabled provider in your saved order."
-        : "Starts with the first provider. After you leave a provider, Dashboard and History show that latest provider until you leave another one. This resets after restart."
+      : trayProviderSelection === "last"
+        ? "Shows the first provider until you open one after a restart."
+        : null
 
   return (
     <div className="rounded-lg bg-muted p-3">
@@ -54,7 +54,7 @@ export function SurfacePinSettings({
       <div className="mt-2 flex min-h-12 items-center justify-center rounded-md bg-[#202124] px-3">
         <img src={trayPreviewUrl} alt="Tray icon preview" className="h-9 max-w-full" />
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">{explanation}</p>
+      {explanation && <p className="mt-3 text-xs text-muted-foreground">{explanation}</p>}
     </div>
   )
 }
