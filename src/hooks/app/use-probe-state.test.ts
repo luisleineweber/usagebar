@@ -3,6 +3,28 @@ import { describe, expect, it, vi } from "vitest"
 import { useProbeState } from "@/hooks/app/use-probe-state"
 
 describe("useProbeState", () => {
+  it("applies the refresh cooldown after a failed manual request", () => {
+    const { result } = renderHook(() => useProbeState({}))
+    result.current.manualRefreshIdsRef.current.add("claude")
+    const before = Date.now()
+    act(() => {
+      result.current.handleProbeResult({
+        providerId: "claude",
+        displayName: "Claude",
+        iconUrl: "/claude.svg",
+        lines: [
+          {
+            type: "badge",
+            label: "Error",
+            text: "Usage request failed (HTTP 429). Try again later.",
+          },
+        ],
+      })
+    })
+    expect(result.current.pluginStates.claude.lastManualRefreshAt).toBeGreaterThanOrEqual(before)
+    expect(result.current.pluginStates.claude.lastSuccessAt).toBeNull()
+  })
+
   it("rejects a late result from a previously selected provider account", () => {
     const { result, rerender } = renderHook(
       ({ instanceId }) =>

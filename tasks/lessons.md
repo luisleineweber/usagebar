@@ -303,3 +303,4 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - History page border: keep shared report spacing but disable the provider-card divider on standalone pages.
 - History page top spacing: reduce only the standalone report padding; keep provider-card spacing unchanged.
 - ccusage fixture runner: `npx` read the repository package overrides and failed with `EOVERRIDE`. Run external package tools from an isolated temporary directory so project npm settings cannot affect them.
+- Failed refresh cooldown: failed manual requests did not set the refresh timestamp, so panel focus could repeat them. Apply the five-minute cooldown after every manual result. Keep lastSuccessAt unchanged on errors, and test HTTP 429 results.
