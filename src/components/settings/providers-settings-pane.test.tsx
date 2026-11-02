@@ -84,7 +84,7 @@ describe("ProvidersSettingsPane list", () => {
       "Disabled",
       "Setup needed",
       "Setup needed",
-      "Disabled",
+      "Unsupported",
     ])
   })
 
@@ -96,6 +96,39 @@ describe("ProvidersSettingsPane list", () => {
     expect(screen.getByRole("button", { name: "Claude, Error" })).not.toHaveTextContent(
       "Not signed in"
     )
+  })
+
+  it("shows platform support text separately from the state, without setup guidance", () => {
+    renderPane()
+    const abacusRow = screen.getByRole("button", { name: "Abacus AI, Setup needed" })
+    expect(abacusRow).toHaveAccessibleDescription("Experimental on Windows.")
+    expect(within(abacusRow).getByTestId("provider-list-support")).toHaveTextContent(
+      "Experimental on Windows."
+    )
+
+    const zedRow = screen.getByRole("button", { name: "Zed, Unsupported" })
+    expect(zedRow).toHaveAccessibleDescription("Coming soon on Windows.")
+    expect(screen.getByRole("checkbox", { name: "Enable Zed" })).toHaveAttribute(
+      "aria-disabled",
+      "true"
+    )
+    expect(screen.getByRole("button", { name: "Codex, Connected" })).not.toHaveAttribute(
+      "aria-describedby"
+    )
+  })
+
+  it("keeps the last settled error while a retry is loading", () => {
+    renderPane({
+      providers: [
+        provider(
+          "claude",
+          "Claude",
+          {},
+          { loading: true, data: output("claude", "Claude"), lastSettledError: "Expired" }
+        ),
+      ],
+    })
+    expect(screen.getByRole("button", { name: "Claude, Error" })).toBeInTheDocument()
   })
 
   it("opens the detail from the row and toggles from the labelled enable control", async () => {
@@ -117,9 +150,9 @@ describe("ProvidersSettingsPane list", () => {
     await userEvent.keyboard("{ArrowDown}")
     expect(screen.getByRole("button", { name: "Claude, Error" })).toHaveFocus()
     await userEvent.keyboard("{End}")
-    expect(screen.getByRole("button", { name: "Zed, Disabled" })).toHaveFocus()
+    expect(screen.getByRole("button", { name: "Zed, Unsupported" })).toHaveFocus()
     await userEvent.keyboard("{ArrowDown}")
-    expect(screen.getByRole("button", { name: "Zed, Disabled" })).toHaveFocus()
+    expect(screen.getByRole("button", { name: "Zed, Unsupported" })).toHaveFocus()
     await userEvent.keyboard("{Home}{ArrowUp}")
     expect(codexRow).toHaveFocus()
 

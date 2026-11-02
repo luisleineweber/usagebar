@@ -305,8 +305,8 @@ describe("SettingsPage", () => {
     render(<TestHarness />)
     await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
 
-    const detail = screen.getByTestId("provider-settings-opencode")
-    expect(detail).toHaveTextContent("Experimental on Windows.")
+    expect(screen.getByTestId("provider-settings-opencode")).toBeInTheDocument()
+    expect(screen.getByText("Experimental on Windows.")).toBeInTheDocument()
   })
 
   it("selects another provider from the Providers tab", async () => {

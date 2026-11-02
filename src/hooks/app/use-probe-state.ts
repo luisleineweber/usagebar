@@ -91,6 +91,7 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
           loading: true,
           error: null,
           errorCategory: null,
+          lastSettledError: sameInstance ? existing?.lastSettledError : undefined,
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -124,6 +125,7 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
           loading: false,
           error,
           errorCategory: null,
+          lastSettledError: error,
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -182,6 +184,7 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
             loading: false,
             error: errorMessage,
             errorCategory: errorMessage ? (output.error?.category ?? "unknown") : null,
+            lastSettledError: errorMessage,
             lastManualRefreshAt:
               !errorMessage && isManual ? capturedAt : (existing?.lastManualRefreshAt ?? null),
             lastSuccessAt: !errorMessage ? capturedAt : (existing?.lastSuccessAt ?? null),

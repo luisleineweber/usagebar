@@ -17,7 +17,20 @@ const STATE_DOT_CLASS = {
   error: "bg-destructive",
   setupNeeded: "bg-amber-500",
   disabled: "border border-foreground/40 bg-transparent",
+  unsupported: "border border-dashed border-foreground/40 bg-transparent",
 } satisfies Record<ProviderConnectionState, string>
+
+/**
+ * Platform support text from the manifest support state. Experimental rows get a short
+ * fixed text: their manifest message also holds setup guidance, which belongs on the detail page.
+ */
+function getSupportText(plugin: SettingsPluginState): string | null {
+  if (plugin.supportState === "comingSoonOnWindows") {
+    return plugin.supportMessage ?? "Coming soon on Windows."
+  }
+  if (plugin.supportState === "experimental") return "Experimental on Windows."
+  return null
+}
 
 export function ProviderListRow({
   plugin,
@@ -36,7 +49,9 @@ export function ProviderListRow({
 }) {
   const connectionState = getProviderConnectionState(plugin)
   const stateLabel = PROVIDER_CONNECTION_STATE_LABELS[connectionState]
+  const supportText = getSupportText(plugin)
   const enableId = `provider-list-${plugin.id}-enabled`
+  const supportTextId = `provider-list-${plugin.id}-support`
 
   return (
     /*
@@ -54,6 +69,7 @@ export function ProviderListRow({
         type="button"
         aria-label={`${plugin.name}, ${stateLabel}`}
         aria-current={selected ? "true" : undefined}
+        aria-describedby={supportText ? supportTextId : undefined}
         data-provider-nav="open"
         className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left outline-none after:absolute after:inset-0 after:rounded-[inherit] after:ring-inset after:ring-ring/50 focus-visible:after:ring-[3px]"
         onClick={onSelect}
@@ -85,6 +101,15 @@ export function ProviderListRow({
               <LoaderCircle aria-hidden className="size-3 motion-safe:animate-spin" />
             ) : null}
           </span>
+          {supportText ? (
+            <span
+              id={supportTextId}
+              data-testid="provider-list-support"
+              className="block text-xs leading-5 text-foreground/70"
+            >
+              {supportText}
+            </span>
+          ) : null}
         </span>
       </button>
 
