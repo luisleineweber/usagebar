@@ -292,7 +292,6 @@ mod tests {
             icon_color_mode: crate::plugin_engine::manifest::IconColorMode::default(),
             icon_aspect_ratio: None,
             brand_color: None,
-            default_plan: None,
             lines: Vec::new(),
             detail: None,
             links: Vec::new(),

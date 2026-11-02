@@ -1,5 +1,15 @@
 # Lessons
 
+## 2026-11-02
+
+- The tray showed the manifest `defaultPlan` ("Free", "Hobby") for providers with errors or no data, and the runtime injected it into probe output. Fix: remove `defaultPlan` from manifests, runtime, TypeScript, and docs; show only a provider-reported or last settled plan. Prevention: `src/lib/plugin-manifest-rules.test.ts` rejects `defaultPlan` in any manifest.
+- The progress label "Extra usage spent" contradicted the "left" display mode ("$37.60 left"). Fix: use direction-neutral labels ("Extra usage", Grok "Credits"). Prevention: the manifest rules test rejects progress labels that end in used, spent, left, or remaining.
+- The footer showed "Updated just now" while two of three providers failed, because the freshness ignored failed providers. Fix: `summarizeDataFreshness` defines never, fresh, and failed states; the footer shows "N of M failed". Prevention: test footer freshness with failed providers, not only successful ones.
+- The Home view showed "No active providers yet" before plugin metadata loaded. Fix: show a loading status until views resolve. Prevention: test every empty state against its loading state.
+- A scrolled Home kept its scroll offset after a switch to a provider detail. Fix: reset the shared scroll container on each view change. Prevention: test view changes with a nonzero scroll offset.
+- Error-row Retry buttons were invisible until hover and all had the name "Retry". Fix: keep Retry visible during errors and name it per provider. Prevention: assert accessible names that include the provider for repeated per-card controls.
+- History rendered nothing without history entries, and rail rows had different heights because height came from icon size plus padding. Fix: show the heading with an empty state, and give rail buttons a fixed `h-11`. Prevention: never return null for a full page view; set fixed row heights on navigation rows.
+
 ## 2026-08-20
 
 - The stable publish workflow used a Tauri private key that did not match the repository public key. Fix: generate one key pair, synchronize both GitHub secrets and the checked-in public key, and inspect the publish log for mismatch warnings. Prevention: treat updater key mismatch warnings as a release blocker.

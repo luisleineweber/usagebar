@@ -6,6 +6,7 @@ describe("ProviderDetailSchema", () => {
   it("renders fields in manifest order without provider-specific branches", () => {
     render(
       <ProviderDetailSchema
+        providerName="Alpha"
         schema={{
           sections: [
             {
@@ -35,6 +36,7 @@ describe("ProviderDetailSchema", () => {
   it("renders a declared quota window and ignores an undeclared value", () => {
     render(
       <ProviderDetailSchema
+        providerName="Alpha"
         schema={{
           sections: [
             {
@@ -74,6 +76,7 @@ describe("ProviderDetailSchema", () => {
   it("keeps zero, unknown, and unsupported quota windows distinct", () => {
     render(
       <ProviderDetailSchema
+        providerName="Alpha"
         schema={{
           sections: [
             {

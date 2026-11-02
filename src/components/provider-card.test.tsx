@@ -52,8 +52,25 @@ describe("ProviderCard", () => {
     const onRetry = vi.fn()
     render(<ProviderCard name="Test" displayMode="used" error="Nope" onRetry={onRetry} />)
     expect(screen.getByText("Nope")).toBeInTheDocument()
-    await userEvent.click(screen.getByRole("button", { name: "Retry" }))
+    await userEvent.click(screen.getByRole("button", { name: "Retry Test" }))
     expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the retry control visible while the provider has an error", () => {
+    const { rerender } = render(
+      <ProviderCard name="Codex" displayMode="used" error="Nope" onRetry={() => {}} />
+    )
+    expect(screen.getByRole("button", { name: "Retry Codex" })).not.toHaveClass("opacity-0")
+
+    rerender(
+      <ProviderCard
+        name="Codex"
+        displayMode="used"
+        onRetry={() => {}}
+        lines={[{ type: "text", label: "Label", value: "Value" }]}
+      />
+    )
+    expect(screen.getByRole("button", { name: "Retry Codex" })).toHaveClass("opacity-0")
   })
 
   it("marks retained values as stale after a refresh error", () => {

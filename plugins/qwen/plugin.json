@@ -7,7 +7,6 @@
   "icon": "icon.svg",
   "iconColorMode": "multicolor",
   "brandColor": "#615CED",
-  "defaultPlan": "Free",
   "platformSupport": {
     "windows": {
       "state": "experimental",

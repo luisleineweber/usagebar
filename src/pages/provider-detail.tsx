@@ -78,7 +78,7 @@ export function ProviderDetailPage({
         iconColorMode={plugin.meta.iconColorMode}
         iconAspectRatio={plugin.meta.iconAspectRatio}
         brandColor={plugin.meta.brandColor}
-        plan={plugin.data?.plan ?? plugin.lastSettledData?.plan ?? plugin.meta.defaultPlan}
+        plan={plugin.data?.plan ?? plugin.lastSettledData?.plan}
         links={plugin.meta.links}
         showSeparator={false}
         loading={plugin.loading}
@@ -98,6 +98,7 @@ export function ProviderDetailPage({
         onResetTimerDisplayModeToggle={onResetTimerDisplayModeToggle}
       />
       <ProviderDetailSchema
+        providerName={plugin.meta.name}
         schema={plugin.meta.detail}
         values={plugin.data?.details ?? plugin.lastSettledData?.details}
         displayMode={displayMode}

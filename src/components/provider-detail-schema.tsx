@@ -10,6 +10,7 @@ import type {
 import type { DisplayMode, ResetTimerDisplayMode, TimeFormatMode } from "@/lib/settings"
 
 type ProviderDetailSchemaProps = {
+  providerName: string
   schema?: ManifestDetail
   values?: PluginDetailValue[]
   displayMode: DisplayMode
@@ -98,6 +99,7 @@ function Sparkline({
 }
 
 function DetailField({
+  providerName,
   field,
   value,
   displayMode,
@@ -106,6 +108,7 @@ function DetailField({
   onResetTimerDisplayModeToggle,
   now,
 }: {
+  providerName: string
   field: ManifestDetailField
   value: PluginDetailValue
   displayMode: DisplayMode
@@ -147,6 +150,7 @@ function DetailField({
   if (field.type === "window" && value.type === "window") {
     return (
       <MetricLineRenderer
+        providerName={providerName}
         line={{
           type: "progress",
           label: field.label,
@@ -185,6 +189,7 @@ function DetailField({
 }
 
 export function ProviderDetailSchema({
+  providerName,
   schema,
   values = [],
   displayMode,
@@ -214,6 +219,7 @@ export function ProviderDetailSchema({
             {fields.map((field) => (
               <DetailField
                 key={field.id}
+                providerName={providerName}
                 field={field}
                 value={valuesById.get(field.id)!}
                 displayMode={displayMode}

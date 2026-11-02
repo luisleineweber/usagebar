@@ -1513,7 +1513,7 @@ describe("App", () => {
       iconUrl: "icon-a",
       lines: [{ type: "badge", label: "Error", text: "Bad" }],
     })
-    const retry = await screen.findByRole("button", { name: "Retry" })
+    const retry = await screen.findByRole("button", { name: /^Retry / })
     await userEvent.click(retry)
     expect(state.startBatchMock).toHaveBeenCalledWith(["a"])
   })
@@ -1559,7 +1559,7 @@ describe("App", () => {
       iconUrl: "icon-b",
       lines: [{ type: "text", label: "Now", value: "OK" }],
     })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Retry / })).toHaveLength(2))
     state.startBatchMock.mockClear()
 
     const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
@@ -1573,7 +1573,7 @@ describe("App", () => {
       iconUrl: "icon-b",
       lines: [{ type: "text", label: "Now", value: "OK" }],
     })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(1))
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Retry / })).toHaveLength(1))
 
     state.startBatchMock.mockClear()
     const cooldownReloadAction = await triggerPluginContextAction("Beta", "b", "reload")
@@ -2305,7 +2305,7 @@ describe("App", () => {
     // Make startBatch reject on next call (the retry)
     state.startBatchMock.mockRejectedValueOnce(new Error("retry failed"))
 
-    const retry = await screen.findByRole("button", { name: "Retry" })
+    const retry = await screen.findByRole("button", { name: /^Retry / })
     await userEvent.click(retry)
 
     await waitFor(() =>
@@ -2453,11 +2453,11 @@ describe("App", () => {
       iconUrl: "icon-b",
       lines: [],
     })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Retry / })).toHaveLength(2))
 
     const initialCalls = state.startBatchMock.mock.calls.length
     const refreshButton = await screen.findByRole("button", {
-      name: /Next automatic update in/i,
+      name: /Next automatic refresh in/i,
     })
     await userEvent.click(refreshButton)
 
@@ -2485,13 +2485,13 @@ describe("App", () => {
       iconUrl: "icon-b",
       lines: [],
     })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Retry / })).toHaveLength(2))
 
     const initialCalls = state.startBatchMock.mock.calls.length
     state.startBatchMock.mockImplementation(() => new Promise(() => {}))
 
     const refreshButton = await screen.findByRole("button", {
-      name: /Next automatic update in/i,
+      name: /Next automatic refresh in/i,
     })
     await userEvent.click(refreshButton)
     await userEvent.click(refreshButton)
@@ -2517,11 +2517,11 @@ describe("App", () => {
         iconUrl: "icon-a",
         lines: [{ type: "text", label: "Now", value: "OK" }],
       })
-      await screen.findByRole("button", { name: "Retry" })
+      await screen.findByRole("button", { name: /^Retry / })
 
       state.startBatchMock.mockRejectedValueOnce(new Error("refresh all failed"))
       const refreshButton = await screen.findByRole("button", {
-        name: /Next automatic update in/i,
+        name: /Next automatic refresh in/i,
       })
       await userEvent.click(refreshButton)
 
@@ -2547,7 +2547,7 @@ describe("App", () => {
         iconUrl: "icon-a",
         lines: [{ type: "badge", label: "Error", text: "Network error" }],
       })
-      await screen.findByRole("button", { name: "Retry" })
+      await screen.findByRole("button", { name: /^Retry / })
     } finally {
       errorSpy.mockRestore()
     }
@@ -2565,7 +2565,7 @@ describe("App", () => {
       lines: [{ type: "badge", label: "Error", text: "Network error" }],
     })
 
-    const retryButton = await screen.findByRole("button", { name: "Retry" })
+    const retryButton = await screen.findByRole("button", { name: /^Retry / })
     await userEvent.click(retryButton)
 
     // Simulate successful probe result after retry (isManual branch)
@@ -2603,7 +2603,7 @@ describe("App", () => {
     })
 
     // Find and prepare to click retry
-    const retryButton = await screen.findByRole("button", { name: "Retry" })
+    const retryButton = await screen.findByRole("button", { name: /^Retry / })
 
     // Before clicking, disable "a" to make enabledIds.length === 0 when resetAutoUpdateSchedule runs
     // This simulates a race condition where settings change mid-action

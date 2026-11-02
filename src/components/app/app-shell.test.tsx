@@ -1,12 +1,19 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { MouseEvent } from "react"
 import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 type MockComponentProps = { children?: ReactNode }
 
-const { appContentMock, invokeMock, openSettingsWindowMock, panelFooterMock, sideNavMock } =
-  vi.hoisted(() => ({
+const {
+  appContentMock,
+  invokeMock,
+  openSettingsWindowMock,
+  panelFooterMock,
+  scrollRef,
+  sideNavMock,
+} = vi.hoisted(() => ({
+    scrollRef: { current: null as HTMLDivElement | null },
     appContentMock: vi.fn(),
     invokeMock: vi.fn(),
     openSettingsWindowMock: vi.fn(),
@@ -29,7 +36,7 @@ vi.mock("@/hooks/app/use-panel", () => ({
   usePanel: () => ({
     containerRef: { current: null },
     contentColumnRef: { current: null },
-    scrollRef: { current: null },
+    scrollRef,
     contentMeasureRef: { current: null },
     footerRef: { current: null },
     canScrollDown: true,
@@ -89,7 +96,11 @@ const plugin = {
 } as DisplayPluginState
 
 function renderShell(
-  overrides: Partial<{ showHistoryInBar: boolean; hasResolvedViews: boolean }> = {}
+  overrides: Partial<{
+    showHistoryInBar: boolean
+    hasResolvedViews: boolean
+    displayPlugins: DisplayPluginState[]
+  }> = {}
 ) {
   const props = {
     onRefreshAll: vi.fn(),
@@ -130,10 +141,36 @@ describe("AppShell", () => {
     renderShell()
 
     expect(screen.getByTestId("app-panel")).toHaveStyle({ height: "500px", maxHeight: "600px" })
-    expect(panelFooterMock).toHaveBeenCalledWith(expect.objectContaining({ lastUpdatedAt: 10 }))
+    expect(panelFooterMock).toHaveBeenCalledWith(
+      expect.objectContaining({ freshness: { kind: "fresh", lastSuccessAt: 10 } })
+    )
     expect(appContentMock).toHaveBeenCalledWith(
       expect.objectContaining({ selectedPlugin: plugin, resolvedSelectedPlugin: plugin })
     )
+  })
+
+  it("reports refresh failures to the footer instead of the last success", () => {
+    renderShell({
+      displayPlugins: [plugin, { ...plugin, meta: { ...plugin.meta, id: "claude" }, error: "Nope" }],
+    })
+
+    expect(panelFooterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        freshness: { kind: "failed", failedCount: 1, totalCount: 2, lastSuccessAt: 20 },
+      })
+    )
+  })
+
+  it("scrolls the content back to the top when the active view changes", () => {
+    useAppUiStore.getState().setActiveView("home")
+    renderShell()
+    const scroller = scrollRef.current
+    expect(scroller).not.toBeNull()
+    scroller!.scrollTop = 120
+
+    act(() => useAppUiStore.getState().setActiveView("codex"))
+
+    expect(scroller!.scrollTop).toBe(0)
   })
 
   it("runs provider context actions by accessible menu name", () => {

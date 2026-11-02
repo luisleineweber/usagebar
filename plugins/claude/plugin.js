@@ -993,7 +993,7 @@
       if (Number.isFinite(used) && Number.isFinite(limit) && limit > 0) {
         lines.push(
           ctx.line.progress({
-            label: "Extra usage spent",
+            label: "Extra usage",
             used: ctx.fmt.dollars(used),
             limit: ctx.fmt.dollars(limit),
             format: { kind: "dollars" },
@@ -1174,7 +1174,7 @@
       if (typeof used === "number" && typeof limit === "number" && limit > 0) {
         lines.push(
           ctx.line.progress({
-            label: "Extra usage spent",
+            label: "Extra usage",
             used: ctx.fmt.dollars(used),
             limit: ctx.fmt.dollars(limit),
             format: { kind: "dollars" },
@@ -1182,7 +1182,10 @@
         )
       } else if (typeof used === "number" && used > 0) {
         lines.push(
-          ctx.line.text({ label: "Extra usage spent", value: "$" + String(ctx.fmt.dollars(used)) })
+          ctx.line.text({
+            label: "Extra usage",
+            value: "$" + String(ctx.fmt.dollars(used)) + " spent",
+          })
         )
       }
     }
