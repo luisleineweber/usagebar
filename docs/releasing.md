@@ -36,7 +36,7 @@ $env:USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER = "1"
 bun run build:release -- --bundles nsis
 ```
 
-Release builds require `TAURI_SIGNING_PRIVATE_KEY`. Pass `--no-sign` only for an explicit local installer smoke build that will not support in-app updates. Local Windows builds need an explicit unsigned-build opt-in when no Authenticode material exists. GitHub prerelease publishes set this option automatically. Unsigned artifacts can show `Unknown publisher` and can trigger Windows SmartScreen's "unrecognized app" warning.
+Release builds require `TAURI_SIGNING_PRIVATE_KEY`. Pass `--no-sign` only for an explicit local installer smoke build that will not support in-app updates. Local Windows builds need an explicit unsigned-build opt-in when no Authenticode material exists. GitHub publishes set this option automatically. Unsigned artifacts can show `Unknown publisher` and can trigger Windows SmartScreen's "unrecognized app" warning.
 
 ## Windows Code Signing
 
@@ -74,7 +74,7 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 
 - a Windows setup executable ending in `setup.exe`
 
-All published releases require `TAURI_SIGNING_PRIVATE_KEY`, `latest.json`, and updater signature assets. Prerelease tags still allow an unsigned Windows installer while Authenticode signing remains unavailable.
+All published releases require `TAURI_SIGNING_PRIVATE_KEY`, `latest.json`, and updater signature assets. All releases allow an unsigned Windows installer while Authenticode signing remains unavailable.
 
 The release workflow copies the signed `latest.json` from each versioned release to fixed channel releases. The app reads its channel, downloads first, and installs only after you select `Restart to update`.
 
