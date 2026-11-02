@@ -41,6 +41,7 @@ export function getProviderConnectionState({
   if (!enabled) return "disabled"
   if (state.loading) {
     if (state.lastSettledError) return "error"
+    // Undefined means no settled probe was recorded, so retained data is not proof.
     if (state.lastSettledError === null && state.data) return "connected"
     return "setupNeeded"
   }

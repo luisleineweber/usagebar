@@ -5,85 +5,112 @@ import { useProbeState } from "@/hooks/app/use-probe-state"
 import type { PluginOutput } from "@/lib/plugin-types"
 import { getProviderConnectionState } from "@/lib/provider-connection-state"
 
-const data: PluginOutput = {
-  providerId: "codex",
-  displayName: "Codex",
-  iconUrl: "/codex.svg",
-  lines: [{ type: "text", label: "Now", value: "ok" }],
+const output: PluginOutput = { providerId: "codex", displayName: "Codex", lines: [], iconUrl: "" }
+
+type StateInput = Pick<PluginState, "data" | "error" | "loading" | "lastSettledError">
+
+function stateOf(overrides: Partial<StateInput> = {}): StateInput {
+  return { data: null, error: null, loading: false, lastSettledError: undefined, ...overrides }
 }
 
-type ProbeState = Pick<PluginState, "data" | "error" | "loading" | "lastSettledError">
-
-function probe(patch: Partial<ProbeState> = {}): ProbeState {
-  return { data: null, error: null, loading: false, lastSettledError: undefined, ...patch }
-}
-
-function stateOf(state: ProbeState, enabled = true, supported = true) {
+function resolve(state: StateInput, enabled = true, supported = true) {
   return getProviderConnectionState({ enabled, supported, state })
 }
 
 describe("getProviderConnectionState", () => {
-  it("is unsupported when the platform cannot run the provider, whether enabled or not", () => {
-    expect(stateOf(probe({ data, lastSettledError: null }), true, false)).toBe("unsupported")
-    expect(stateOf(probe(), false, false)).toBe("unsupported")
+  it("reports Unsupported for providers that cannot run on this platform", () => {
+    expect(resolve(stateOf(), true, false)).toBe("unsupported")
+    expect(resolve(stateOf(), false, false)).toBe("unsupported")
   })
 
-  it("is disabled when the user turned the provider off, even with retained data", () => {
-    expect(stateOf(probe({ data, lastSettledError: null }), false)).toBe("disabled")
-  })
-
-  it("is error after a settled failure, even with retained data", () => {
-    expect(stateOf(probe({ data, error: "expired", lastSettledError: "expired" }))).toBe("error")
-  })
-
-  it("is connected after a settled success", () => {
-    expect(stateOf(probe({ data, lastSettledError: null }))).toBe("connected")
-  })
-
-  it("is setupNeeded when no probe has settled", () => {
-    expect(stateOf(probe())).toBe("setupNeeded")
-    expect(stateOf(probe({ loading: true }))).toBe("setupNeeded")
-  })
-
-  it("stays connected while a refresh after a success is loading", () => {
-    expect(stateOf(probe({ data, loading: true, lastSettledError: null }))).toBe("connected")
-  })
-
-  it("stays error while a retry after a failure is loading", () => {
-    expect(stateOf(probe({ data, loading: true, lastSettledError: "expired" }))).toBe("error")
-  })
-
-  it("does not treat retained data as a connection when no settled probe is recorded", () => {
-    expect(stateOf(probe({ data, loading: true, lastSettledError: undefined }))).toBe("setupNeeded")
-  })
-
-  it("follows success, failure, and retry through useProbeState", () => {
-    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
-    const connection = () => stateOf(result.current.pluginStates.codex!)
-
-    act(() => result.current.handleProbeResult(data))
-    expect(connection()).toBe("connected")
-
-    act(() =>
-      result.current.handleProbeResult({
-        ...data,
-        lines: [{ type: "badge", label: "Error", text: "Codex login expired." }],
-      })
+  it("reports Disabled from the enabled flag, even with retained data or errors", () => {
+    expect(resolve(stateOf({ data: output, error: "x", lastSettledError: "x" }), false)).toBe(
+      "disabled"
     )
-    expect(connection()).toBe("error")
+  })
 
-    // The refresh clears `error` and keeps the earlier data; the retry must not look connected.
-    act(() => result.current.setLoadingForPlugins(["codex"]))
+  it("reports Error when the last settled probe failed, even with retained data", () => {
+    expect(resolve(stateOf({ data: output, error: "Not signed in" }))).toBe("error")
+  })
+
+  it("reports Connected only when a settled probe returned output", () => {
+    expect(resolve(stateOf({ data: output, lastSettledError: null }))).toBe("connected")
+  })
+
+  it("reports Setup needed when an enabled provider has no probe output", () => {
+    expect(resolve(stateOf())).toBe("setupNeeded")
+  })
+
+  describe("while a refresh is loading", () => {
+    it("keeps Error after a failure, although data is retained and error is cleared", () => {
+      expect(resolve(stateOf({ loading: true, data: output, lastSettledError: "Expired" }))).toBe(
+        "error"
+      )
+    })
+
+    it("keeps Connected when the last settled probe succeeded", () => {
+      expect(resolve(stateOf({ loading: true, data: output, lastSettledError: null }))).toBe(
+        "connected"
+      )
+    })
+
+    it("does not treat retained data as a connection without a recorded settled probe", () => {
+      expect(resolve(stateOf({ loading: true, data: output }))).toBe("setupNeeded")
+    })
+  })
+
+  it("keeps the settled failure through success, failure, and retry in useProbeState", () => {
+    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
+    const connectionState = () => resolve(result.current.pluginStates.codex!)
+    const success: PluginOutput = {
+      ...output,
+      lines: [{ type: "text", label: "Now", value: "42%" }],
+    }
+
+    act(() => {
+      result.current.handleProbeResult(success)
+    })
+    expect(result.current.pluginStates.codex?.lastSettledError).toBeNull()
+    expect(connectionState()).toBe("connected")
+
+    act(() => {
+      result.current.handleProbeResult({
+        ...success,
+        lines: [{ type: "badge", label: "Error", text: "Not signed in" }],
+      })
+    })
+    expect(connectionState()).toBe("error")
+
+    act(() => {
+      result.current.setLoadingForPlugins(["codex"])
+    })
+    // The refresh clears `error` and keeps the old data; the retry must not look connected.
     expect(result.current.pluginStates.codex).toMatchObject({
       loading: true,
       error: null,
-      lastSettledError: "Codex login expired.",
+      lastSettledError: "Not signed in",
+      data: { providerId: "codex" },
     })
-    expect(result.current.pluginStates.codex?.data).not.toBeNull()
-    expect(connection()).toBe("error")
+    expect(connectionState()).toBe("error")
 
-    act(() => result.current.handleProbeResult(data))
+    // A second refresh before the first settles keeps the same settled result.
+    act(() => {
+      result.current.setLoadingForPlugins(["codex"])
+    })
+    expect(connectionState()).toBe("error")
+
+    act(() => {
+      result.current.setErrorForPlugins(["codex"], "Probe failed")
+    })
+    expect(result.current.pluginStates.codex?.lastSettledError).toBe("Probe failed")
+
+    act(() => {
+      result.current.setLoadingForPlugins(["codex"])
+    })
+    act(() => {
+      result.current.handleProbeResult(success)
+    })
     expect(result.current.pluginStates.codex?.lastSettledError).toBeNull()
-    expect(connection()).toBe("connected")
+    expect(connectionState()).toBe("connected")
   })
 })
