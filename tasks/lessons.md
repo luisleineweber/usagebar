@@ -3,6 +3,7 @@
 ## 2026-11-01
 
 - The updater rework allowed unsigned Windows installers only for prereleases, so the next stable publish would fail without an Authenticode certificate. Fix: allow unsigned installers for all releases and keep the Tauri updater key required. Prevention: `scripts/publish-workflow.test.mjs` runs in CI.
+- A prerelease stage guard blocked `0.2.0-beta.1` for `0.2.0-alpha.1` installs, although all prereleases share one updater channel. Fix: offer every newer version from the selected channel. Prevention: the update hook test covers an alpha to beta update.
 - New advisories made the dependency audit fail for Vite, Vitest, undici, minimatch, quinn-proto, rustls, rustls-webpki, webpki-root-certs, and zip. Fix: update only the affected packages and disable the unused zip feature of the updater plugin, because releases ship signed Windows installers without archives. Prevention: run `bun audit` and `cargo audit` locally after each lockfile change.
 - The cargo audit report failed on unmaintained and unsound warnings without a fix, although the audit step allows warnings. Fix: fail the report only for vulnerabilities and still list all warnings. Prevention: `scripts/report-cargo-audit.test.mjs` runs in CI.
 
