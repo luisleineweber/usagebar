@@ -90,8 +90,14 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
           instanceRef: currentRef ?? existing?.instanceRef,
           loading: true,
           error: null,
+          // A refresh clears `error`; keep the last settled result for status derivation.
+          // A different provider instance has no settled result yet.
+          lastSettledError: !sameInstance
+            ? null
+            : existing?.loading
+              ? (existing.lastSettledError ?? null)
+              : (existing?.error ?? null),
           errorCategory: null,
-          lastSettledError: sameInstance ? existing?.lastSettledError : undefined,
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -124,8 +130,8 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
           instanceRef: currentRef ?? existing?.instanceRef,
           loading: false,
           error,
-          errorCategory: null,
           lastSettledError: error,
+          errorCategory: null,
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -183,8 +189,8 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
               : appendUsageHistory(existing?.history, settledOutput, capturedAt),
             loading: false,
             error: errorMessage,
-            errorCategory: errorMessage ? (output.error?.category ?? "unknown") : null,
             lastSettledError: errorMessage,
+            errorCategory: errorMessage ? (output.error?.category ?? "unknown") : null,
             lastManualRefreshAt:
               !errorMessage && isManual ? capturedAt : (existing?.lastManualRefreshAt ?? null),
             lastSuccessAt: !errorMessage ? capturedAt : (existing?.lastSuccessAt ?? null),

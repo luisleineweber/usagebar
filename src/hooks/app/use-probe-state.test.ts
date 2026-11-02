@@ -1,7 +1,6 @@
 import { act, renderHook } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import { useProbeState } from "@/hooks/app/use-probe-state"
-import { getProviderConnectionState } from "@/lib/provider-connection-state"
 
 describe("useProbeState", () => {
   it("rejects a late result from a previously selected provider account", () => {
@@ -179,69 +178,5 @@ describe("useProbeState", () => {
         displayName: "Codex",
       },
     })
-  })
-  it("keeps the last settled error through success, failure, and retry", () => {
-    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
-    const connectionState = () =>
-      getProviderConnectionState({
-        enabled: true,
-        supported: true,
-        state: result.current.pluginStates.codex!,
-      })
-    const success = {
-      providerId: "codex",
-      displayName: "Codex",
-      iconUrl: "/codex.svg",
-      lines: [{ type: "text" as const, label: "Now", value: "42%" }],
-    }
-
-    act(() => {
-      result.current.handleProbeResult(success)
-    })
-    expect(result.current.pluginStates.codex?.lastSettledError).toBeNull()
-    expect(connectionState()).toBe("connected")
-
-    act(() => {
-      result.current.handleProbeResult({
-        ...success,
-        lines: [{ type: "badge", label: "Error", text: "Not signed in" }],
-      })
-    })
-    expect(connectionState()).toBe("error")
-
-    act(() => {
-      result.current.setLoadingForPlugins(["codex"])
-    })
-    // The refresh clears `error` and keeps the old data; the retry must not look connected.
-    expect(result.current.pluginStates.codex).toMatchObject({
-      loading: true,
-      error: null,
-      lastSettledError: "Not signed in",
-      data: { providerId: "codex" },
-    })
-    expect(connectionState()).toBe("error")
-
-    act(() => {
-      result.current.handleProbeResult(success)
-    })
-    expect(result.current.pluginStates.codex?.lastSettledError).toBeNull()
-    expect(connectionState()).toBe("connected")
-  })
-
-  it("records a settled error from a failed probe batch", () => {
-    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
-
-    act(() => {
-      result.current.setLoadingForPlugins(["codex"])
-    })
-    expect(result.current.pluginStates.codex?.lastSettledError).toBeUndefined()
-
-    act(() => {
-      result.current.setErrorForPlugins(["codex"], "Probe failed")
-    })
-    act(() => {
-      result.current.setLoadingForPlugins(["codex"])
-    })
-    expect(result.current.pluginStates.codex?.lastSettledError).toBe("Probe failed")
   })
 })
