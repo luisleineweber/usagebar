@@ -71,7 +71,7 @@ export function ProviderSettingsDetail({
       data: state?.data ?? null,
       error: state?.error ?? null,
       loading: state?.loading ?? false,
-      lastSettledError: state?.lastSettledError ?? null,
+      lastSettledError: state?.lastSettledError,
     },
   })
   const probeStatus = getProbeStatus(plugin, connectionState, state)

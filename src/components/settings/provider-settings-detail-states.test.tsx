@@ -116,6 +116,16 @@ describe("ProviderSettingsDetail state vocabulary", () => {
     expect(screen.queryByText("Connected")).not.toBeInTheDocument()
   })
 
+  it("shows Setup needed, not Connected, while loading without a settled probe", () => {
+    renderDetail({
+      state: pluginState({ data: output("openrouter"), loading: true, error: null }),
+    })
+
+    expect(headerBadge()).toHaveTextContent("Setup needed")
+    expect(screen.getAllByText("Setup needed")).toHaveLength(2)
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument()
+  })
+
   it("shows Unsupported, not Disabled, for a provider that cannot run here", () => {
     renderDetail({
       enabled: true,
