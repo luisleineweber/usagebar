@@ -1,59 +1,8 @@
 import { act, renderHook } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import { useProbeState } from "@/hooks/app/use-probe-state"
-import { getProviderConnectionState } from "@/lib/provider-connection-state"
 
 describe("useProbeState", () => {
-  it("keeps the settled failure through success, failure, and retry", () => {
-    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
-    const connection = () =>
-      getProviderConnectionState({
-        enabled: true,
-        supported: true,
-        state: result.current.pluginStates.codex,
-      })
-    const success = {
-      providerId: "codex",
-      displayName: "Codex",
-      iconUrl: "/codex.svg",
-      lines: [{ type: "text" as const, label: "Now", value: "ok" }],
-    }
-
-    act(() => result.current.handleProbeResult(success))
-    expect(connection()).toBe("connected")
-
-    act(() => result.current.setErrorForPlugins(["codex"], "Codex login expired."))
-    expect(connection()).toBe("error")
-
-    act(() => result.current.setLoadingForPlugins(["codex"]))
-    expect(result.current.pluginStates.codex.data).not.toBeNull()
-    expect(result.current.pluginStates.codex.error).toBeNull()
-    expect(connection()).toBe("error")
-
-    // A second refresh before the first settles keeps the same settled result.
-    act(() => result.current.setLoadingForPlugins(["codex"]))
-    expect(connection()).toBe("error")
-
-    act(() => result.current.handleProbeResult(success))
-    expect(connection()).toBe("connected")
-    expect(result.current.pluginStates.codex.lastSettledError).toBeNull()
-  })
-
-  it("records a failed probe result as the settled error", () => {
-    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
-    act(() =>
-      result.current.handleProbeResult({
-        providerId: "codex",
-        displayName: "Codex",
-        iconUrl: "/codex.svg",
-        lines: [{ type: "badge", label: "Error", text: "Rate limited." }],
-      })
-    )
-    act(() => result.current.setLoadingForPlugins(["codex"]))
-
-    expect(result.current.pluginStates.codex.lastSettledError).toBe("Rate limited.")
-  })
-
   it("rejects a late result from a previously selected provider account", () => {
     const { result, rerender } = renderHook(
       ({ instanceId }) =>

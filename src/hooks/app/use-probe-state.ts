@@ -90,14 +90,12 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
           instanceRef: currentRef ?? existing?.instanceRef,
           loading: true,
           error: null,
-          // A refresh clears `error`; keep the last settled result for status derivation.
-          // A different provider instance has no settled result yet.
+          errorCategory: null,
           lastSettledError: !sameInstance
             ? null
             : existing?.loading
               ? (existing.lastSettledError ?? null)
               : (existing?.error ?? null),
-          errorCategory: null,
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -130,8 +128,8 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
           instanceRef: currentRef ?? existing?.instanceRef,
           loading: false,
           error,
-          lastSettledError: error,
           errorCategory: null,
+          lastSettledError: error,
           history: existing?.history,
           lastManualRefreshAt: existing?.lastManualRefreshAt ?? null,
           lastSuccessAt: existing?.lastSuccessAt ?? null,
@@ -189,8 +187,8 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
               : appendUsageHistory(existing?.history, settledOutput, capturedAt),
             loading: false,
             error: errorMessage,
-            lastSettledError: errorMessage,
             errorCategory: errorMessage ? (output.error?.category ?? "unknown") : null,
+            lastSettledError: errorMessage,
             lastManualRefreshAt:
               !errorMessage && isManual ? capturedAt : (existing?.lastManualRefreshAt ?? null),
             lastSuccessAt: !errorMessage ? capturedAt : (existing?.lastSuccessAt ?? null),
