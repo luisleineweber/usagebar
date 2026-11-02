@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-11-02
+
+- Guided login read cookies only on a success page load. When a provider set the approved cookie later through XHR, Connect stayed pending until a reload. Fix: after the success page loads, read the cookies at a fixed interval on the worker thread. Prevention: the native `late-capture` and `destroy` checks in `src-tauri/tests/guided_cookie_login.rs`.
+
 ## 2026-10-31
 
 - The cargo audit report script failed on unmaintained and unsound warnings, although the audit step used `denyWarnings: false`. The required Dependency audit check failed on every PR and on `main`. Fix: fail the report only on vulnerabilities and keep warnings in the summary. Prevention: `scripts/report-cargo-audit.test.mjs` runs in CI and covers both cases.

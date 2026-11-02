@@ -33,17 +33,15 @@ fn is_missing_credential_error(_: &str) -> bool {
 #[cfg(target_os = "windows")]
 fn main() {
     if let Some(provider_id) = std::env::args().nth(1) {
-        run_login_test(
-            provider_id,
-            std::env::args().nth(2).as_deref() == Some("capture"),
-        );
+        let mode = std::env::args().nth(2).expect("native test mode");
+        run_login_test(provider_id, &mode);
         return;
     }
 
     let executable = std::env::current_exe().expect("find native test executable");
     let mut failed = Vec::new();
     for provider_id in ["zed", "opencode", "abacus", "perplexity"] {
-        for mode in ["cancel", "capture"] {
+        for mode in ["cancel", "destroy", "capture", "late-capture"] {
             println!("Checking guided login for {provider_id}: {mode}");
             let status = std::process::Command::new(&executable)
                 .args([provider_id, mode])
@@ -58,13 +56,18 @@ fn main() {
 }
 
 #[cfg(target_os = "windows")]
-fn run_login_test(provider_id: String, capture: bool) {
+fn run_login_test(provider_id: String, mode: &str) {
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
+    let capture = mode.ends_with("capture");
+    // Destroy closes the window without CloseRequested.
+    let destroy = mode == "destroy";
+    // Late capture sets the approved cookie after the page load without a new navigation.
+    let late_cookie = mode == "late-capture";
     let policy = guided_cookie_policy(&provider_id).expect("known guided login provider");
 
     let server = TcpListener::bind("127.0.0.1:0").expect("start local page server");
@@ -139,20 +142,8 @@ fn run_login_test(provider_id: String, capture: bool) {
                 .find(|window| window.label().starts_with("openusage-cookie-login-"));
             if let Some(login) = login {
                 println!("Native login window created");
-                if capture {
-                    let cookie_url = policy.cookie_urls[0].parse::<tauri::Url>().unwrap();
-                    for name in [policy.cookie_names[0], "unapproved_fixture_cookie"] {
-                        login
-                            .set_cookie(
-                                tauri::webview::Cookie::build((name, "native-test-value"))
-                                    .domain(cookie_url.host_str().unwrap().to_string())
-                                    .path("/")
-                                    .secure(true)
-                                    .http_only(true)
-                                    .build(),
-                            )
-                            .expect("set fixture cookie in the isolated test profile");
-                    }
+                if capture && !late_cookie {
+                    set_fixture_cookies(&login, policy.cookie_urls[0], policy.cookie_names[0]);
                 }
                 // Replace the remote page with deterministic content. Its script can
                 // execute only when the native event loop continues after the IPC call.
@@ -160,13 +151,24 @@ fn run_login_test(provider_id: String, capture: bool) {
                     .navigate(page_url.parse().unwrap())
                     .expect("load test page");
                 println!("Local page navigation requested");
-                if capture {
+                if capture && !late_cookie {
                     return;
                 }
                 while Instant::now() < deadline {
                     if login.url().is_ok_and(|url| url.fragment() == Some("ready")) {
                         println!("Local page script completed");
-                        login.close().expect("close login window");
+                        if late_cookie {
+                            set_fixture_cookies(
+                                &login,
+                                policy.cookie_urls[0],
+                                policy.cookie_names[0],
+                            );
+                            println!("Approved cookie set after page load");
+                        } else if destroy {
+                            login.destroy().expect("destroy login window");
+                        } else {
+                            login.close().expect("close login window");
+                        }
                         return;
                     }
                     std::thread::sleep(Duration::from_millis(20));
@@ -207,10 +209,12 @@ fn run_login_test(provider_id: String, capture: bool) {
                 let correct = match response {
                     tauri::ipc::InvokeResponse::Err(error) => {
                         println!("Login result: {}", error.0);
-                        !capture
-                            && error.0.as_str().is_some_and(|message| {
-                                message == "guided login was closed before cookies were captured"
-                            })
+                        let expected = if destroy {
+                            "guided login window closed unexpectedly"
+                        } else {
+                            "guided login was closed before cookies were captured"
+                        };
+                        !capture && error.0.as_str() == Some(expected)
                     }
                     tauri::ipc::InvokeResponse::Ok(body) => {
                         let result: serde_json::Value =
@@ -229,6 +233,23 @@ fn run_login_test(provider_id: String, capture: bool) {
         );
         println!("Login IPC call returned to the native event loop");
     });
+}
+
+#[cfg(target_os = "windows")]
+fn set_fixture_cookies(login: &tauri::WebviewWindow, cookie_url: &str, approved_name: &str) {
+    let cookie_url = cookie_url.parse::<tauri::Url>().unwrap();
+    for name in [approved_name, "unapproved_fixture_cookie"] {
+        login
+            .set_cookie(
+                tauri::webview::Cookie::build((name, "native-test-value"))
+                    .domain(cookie_url.host_str().unwrap().to_string())
+                    .path("/")
+                    .secure(true)
+                    .http_only(true)
+                    .build(),
+            )
+            .expect("set fixture cookie in the isolated test profile");
+    }
 }
 
 #[cfg(not(target_os = "windows"))]

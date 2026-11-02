@@ -9,6 +9,9 @@ const DEFAULT_SOURCE_URL: &str = "https://dashboard.zed.dev/account";
 const DEFAULT_TIMEOUT_MS: u64 = 15_000;
 const MAX_TIMEOUT_MS: u64 = 60_000;
 const MIN_TIMEOUT_MS: u64 = 1_000;
+// Sign-in can set cookies after the success page load, for example through XHR.
+const COOKIE_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const WINDOW_GONE_ERROR: &str = "guided login window closed unexpectedly";
 const RESULT_SCHEME: &str = "openusage-browser";
 const RESULT_HOST: &str = "result";
 
@@ -203,34 +206,53 @@ pub fn capture_cookies_interactively(
         })
         .map_err(|error| format!("guided login unavailable: {}", error))?;
 
-    // WebView2 cookie reads must run outside native page event handlers.
+    wait_for_approved_cookies(app_handle, &label, &rx, &cookie_urls, &cookie_names)
+}
+
+// WebView2 cookie reads must run outside native page event handlers.
+fn wait_for_approved_cookies(
+    app_handle: &AppHandle,
+    label: &str,
+    rx: &mpsc::Receiver<CookieCaptureMessage>,
+    cookie_urls: &[String],
+    cookie_names: &[String],
+) -> Result<GuidedCookieCaptureResponse, String> {
+    let mut success_url: Option<String> = None;
     loop {
-        match rx.recv() {
-            Ok(CookieCaptureMessage::PageLoaded(final_url)) => {
-                let result = app_handle
-                    .get_webview_window(&label)
-                    .ok_or_else(|| "guided login window disappeared".to_string())
-                    .and_then(|window| {
-                        cookie_header_for_urls(&window, &cookie_urls, &cookie_names)
-                    });
-                match result {
-                    Ok(Some((cookie_header, cookie_count))) => {
-                        close_hidden_browser(app_handle, &label);
-                        return Ok(GuidedCookieCaptureResponse {
-                            cookie_header,
-                            final_url,
-                            cookie_count,
-                        });
-                    }
-                    Ok(None) => continue,
-                    Err(error) => {
-                        close_hidden_browser(app_handle, &label);
-                        return Err(error);
-                    }
-                }
-            }
+        // Wait for the success page first. After it loads, read the cookies at a fixed interval.
+        let message = match success_url {
+            Some(_) => rx.recv_timeout(COOKIE_POLL_INTERVAL),
+            None => rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
+        };
+        match message {
+            Ok(CookieCaptureMessage::PageLoaded(final_url)) => success_url = Some(final_url),
             Ok(CookieCaptureMessage::Error(error)) => return Err(error),
-            Err(_) => return Err("guided login cancelled unexpectedly".to_string()),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            // The senders live in the window handlers, so a destroyed window disconnects.
+            Err(mpsc::RecvTimeoutError::Disconnected) => return Err(WINDOW_GONE_ERROR.to_string()),
+        }
+        let Some(final_url) = &success_url else {
+            continue;
+        };
+        let Some(window) = app_handle.get_webview_window(label) else {
+            return Err(WINDOW_GONE_ERROR.to_string());
+        };
+
+        let result = cookie_header_for_urls(&window, cookie_urls, cookie_names);
+        match result {
+            Ok(Some((cookie_header, cookie_count))) => {
+                close_hidden_browser(app_handle, label);
+                return Ok(GuidedCookieCaptureResponse {
+                    cookie_header,
+                    final_url: final_url.clone(),
+                    cookie_count,
+                });
+            }
+            Ok(None) => {}
+            Err(error) => {
+                close_hidden_browser(app_handle, label);
+                return Err(error);
+            }
         }
     }
 }
