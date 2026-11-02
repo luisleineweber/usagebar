@@ -8,6 +8,8 @@
 - The Home view showed "No active providers yet" before plugin metadata loaded. Fix: show a loading status until views resolve. Prevention: test every empty state against its loading state.
 - A scrolled Home kept its scroll offset after a switch to a provider detail. Fix: reset the shared scroll container on each view change. Prevention: test view changes with a nonzero scroll offset.
 - Error-row Retry buttons were invisible until hover and all had the name "Retry". Fix: keep Retry visible during errors and name it per provider. Prevention: assert accessible names that include the provider for repeated per-card controls.
+- A retry after a failed refresh showed "Data updated just now", because the loading state clears the error and keeps `lastSuccessAt`. Fix: `summarizeDataFreshness` reads `loading` and returns `refreshing` until the result arrives; a loading provider never counts as fresh. Prevention: test freshness through success, failure, and retry, not only settled states.
+- At 400 px the footer update action ("Update to 0.2.0-beta.12", "Restart to update") covered the data freshness text, because the shared Button has `shrink-0`. Fix: put actionable app updates on their own footer row with a shrinkable, truncating label. Prevention: check the footer in the harness with the longest updater and freshness texts in the same row.
 - History rendered nothing without history entries, and rail rows had different heights because height came from icon size plus padding. Fix: show the heading with an empty state, and give rail buttons a fixed `h-11`. Prevention: never return null for a full page view; set fixed row heights on navigation rows.
 
 ## 2026-08-20

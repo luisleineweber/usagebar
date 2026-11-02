@@ -161,6 +161,16 @@ describe("AppShell", () => {
     )
   })
 
+  it("reports refreshing, not fresh, while a failed provider retries", () => {
+    renderShell({
+      displayPlugins: [{ ...plugin, loading: true, error: null, lastSuccessAt: 20 }],
+    })
+
+    expect(panelFooterMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ freshness: { kind: "refreshing" } })
+    )
+  })
+
   it("scrolls the content back to the top when the active view changes", () => {
     useAppUiStore.getState().setActiveView("home")
     renderShell()

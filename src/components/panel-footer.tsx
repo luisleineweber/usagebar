@@ -59,13 +59,45 @@ function VersionButton({
 
 const STATUS_TEXT_CLASS = "min-w-0 truncate text-xs text-muted-foreground"
 
-function AppUpdateStatus({
+/** Actionable app update states get their own footer row so they never cover data freshness. */
+function AppUpdateActionRow({
   updateStatus,
   onUpdateInstall,
 }: {
   updateStatus: UpdateStatus
   onUpdateInstall: () => void
 }) {
+  if (updateStatus.status !== "available" && updateStatus.status !== "ready") return null
+  return (
+    <div data-slot="app-update-action" className="flex min-w-0 pb-1">
+      {updateStatus.status === "available" ? (
+        <Button
+          variant="default"
+          size="xs"
+          className="min-w-0 shrink rounded-md border-primary/20 bg-primary/5 text-primary shadow-none hover:border-primary/40 hover:bg-primary hover:text-primary-foreground dark:border-page-accent/55 dark:bg-page-accent/10 dark:text-page-accent dark:hover:border-page-accent dark:hover:bg-page-accent dark:hover:text-primary-foreground"
+          onClick={onUpdateInstall}
+          title={updateStatus.error ? "Download failed. Try again." : "Download app update"}
+        >
+          <Download className="size-3" aria-hidden />
+          <span className="truncate">Update to {updateStatus.version}</span>
+        </Button>
+      ) : (
+        <Button
+          variant="default"
+          size="xs"
+          className="min-w-0 shrink"
+          onClick={onUpdateInstall}
+          title="Restart to update the app"
+        >
+          <RotateCw className="size-3" aria-hidden />
+          <span className="truncate">Restart to update</span>
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function AppUpdateStatus({ updateStatus }: { updateStatus: UpdateStatus }) {
   switch (updateStatus.status) {
     case "checking":
       return (
@@ -79,19 +111,6 @@ function AppUpdateStatus({
           App up to date
         </span>
       )
-    case "available":
-      return (
-        <Button
-          variant="default"
-          size="xs"
-          className="min-w-0 rounded-md border-primary/20 bg-primary/5 text-primary shadow-none hover:border-primary/40 hover:bg-primary hover:text-primary-foreground dark:border-page-accent/55 dark:bg-page-accent/10 dark:text-page-accent dark:hover:border-page-accent dark:hover:bg-page-accent dark:hover:text-primary-foreground"
-          onClick={onUpdateInstall}
-          title={updateStatus.error ? "Download failed. Try again." : "Download app update"}
-        >
-          <Download className="size-3" aria-hidden />
-          <span className="truncate">Update to {updateStatus.version}</span>
-        </Button>
-      )
     case "downloading":
       return (
         <span role="status" className={STATUS_TEXT_CLASS}>
@@ -99,18 +118,6 @@ function AppUpdateStatus({
             ? `Downloading app update ${updateStatus.progress}%`
             : "Downloading app update..."}
         </span>
-      )
-    case "ready":
-      return (
-        <Button
-          variant="default"
-          size="xs"
-          onClick={onUpdateInstall}
-          title="Restart to update the app"
-        >
-          <RotateCw className="size-3" aria-hidden />
-          Restart to update
-        </Button>
       )
     case "installing":
       return (
@@ -163,7 +170,8 @@ export function PanelFooter({
   onShowAbout,
   onCloseAbout,
 }: PanelFooterProps) {
-  const lastSuccessAt = freshness.kind === "never" ? null : freshness.lastSuccessAt
+  const lastSuccessAt =
+    freshness.kind === "fresh" || freshness.kind === "failed" ? freshness.lastSuccessAt : null
   const now = useNowTicker({
     enabled: Boolean(autoUpdateNextAt || lastSuccessAt),
     resetKey: `${autoUpdateNextAt ?? "paused"}:${lastSuccessAt ?? "never"}`,
@@ -188,52 +196,60 @@ export function PanelFooter({
 
   return (
     <>
-      <div className="flex h-8 items-center justify-between gap-2 border-t pt-1.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <VersionButton
-            version={version}
-            onVersionClick={onShowAbout}
-            onUpdateCheck={onUpdateCheck}
-          />
-          <AppUpdateStatus updateStatus={updateStatus} onUpdateInstall={onUpdateInstall} />
-        </div>
-        <div className="flex shrink-0 items-center justify-end gap-2">
-          {freshness.kind === "failed" ? (
-            <span
-              role="status"
-              className="inline-flex items-center gap-1 text-xs text-destructive tabular-nums"
-              title={`Refresh failed for ${freshness.failedCount} of ${freshness.totalCount} providers.${lastSuccessText ? ` ${lastSuccessText}.` : ""}`}
-            >
-              <AlertCircle className="size-3 shrink-0" aria-hidden />
-              <span>
-                {freshness.failedCount} of {freshness.totalCount} failed
+      <div className="border-t pt-1.5">
+        <AppUpdateActionRow updateStatus={updateStatus} onUpdateInstall={onUpdateInstall} />
+        <div className="flex h-[26px] items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <VersionButton
+              version={version}
+              onVersionClick={onShowAbout}
+              onUpdateCheck={onUpdateCheck}
+            />
+            <AppUpdateStatus updateStatus={updateStatus} />
+          </div>
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            {freshness.kind === "failed" ? (
+              <span
+                role="status"
+                className="inline-flex items-center gap-1 text-xs text-destructive tabular-nums"
+                title={`Refresh failed for ${freshness.failedCount} of ${freshness.totalCount} providers.${lastSuccessText ? ` ${lastSuccessText}.` : ""}`}
+              >
+                <AlertCircle className="size-3 shrink-0" aria-hidden />
+                <span>
+                  {freshness.failedCount} of {freshness.totalCount} failed
+                </span>
               </span>
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {lastSuccessText ?? "No data yet"}
-            </span>
-          )}
-          {autoUpdateNextAt !== null && onRefreshAll ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.currentTarget.blur()
-                onRefreshAll()
-              }}
-              className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums transition-colors hover:text-foreground"
-              aria-label={`${autoUpdateDescription}. Click to refresh now.`}
-              title={`${autoUpdateDescription}. Click to refresh now.`}
-            >
-              <Clock3 className="size-3" aria-hidden />
-              {countdownLabel}
-            </button>
-          ) : (
-            <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
-              <Clock3 className="size-3" aria-hidden />
-              {countdownLabel}
-            </span>
-          )}
+            ) : (
+              <span
+                role={freshness.kind === "refreshing" ? "status" : undefined}
+                className="text-xs text-muted-foreground tabular-nums"
+              >
+                {freshness.kind === "refreshing"
+                  ? "Refreshing..."
+                  : (lastSuccessText ?? "No data yet")}
+              </span>
+            )}
+            {autoUpdateNextAt !== null && onRefreshAll ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.currentTarget.blur()
+                  onRefreshAll()
+                }}
+                className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums transition-colors hover:text-foreground"
+                aria-label={`${autoUpdateDescription}. Click to refresh now.`}
+                title={`${autoUpdateDescription}. Click to refresh now.`}
+              >
+                <Clock3 className="size-3" aria-hidden />
+                {countdownLabel}
+              </button>
+            ) : (
+              <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
+                <Clock3 className="size-3" aria-hidden />
+                {countdownLabel}
+              </span>
+            )}
+          </div>
         </div>
       </div>
       {showAbout && <AboutDialog version={version} onClose={onCloseAbout} />}

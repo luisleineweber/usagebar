@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
@@ -124,6 +124,47 @@ describe("PanelFooter", () => {
     )
     expect(screen.queryByText(/Data updated just now/)).toBeNull()
     vi.useRealTimers()
+  })
+
+  it("shows a refreshing state instead of a success time while providers load", () => {
+    render(
+      <PanelFooter
+        version="0.0.0"
+        freshness={{ kind: "refreshing" }}
+        autoUpdateNextAt={null}
+        updateStatus={idle}
+        onUpdateInstall={noop}
+        {...footerProps}
+      />
+    )
+
+    expect(screen.getByRole("status")).toHaveTextContent("Refreshing...")
+    expect(screen.queryByText(/Data updated/)).toBeNull()
+  })
+
+  it("puts actionable app updates on their own row, apart from data freshness", () => {
+    for (const updateStatus of [
+      { status: "available", version: "0.2.0-beta.12" },
+      { status: "ready" },
+    ] satisfies UpdateStatus[]) {
+      const { container, unmount } = render(
+        <PanelFooter
+          version="0.0.0"
+          freshness={{ kind: "fresh", lastSuccessAt: Date.now() - 12 * 60_000 }}
+          autoUpdateNextAt={null}
+          updateStatus={updateStatus}
+          onUpdateInstall={noop}
+          {...footerProps}
+        />
+      )
+      const actionRow = container.querySelector('[data-slot="app-update-action"]')
+      const action = within(actionRow as HTMLElement).getByRole("button")
+      expect(action).toHaveClass("shrink")
+      expect(action).not.toHaveClass("shrink-0")
+      expect(actionRow).not.toContainElement(screen.getByText("Data updated 12m ago"))
+      expect(actionRow).not.toContainElement(screen.getByRole("button", { name: "UsageBar 0.0.0" }))
+      unmount()
+    }
   })
 
   it("keeps the version button reachable in every app update state", async () => {
