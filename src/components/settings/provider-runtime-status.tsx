@@ -5,13 +5,18 @@ import type { PluginMeta } from "@/lib/plugin-types"
 
 type ProbeStatus = { tone: "muted" | "info" | "error" | "success"; label: string }
 
+/** Platform support text for a provider that cannot run here. */
+export function getUnsupportedMessage(plugin: PluginMeta): string {
+  return plugin.supportMessage ?? "Coming soon on Windows."
+}
+
 export function getProbeStatus(
   plugin: PluginMeta,
   connectionState: ProviderConnectionState,
   state: PluginState | undefined
 ): ProbeStatus {
-  if (plugin.supportState === "comingSoonOnWindows") {
-    return { tone: "muted", label: plugin.supportMessage ?? "Coming soon on Windows." }
+  if (connectionState === "unsupported") {
+    return { tone: "muted", label: getUnsupportedMessage(plugin) }
   }
   if (connectionState === "disabled") {
     return { tone: "muted", label: "Enable this provider to check it." }

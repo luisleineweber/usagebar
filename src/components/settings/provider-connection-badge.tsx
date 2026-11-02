@@ -10,6 +10,7 @@ const BADGE_CLASS = {
   error: "border-destructive/40 text-destructive",
   setupNeeded: undefined,
   disabled: "text-muted-foreground",
+  unsupported: "text-muted-foreground",
 } satisfies Record<ProviderConnectionState, string | undefined>
 
 export function ProviderConnectionBadge({

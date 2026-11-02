@@ -22,6 +22,7 @@ function renderSection(props: Partial<ComponentProps<typeof AccountManagementSec
       providerName="OpenRouter"
       definition={openrouter}
       connectionState="connected"
+      unsupportedMessage="Coming soon on Windows."
       stale={false}
       credentialStored
       onReauthenticate={onReauthenticate}

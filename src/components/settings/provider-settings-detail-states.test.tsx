@@ -101,6 +101,39 @@ describe("ProviderSettingsDetail state vocabulary", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Management key was rejected.")
   })
 
+  it("keeps Error, not Connected, while a retry after a failure runs", () => {
+    renderDetail({
+      state: pluginState({
+        data: output("openrouter"),
+        loading: true,
+        error: null,
+        lastSettledError: "Management key was rejected.",
+        lastSuccessAt: Date.now() - 60_000,
+      }),
+    })
+
+    expect(headerBadge()).toHaveTextContent("Error")
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument()
+  })
+
+  it("shows Unsupported, not Disabled, for a provider that cannot run here", () => {
+    renderDetail({
+      enabled: true,
+      plugin: plugin("antigravity", "Antigravity", {
+        supportState: "comingSoonOnWindows",
+        supportMessage: "Coming soon on Windows. Antigravity needs a macOS helper.",
+      }),
+    })
+
+    expect(headerBadge()).toHaveTextContent("Unsupported")
+    expect(screen.getAllByText("Unsupported")).toHaveLength(2)
+    expect(screen.queryByText("Disabled")).not.toBeInTheDocument()
+    expect(screen.queryByText("This provider is turned off.")).not.toBeInTheDocument()
+    expect(
+      screen.getAllByText("Coming soon on Windows. Antigravity needs a macOS helper.").length
+    ).toBeGreaterThan(0)
+  })
+
   it("disables provider actions while the provider is turned off", async () => {
     const { onRetry, onOpenInTray } = renderDetail({ enabled: false })
 

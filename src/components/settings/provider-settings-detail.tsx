@@ -10,6 +10,7 @@ import { GuidedCookieLoginPanel } from "@/components/settings/guided-cookie-logi
 import {
   ProviderRuntimeStatus,
   getProbeStatus,
+  getUnsupportedMessage,
 } from "@/components/settings/provider-runtime-status"
 import { ProviderSecretField } from "@/components/settings/provider-secret-field"
 import { ProviderSettingsHeader } from "@/components/settings/provider-settings-header"
@@ -66,7 +67,12 @@ export function ProviderSettingsDetail({
   const connectionState = getProviderConnectionState({
     enabled,
     supported: plugin.supportState !== "comingSoonOnWindows",
-    state: { data: state?.data ?? null, error: state?.error ?? null },
+    state: {
+      data: state?.data ?? null,
+      error: state?.error ?? null,
+      loading: state?.loading ?? false,
+      lastSettledError: state?.lastSettledError ?? null,
+    },
   })
   const probeStatus = getProbeStatus(plugin, connectionState, state)
   const isConnected = connectionState === "connected"
@@ -99,8 +105,8 @@ export function ProviderSettingsDetail({
   // The Experimental badge already names the support state. A provider's own hint is the
   // specific guidance; the manifest message is used only when no settings definition exists.
   const setupHint =
-    plugin.supportState === "comingSoonOnWindows"
-      ? (plugin.supportMessage ?? "Coming soon on Windows.")
+    connectionState === "unsupported"
+      ? getUnsupportedMessage(plugin)
       : !hasProviderSettingsDefinition(plugin.id) && plugin.supportMessage
         ? plugin.supportMessage
         : isConnected
@@ -386,6 +392,7 @@ export function ProviderSettingsDetail({
           providerName={plugin.name}
           definition={definition}
           connectionState={connectionState}
+          unsupportedMessage={getUnsupportedMessage(plugin)}
           stale={Boolean(
             isConnected && state?.lastSuccessAt && Date.now() - state.lastSuccessAt > STALE_AFTER_MS
           )}

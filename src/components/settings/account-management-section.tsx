@@ -6,7 +6,11 @@ import { getProviderAccountCapabilities } from "@/lib/account-capabilities"
 import type { ProviderConnectionState } from "@/lib/provider-connection-state"
 import type { ProviderConfig, ProviderSettingsDefinition } from "@/lib/provider-settings"
 
-function connectionDetail(state: ProviderConnectionState, stale: boolean): string {
+function connectionDetail(
+  state: ProviderConnectionState,
+  stale: boolean,
+  unsupportedMessage: string
+): string {
   switch (state) {
     case "connected":
       return stale
@@ -18,6 +22,8 @@ function connectionDetail(state: ProviderConnectionState, stale: boolean): strin
       return "No check has completed yet."
     case "disabled":
       return "This provider is turned off."
+    case "unsupported":
+      return unsupportedMessage
   }
 }
 
@@ -26,6 +32,7 @@ export function AccountManagementSection({
   providerName,
   definition,
   connectionState,
+  unsupportedMessage,
   stale,
   config,
   credentialStored,
@@ -37,6 +44,7 @@ export function AccountManagementSection({
   providerName: string
   definition: ProviderSettingsDefinition
   connectionState: ProviderConnectionState
+  unsupportedMessage: string
   stale: boolean
   config?: ProviderConfig
   credentialStored: boolean
@@ -56,7 +64,7 @@ export function AccountManagementSection({
             Account & Connection
           </h4>
           <p className="mt-1 text-sm text-muted-foreground">
-            {connectionDetail(connectionState, stale)}
+            {connectionDetail(connectionState, stale, unsupportedMessage)}
           </p>
         </div>
         <ProviderConnectionBadge state={connectionState} />
