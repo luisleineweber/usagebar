@@ -20,7 +20,9 @@ The preflight currently verifies:
 
 - `package.json`, [src-tauri/tauri.conf.json](../src-tauri/tauri.conf.json), and [src-tauri/Cargo.toml](../src-tauri/Cargo.toml) agree on the same version
 - the release tag matches that version
-- the Tauri product branding and updater endpoint still point at `UsageBar` and `luisleineweber/usagebar`
+- the Tauri product branding is `UsageBar`
+- the stable build reads the `updater` channel and [src-tauri/tauri.prerelease.conf.json](../src-tauri/tauri.prerelease.conf.json) points prerelease builds at the `updater-prerelease` channel
+- the updater public key keeps key ID `1172A2A8FDB20C1F`, which signed every published release
 - [CHANGELOG.md](../CHANGELOG.md) contains a section for the version being released
 - bundled plugins exist under `src-tauri/resources/bundled_plugins`
 
@@ -29,11 +31,12 @@ The preflight currently verifies:
 Build the Windows installer locally before the first publish of a version:
 
 ```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content .\usagebar.key -Raw
 $env:USAGEBAR_ALLOW_UNSIGNED_WINDOWS_INSTALLER = "1"
 bun run build:release -- --bundles nsis
 ```
 
-If `TAURI_SIGNING_PRIVATE_KEY` is unset, the helper automatically adds `--no-sign` so local builds can complete without Tauri updater signatures. Local Windows builds need an explicit unsigned-build opt-in when no Authenticode material exists. GitHub publishes set this option for prerelease and stable tags. Unsigned artifacts can show `Unknown publisher` and can trigger Windows SmartScreen's "unrecognized app" warning.
+Release builds require `TAURI_SIGNING_PRIVATE_KEY`. Pass `--no-sign` only for an explicit local installer smoke build that will not support in-app updates. Local Windows builds need an explicit unsigned-build opt-in when no Authenticode material exists. GitHub publishes set this option automatically. Unsigned artifacts can show `Unknown publisher` and can trigger Windows SmartScreen's "unrecognized app" warning.
 
 ## Windows Code Signing
 
@@ -71,13 +74,18 @@ The workflow runs the same release preflight, builds platform artifacts, and ver
 
 - a Windows setup executable ending in `setup.exe`
 
-Stable releases require `TAURI_SIGNING_PRIVATE_KEY` and updater signature assets. For prerelease tags, the workflow passes `--no-sign` and publishes without updater assets. All Windows publishes allow an unsigned installer while Authenticode signing remains unavailable.
+All published releases require `TAURI_SIGNING_PRIVATE_KEY`, `latest.json`, and updater signature assets. All releases allow an unsigned Windows installer while Authenticode signing remains unavailable.
 
-Current updater channel note:
+The release workflow copies the signed `latest.json` from each versioned release to fixed channel releases. The app reads its channel, downloads first, and installs only after you select `Restart to update`.
 
-- Signed Tauri updater metadata is the primary update path.
-- GitHub's `releases/latest` alias does not resolve prereleases, so UsageBar queries the release API when a prerelease has no signed updater metadata.
-- The Windows fallback accepts only the exact `UsageBar_<version>_x64-setup.exe` asset and verifies GitHub's SHA-256 digest before installation.
+Current updater channel:
+
+- GitHub's `releases/latest` alias does not resolve prereleases.
+- Stable releases update both the `updater` and `updater-prerelease` channels.
+- Prereleases update only the `updater-prerelease` channel, so stable installs never receive a prerelease.
+- Prerelease builds use `--config src-tauri/tauri.prerelease.conf.json`; [scripts/updater-channel.mjs](../scripts/updater-channel.mjs) selects the channel from the release tag.
+- Both channel releases stay GitHub prereleases so `releases/latest` still resolves to the newest stable release. v0.1.1 installs read that alias.
+- Do not rotate the updater key. Installed builds reject updates signed with another key.
 
 ## Release Gate
 
@@ -111,7 +119,7 @@ This is a public alpha for Windows users who want to test UsageBar before a full
 
 - Some providers are experimental and may need manual cookie/API-key setup
 - Some costs or usage buckets may be estimated or partial
-- Prerelease updates may use the GitHub installer fallback when signed updater metadata is unavailable
+- Prerelease updates use the signed prerelease updater channel
 - UI polish, crash recovery, and signed-build coverage are not final
 
 ### Privacy
