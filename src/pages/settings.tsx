@@ -101,11 +101,11 @@ export function SettingsPage({
   return (
     <Tabs
       value={settingsTab}
-      className="gap-0"
+      className="gap-0 xl:h-full xl:min-h-0"
       onValueChange={(value) => onSettingsTabChange(value as "general" | "providers")}
     >
       {/* Page header: title stacked above underline tabs, left-aligned */}
-      <div className="mb-1 pb-0">
+      <div className="mb-1 shrink-0 pb-0">
         <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           <span className="size-2 rounded-full bg-primary" />
           UsageBar
@@ -153,7 +153,7 @@ export function SettingsPage({
       </div>
 
       {/* General uses two columns on wide settings windows to avoid a narrow form in empty space. */}
-      <TabsContent value="general" className="mt-0 pt-5">
+      <TabsContent value="general" className="mt-0 pt-5 xl:min-h-0 xl:overflow-y-auto">
         <GeneralSettingsPane
           autoUpdateInterval={autoUpdateInterval}
           onAutoUpdateIntervalChange={onAutoUpdateIntervalChange}
@@ -183,7 +183,7 @@ export function SettingsPage({
       </TabsContent>
 
       {/* Providers: full width for two-column layout */}
-      <TabsContent value="providers" className="mt-0 pt-5">
+      <TabsContent value="providers" className="mt-0 pt-5 xl:min-h-0">
         <ProvidersSettingsPane
           providers={providers}
           selectedProviderId={selectedProviderId}
