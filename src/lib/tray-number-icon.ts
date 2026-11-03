@@ -1,7 +1,6 @@
 import { renderSvgToImage } from "@/lib/tray-bars-icon"
 import type { TrayState } from "@/lib/tray-state"
 
-export type TrayColorScheme = "light" | "dark"
 export type TrayNumberGlyph = number | "unknown" | "error"
 
 type Glyph = {
@@ -45,30 +44,31 @@ export function getWindowsTrayIconSizePx(devicePixelRatio: number | undefined): 
   return Math.max(16, Math.round(16 * dpr))
 }
 
-export function getSystemTrayColorScheme(): TrayColorScheme {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "dark"
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-}
+/** The Windows taskbar icon always uses white glyphs; status colors stay readable on the taskbar. */
+const TRAY_NUMBER_COLORS = {
+  normal: "#ffffff",
+  warning: "#f59e0b",
+  critical: "#ef4444",
+} as const
 
 export function getTrayNumberColor(
-  state: Pick<TrayState, "kind"> & { remainingPercentExact?: number; scheme: TrayColorScheme }
+  state: Pick<TrayState, "kind"> & { remainingPercentExact?: number }
 ): string {
-  if (state.kind === "error") return state.scheme === "dark" ? "#ef4444" : "#b91c1c"
+  if (state.kind === "error") return TRAY_NUMBER_COLORS.critical
   if (state.kind !== "value" || typeof state.remainingPercentExact !== "number") {
-    return state.scheme === "dark" ? "#f8fafc" : "#111827"
+    return TRAY_NUMBER_COLORS.normal
   }
-  if (state.remainingPercentExact < 10) return state.scheme === "dark" ? "#ef4444" : "#b91c1c"
-  if (state.remainingPercentExact <= 25) return state.scheme === "dark" ? "#f59e0b" : "#c2410c"
-  return state.scheme === "dark" ? "#f8fafc" : "#111827"
+  if (state.remainingPercentExact < 10) return TRAY_NUMBER_COLORS.critical
+  if (state.remainingPercentExact <= 25) return TRAY_NUMBER_COLORS.warning
+  return TRAY_NUMBER_COLORS.normal
 }
 
 export function makeTrayNumberSvg(args: {
   value: TrayNumberGlyph
   sizePx: number
-  scheme: TrayColorScheme
   state?: TrayState
 }): string {
-  const { value, sizePx, scheme } = args
+  const { value, sizePx } = args
   const glyphs = getGlyphs(value)
   const totalUnits = glyphs.length * 3 + Math.max(0, glyphs.length - 1)
   const cell = Math.max(2, Math.floor(Math.min((sizePx - 2) / totalUnits, (sizePx - 2) / 5)))
@@ -76,13 +76,12 @@ export function makeTrayNumberSvg(args: {
   const xStart = Math.floor((sizePx - glyphWidth) / 2)
   const yStart = Math.floor((sizePx - 5 * cell) / 2)
   const color = getTrayNumberColor(
-    args.state
-      ? { ...args.state, scheme }
-      : value === "error"
-        ? { kind: "error", scheme }
+    args.state ??
+      (value === "error"
+        ? { kind: "error" }
         : value === "unknown"
-          ? { kind: "unknown", scheme }
-          : { kind: "value", remainingPercentExact: value, scheme }
+          ? { kind: "unknown" }
+          : { kind: "value", remainingPercentExact: value })
   )
   const glyphName =
     value === "unknown" ? "dash" : value === "error" ? "error" : String(clampDisplayedValue(value))
@@ -113,7 +112,6 @@ export function makeTrayNumberSvg(args: {
 export async function renderTrayNumberIcon(args: {
   value: TrayNumberGlyph
   sizePx: number
-  scheme: TrayColorScheme
   state?: TrayState
 }) {
   const svg = makeTrayNumberSvg(args)

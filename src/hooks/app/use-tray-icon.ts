@@ -21,16 +21,11 @@ import {
   TRAY_TEMPLATE_FOREGROUND,
 } from "@/lib/tray-bars-icon"
 import {
-  getSystemTrayColorScheme,
   getTrayNumberColor,
   getWindowsTrayIconSizePx,
   renderTrayNumberIcon,
 } from "@/lib/tray-number-icon"
-import {
-  formatTrayBarsTooltip,
-  formatTrayNativeTitle,
-  formatTrayTooltip,
-} from "@/lib/tray-tooltip"
+import { formatTrayBarsTooltip, formatTrayNativeTitle, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { TrayState } from "@/lib/tray-state"
 import type { PluginState } from "@/hooks/app/types"
 
@@ -286,30 +281,18 @@ export function useTrayIcon({
       }
 
       if (!isTemplate) {
-        const scheme = getSystemTrayColorScheme()
-        const numberColor =
-          trayState.kind === "value"
-            ? getTrayNumberColor({
-                kind: "value",
-                remainingPercentExact: trayState.remainingPercentExact,
-                scheme,
-              })
-            : getTrayNumberColor({ kind: trayState.kind, scheme })
+        const numberColor = getTrayNumberColor(trayState)
         void renderTrayNumberIcon({
           value:
             trayState.kind === "value"
               ? Math.round(trayState.remainingPercentExact)
               : trayState.kind,
           sizePx: getWindowsTrayIconSizePx(window.devicePixelRatio),
-          scheme,
           state: trayState,
         })
           .then((image) =>
             Promise.all([
-              setIconIfChanged(
-                `number:${getTrayStateValue(trayState)}:${scheme}:${numberColor}`,
-                image
-              ),
+              setIconIfChanged(`number:${getTrayStateValue(trayState)}:${numberColor}`, image),
               setTooltipIfChanged(tooltipText),
             ])
           )

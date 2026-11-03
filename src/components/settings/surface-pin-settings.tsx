@@ -29,7 +29,6 @@ export function SurfacePinSettings({
               ? "error"
               : "unknown",
         sizePx: 36,
-        scheme: "dark",
         state: preview.state,
       })
     : makeTrayBarsSvg({
