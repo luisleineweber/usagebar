@@ -209,6 +209,7 @@ export function ProviderSettingsDetail({
 
       <div className="mt-4 pr-1 text-sm">
         <ProviderRuntimeStatus
+          providerName={plugin.name}
           className={GROUP_CLASS}
           sourceLabel={getProviderSourceLabel(plugin.id, config)}
           lastSuccessAt={state?.lastSuccessAt ?? null}
