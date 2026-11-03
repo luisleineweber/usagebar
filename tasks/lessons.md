@@ -1,5 +1,26 @@
 # Lessons
 
+## 2026-11-01
+
+- The updater rework allowed unsigned Windows installers only for prereleases, so the next stable publish would fail without an Authenticode certificate. Fix: allow unsigned installers for all releases and keep the Tauri updater key required. Prevention: `scripts/publish-workflow.test.mjs` runs in CI.
+- A prerelease stage guard blocked `0.2.0-beta.1` for `0.2.0-alpha.1` installs, although all prereleases share one updater channel. Fix: offer every newer version from the selected channel. Prevention: the update hook test covers an alpha to beta update.
+- New advisories made the dependency audit fail for Vite, Vitest, undici, minimatch, quinn-proto, rustls, rustls-webpki, webpki-root-certs, and zip. Fix: update only the affected packages and disable the unused zip feature of the updater plugin, because releases ship signed Windows installers without archives. Prevention: run `bun audit` and `cargo audit` locally after each lockfile change.
+- The cargo audit report failed on unmaintained and unsound warnings without a fix, although the audit step allows warnings. Fix: fail the report only for vulnerabilities and still list all warnings. Prevention: `scripts/report-cargo-audit.test.mjs` runs in CI.
+
+## 2026-10-09
+
+- The dependency audit found unsafe versions of Vitest, brace-expansion, source-map-js, and undici. Fix: update only the affected packages and keep Vitest coverage on the same version. Prevention: run the CI audit against the lockfile after package changes.
+- A failed JavaScript audit skipped the Rust audit setup, but the report step still called the missing cargo-audit tool. Fix: run the Rust audit even when the JavaScript audit fails. Prevention: keep independent audits active after an earlier audit failure.
+- The skipped Rust audit hid an unsafe rustls version and a withdrawn chacha20 version. Fix: update only those two lockfile entries. Prevention: require both dependency audits to pass before PR completion.
+- Linux Rust lint failed because Windows imports, data, and mutable lists compiled without Windows callers. Fix: compile Windows code only where needed, use fixed credential lists, and remove unused non-Windows secret-store functions. Prevention: keep the Linux and Windows all-target Clippy checks active in CI.
+- One App test made four preference changes and exceeded the time limit even when run alone. Fix: test each preference change separately with the same event checks and time limit. Prevention: use one interaction per async test when the interactions test separate behavior.
+
+## 2026-08-28
+
+- A fixed `releases/latest` updater endpoint cannot discover prerelease releases. Fix: publish signed `latest.json` to fixed channel releases and use the signed download-then-restart flow for every release. Prevention: test prerelease discovery, signature assets, and both update actions.
+- One shared updater channel offered prereleases to stable installs, because a newer core version is always eligible. Fix: stable releases feed `updater` and `updater-prerelease`; prereleases feed only `updater-prerelease`. Prevention: `scripts/updater-channel.test.mjs` runs in CI.
+- The updater rework replaced the public key that signed v0.1.1. Installed v0.1.1 builds would reject every later update. Fix: keep key ID `1172A2A8FDB20C1F`. Prevention: release preflight fails when the key ID changes.
+
 ## 2026-08-20
 
 - The stable publish workflow used a Tauri private key that did not match the repository public key. Fix: generate one key pair, synchronize both GitHub secrets and the checked-in public key, and inspect the publish log for mismatch warnings. Prevention: treat updater key mismatch warnings as a release blocker.
