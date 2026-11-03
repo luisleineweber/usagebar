@@ -40,9 +40,7 @@ describe("claude plugin", () => {
 
     expect(result.plan).toBe("Pro")
     expect(result.lines.find((line) => line.label === "Session")?.used).toBe(12)
-    expect(ctx.host.providerSecrets.read).toHaveBeenCalledWith(
-      "account:profile-claude:authJson"
-    )
+    expect(ctx.host.providerSecrets.read).toHaveBeenCalledWith("account:profile-claude:authJson")
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
 
@@ -248,7 +246,8 @@ describe("claude plugin", () => {
     const result = plugin.probe(ctx)
 
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(ctx.host.fs.readText).not.toHaveBeenCalled()
+    expect(ctx.host.fs.readText).not.toHaveBeenCalledWith("~/.claude/.credentials.json")
+    expect(ctx.host.fs.readText).not.toHaveBeenCalledWith("~/.claude.json")
     expect(ctx.host.http.request).toHaveBeenCalledWith(
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer keychain-token" }),
@@ -1698,12 +1697,13 @@ describe("claude plugin", () => {
     it("passes custom path and offline pricing controls to ccusage", async () => {
       const ctx = makeProbeCtx({ ccusageResult: okUsage([]) })
       ctx.host.providerConfig = {
-        get: vi.fn((key) =>
-          ({
-            historyPath: "D:/usage/claude",
-            pricingMode: "display",
-            offlinePricing: "enabled",
-          })[key] ?? null
+        get: vi.fn(
+          (key) =>
+            ({
+              historyPath: "D:/usage/claude",
+              pricingMode: "display",
+              offlinePricing: "enabled",
+            })[key] ?? null
         ),
       }
       const plugin = await loadPlugin()

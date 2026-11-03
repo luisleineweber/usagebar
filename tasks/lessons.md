@@ -1,5 +1,7 @@
 # Lessons
 
+- Claude HTTP 429: refreshes ignored the provider retry delay and sent more requests. Save the retry time per profile and check it before token refresh. Test delay headers, runtime reloads, and retry recovery.
+
 ## 2026-08-20
 
 - The stable publish workflow used a Tauri private key that did not match the repository public key. Fix: generate one key pair, synchronize both GitHub secrets and the checked-in public key, and inspect the publish log for mismatch warnings. Prevention: treat updater key mismatch warnings as a release blocker.

@@ -57,6 +57,14 @@ Returns rate limit windows and optional extra credits.
 
 All windows are enforced simultaneously — hitting any limit throttles the user.
 
+### Usage request limit
+
+HTTP 429 means the usage endpoint has limited requests. It does not establish the remaining subscription quota.
+UsageBar saves the `Retry-After` time for each managed profile, or for the local login.
+Refreshes wait until that time, including after an app restart. If the header is missing or invalid,
+UsageBar waits five minutes. The error shows the next retry time. UsageBar does not refresh the
+OAuth token for HTTP 429.
+
 ## Authentication
 
 ### Token Location

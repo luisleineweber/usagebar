@@ -569,6 +569,46 @@
     })
   }
 
+  function rateLimitPath(ctx) {
+    const profileId = readManagedProfileId(ctx) || "local"
+    return ctx.app.pluginDataDir + "/retry-" + encodeURIComponent(profileId) + ".json"
+  }
+
+  function rateLimitMessage(retryAt) {
+    return (
+      "Usage request failed (HTTP 429). Claude request limit reached. Retry after " +
+      new Date(retryAt).toISOString() +
+      "."
+    )
+  }
+
+  function checkRateLimit(ctx, nowMs) {
+    const path = rateLimitPath(ctx)
+    if (!ctx.host.fs.exists(path)) return
+    let state
+    try {
+      state = ctx.util.tryParseJson(ctx.host.fs.readText(path))
+    } catch (e) {
+      ctx.host.log.warn("Claude retry time read failed: " + String(e))
+      return
+    }
+    if (state && Number.isFinite(state.retryAt) && state.retryAt > nowMs) {
+      throw rateLimitMessage(state.retryAt)
+    }
+  }
+
+  function saveRateLimit(ctx, response, nowMs) {
+    const headers = response.headers || {}
+    const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
+    const value = key ? String(headers[key]).trim() : ""
+    const seconds = /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : NaN
+    const requestedAt = Number.isFinite(seconds) ? nowMs + seconds * 1000 : Date.parse(value)
+    const retryAt =
+      Number.isFinite(requestedAt) && requestedAt > nowMs ? requestedAt : nowMs + 5 * 60 * 1000
+    ctx.host.fs.writeText(rateLimitPath(ctx), JSON.stringify({ retryAt }))
+    throw rateLimitMessage(retryAt)
+  }
+
   function queryTokenUsage(ctx) {
     const since = new Date()
     // Inclusive range: today + previous 30 days = 31 calendar days.
@@ -1049,6 +1089,7 @@
     }
 
     const nowMs = Date.now()
+    checkRateLimit(ctx, nowMs)
     let accessToken = creds.oauth.accessToken
 
     // Proactively refresh if token is expired or about to expire
@@ -1093,6 +1134,8 @@
       ctx.host.log.error("usage returned auth error after all retries: status=" + resp.status)
       throw "Token expired. Run `claude` to log in again."
     }
+
+    if (resp.status === 429) saveRateLimit(ctx, resp, Date.now())
 
     if (resp.status < 200 || resp.status >= 300) {
       ctx.host.log.error("usage returned error: status=" + resp.status)
