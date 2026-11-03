@@ -68,6 +68,21 @@ describe("GeneralSettingsPane", () => {
     })
   })
 
+  it("shows tray style guidance in the provider selection column, not in the preview", () => {
+    const { rerender } = render(<GeneralSettingsPane {...defaultProps} menubarIconStyle="bars" />)
+    const preview = screen.getByText("Live preview").parentElement!
+    const barsHint = screen.getByText("Stacked bars show the first four providers.")
+    expect(preview).not.toContainElement(barsHint)
+    expect(screen.queryByRole("radiogroup", { name: "Tray provider selection" })).toBeNull()
+
+    rerender(<GeneralSettingsPane {...defaultProps} trayProviderSelection="last" />)
+    const restartHint = screen.getByText(
+      "Shows the first provider until you open one after a restart."
+    )
+    expect(screen.getByText("Live preview").parentElement).not.toContainElement(restartHint)
+    expect(screen.queryByText(/Stacked bars show/)).toBeNull()
+  })
+
   it("lays out the three tray icon styles in one row", () => {
     render(<GeneralSettingsPane {...defaultProps} />)
 

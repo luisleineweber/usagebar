@@ -239,32 +239,35 @@ export function GeneralSettingsPane({
           ariaLabel="Tray icon style"
         />
         <p className="mt-2 text-xs text-muted-foreground">Compact always shows remaining usage.</p>
-        <div
-          className={
-            menubarIconStyle === "bars"
-              ? "mt-4 flex justify-end"
-              : "mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start"
-          }
-        >
-          {menubarIconStyle !== "bars" && (
-            <div>
-              <h4 className="mb-2 text-sm font-medium">Provider selection</h4>
-              <SettingsRadioGroup
-                options={TRAY_PROVIDER_SELECTION_OPTIONS}
-                value={trayProviderSelection}
-                onValueChange={onTrayProviderSelectionChange}
-                className={TWO_OPTION_GROUP_CLASS}
-                ariaLabel="Tray provider selection"
-              />
-            </div>
-          )}
-          <div className={menubarIconStyle === "bars" ? "w-full sm:w-48" : undefined}>
-            <SurfacePinSettings
-              menubarIconStyle={menubarIconStyle}
-              trayProviderSelection={trayProviderSelection}
-              preview={traySettingsPreview}
-            />
+        <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start">
+          <div>
+            <h4 className="mb-2 text-sm font-medium">Provider selection</h4>
+            {menubarIconStyle === "bars" ? (
+              <p className="text-xs text-muted-foreground">
+                Stacked bars show the first four providers.
+              </p>
+            ) : (
+              <>
+                <SettingsRadioGroup
+                  options={TRAY_PROVIDER_SELECTION_OPTIONS}
+                  value={trayProviderSelection}
+                  onValueChange={onTrayProviderSelectionChange}
+                  className={TWO_OPTION_GROUP_CLASS}
+                  ariaLabel="Tray provider selection"
+                />
+                {trayProviderSelection === "last" && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Shows the first provider until you open one after a restart.
+                  </p>
+                )}
+              </>
+            )}
           </div>
+          <SurfacePinSettings
+            menubarIconStyle={menubarIconStyle}
+            accentColor={accentColor}
+            preview={traySettingsPreview}
+          />
         </div>
       </section>
 
