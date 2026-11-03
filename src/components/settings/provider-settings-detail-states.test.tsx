@@ -78,11 +78,11 @@ describe("ProviderSettingsDetail state vocabulary", () => {
     ["Setup needed", true, pluginState()],
     ["Connected", true, pluginState({ data: output("openrouter"), lastSuccessAt: Date.now() })],
     ["Disabled", false, pluginState()],
-  ])("shows %s in the header and the account block", (label, enabled, state) => {
+  ])("shows %s once, in the header", (label, enabled, state) => {
     renderDetail({ enabled, state })
 
     expect(headerBadge()).toHaveTextContent(label)
-    expect(screen.getAllByText(label)).toHaveLength(2)
+    expect(screen.getAllByText(label)).toHaveLength(1)
     expect(screen.queryByText("Attention needed")).not.toBeInTheDocument()
     expect(screen.queryByText(/^(Setup|Ready|Not connected)$/)).not.toBeInTheDocument()
   })
@@ -122,7 +122,7 @@ describe("ProviderSettingsDetail state vocabulary", () => {
     })
 
     expect(headerBadge()).toHaveTextContent("Setup needed")
-    expect(screen.getAllByText("Setup needed")).toHaveLength(2)
+    expect(screen.getAllByText("Setup needed")).toHaveLength(1)
     expect(screen.queryByText("Connected")).not.toBeInTheDocument()
   })
 
@@ -136,7 +136,7 @@ describe("ProviderSettingsDetail state vocabulary", () => {
     })
 
     expect(headerBadge()).toHaveTextContent("Unsupported")
-    expect(screen.getAllByText("Unsupported")).toHaveLength(2)
+    expect(screen.getAllByText("Unsupported")).toHaveLength(1)
     expect(screen.queryByText("Disabled")).not.toBeInTheDocument()
     expect(screen.queryByText("This provider is turned off.")).not.toBeInTheDocument()
     expect(
@@ -165,11 +165,12 @@ describe("ProviderSettingsDetail state vocabulary", () => {
     expect(screen.queryByRole("button", { name: /ping now|^retry$|scan again/i })).toBeNull()
   })
 
-  it("offers re-authentication only for a stored credential", () => {
+  it("shows no empty secret state and no re-authentication without a stored credential", () => {
     renderDetail()
 
-    expect(screen.getByText("No secret stored")).toBeInTheDocument()
+    expect(screen.queryByText("No secret stored")).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Re-authenticate" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save secret" })).toBeInTheDocument()
   })
 
   it("does not repeat the experimental support message in the connect guidance", () => {
@@ -192,11 +193,12 @@ describe("ProviderSettingsDetail copy and labels", () => {
       state: pluginState({ data: output("cursor"), lastSuccessAt: Date.now() }),
     })
 
-    expect(screen.getByText("Connection details")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Signed in" })).toBeInTheDocument()
     expect(screen.queryByText(/deferred|persistence is modeled|Current plugin/i)).toBeNull()
   })
 
   it("names Claude controls by their visible labels", async () => {
+    // Signed out, so the sign-in options are visible.
     renderDetail({ plugin: plugin("claude", "Claude") })
 
     const cookie = screen.getByRole("textbox", { name: "Claude web Cookie header" })
@@ -205,7 +207,10 @@ describe("ProviderSettingsDetail copy and labels", () => {
   })
 
   it("explains Import current login for Claude like for Codex", async () => {
-    renderDetail({ plugin: plugin("claude", "Claude") })
+    renderDetail({
+      plugin: plugin("claude", "Claude"),
+      state: pluginState({ data: output("claude"), lastSuccessAt: Date.now() }),
+    })
 
     const accounts = (await screen.findByText("Claude Accounts")).parentElement as HTMLElement
     expect(

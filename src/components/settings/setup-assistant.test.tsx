@@ -34,7 +34,10 @@ describe("SetupAssistant", () => {
     expect(screen.getByText("Found")).toBeInTheDocument()
     expect(screen.getByText("Not found")).toBeInTheDocument()
     expect(screen.getAllByText(/Source:/i)).toHaveLength(2)
-    expect(screen.getAllByText(/never uploaded/i)).toHaveLength(2)
+    expect(screen.getByText(/Secrets stay on this device/)).toBeInTheDocument()
+    // The privacy note appears once for the list, not again after every check.
+    expect(screen.queryByText(/never uploaded/i)).not.toBeInTheDocument()
+    expect(screen.getByRole("group", { name: "On this device" })).toBeInTheDocument()
   })
 
   it("reports pending checks while a provider check runs, without its own check action", () => {

@@ -60,15 +60,18 @@ export function ProviderSecretField({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md border border-border/55 bg-muted/25 px-3 py-2.5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          {stateLabel}
+      {/* Without a stored secret the state box adds nothing; the note moves under the field. */}
+      {stored ? (
+        <div className="rounded-md border border-border/55 bg-muted/25 px-3 py-2.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            {stateLabel}
+          </div>
+          <div className="mt-1 text-sm font-medium text-foreground">
+            {`Stored${updatedText ? ` / ${updatedText}` : ""}`}
+          </div>
+          {storageNote ? <p className="mt-1 text-xs text-muted-foreground">{storageNote}</p> : null}
         </div>
-        <div className="mt-1 text-sm font-medium text-foreground">
-          {stored ? `Stored${updatedText ? ` / ${updatedText}` : ""}` : "No secret stored"}
-        </div>
-        {storageNote ? <p className="mt-1 text-xs text-muted-foreground">{storageNote}</p> : null}
-      </div>
+      ) : null}
       <div>
         <label
           htmlFor={inputId}
@@ -86,6 +89,7 @@ export function ProviderSecretField({
         />
         <p id={descriptionId} className="mt-1 text-xs text-muted-foreground">
           {field.description}
+          {!stored && storageNote ? ` ${storageNote}` : null}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">

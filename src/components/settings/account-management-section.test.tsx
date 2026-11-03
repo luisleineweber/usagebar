@@ -1,72 +1,37 @@
-import type { ComponentProps } from "react"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import { AccountManagementSection } from "@/components/settings/account-management-section"
+import {
+  AccountManagementSection,
+  hasManagedAccounts,
+} from "@/components/settings/account-management-section"
 import { getProviderSettingsDefinition } from "@/lib/provider-settings"
 
 vi.mock("@/components/settings/codex-accounts-section", () => ({
-  CodexAccountsSection: () => null,
+  CodexAccountsSection: () => <p>Codex accounts</p>,
 }))
 vi.mock("@/components/settings/provider-accounts-section", () => ({
-  ProviderAccountsSection: () => null,
+  ProviderAccountsSection: ({ providerName }: { providerName: string }) => (
+    <p>{providerName} accounts</p>
+  ),
 }))
 
-const openrouter = getProviderSettingsDefinition("openrouter")
-
-function renderSection(props: Partial<ComponentProps<typeof AccountManagementSection>> = {}) {
-  const onReauthenticate = vi.fn()
-  const onRemoveCredential = vi.fn()
-  render(
-    <AccountManagementSection
-      providerId="openrouter"
-      providerName="OpenRouter"
-      definition={openrouter}
-      connectionState="connected"
-      unsupportedMessage="Coming soon on Windows."
-      stale={false}
-      credentialStored
-      onReauthenticate={onReauthenticate}
-      onRemoveCredential={onRemoveCredential}
-      {...props}
-    />
-  )
-  return { onReauthenticate, onRemoveCredential }
-}
-
 describe("AccountManagementSection", () => {
-  it("shows credential actions when an app-stored credential exists", () => {
-    const { onReauthenticate, onRemoveCredential } = renderSection({ stale: true })
+  it("shows only the account list, without a second connection state", () => {
+    render(<AccountManagementSection className="" providerId="claude" providerName="Claude" />)
 
-    expect(screen.getByText("Connected")).toBeInTheDocument()
-    expect(screen.getByText(/more than 30 minutes ago/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "Re-authenticate" }))
-    fireEvent.click(screen.getByRole("button", { name: "Remove credential" }))
-
-    expect(onReauthenticate).toHaveBeenCalledTimes(1)
-    expect(onRemoveCredential).toHaveBeenCalledTimes(1)
+    expect(screen.getByText("Claude accounts")).toBeInTheDocument()
+    expect(screen.queryByText("Account & Connection")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /re-authenticate/i })).not.toBeInTheDocument()
   })
 
-  it("offers no re-authentication or removal without a stored credential", () => {
-    renderSection({ connectionState: "setupNeeded", credentialStored: false })
+  it("uses the Codex account list for Codex", () => {
+    render(<AccountManagementSection className="" providerId="codex" providerName="Codex" />)
 
-    expect(screen.getByText("Setup needed")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Re-authenticate" })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Remove credential" })).not.toBeInTheDocument()
+    expect(screen.getByText("Codex accounts")).toBeInTheDocument()
   })
 
-  it.each([
-    ["error", "Error"],
-    ["disabled", "Disabled"],
-  ] as const)("reuses the shared %s state label", (connectionState, label) => {
-    renderSection({ connectionState })
-
-    expect(screen.getByText(label)).toBeInTheDocument()
-    expect(screen.queryByText("Attention needed")).not.toBeInTheDocument()
-  })
-
-  it("has no separate check action because the header owns it", () => {
-    renderSection()
-
-    expect(screen.queryByRole("button", { name: /ping|retry|check/i })).not.toBeInTheDocument()
+  it("is available only for providers with managed accounts", () => {
+    expect(hasManagedAccounts(getProviderSettingsDefinition("claude"))).toBe(true)
+    expect(hasManagedAccounts(getProviderSettingsDefinition("openrouter"))).toBe(false)
   })
 })

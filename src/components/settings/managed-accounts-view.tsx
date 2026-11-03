@@ -54,7 +54,7 @@ export function ManagedAccountsView({
 }) {
   const copy = managedAccountCopy(providerId, providerName)
   return (
-    <div className="mt-4 border-t border-border/55 pt-4">
+    <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">

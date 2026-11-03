@@ -42,22 +42,18 @@ export function SetupAssistant({
   loading: boolean
 }) {
   return (
-    <section
-      className="border-t border-border/55 py-4"
-      aria-labelledby="provider-setup-assistant-heading"
-      aria-busy={loading}
-    >
-      <h4
-        id="provider-setup-assistant-heading"
-        className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+    <div role="group" aria-labelledby="provider-setup-detection-heading" aria-busy={loading}>
+      <h5
+        id="provider-setup-detection-heading"
+        className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
       >
-        Setup assistant
-      </h4>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Local checks show which sign-in sources are ready. Secrets stay on this device.
+        On this device
+      </h5>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Local checks only. Secrets stay on this device.
       </p>
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-2 space-y-2">
         {checks.map((check) => {
           const state = getDetectionState(check, detections, loading)
           return (
@@ -86,12 +82,12 @@ export function SetupAssistant({
                 {statusCopy(state)}
               </span>
               <p className="basis-full pl-6 text-xs text-muted-foreground">
-                Source: {check.source}. {check.description} Never uploaded.
+                Source: {check.source}. {check.description}
               </p>
             </div>
           )
         })}
       </div>
-    </section>
+    </div>
   )
 }
