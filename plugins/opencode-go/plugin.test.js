@@ -554,6 +554,30 @@ describe("opencode-go plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("OpenCode Go API key invalid")
   })
 
+  it("shows free usage with an expired-key badge when the Go key expired", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
+
+    const ctx = makeCtx()
+    setAuth(ctx)
+    ctx.goUsageResponse = response(
+      JSON.stringify({
+        error: { type: "authentication_error", code: "api_key_expired", message: "expired" },
+      }),
+      401
+    )
+    setHistoryQuery(ctx, [
+      { createdMs: Date.parse("2026-05-26T10:00:00.000Z"), modelId: "mimo-v2.5-free", cost: 0 },
+    ])
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBe("Free")
+    expect(result.lines[0]).toMatchObject({ type: "badge", label: "Go key", text: "Expired" })
+    expect(result.lines[1]).toMatchObject({ type: "progress", label: "Free", used: 1, limit: 200 })
+  })
+
   it("keeps official meters when sqlite is unreadable", async () => {
     const ctx = makeCtx()
     setGoSubscriptionAuth(ctx)

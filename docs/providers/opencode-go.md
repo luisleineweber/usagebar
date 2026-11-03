@@ -67,7 +67,8 @@ usage is not estimated in local history.
 
 UsageBar displays the provider plan as either `GoSubscription` or `Free`. It renders the paid Go `5h`,
 `Weekly`, and `Monthly` bars only after the usage API returns valid windows. A 403 `EntitlementError`
-means that the key has no Go subscription. Free-mode counting includes free model rows such as
+means that the key has no Go subscription. A 401 with code `api_key_expired` shows Free usage and an
+`Expired` `Go key` badge. Other 401 responses fail as an invalid key. Free-mode counting includes free model rows such as
 `*-free` and `big-pickle`; paid Go model rows are ignored.
 
 ## Limits
