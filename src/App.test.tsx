@@ -2100,35 +2100,28 @@ describe("App", () => {
     )
   })
 
-  it("publishes display preference changes from the settings window", async () => {
-    state.isTauriMock.mockReturnValue(true)
-    renderSettingsWindow()
+  it.each([
+    ["radio", "Light", "themeMode", "light"],
+    ["radio", "Used", "displayMode", "used"],
+    ["radio", /Absolute/, "resetTimerDisplayMode", "absolute"],
+    ["checkbox", "Show History in bar", "showHistoryInBar", false],
+  ] as const)(
+    "publishes %s %s preference changes from the settings window",
+    async (role, name, key, value) => {
+      state.isTauriMock.mockReturnValue(true)
+      renderSettingsWindow()
 
-    await userEvent.click(await screen.findByRole("radio", { name: "Light" }))
-    await userEvent.click(await screen.findByRole("radio", { name: "Used" }))
-    await userEvent.click(await screen.findByRole("radio", { name: /Absolute/ }))
-    await userEvent.click(await screen.findByRole("checkbox", { name: "Show History in bar" }))
+      await userEvent.click(await screen.findByRole(role, { name }))
 
-    await waitFor(() =>
-      expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
-        key: "themeMode",
-        value: "light",
-      })
-    )
-    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
-      key: "displayMode",
-      value: "used",
-    })
-    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
-      key: "resetTimerDisplayMode",
-      value: "absolute",
-    })
-    expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
-      key: "showHistoryInBar",
-      value: false,
-    })
-    expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
-  })
+      await waitFor(() =>
+        expect(eventState.emitMock).toHaveBeenCalledWith("display-preferences:updated", {
+          key,
+          value,
+        })
+      )
+      expect(screen.queryByText("Menubar Icon")).not.toBeInTheDocument()
+    }
+  )
 
   it("applies display preference updates from the settings window to the tray", async () => {
     state.isTauriMock.mockReturnValue(true)

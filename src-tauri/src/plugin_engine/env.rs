@@ -64,10 +64,10 @@ pub(crate) fn parse_interactive_shell_env_output(
     sanitize_env_value(text)
 }
 
-pub(crate) fn configure_background_command(command: &mut Command) {
+pub(crate) fn configure_background_command(_command: &mut Command) {
     #[cfg(target_os = "windows")]
     {
-        command.creation_flags(CREATE_NO_WINDOW);
+        _command.creation_flags(CREATE_NO_WINDOW);
     }
 }
 

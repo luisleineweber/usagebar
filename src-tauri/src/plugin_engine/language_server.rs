@@ -1,3 +1,4 @@
+#[cfg(target_os = "windows")]
 use crate::plugin_engine::env::configure_background_command;
 use rquickjs::{Ctx, Exception, Function, Object};
 use std::process::Command;
@@ -22,6 +23,7 @@ struct LsDiscoverResult {
     extension_port: Option<i32>,
 }
 
+#[cfg(target_os = "windows")]
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct WindowsProcessEntry {
@@ -375,6 +377,7 @@ fn parse_lsof_ports(output: &str) -> Vec<i32> {
     ports.into_iter().collect()
 }
 
+#[cfg(any(target_os = "windows", test))]
 pub(crate) fn parse_netstat_ports(output: &str, process_pid: i32) -> Vec<i32> {
     let mut ports = std::collections::BTreeSet::new();
     let pid_text = process_pid.to_string();
