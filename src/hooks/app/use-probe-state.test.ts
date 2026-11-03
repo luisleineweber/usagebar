@@ -3,6 +3,33 @@ import { describe, expect, it, vi } from "vitest"
 import { useProbeState } from "@/hooks/app/use-probe-state"
 
 describe("useProbeState", () => {
+  it("retains session data and the successful timestamp after HTTP 429", () => {
+    const { result } = renderHook(() => useProbeState({}))
+    const output = {
+      providerId: "claude",
+      displayName: "Claude",
+      iconUrl: "/claude.svg",
+      lines: [{ type: "text" as const, label: "Now", value: "42%" }],
+    }
+    act(() => result.current.handleProbeResult(output))
+    const lastSuccessAt = result.current.pluginStates.claude.lastSuccessAt
+    act(() => result.current.setLoadingForPlugins(["claude"]))
+    act(() =>
+      result.current.handleProbeResult({
+        ...output,
+        lines: [
+          {
+            type: "badge",
+            label: "Error",
+            text: "Usage request failed (HTTP 429). Try again later.",
+          },
+        ],
+      })
+    )
+    expect(result.current.pluginStates.claude.data?.lines).toEqual(output.lines)
+    expect(result.current.pluginStates.claude.lastSuccessAt).toBe(lastSuccessAt)
+    expect(result.current.pluginStates.claude.error).toContain("429")
+  })
   it("applies the refresh cooldown after a failed manual request", () => {
     const { result } = renderHook(() => useProbeState({}))
     result.current.manualRefreshIdsRef.current.add("claude")
