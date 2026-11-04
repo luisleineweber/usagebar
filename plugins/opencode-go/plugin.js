@@ -473,12 +473,13 @@
     return new Date(ms).toISOString()
   }
 
-  function readGoErrorType(ctx, bodyText) {
+  function readGoErrorField(ctx, bodyText, field) {
     const payload = ctx.util.tryParseJson(bodyText)
     if (!payload || typeof payload !== "object") return null
     const error = payload.error
     if (!error || typeof error !== "object") return null
-    return typeof error.type === "string" && error.type.trim() ? error.type.trim() : null
+    const value = error[field]
+    return typeof value === "string" && value.trim() ? value.trim() : null
   }
 
   function readGoUsage(ctx, apiKey) {
@@ -501,10 +502,15 @@
       throw "OpenCode Go usage response invalid."
     }
     if (response.status === 401) {
+      if (readGoErrorField(ctx, response.bodyText, "code") === "api_key_expired") {
+        return { kind: "keyExpired" }
+      }
       throw "OpenCode Go API key invalid. Log into OpenCode Go again."
     }
     if (response.status === 403) {
-      if (readGoErrorType(ctx, response.bodyText) === "EntitlementError") return null
+      if (readGoErrorField(ctx, response.bodyText, "type") === "EntitlementError") {
+        return { kind: "notEntitled" }
+      }
       throw "OpenCode Go usage request forbidden."
     }
     if (response.status < 200 || response.status >= 300) {
@@ -540,7 +546,7 @@
       if (resetsAt) opts.resetsAt = resetsAt
       lines.push(ctx.line.progress(opts))
     }
-    return lines
+    return { kind: "usage", lines }
   }
 
   function countFreeRange(rows, startMs, endMs) {
@@ -688,36 +694,35 @@
       throw "OpenCode Go not detected. Log in with OpenCode Go or use it locally first."
     }
 
-    const goLines = authProfile && authProfile.key ? readGoUsage(ctx, authProfile.key) : null
-    if (goLines) {
-      const lines = appendZenBalanceLine(ctx, goLines)
-      return { plan: PLAN.go, lines }
+    const goUsage = authProfile && authProfile.key ? readGoUsage(ctx, authProfile.key) : null
+    if (goUsage && goUsage.kind === "usage") {
+      return { plan: PLAN.go, lines: appendZenBalanceLine(ctx, goUsage.lines) }
     }
 
-    if (!history.ok) {
-      return {
-        plan: PLAN.free,
-        lines: appendZenBalanceLine(ctx, buildSoftEmptyLines(ctx)),
-      }
+    if (goUsage && goUsage.kind === "keyExpired") {
+      return { lines: appendZenBalanceLine(ctx, [buildExpiredKeyLine(ctx)]) }
     }
 
-    if (!history.present) {
-      return {
-        plan: PLAN.free,
-        lines: appendZenBalanceLine(ctx, buildNotSubscribedLines(ctx)),
-      }
-    }
+    return { plan: PLAN.free, lines: buildFreeLines(ctx, history) }
+  }
+
+  function buildExpiredKeyLine(ctx) {
+    return ctx.line.badge({
+      label: "Go key",
+      text: "Expired",
+      color: "#f59e0b",
+      subtitle: "Create a new API key in OpenCode Console to show Go usage.",
+    })
+  }
+
+  function buildFreeLines(ctx, history) {
+    if (!history.ok) return appendZenBalanceLine(ctx, buildSoftEmptyLines(ctx))
+    if (!history.present) return appendZenBalanceLine(ctx, buildNotSubscribedLines(ctx))
 
     const rowsResult = loadHistory(ctx)
-    if (!rowsResult.ok) {
-      return {
-        plan: PLAN.free,
-        lines: appendZenBalanceLine(ctx, buildSoftEmptyLines(ctx)),
-      }
-    }
+    if (!rowsResult.ok) return appendZenBalanceLine(ctx, buildSoftEmptyLines(ctx))
 
-    const freeLines = buildFreeUsageLines(ctx, rowsResult.rows, readNowMs())
-    return { plan: PLAN.free, lines: freeLines }
+    return buildFreeUsageLines(ctx, rowsResult.rows, readNowMs())
   }
 
   function addCcusageHistory(ctx, result) {
