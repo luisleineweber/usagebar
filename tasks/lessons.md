@@ -334,3 +334,4 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - History page border: keep shared report spacing but disable the provider-card divider on standalone pages.
 - History page top spacing: reduce only the standalone report padding; keep provider-card spacing unchanged.
 - ccusage fixture runner: `npx` read the repository package overrides and failed with `EOVERRIDE`. Run external package tools from an isolated temporary directory so project npm settings cannot affect them.
+- OpenCode Go expired key: the usage API returned 401 `api_key_expired` and the plugin failed with a wrong "API key invalid" message. Report `api_key_expired` as an `Expired` badge in the overview, with no plan and no Free quota, because an expired key does not prove a Free account. Remove manifest `defaultPlan` values that would fill an unknown plan. Handle each documented provider error code explicitly; do not map all 401 responses to one error.
