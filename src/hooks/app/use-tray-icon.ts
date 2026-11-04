@@ -28,6 +28,7 @@ import {
 import { formatTrayBarsTooltip, formatTrayNativeTitle, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { TrayState } from "@/lib/tray-state"
 import type { PluginState } from "@/hooks/app/types"
+import { useTaskbarTheme } from "@/hooks/use-taskbar-theme"
 
 export type TrayUpdateReason = "probe" | "settings" | "init"
 
@@ -105,6 +106,8 @@ export function useTrayIcon({
   const lastLeftProviderIdRef = useRef<string | null>(null)
   const timeFormatModeRef = useRef(timeFormatMode)
   const useTemplateIconRef = useRef(shouldUseTemplateTrayIcon())
+  const taskbarTheme = useTaskbarTheme(!useTemplateIconRef.current)
+  const taskbarThemeRef = useRef(taskbarTheme)
   const lastIconKeyRef = useRef<string | null>(null)
   const lastTooltipRef = useRef<string | null>(null)
   const lastTitleRef = useRef<string | null>(null)
@@ -144,6 +147,9 @@ export function useTrayIcon({
   useEffect(() => {
     timeFormatModeRef.current = timeFormatMode
   }, [timeFormatMode])
+  useEffect(() => {
+    taskbarThemeRef.current = taskbarTheme
+  }, [taskbarTheme])
 
   const scheduleTrayIconUpdate = useCallback((_reason: TrayUpdateReason, delayMs = 0) => {
     if (trayUpdateTimerRef.current !== null) {
@@ -281,13 +287,19 @@ export function useTrayIcon({
       }
 
       if (!isTemplate) {
-        const numberColor = getTrayNumberColor(trayState)
+        const taskbarTheme = taskbarThemeRef.current
+        if (!taskbarTheme) {
+          setStableTrayIcon(tooltipText, formatTrayNativeTitle(trayState))
+          return
+        }
+        const numberColor = getTrayNumberColor(trayState, taskbarTheme)
         void renderTrayNumberIcon({
           value:
             trayState.kind === "value"
               ? Math.round(trayState.remainingPercentExact)
               : trayState.kind,
           sizePx: getWindowsTrayIconSizePx(window.devicePixelRatio),
+          taskbarTheme,
           state: trayState,
         })
           .then((image) =>
@@ -380,6 +392,7 @@ export function useTrayIcon({
     activeView,
     trayProviderSelection,
     timeFormatMode,
+    taskbarTheme,
     trayReady,
   ])
 

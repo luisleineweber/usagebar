@@ -57,6 +57,7 @@ const state = vi.hoisted(() => ({
   autostartIsEnabledMock: vi.fn(),
   renderTrayBarsIconMock: vi.fn(),
   renderTrayNumberIconMock: vi.fn(),
+  loadTaskbarThemeMock: vi.fn(),
   probeHandlers: null as null | {
     onResult: (output: PluginOutput) => void
     onBatchComplete: () => void
@@ -281,6 +282,11 @@ vi.mock("@/lib/tray-bars-icon", async () => {
   }
 })
 
+vi.mock("@/lib/taskbar-theme", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/taskbar-theme")>("@/lib/taskbar-theme")
+  return { ...actual, loadTaskbarTheme: state.loadTaskbarThemeMock }
+})
+
 vi.mock("@/lib/tray-number-icon", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/tray-number-icon")>("@/lib/tray-number-icon")
@@ -492,6 +498,8 @@ describe("App", () => {
     state.autostartIsEnabledMock.mockResolvedValue(false)
     state.renderTrayBarsIconMock.mockResolvedValue({})
     state.renderTrayNumberIconMock.mockResolvedValue({})
+    state.loadTaskbarThemeMock.mockReset()
+    state.loadTaskbarThemeMock.mockResolvedValue("dark")
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
       configurable: true,
       get() {
@@ -1019,6 +1027,47 @@ describe("App", () => {
       )
     )
     expect(state.traySetTitleMock).not.toHaveBeenCalled()
+  })
+
+  it("waits for the taskbar theme before it draws the Windows tray number", async () => {
+    let resolveTheme: (theme: "light" | "dark") => void = () => {}
+    state.loadTaskbarThemeMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTheme = resolve
+      })
+    )
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    await waitFor(() => expect(state.traySetTooltipMock).toHaveBeenCalled())
+    expect(state.renderTrayNumberIconMock).not.toHaveBeenCalled()
+
+    await act(async () => resolveTheme("light"))
+
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ taskbarTheme: "light" })
+      )
+    )
+  })
+
+  it("redraws the Windows tray number when the taskbar theme changes", async () => {
+    render(<App />)
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ taskbarTheme: "dark" })
+      )
+    )
+
+    await act(async () => {
+      eventState.handlers.get("taskbar-theme-changed")?.({ payload: "light" })
+    })
+
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ taskbarTheme: "light" })
+      )
+    )
   })
 
   it("renders the selected Windows bars style instead of the number glyph", async () => {

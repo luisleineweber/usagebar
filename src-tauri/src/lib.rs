@@ -28,6 +28,7 @@ mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]
 mod settings_window;
+mod taskbar_theme;
 #[cfg(not(test))]
 mod tray;
 #[cfg(target_os = "macos")]
@@ -251,6 +252,7 @@ pub fn run() {
             import_current_provider_account_profile,
             delete_provider_account_profile,
             update_global_shortcut,
+            taskbar_theme::get_taskbar_theme,
         ])
         .setup(app_startup::setup)
         .build(tauri::generate_context!())
