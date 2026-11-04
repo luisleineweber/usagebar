@@ -28,6 +28,7 @@ jobs:
         run: bun audit --audit-level=low
 
       - name: Run cargo audit
+        if: always()
         uses: actions-rust-lang/audit@v1
         with:
           workingDirectory: src-tauri
@@ -40,10 +41,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          # GTK3 is required by Tauri's Linux WebView backend. Its glib 0.18
-          # bindings contain an unsound VariantStrIter API that this app does
-          # not use, and GTK3 cannot move to glib >= 0.20 independently.
-          cargo audit --ignore RUSTSEC-2024-0429 --json > ../cargo-audit.json
+          cargo audit --json > ../cargo-audit.json
           audit_status=$?
           set -e
           node ../scripts/report-cargo-audit.mjs ../cargo-audit.json | tee -a "$GITHUB_STEP_SUMMARY"
@@ -142,6 +140,15 @@ jobs:
 
       - name: Run Tauri wrapper tests
         run: node --test scripts/tauri/wrapper.test.mjs
+
+      - name: Run updater channel tests
+        run: node --test scripts/updater-channel.test.mjs
+
+      - name: Run cargo audit report tests
+        run: node --test scripts/report-cargo-audit.test.mjs
+
+      - name: Run publish workflow tests
+        run: node --test scripts/publish-workflow.test.mjs
 
       - name: Prepare CLI sidecar
         run: bun run prepare:cli-sidecar

@@ -24,7 +24,7 @@ vi.mock("@tauri-apps/plugin-process", () => ({
   relaunch: relaunchMock,
 }))
 
-import { compareVersions, isEligibleUpdateCandidate, useAppUpdate } from "@/hooks/use-app-update"
+import { compareVersions, useAppUpdate } from "@/hooks/use-app-update"
 
 declare global {
   // eslint-disable-next-line no-var
@@ -42,7 +42,8 @@ describe("useAppUpdate", () => {
     checkMock.mockResolvedValue(null)
     // `@tauri-apps/api/core` considers `globalThis.isTauri` the runtime flag.
     globalThis.isTauri = true
-})
+  })
+
   afterAll(() => {
     vi.unstubAllGlobals()
     if (originalIsTauri === undefined) {
@@ -64,15 +65,39 @@ describe("useAppUpdate", () => {
     expect(compareVersions("0.1.0-beta.7", "0.1.0-beta.6")).toBe(1)
     expect(compareVersions("0.1.0", "0.1.0-beta.7")).toBe(1)
     expect(compareVersions("0.1.0-beta.6", "0.1.0")).toBe(-1)
+    expect(compareVersions("0.2.0-beta.1", "0.2.0-alpha.1")).toBe(1)
   })
 
-  it("only treats same-channel prereleases, stable releases, or higher cores as eligible updates", () => {
-    expect(isEligibleUpdateCandidate("0.1.0-alpha.2", "0.1.0-alpha.1")).toBe(true)
-    expect(isEligibleUpdateCandidate("0.1.0", "0.1.0-alpha.1")).toBe(true)
-    expect(isEligibleUpdateCandidate("0.1.1-beta.1", "0.1.0-alpha.1")).toBe(true)
-    expect(isEligibleUpdateCandidate("0.1.0-beta.6", "0.1.0-alpha.1")).toBe(false)
-    expect(isEligibleUpdateCandidate("0.1.0-alpha.1", "0.1.0-alpha.1")).toBe(false)
-    expect(isEligibleUpdateCandidate("0.0.9", "0.1.0-alpha.1")).toBe(false)
+  it("offers a later prerelease stage of the same core version", async () => {
+    getVersionMock.mockResolvedValue("0.2.0-alpha.1")
+    checkMock.mockResolvedValue({
+      version: "0.2.0-beta.1",
+      download: vi.fn(),
+      install: vi.fn(),
+    })
+
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+
+    await waitFor(() =>
+      expect(result.current.updateStatus).toEqual({ status: "available", version: "0.2.0-beta.1" })
+    )
+  })
+
+  it("ignores updater candidates that are not newer than the current version", async () => {
+    getVersionMock.mockResolvedValue("0.2.0-beta.1")
+    checkMock.mockResolvedValue({
+      version: "0.2.0-alpha.1",
+      download: vi.fn(),
+      install: vi.fn(),
+    })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const { result } = renderHook(() => useAppUpdate({ isDev: false }))
+
+    await waitFor(() => expect(result.current.updateStatus).toEqual({ status: "up-to-date" }))
+    expect(warnSpy).toHaveBeenCalledWith(
+      "Ignoring updater candidate 0.2.0-alpha.1; current version is 0.2.0-beta.1."
+    )
   })
 
   it("skips updater checks in dev", async () => {
