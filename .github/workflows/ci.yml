@@ -35,10 +35,6 @@ jobs:
           denyWarnings: false
           createIssues: false
 
-      - name: Test cargo audit report
-        if: always()
-        run: node --test scripts/report-cargo-audit.test.mjs
-
       - name: Export cargo audit report
         if: always()
         working-directory: src-tauri
@@ -144,6 +140,15 @@ jobs:
 
       - name: Run Tauri wrapper tests
         run: node --test scripts/tauri/wrapper.test.mjs
+
+      - name: Run updater channel tests
+        run: node --test scripts/updater-channel.test.mjs
+
+      - name: Run cargo audit report tests
+        run: node --test scripts/report-cargo-audit.test.mjs
+
+      - name: Run publish workflow tests
+        run: node --test scripts/publish-workflow.test.mjs
 
       - name: Prepare CLI sidecar
         run: bun run prepare:cli-sidecar

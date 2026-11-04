@@ -4,10 +4,12 @@
 
 - Guided login read cookies only on a success page load. When a provider set the approved cookie later through XHR, Connect stayed pending until a reload. Fix: after the success page loads, read the cookies at a fixed interval on the worker thread. Prevention: the native `late-capture` and `destroy` checks in `src-tauri/tests/guided_cookie_login.rs`.
 
-## 2026-10-31
+## 2026-11-01
 
-- The cargo audit report script failed on unmaintained and unsound warnings, although the audit step used `denyWarnings: false`. The required Dependency audit check failed on every PR and on `main`. Fix: fail the report only on vulnerabilities and keep warnings in the summary. Prevention: `scripts/report-cargo-audit.test.mjs` runs in CI and covers both cases.
-- New advisories made the audit fail without a code change. The zip fix was only in `tauri-plugin-updater` 2.14.1, which needs Tauri 2.12. Fix: update the affected JavaScript packages, Rust patch versions, and Tauri with its JavaScript packages to the same minor version. Prevention: run both audits with a fresh advisory database before PR completion.
+- The updater rework allowed unsigned Windows installers only for prereleases, so the next stable publish would fail without an Authenticode certificate. Fix: allow unsigned installers for all releases and keep the Tauri updater key required. Prevention: `scripts/publish-workflow.test.mjs` runs in CI.
+- A prerelease stage guard blocked `0.2.0-beta.1` for `0.2.0-alpha.1` installs, although all prereleases share one updater channel. Fix: offer every newer version from the selected channel. Prevention: the update hook test covers an alpha to beta update.
+- New advisories made the dependency audit fail for Vite, Vitest, undici, minimatch, quinn-proto, rustls, rustls-webpki, webpki-root-certs, and zip. Fix: update only the affected packages and disable the unused zip feature of the updater plugin, because releases ship signed Windows installers without archives. Prevention: run `bun audit` and `cargo audit` locally after each lockfile change.
+- The cargo audit report failed on unmaintained and unsound warnings without a fix, although the audit step allows warnings. Fix: fail the report only for vulnerabilities and still list all warnings. Prevention: `scripts/report-cargo-audit.test.mjs` runs in CI.
 
 ## 2026-10-09
 
@@ -22,6 +24,12 @@
 - GitHub CLI selected the upstream remote because this repository had no default. Fix: set luisleineweber/usagebar as the default and use explicit --repo for PR commands. Prevention: check the selected repository before creating or finding a PR.
 - Guided login opened a blank window because a synchronous Tauri command waited for cookie capture on the native event loop. Fix: use an async command and run the blocking capture wait on a worker thread. Prevention: run the native Windows IPC test in CI; check that a page script runs and that closing the login window returns cancellation.
 - Abacus AI and Perplexity still opened blank windows because their initial URLs started a cookie read inside a native navigation event. The same read blocked Zed and OpenCode Zen at their target URLs. Fix: send completed page events to the existing capture worker, read cookies there, and keep the window open when sign-in cookies are absent. Prevention: test page scripts, empty-cookie cancellation, and approved-cookie capture for all four providers with real Windows WebView2.
+
+## 2026-08-28
+
+- A fixed `releases/latest` updater endpoint cannot discover prerelease releases. Fix: publish signed `latest.json` to fixed channel releases and use the signed download-then-restart flow for every release. Prevention: test prerelease discovery, signature assets, and both update actions.
+- One shared updater channel offered prereleases to stable installs, because a newer core version is always eligible. Fix: stable releases feed `updater` and `updater-prerelease`; prereleases feed only `updater-prerelease`. Prevention: `scripts/updater-channel.test.mjs` runs in CI.
+- The updater rework replaced the public key that signed v0.1.1. Installed v0.1.1 builds would reject every later update. Fix: keep key ID `1172A2A8FDB20C1F`. Prevention: release preflight fails when the key ID changes.
 
 ## 2026-08-20
 

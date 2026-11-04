@@ -86,5 +86,4 @@ for (const { type, entry } of entries) {
   console.log("")
 }
 
-// Warnings stay visible in the summary. Only vulnerabilities fail, matching `denyWarnings: false`.
-process.exitCode = (counts.vulnerability ?? 0) > 0 ? 1 : 0
+process.exitCode = counts.vulnerability > 0 ? 1 : 0
