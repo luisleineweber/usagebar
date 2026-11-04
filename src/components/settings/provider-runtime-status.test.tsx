@@ -5,19 +5,36 @@ import { ProviderRuntimeStatus } from "./provider-runtime-status"
 
 const error = "OpenCode Go API key invalid. Log into OpenCode Go again."
 
-function renderStatus(tone: "error" | "success" = "error") {
+function renderStatus(tone: "error" | "success" = "error", label = error) {
   render(
     <ProviderRuntimeStatus
       providerName="OpenCode Go"
       sourceLabel="Local credentials"
       lastSuccessAt={null}
-      status={{ tone, label: error }}
+      status={{ tone, label }}
       className=""
     />
   )
 }
 
 describe("ProviderRuntimeStatus agent instructions", () => {
+  it.each([
+    "access_token=private-token-value",
+    '{"api_key":"private-api-key"}',
+    "Cookie: session=private-cookie; other=private-other-cookie",
+    "Authorization: Bearer private-bearer-value",
+    "eyJhbGciOiJIUzI1NiJ9.privatepayload.privatesignature",
+  ])("redacts secrets before they reach the clipboard: %s", async (message) => {
+    const user = userEvent.setup()
+    const writeText = vi.spyOn(navigator.clipboard, "writeText")
+    renderStatus("error", `Provider request failed: ${message}`)
+    await user.click(screen.getByRole("button", { name: "Copy instructions for an agent" }))
+    const prompt = writeText.mock.calls[0][0]
+    expect(prompt).toContain("Provider request failed")
+    expect(prompt).toContain("[REDACTED]")
+    expect(prompt).not.toContain("private")
+  })
+
   it("copies a recovery task with provider context and confirms the copy", async () => {
     const user = userEvent.setup()
     const writeText = vi.spyOn(navigator.clipboard, "writeText")

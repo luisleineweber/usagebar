@@ -140,6 +140,15 @@ describe("normalizeProviderConfigs", () => {
     expect(result.codex.secrets?.cookieHeader?.updatedAt).toBe(1700000000000)
   })
 
+  it("keeps only a true Microsoft Edge import opt-in", () => {
+    const result = normalizeProviderConfigs({
+      claude: { browserCookieImportEnabled: true },
+      cursor: { browserCookieImportEnabled: "true" },
+    })
+    expect(result.claude.browserCookieImportEnabled).toBe(true)
+    expect(result.cursor.browserCookieImportEnabled).toBeUndefined()
+  })
+
   it("drops invalid source values", () => {
     const result = normalizeProviderConfigs({
       codex: { source: "invalid" },
@@ -229,6 +238,17 @@ describe("updateProviderConfig", () => {
     const result = updateProviderConfig(configs, "ollama", { workspaceId: "wrk-1" })
     expect(result.ollama.workspaceId).toBe("wrk-1")
     expect(result.ollama.updatedAt).toBeDefined()
+  })
+
+  it("keeps the Microsoft Edge import opt-in after an update", () => {
+    const enabled = updateProviderConfig({}, "claude", { browserCookieImportEnabled: true })
+    expect(enabled.claude.browserCookieImportEnabled).toBe(true)
+
+    const later = updateProviderConfig(enabled, "claude", { historyPath: "C:/claude" })
+    expect(later.claude.browserCookieImportEnabled).toBe(true)
+
+    const disabled = updateProviderConfig(later, "claude", { browserCookieImportEnabled: false })
+    expect(disabled.claude.browserCookieImportEnabled).toBeUndefined()
   })
 
   it("preserves unchanged fields", () => {

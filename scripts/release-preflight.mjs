@@ -2,6 +2,13 @@ import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 
+import {
+  PRERELEASE_CHANNEL_TAG,
+  PRERELEASE_CONFIG_PATH,
+  STABLE_CHANNEL_TAG,
+  channelEndpoint,
+} from "./updater-channel.mjs"
+
 const repoRoot = path.resolve(import.meta.dirname, "..")
 const args = process.argv.slice(2)
 
@@ -103,19 +110,31 @@ if (tauriConf.productName !== "UsageBar") {
   fail(`Tauri productName drifted from UsageBar: ${tauriConf.productName}`)
 }
 
-const updaterEndpoints = tauriConf.plugins?.updater?.endpoints ?? []
-const expectedUpdaterEndpoint =
-  "https://github.com/luisleineweber/usagebar/releases/download/updater/latest.json"
-if (updaterEndpoints.length !== 1 || updaterEndpoints[0] !== expectedUpdaterEndpoint) {
-  fail(`Updater endpoint must be ${expectedUpdaterEndpoint}`)
+function requireSingleEndpoint(config, configPath, channelTag) {
+  const endpoints = config.plugins?.updater?.endpoints ?? []
+  const expected = channelEndpoint(channelTag)
+  if (endpoints.length !== 1 || endpoints[0] !== expected) {
+    fail(`${configPath} updater endpoint must be ${expected}`)
+  }
 }
+
+requireSingleEndpoint(tauriConf, "src-tauri/tauri.conf.json", STABLE_CHANNEL_TAG)
+requireSingleEndpoint(readJson(PRERELEASE_CONFIG_PATH), PRERELEASE_CONFIG_PATH, PRERELEASE_CHANNEL_TAG)
 
 if (tauriConf.bundle?.createUpdaterArtifacts !== true) {
   fail("Tauri updater artifacts must be enabled")
 }
 
-if (!tauriConf.plugins?.updater?.pubkey) {
+// Installed builds trust only this key. Rotating it strands every installed
+// release, so a rotation needs an explicit migration plan first.
+const expectedUpdaterKeyId = "1172A2A8FDB20C1F"
+const updaterPubkey = tauriConf.plugins?.updater?.pubkey
+if (!updaterPubkey) {
   fail("Tauri updater public key is missing")
+}
+const updaterKeyComment = Buffer.from(updaterPubkey, "base64").toString("utf8").split("\n")[0]
+if (!updaterKeyComment.endsWith(expectedUpdaterKeyId)) {
+  fail(`Tauri updater public key must keep key ID ${expectedUpdaterKeyId}`)
 }
 
 if (!changelog.includes(`## ${version}`)) {
@@ -153,7 +172,7 @@ if (releaseTag) {
   console.log(`Release tag: ${releaseTag}`)
 }
 console.log(`Bundled plugins detected: ${bundledPluginCount}`)
-console.log(`Updater endpoint: ${updaterEndpoints[0] ?? "(missing)"}`)
+console.log(`Updater key ID: ${expectedUpdaterKeyId}`)
 if (requireClean) {
   console.log("Working tree: clean")
 }

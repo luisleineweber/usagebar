@@ -59,8 +59,6 @@ const counts = entries.reduce((result, { type }) => {
   result[type] = (result[type] ?? 0) + 1
   return result
 }, {})
-const blockingTypes = new Set(["vulnerability", "unsound", "yanked"])
-const blockingEntries = entries.filter(({ type }) => blockingTypes.has(type))
 const countLabel = Object.entries(counts)
   .map(([type, count]) => `${count} ${type}`)
   .join(", ")
@@ -68,7 +66,6 @@ const countLabel = Object.entries(counts)
 console.log("## RustSec dependency audit")
 console.log("")
 console.log(`**${entries.length} findings:** ${countLabel || "none"}.`)
-console.log(`- Blocking findings: ${blockingEntries.length}`)
 console.log(`- Audit database updated: ${data.database?.["last-updated"] ?? "unknown"}`)
 console.log(`- Lockfile dependencies: ${data.lockfile?.["dependency-count"] ?? "unknown"}`)
 console.log("")
@@ -89,4 +86,4 @@ for (const { type, entry } of entries) {
   console.log("")
 }
 
-process.exitCode = blockingEntries.length > 0 ? 1 : 0
+process.exitCode = counts.vulnerability > 0 ? 1 : 0

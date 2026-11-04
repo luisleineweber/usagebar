@@ -245,7 +245,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText("How to connect")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument()
     expect(
       screen.getByText(/Install Codex CLI, sign in on this machine, then retry\./)
     ).toBeInTheDocument()
@@ -337,7 +337,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText("Connection details")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Signed in" })).toBeInTheDocument()
     expect(screen.getByText("Provider responded successfully.")).toBeInTheDocument()
   })
 
@@ -458,6 +458,8 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
+    // A stored credential means signed in, so the credential sits behind Change sign-in.
+    await userEvent.click(screen.getByRole("button", { name: "Change sign-in" }))
     await userEvent.click(screen.getByRole("button", { name: "Clear secret" }))
 
     await waitFor(() => {
@@ -759,7 +761,7 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByLabelText("Moonshot API key")).toBeInTheDocument()
   })
 
-  it("shows setup source status and provenance", () => {
+  it("shows setup source status and provenance", async () => {
     render(
       <ProviderSettingsDetail
         plugin={kimiPlugin}
@@ -780,10 +782,11 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByRole("heading", { name: "Setup assistant" })).toBeInTheDocument()
+    // A found local login means signed in; the checks stay available behind Change sign-in.
+    expect(screen.getByText("Signed in with Kimi CLI login.")).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Change sign-in" }))
     expect(screen.getByRole("group", { name: "Kimi CLI login: Found" })).toBeInTheDocument()
     expect(screen.getByRole("group", { name: "Moonshot API key: Not found" })).toBeInTheDocument()
-    expect(screen.getAllByText(/Never uploaded/i)).toHaveLength(2)
   })
 
   it("shows explicit Kilo API-key guidance", () => {
@@ -924,7 +927,7 @@ describe("ProviderSettingsDetail", () => {
     ).toBeInTheDocument()
   })
 
-  it("runs guided login from re-authenticate when a session is stored", async () => {
+  it("runs guided login from Change sign-in when a session is stored", async () => {
     guidedLoginMock.mockResolvedValueOnce({
       cookieHeader: "zed.session=reauth",
       finalUrl: "https://dashboard.zed.dev/org_123/billing/usage",
@@ -949,7 +952,8 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    await userEvent.click(screen.getByRole("button", { name: "Re-authenticate" }))
+    await userEvent.click(screen.getByRole("button", { name: "Change sign-in" }))
+    await userEvent.click(screen.getByRole("button", { name: "Connect dashboard" }))
 
     await waitFor(() => expect(guidedLoginMock).toHaveBeenCalledTimes(1))
     expect(onSecretSave).toHaveBeenCalledWith("zed", "cookieHeader", "zed.session=reauth")
@@ -1116,6 +1120,8 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
+    // Saving a sign-in secret switches the page to the signed-in view.
+    await userEvent.click(screen.getByRole("button", { name: "Change sign-in" }))
     await userEvent.click(screen.getByRole("button", { name: "Clear secret" }))
     await waitFor(() => {
       expect(onSecretDelete).toHaveBeenCalledWith("alibaba", "cookieHeader")

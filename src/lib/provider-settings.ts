@@ -56,6 +56,11 @@ export type ProviderSettingsDefinition = {
     successMessage: string
   }
   sourceOptions?: ProviderSettingsOption[]
+  /**
+   * "signIn" (default): the secret field signs in to the provider.
+   * "optionalData": the secret only adds optional data; the sign-in happens elsewhere.
+   */
+  secretFieldRole?: "signIn" | "optionalData"
   secretField?: {
     key: string
     label: string
@@ -164,6 +169,7 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
       "Install Codex CLI and sign in locally. Dashboard cookies are optional enrichment only.",
     connectHint:
       "Install Codex CLI, sign in on this machine, then retry. Use managed account import if you want to pin a specific local Codex account.",
+    secretFieldRole: "optionalData",
     secretField: {
       key: "cookieHeader",
       label: "Dashboard Cookie header",
@@ -363,6 +369,7 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
         description: "Only key presence is checked. The key is never shown in Settings.",
       },
     ],
+    secretFieldRole: "optionalData",
     secretField: {
       key: "apiKey",
       label: "Moonshot API key",
@@ -781,6 +788,8 @@ function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
       ? raw.pricingMode
       : undefined
   const offlinePricing = raw.offlinePricing === "enabled" ? "enabled" : undefined
+  // The backend allows an Edge import only for a stored `true`; off is stored as absent.
+  const browserCookieImportEnabled = raw.browserCookieImportEnabled === true ? true : undefined
   const updatedAt =
     typeof raw.updatedAt === "number" && Number.isFinite(raw.updatedAt) ? raw.updatedAt : undefined
   const secrets = sanitizeSecretMetadata(raw.secrets)
@@ -792,6 +801,7 @@ function normalizeProviderConfigEntry(value: unknown): ProviderConfig {
     historyPath,
     pricingMode,
     offlinePricing,
+    browserCookieImportEnabled,
     updatedAt,
     secrets: Object.keys(secrets).length > 0 ? secrets : undefined,
   }
