@@ -115,6 +115,7 @@ describe("opencode-go plugin", () => {
     expect(manifest.id).toBe("opencode-go")
     expect(manifest.name).toBe("OpenCode")
     expect(manifest.brandColor).toBe("#000000")
+    expect(manifest.defaultPlan).toBeUndefined()
     expect(manifest.links).toEqual([
       { label: "Console", url: "https://opencode.ai/auth" },
       { label: "Docs", url: "https://opencode.ai/docs/go/" },
@@ -122,6 +123,7 @@ describe("opencode-go plugin", () => {
     expect(manifest.lines).toEqual([
       { type: "progress", label: "5h", scope: "overview", primaryOrder: 1 },
       { type: "progress", label: "Free", scope: "overview", primaryOrder: 1 },
+      { type: "badge", label: "Go key", scope: "overview" },
       { type: "text", label: "Zen balance", scope: "detail" },
       { type: "text", label: "Zen source", scope: "detail" },
       { type: "text", label: "Zen auth source", scope: "detail" },
@@ -554,28 +556,61 @@ describe("opencode-go plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("OpenCode Go API key invalid")
   })
 
-  it("shows free usage with an expired-key badge when the Go key expired", async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
-
-    const ctx = makeCtx()
-    setAuth(ctx)
-    ctx.goUsageResponse = response(
+  function expiredKeyResponse() {
+    return response(
       JSON.stringify({
         error: { type: "authentication_error", code: "api_key_expired", message: "expired" },
       }),
       401
     )
-    setHistoryQuery(ctx, [
-      { createdMs: Date.parse("2026-05-26T10:00:00.000Z"), modelId: "mimo-v2.5-free", cost: 0 },
-    ])
+  }
+
+  it.each([
+    [
+      "free-model history",
+      [{ createdMs: Date.parse("2026-05-26T10:00:00.000Z"), modelId: "mimo-v2.5-free", cost: 0 }],
+    ],
+    [
+      "paid-model history only",
+      [{ createdMs: Date.parse("2026-05-26T10:00:00.000Z"), modelId: "kimi-k2.6", cost: 1.2 }],
+    ],
+  ])("reports an expired Go key without a plan or Free quota (%s)", async (_name, rows) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
+
+    const ctx = makeCtx()
+    setAuth(ctx)
+    ctx.goUsageResponse = expiredKeyResponse()
+    setHistoryQuery(ctx, rows)
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Free")
-    expect(result.lines[0]).toMatchObject({ type: "badge", label: "Go key", text: "Expired" })
-    expect(result.lines[1]).toMatchObject({ type: "progress", label: "Free", used: 1, limit: 200 })
+    expect(result.plan).toBeUndefined()
+    expect(result.lines).toEqual([
+      {
+        type: "badge",
+        label: "Go key",
+        text: "Expired",
+        color: "#f59e0b",
+        subtitle: "Create a new API key in OpenCode Console to show Go usage.",
+      },
+    ])
+  })
+
+  it("reports an expired Go key without a plan when sqlite is unreadable", async () => {
+    const ctx = makeCtx()
+    setAuth(ctx)
+    ctx.goUsageResponse = expiredKeyResponse()
+    ctx.host.sqlite.query.mockImplementation(() => {
+      throw new Error("database is locked")
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.plan).toBeUndefined()
+    expect(result.lines.map((line) => line.label)).toEqual(["Go key"])
   })
 
   it("keeps official meters when sqlite is unreadable", async () => {

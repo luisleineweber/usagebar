@@ -699,12 +699,11 @@
       return { plan: PLAN.go, lines: appendZenBalanceLine(ctx, goUsage.lines) }
     }
 
-    const freeLines = buildFreeLines(ctx, history)
-    const lines =
-      goUsage && goUsage.kind === "keyExpired"
-        ? [buildExpiredKeyLine(ctx)].concat(freeLines)
-        : freeLines
-    return { plan: PLAN.free, lines }
+    if (goUsage && goUsage.kind === "keyExpired") {
+      return { lines: appendZenBalanceLine(ctx, [buildExpiredKeyLine(ctx)]) }
+    }
+
+    return { plan: PLAN.free, lines: buildFreeLines(ctx, history) }
   }
 
   function buildExpiredKeyLine(ctx) {

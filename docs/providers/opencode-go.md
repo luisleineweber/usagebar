@@ -67,8 +67,9 @@ usage is not estimated in local history.
 
 UsageBar displays the provider plan as either `GoSubscription` or `Free`. It renders the paid Go `5h`,
 `Weekly`, and `Monthly` bars only after the usage API returns valid windows. A 403 `EntitlementError`
-means that the key has no Go subscription. A 401 with code `api_key_expired` shows Free usage and an
-`Expired` `Go key` badge. Other 401 responses fail as an invalid key. Free-mode counting includes free model rows such as
+means that the key has no Go subscription. A 401 with code `api_key_expired` does not prove a Free
+account. UsageBar then reports no plan and no Free quota. It shows only an `Expired` `Go key` badge in
+the overview, plus the optional Zen balance. Other 401 responses fail as an invalid key. Free-mode counting includes free model rows such as
 `*-free` and `big-pickle`; paid Go model rows are ignored.
 
 ## Limits
@@ -80,7 +81,7 @@ For Free usage, OpenUsage uses the published Free 5-hour request limit:
 
 - `5h`: `200 requests`
 
-Free accounts are not mapped onto the `$12/$30/$60` Go dollar limits. UsageBar defaults to `Free` unless it finds positive `GoSubscription` evidence.
+Free accounts are not mapped onto the `$12/$30/$60` Go dollar limits. The manifest has no default plan. The plugin reports `Free` only when the usage API or local Free usage gives evidence for it.
 
 ## Window Rules
 
