@@ -3,6 +3,7 @@ use crate::plugin_engine::env::*;
 use crate::plugin_engine::manifest::HostCapabilities;
 use crate::plugin_engine::redaction::*;
 use crate::plugin_engine::runtime::ProviderInstanceRef;
+#[cfg(target_os = "windows")]
 use crate::provider_secret_store;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
@@ -1288,10 +1289,10 @@ fn inject_keychain<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<
         "readGenericPasswordForTarget",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, target: String| -> rquickjs::Result<String> {
+            move |ctx_inner: Ctx<'_>, _target: String| -> rquickjs::Result<String> {
                 #[cfg(target_os = "windows")]
                 {
-                    read_windows_generic_password_target(&target)
+                    read_windows_generic_password_target(&_target)
                         .map_err(|e| Exception::throw_message(&ctx_inner, &e))
                 }
 
@@ -1375,11 +1376,12 @@ fn inject_provider_secrets<'js>(
     ctx: &Ctx<'js>,
     host: &Object<'js>,
     plugin_id: &str,
-    app_data_dir: &Path,
+    _app_data_dir: &Path,
 ) -> rquickjs::Result<()> {
     let provider_secrets_obj = Object::new(ctx.clone())?;
     let pid = plugin_id.to_string();
-    let data_dir = app_data_dir.to_path_buf();
+    #[cfg(target_os = "windows")]
+    let data_dir = _app_data_dir.to_path_buf();
 
     provider_secrets_obj.set(
         "read",
@@ -1415,11 +1417,11 @@ fn inject_provider_secrets<'js>(
                 services.extend(provider_secret_legacy_services(&pid, &secret_key));
 
                 for service in services {
-                    let mut specs = vec![provider_secret_entry_spec(&service)];
-                    #[cfg(target_os = "windows")]
-                    {
-                        specs.push(provider_secret_legacy_entry_spec(&service));
-                    }
+                    let specs = [
+                        provider_secret_entry_spec(&service),
+                        #[cfg(target_os = "windows")]
+                        provider_secret_legacy_entry_spec(&service),
+                    ];
 
                     for spec in specs {
                         let entry = open_provider_secret_entry(spec).map_err(|e| {
@@ -1453,7 +1455,8 @@ fn inject_provider_secrets<'js>(
     )?;
 
     let pid = plugin_id.to_string();
-    let data_dir = app_data_dir.to_path_buf();
+    #[cfg(target_os = "windows")]
+    let data_dir = _app_data_dir.to_path_buf();
     provider_secrets_obj.set(
         "write",
         Function::new(
