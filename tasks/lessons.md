@@ -5,6 +5,7 @@
 - Setup detection: the Claude detector reported "found" for `~/.claude.json` account metadata without OAuth tokens. Fix: report "found" only for usable OAuth tokens. Prevention: test metadata-only, missing, and valid sources for each detector.
 - Setup detection: reused credential loaders caught read and credential-store errors and returned null, so denied access showed "Not found". Fix: Vertex AI, Copilot, and Kimi detectors record access failures and report "unavailable". Prevention: keep missing and unreadable sources distinct and test a denied read.
 - Setup scan privacy: "Scan again" ran the full usage probe, which can contact the provider and refresh tokens, while the screen said secrets never leave the device. Fix: `detect_plugin_setup` runs only `detectSetup(ctx)` without network host APIs. Prevention: an action must do only what its text claims; test that the scan does not start a probe.
+- Setup scan state: a pending scan could finish after the provider or selected account changed, so account B showed account A's "Found". Fix: bind scan state to provider and account, invalidate a pending scan on change and unmount, and ignore stale results. Prevention: test a change during and after an async request with stable props.
 
 ## 2026-11-02
 

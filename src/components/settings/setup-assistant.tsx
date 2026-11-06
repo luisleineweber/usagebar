@@ -1,7 +1,7 @@
 import { AlertCircle, CheckCircle2, CircleX, LoaderCircle, ScanSearch } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useSetupScan } from "@/hooks/use-setup-scan"
-import type { ProviderInstanceRef, SetupDetection } from "@/lib/plugin-types"
+import type { SetupDetection } from "@/lib/plugin-types"
 import type { ProviderSetupCheck } from "@/lib/provider-settings"
 import { cn } from "@/lib/utils"
 
@@ -41,13 +41,14 @@ function StatusIcon({ state }: { state: ReturnType<typeof getDetectionState> }) 
 export function SetupAssistant({
   checks,
   providerId,
-  instanceRef,
+  accountId,
   detections: probeDetections,
   loading: probeLoading,
 }: {
   checks: ProviderSetupCheck[]
   providerId: string
-  instanceRef?: ProviderInstanceRef
+  /** Selected managed account, or undefined for the default local login. */
+  accountId?: string
   /** Detections from the last usage probe. */
   detections?: SetupDetection[]
   /** True while a usage probe runs. */
@@ -55,7 +56,7 @@ export function SetupAssistant({
 }) {
   const { detections, scanning, error, scan } = useSetupScan({
     providerId,
-    instanceRef,
+    accountId,
     probeDetections,
   })
   const loading = scanning || probeLoading

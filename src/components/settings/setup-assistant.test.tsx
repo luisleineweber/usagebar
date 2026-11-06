@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { SetupAssistant } from "@/components/settings/setup-assistant"
 
@@ -60,7 +60,6 @@ describe("SetupAssistant", () => {
       { id: "kimi-cli-login", state: "missing" },
       { id: "kimi-api-key", state: "found" },
     ])
-    const instanceRef = { providerId: "kimi", instanceId: "profile-1" }
     render(
       <SetupAssistant
         checks={checks}
@@ -70,13 +69,16 @@ describe("SetupAssistant", () => {
           { id: "kimi-api-key", state: "missing" },
         ]}
         providerId="kimi"
-        instanceRef={instanceRef}
+        accountId="profile-1"
       />
     )
 
     fireEvent.click(screen.getByRole("button", { name: "Scan again" }))
 
-    expect(scanProviderSetup).toHaveBeenCalledWith("kimi", instanceRef)
+    expect(scanProviderSetup).toHaveBeenCalledWith("kimi", {
+      providerId: "kimi",
+      instanceId: "profile-1",
+    })
     expect(
       await screen.findByRole("group", { name: "Moonshot API key: Found" })
     ).toBeInTheDocument()
@@ -94,6 +96,103 @@ describe("SetupAssistant", () => {
       "Setup scan failed: setup scan timed out after 15s"
     )
     await waitFor(() => expect(screen.getByRole("button", { name: "Scan again" })).toBeEnabled())
+  })
+
+  function deferredScan() {
+    let resolve: (detections: { id: string; state: string }[]) => void = () => {}
+    scanProviderSetup.mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done
+        })
+    )
+    return (detections: { id: string; state: string }[]) => resolve(detections)
+  }
+
+  // One stable array, so only the provider or account change can hide an older scan result.
+  const noProbeDetections: { id: string; state: "found" | "missing" | "unavailable" }[] = []
+
+  const accountAResult = [
+    { id: "kimi-cli-login", state: "found" },
+    { id: "kimi-api-key", state: "found" },
+  ]
+
+  it("ignores a scan that finishes after the selected account changed", async () => {
+    const finishScan = deferredScan()
+    const { rerender } = render(
+      <SetupAssistant
+        checks={checks}
+        loading={false}
+        detections={noProbeDetections}
+        providerId="kimi"
+        accountId="account-a"
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Scan again" }))
+    expect(screen.getByRole("button", { name: "Scanning…" })).toBeDisabled()
+
+    rerender(
+      <SetupAssistant
+        checks={checks}
+        loading={false}
+        detections={noProbeDetections}
+        providerId="kimi"
+        accountId="account-b"
+      />
+    )
+    expect(screen.getByRole("button", { name: "Scan again" })).toBeEnabled()
+
+    await act(async () => finishScan(accountAResult))
+
+    expect(screen.queryByText("Found")).not.toBeInTheDocument()
+    expect(screen.getAllByText("Could not inspect")).toHaveLength(2)
+  })
+
+  it("does not show an account's scan result after a change to another account", async () => {
+    scanProviderSetup.mockResolvedValue(accountAResult)
+    const { rerender } = render(
+      <SetupAssistant
+        checks={checks}
+        loading={false}
+        detections={noProbeDetections}
+        providerId="kimi"
+        accountId="account-a"
+      />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Scan again" }))
+    expect(await screen.findAllByText("Found")).toHaveLength(2)
+
+    rerender(
+      <SetupAssistant
+        checks={checks}
+        loading={false}
+        detections={noProbeDetections}
+        providerId="kimi"
+        accountId="account-b"
+      />
+    )
+
+    expect(screen.queryByText("Found")).not.toBeInTheDocument()
+    expect(screen.getAllByText("Could not inspect")).toHaveLength(2)
+  })
+
+  it("ignores a scan that finishes after a change to another provider or an unmount", async () => {
+    const finishFirstScan = deferredScan()
+    const { rerender, unmount } = render(
+      <SetupAssistant checks={checks} loading={false} detections={noProbeDetections} providerId="kimi" />
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Scan again" }))
+    rerender(
+      <SetupAssistant checks={checks} loading={false} detections={noProbeDetections} providerId="claude" />
+    )
+    await act(async () => finishFirstScan(accountAResult))
+    expect(screen.queryByText("Found")).not.toBeInTheDocument()
+
+    const finishSecondScan = deferredScan()
+    fireEvent.click(screen.getByRole("button", { name: "Scan again" }))
+    unmount()
+    await act(async () => finishSecondScan(accountAResult))
+    expect(scanProviderSetup).toHaveBeenCalledTimes(2)
   })
 
   it("reports unavailable checks when a detector cannot provide a result", () => {

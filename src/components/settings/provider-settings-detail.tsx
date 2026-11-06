@@ -507,7 +507,7 @@ export function ProviderSettingsDetail({
           <SetupAssistant
             checks={setupChecks}
             providerId={plugin.id}
-            instanceRef={state?.instanceRef}
+            accountId={config?.selectedAccountProfileId}
             detections={state?.setupDetection}
             loading={Boolean(state?.loading)}
           />
