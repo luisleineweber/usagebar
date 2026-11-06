@@ -1,0 +1,7 @@
+{
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/luisleineweber/usagebar/releases/download/updater-prerelease/latest.json"]
+    }
+  }
+}

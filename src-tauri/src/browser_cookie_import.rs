@@ -36,16 +36,22 @@ impl BrowserCookieImportResult {
 }
 
 struct CookiePolicy {
+    #[cfg(any(target_os = "windows", test))]
     domain: &'static str,
+    #[cfg(any(target_os = "windows", test))]
     names: &'static [&'static str],
+    #[cfg(any(target_os = "windows", test))]
     secret_key: &'static str,
 }
 
 fn policy_for_provider(provider_id: &str) -> Option<CookiePolicy> {
     match provider_id {
         "claude" => Some(CookiePolicy {
+            #[cfg(any(target_os = "windows", test))]
             domain: "claude.ai",
+            #[cfg(any(target_os = "windows", test))]
             names: &["sessionKey"],
+            #[cfg(any(target_os = "windows", test))]
             secret_key: "cookieHeader",
         }),
         _ => None,
@@ -427,6 +433,7 @@ mod tests {
         let claude = policy_for_provider("claude").unwrap();
         assert_eq!(claude.domain, "claude.ai");
         assert_eq!(claude.names, ["sessionKey"]);
+        assert_eq!(claude.secret_key, "cookieHeader");
         assert!(policy_for_provider("unknown").is_none());
     }
 

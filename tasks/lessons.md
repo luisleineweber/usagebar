@@ -1,5 +1,36 @@
 # Lessons
 
+## 2026-11-02
+
+- Guided login read cookies only on a success page load. When a provider set the approved cookie later through XHR, Connect stayed pending until a reload. Fix: after the success page loads, read the cookies at a fixed interval on the worker thread. Prevention: the native `late-capture` and `destroy` checks in `src-tauri/tests/guided_cookie_login.rs`.
+
+## 2026-11-01
+
+- The updater rework allowed unsigned Windows installers only for prereleases, so the next stable publish would fail without an Authenticode certificate. Fix: allow unsigned installers for all releases and keep the Tauri updater key required. Prevention: `scripts/publish-workflow.test.mjs` runs in CI.
+- A prerelease stage guard blocked `0.2.0-beta.1` for `0.2.0-alpha.1` installs, although all prereleases share one updater channel. Fix: offer every newer version from the selected channel. Prevention: the update hook test covers an alpha to beta update.
+- New advisories made the dependency audit fail for Vite, Vitest, undici, minimatch, quinn-proto, rustls, rustls-webpki, webpki-root-certs, and zip. Fix: update only the affected packages and disable the unused zip feature of the updater plugin, because releases ship signed Windows installers without archives. Prevention: run `bun audit` and `cargo audit` locally after each lockfile change.
+- The cargo audit report failed on unmaintained and unsound warnings without a fix, although the audit step allows warnings. Fix: fail the report only for vulnerabilities and still list all warnings. Prevention: `scripts/report-cargo-audit.test.mjs` runs in CI.
+
+## 2026-10-09
+
+- The dependency audit found unsafe versions of Vitest, brace-expansion, source-map-js, and undici. Fix: update only the affected packages and keep Vitest coverage on the same version. Prevention: run the CI audit against the lockfile after package changes.
+- A failed JavaScript audit skipped the Rust audit setup, but the report step still called the missing cargo-audit tool. Fix: run the Rust audit even when the JavaScript audit fails. Prevention: keep independent audits active after an earlier audit failure.
+- The skipped Rust audit hid an unsafe rustls version and a withdrawn chacha20 version. Fix: update only those two lockfile entries. Prevention: require both dependency audits to pass before PR completion.
+- Linux Rust lint failed because Windows imports, data, and mutable lists compiled without Windows callers. Fix: compile Windows code only where needed, use fixed credential lists, and remove unused non-Windows secret-store functions. Prevention: keep the Linux and Windows all-target Clippy checks active in CI.
+- One App test made four preference changes and exceeded the time limit even when run alone. Fix: test each preference change separately with the same event checks and time limit. Prevention: use one interaction per async test when the interactions test separate behavior.
+
+## 2026-10-08
+
+- GitHub CLI selected the upstream remote because this repository had no default. Fix: set luisleineweber/usagebar as the default and use explicit --repo for PR commands. Prevention: check the selected repository before creating or finding a PR.
+- Guided login opened a blank window because a synchronous Tauri command waited for cookie capture on the native event loop. Fix: use an async command and run the blocking capture wait on a worker thread. Prevention: run the native Windows IPC test in CI; check that a page script runs and that closing the login window returns cancellation.
+- Abacus AI and Perplexity still opened blank windows because their initial URLs started a cookie read inside a native navigation event. The same read blocked Zed and OpenCode Zen at their target URLs. Fix: send completed page events to the existing capture worker, read cookies there, and keep the window open when sign-in cookies are absent. Prevention: test page scripts, empty-cookie cancellation, and approved-cookie capture for all four providers with real Windows WebView2.
+
+## 2026-08-28
+
+- A fixed `releases/latest` updater endpoint cannot discover prerelease releases. Fix: publish signed `latest.json` to fixed channel releases and use the signed download-then-restart flow for every release. Prevention: test prerelease discovery, signature assets, and both update actions.
+- One shared updater channel offered prereleases to stable installs, because a newer core version is always eligible. Fix: stable releases feed `updater` and `updater-prerelease`; prereleases feed only `updater-prerelease`. Prevention: `scripts/updater-channel.test.mjs` runs in CI.
+- The updater rework replaced the public key that signed v0.1.1. Installed v0.1.1 builds would reject every later update. Fix: keep key ID `1172A2A8FDB20C1F`. Prevention: release preflight fails when the key ID changes.
+
 ## 2026-08-20
 
 - The stable publish workflow used a Tauri private key that did not match the repository public key. Fix: generate one key pair, synchronize both GitHub secrets and the checked-in public key, and inspect the publish log for mismatch warnings. Prevention: treat updater key mismatch warnings as a release blocker.
@@ -305,3 +336,4 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - ccusage fixture runner: `npx` read the repository package overrides and failed with `EOVERRIDE`. Run external package tools from an isolated temporary directory so project npm settings cannot affect them.
 - Failed refresh cooldown: failed manual requests did not set the refresh timestamp, so panel focus could repeat them. Apply the five-minute cooldown after every manual result. Keep lastSuccessAt unchanged on errors, and test HTTP 429 results.
 - Claude HTTP 429: a frontend manual cooldown did not protect startup or automatic probes, and Retry-After was ignored. Save a per-profile retry deadline at the provider boundary for usage and refresh responses. Test fresh runtimes, both header formats, request counts, and retained session data.
+- OpenCode Go expired key: the usage API returned 401 `api_key_expired` and the plugin failed with a wrong "API key invalid" message. Report `api_key_expired` as an `Expired` badge in the overview, with no plan and no Free quota, because an expired key does not prove a Free account. Remove manifest `defaultPlan` values that would fill an unknown plan. Handle each documented provider error code explicitly; do not map all 401 responses to one error.

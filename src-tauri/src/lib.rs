@@ -5,7 +5,6 @@ mod analytics;
 mod app_nap;
 #[cfg(not(test))]
 mod app_startup;
-mod app_update;
 mod atomic_file;
 mod browser_cookie_import;
 pub mod cli;
@@ -16,6 +15,8 @@ mod credential_support;
 mod dev_data_migration;
 #[cfg(not(test))]
 mod global_shortcut;
+#[cfg(not(test))]
+mod guided_cookie_login;
 mod local_http_api;
 mod panel;
 mod plugin_commands;
@@ -24,6 +25,7 @@ mod plugin_engine;
 mod probe_commands;
 mod probe_coordinator;
 mod provider_account_store;
+#[cfg(target_os = "windows")]
 mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]
@@ -61,14 +63,14 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 
 #[cfg(not(test))]
-use app_update::{download_github_update, install_downloaded_update};
-#[cfg(not(test))]
 use credential_commands::{
-    capture_provider_cookie_header, delete_codex_account_profile, delete_provider_account_profile,
-    delete_provider_secret, import_browser_cookies, import_current_codex_account_profile,
+    delete_codex_account_profile, delete_provider_account_profile, delete_provider_secret,
+    import_browser_cookies, import_current_codex_account_profile,
     import_current_provider_account_profile, list_browser_import_sources,
     list_codex_account_profiles, list_provider_account_profiles, set_provider_secret,
 };
+#[cfg(not(test))]
+use guided_cookie_login::capture_provider_cookie_header;
 #[cfg(not(test))]
 use probe_commands::start_probe_batch;
 
@@ -253,8 +255,6 @@ pub fn run() {
             import_current_provider_account_profile,
             delete_provider_account_profile,
             update_global_shortcut,
-            download_github_update,
-            install_downloaded_update,
         ])
         .setup(app_startup::setup)
         .build(tauri::generate_context!())

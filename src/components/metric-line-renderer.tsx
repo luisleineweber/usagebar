@@ -211,7 +211,9 @@ export function MetricLineRenderer({
     const secondaryText =
       resetLabel ??
       (line.format.kind === "percent"
-        ? `${limit}% cap`
+        ? used <= 0
+          ? "Full"
+          : null
         : line.format.kind === "dollars"
           ? `$${formatFixedPrecisionNumber(limit)} limit`
           : `${formatCountNumber(limit)} ${line.format.suffix}`)
