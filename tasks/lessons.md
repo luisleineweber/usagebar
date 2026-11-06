@@ -6,6 +6,7 @@
 - Setup detection: reused credential loaders caught read and credential-store errors and returned null, so denied access showed "Not found". Fix: Vertex AI, Copilot, and Kimi detectors record access failures and report "unavailable". Prevention: keep missing and unreadable sources distinct and test a denied read.
 - Setup scan privacy: "Scan again" ran the full usage probe, which can contact the provider and refresh tokens, while the screen said secrets never leave the device. Fix: `detect_plugin_setup` runs only `detectSetup(ctx)` without network host APIs. Prevention: an action must do only what its text claims; test that the scan does not start a probe.
 - Setup scan state: a pending scan could finish after the provider or selected account changed, so account B showed account A's "Found". Fix: bind scan state to provider and account, invalidate a pending scan on change and unmount, and ignore stale results. Prevention: test a change during and after an async request with stable props.
+- Setup scan invalidation: the cleanup invalidated the request id but kept its pending state, so after an A to B to A switch "Scan again" stayed disabled until the stale request finished. Fix: clear the pending state in the same invalidation path, and let an invalidated request change no state. Prevention: when a request is invalidated, invalidate all state that belongs to it, and prove with a setter count that a late result after unmount changes nothing.
 
 ## 2026-11-02
 

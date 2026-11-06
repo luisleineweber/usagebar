@@ -36,20 +36,22 @@ export function useSetupScan({
   )
   const [result, setResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState<ScanError | null>(null)
-  const [pending, setPending] = useState<{ scanKey: string; id: number } | null>(null)
+  const [pending, setPending] = useState<{ scanKey: string } | null>(null)
   const requestId = useRef(0)
 
-  // A provider or account change, or an unmount, invalidates the pending scan.
+  // A provider or account change, or an unmount, invalidates the pending scan. Its pending
+  // state goes with it, so a return to the earlier account does not show a stale scan.
   useEffect(
     () => () => {
       requestId.current += 1
+      setPending(null)
     },
     [scanKey]
   )
 
   const scan = useCallback(async () => {
     const id = ++requestId.current
-    setPending({ scanKey, id })
+    setPending({ scanKey })
     setError(null)
     try {
       const detections = await scanProviderSetup(providerId, instanceRef)
@@ -58,7 +60,8 @@ export function useSetupScan({
       console.error("Setup scan failed:", scanError)
       if (id === requestId.current) setError({ scanKey, message: String(scanError) })
     } finally {
-      setPending((current) => (current?.id === id ? null : current))
+      // An invalidated request changes no state: its pending state was cleared on invalidation.
+      if (id === requestId.current) setPending(null)
     }
   }, [scanKey, providerId, instanceRef, probeDetections])
 
