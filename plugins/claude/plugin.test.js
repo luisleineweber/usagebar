@@ -428,7 +428,9 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Sonnet")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Extra usage spent")).toBeTruthy()
+    const extraUsage = result.lines.find((line) => line.label === "Extra usage")
+    expect(extraUsage?.type).toBe("text")
+    expect(extraUsage?.value).toMatch(/^\$[\d.,]+ spent$/)
   })
 
   it("omits extra usage line when used credits are zero and no limit exists", async () => {
@@ -445,7 +447,7 @@ describe("claude plugin", () => {
     })
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Extra usage spent")).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "Extra usage")).toBeUndefined()
   })
 
   it("uses keychain credentials when value is hex-encoded JSON", async () => {

@@ -7,7 +7,6 @@
   "icon": "icon.svg",
   "iconColorMode": "multicolor",
   "brandColor": "#FF500F",
-  "defaultPlan": "Free",
   "platformSupport": {
     "windows": {
       "state": "experimental",

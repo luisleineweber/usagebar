@@ -6,7 +6,6 @@
   "entry": "plugin.js",
   "icon": "vertexai-color.svg",
   "brandColor": "#4285F4",
-  "defaultPlan": "Pay-as-you-go",
   "platformSupport": {
     "windows": {
       "state": "experimental",

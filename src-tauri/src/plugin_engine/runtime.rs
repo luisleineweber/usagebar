@@ -600,8 +600,7 @@ fn run_probe_unstamped(
         let plan: Option<String> = result
             .get::<_, String>("plan")
             .ok()
-            .filter(|s| !s.trim().is_empty())
-            .or_else(|| plugin.manifest.default_plan.clone());
+            .filter(|s| !s.trim().is_empty());
 
         let lines = match parse_lines(&result) {
             Ok(lines) if !lines.is_empty() => lines,
@@ -1448,7 +1447,7 @@ fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput 
         provider_id: plugin.manifest.id.clone(),
         instance_ref: None,
         display_name: plugin.manifest.name.clone(),
-        plan: plugin.manifest.default_plan.clone(),
+        plan: None,
         lines: vec![error_line(error.message.clone())],
         details: None,
         icon_url: plugin.icon_data_url.clone(),
@@ -1530,7 +1529,6 @@ mod tests {
                 icon_color_mode: crate::plugin_engine::manifest::IconColorMode::default(),
                 icon_aspect_ratio: None,
                 brand_color: None,
-                default_plan: None,
                 lines: vec![],
                 detail: None,
                 links: vec![],
@@ -1812,7 +1810,7 @@ mod tests {
     }
 
     #[test]
-    fn run_probe_uses_manifest_plan_only_when_plugin_does_not_report_one() {
+    fn run_probe_reports_only_the_plugin_plan() {
         let mut plugin = test_plugin(
             r#"
             globalThis.__openusage_plugin = {
@@ -1822,10 +1820,9 @@ mod tests {
             };
             "#,
         );
-        plugin.manifest.default_plan = Some("Free".to_string());
 
-        let output = run_probe(&plugin, &temp_app_dir("default-plan"), "0.0.0", None);
-        assert_eq!(output.plan.as_deref(), Some("Free"));
+        let output = run_probe(&plugin, &temp_app_dir("missing-plan"), "0.0.0", None);
+        assert_eq!(output.plan, None);
 
         plugin.entry_script = r#"
             globalThis.__openusage_plugin = {
@@ -2108,5 +2105,6 @@ mod tests {
 
         let output = run_probe(&plugin, &temp_app_dir("error-history"), "0.0.0", None);
         assert!(output.history.is_none());
+        assert_eq!(output.plan, None);
     }
 }

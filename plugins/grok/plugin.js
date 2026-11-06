@@ -144,7 +144,7 @@
     const usedPercent = clampPercent((usedUnits / limitUnits) * 100)
     const lines = [
       ctx.line.progress({
-        label: "Credits used",
+        label: "Credits",
         used: usedPercent,
         limit: 100,
         format: { kind: "percent" },

@@ -57,6 +57,8 @@ const state = vi.hoisted(() => ({
   autostartIsEnabledMock: vi.fn(),
   renderTrayBarsIconMock: vi.fn(),
   renderTrayNumberIconMock: vi.fn(),
+  loadTaskbarThemeMock: vi.fn(),
+  isWindowsTrayPlatformMock: vi.fn(),
   probeHandlers: null as null | {
     onResult: (output: PluginOutput) => void
     onBatchComplete: () => void
@@ -281,6 +283,15 @@ vi.mock("@/lib/tray-bars-icon", async () => {
   }
 })
 
+vi.mock("@/lib/taskbar-theme", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/taskbar-theme")>("@/lib/taskbar-theme")
+  return {
+    ...actual,
+    isWindowsTrayPlatform: state.isWindowsTrayPlatformMock,
+    loadTaskbarTheme: state.loadTaskbarThemeMock,
+  }
+})
+
 vi.mock("@/lib/tray-number-icon", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/tray-number-icon")>("@/lib/tray-number-icon")
@@ -492,6 +503,10 @@ describe("App", () => {
     state.autostartIsEnabledMock.mockResolvedValue(false)
     state.renderTrayBarsIconMock.mockResolvedValue({})
     state.renderTrayNumberIconMock.mockResolvedValue({})
+    state.loadTaskbarThemeMock.mockReset()
+    state.loadTaskbarThemeMock.mockResolvedValue("dark")
+    state.isWindowsTrayPlatformMock.mockReset()
+    state.isWindowsTrayPlatformMock.mockReturnValue(true)
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
       configurable: true,
       get() {
@@ -1021,6 +1036,61 @@ describe("App", () => {
     expect(state.traySetTitleMock).not.toHaveBeenCalled()
   })
 
+  it("waits for the taskbar theme before it draws the Windows tray number", async () => {
+    let resolveTheme: (theme: "light" | "dark") => void = () => {}
+    state.loadTaskbarThemeMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTheme = resolve
+      })
+    )
+
+    render(<App />)
+    await waitFor(() => expect(state.startBatchMock).toHaveBeenCalled())
+    await waitFor(() => expect(state.traySetTooltipMock).toHaveBeenCalled())
+    expect(state.renderTrayNumberIconMock).not.toHaveBeenCalled()
+
+    await act(async () => resolveTheme("light"))
+
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ taskbarTheme: "light" })
+      )
+    )
+  })
+
+  it("draws the Linux tray number without the Windows taskbar lookup", async () => {
+    state.isWindowsTrayPlatformMock.mockReturnValue(false)
+
+    render(<App />)
+
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ taskbarTheme: "dark" })
+      )
+    )
+    expect(state.loadTaskbarThemeMock).not.toHaveBeenCalled()
+    expect(eventState.handlers.has("taskbar-theme-changed")).toBe(false)
+  })
+
+  it("redraws the Windows tray number when the taskbar theme changes", async () => {
+    render(<App />)
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ taskbarTheme: "dark" })
+      )
+    )
+
+    await act(async () => {
+      eventState.handlers.get("taskbar-theme-changed")?.({ payload: "light" })
+    })
+
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ taskbarTheme: "light" })
+      )
+    )
+  })
+
   it("renders the selected Windows bars style instead of the number glyph", async () => {
     state.loadMenubarIconStyleMock.mockResolvedValue("bars")
     state.invokeMock.mockImplementation(async (cmd: string) => {
@@ -1513,7 +1583,7 @@ describe("App", () => {
       iconUrl: "icon-a",
       lines: [{ type: "badge", label: "Error", text: "Bad" }],
     })
-    const retry = await screen.findByRole("button", { name: "Retry" })
+    const retry = await screen.findByRole("button", { name: /^Retry / })
     await userEvent.click(retry)
     expect(state.startBatchMock).toHaveBeenCalledWith(["a"])
   })
@@ -1559,7 +1629,7 @@ describe("App", () => {
       iconUrl: "icon-b",
       lines: [{ type: "text", label: "Now", value: "OK" }],
     })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Retry / })).toHaveLength(2))
     state.startBatchMock.mockClear()
 
     const reloadAction = await triggerPluginContextAction("Beta", "b", "reload")
@@ -1573,7 +1643,7 @@ describe("App", () => {
       iconUrl: "icon-b",
       lines: [{ type: "text", label: "Now", value: "OK" }],
     })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(1))
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Retry / })).toHaveLength(1))
 
     state.startBatchMock.mockClear()
     const cooldownReloadAction = await triggerPluginContextAction("Beta", "b", "reload")
@@ -2298,7 +2368,7 @@ describe("App", () => {
     // Make startBatch reject on next call (the retry)
     state.startBatchMock.mockRejectedValueOnce(new Error("retry failed"))
 
-    const retry = await screen.findByRole("button", { name: "Retry" })
+    const retry = await screen.findByRole("button", { name: /^Retry / })
     await userEvent.click(retry)
 
     await waitFor(() =>
@@ -2446,11 +2516,11 @@ describe("App", () => {
       iconUrl: "icon-b",
       lines: [],
     })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Retry / })).toHaveLength(2))
 
     const initialCalls = state.startBatchMock.mock.calls.length
     const refreshButton = await screen.findByRole("button", {
-      name: /Next automatic update in/i,
+      name: /Next automatic refresh in/i,
     })
     await userEvent.click(refreshButton)
 
@@ -2478,13 +2548,13 @@ describe("App", () => {
       iconUrl: "icon-b",
       lines: [],
     })
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2))
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Retry / })).toHaveLength(2))
 
     const initialCalls = state.startBatchMock.mock.calls.length
     state.startBatchMock.mockImplementation(() => new Promise(() => {}))
 
     const refreshButton = await screen.findByRole("button", {
-      name: /Next automatic update in/i,
+      name: /Next automatic refresh in/i,
     })
     await userEvent.click(refreshButton)
     await userEvent.click(refreshButton)
@@ -2510,11 +2580,11 @@ describe("App", () => {
         iconUrl: "icon-a",
         lines: [{ type: "text", label: "Now", value: "OK" }],
       })
-      await screen.findByRole("button", { name: "Retry" })
+      await screen.findByRole("button", { name: /^Retry / })
 
       state.startBatchMock.mockRejectedValueOnce(new Error("refresh all failed"))
       const refreshButton = await screen.findByRole("button", {
-        name: /Next automatic update in/i,
+        name: /Next automatic refresh in/i,
       })
       await userEvent.click(refreshButton)
 
@@ -2540,7 +2610,7 @@ describe("App", () => {
         iconUrl: "icon-a",
         lines: [{ type: "badge", label: "Error", text: "Network error" }],
       })
-      await screen.findByRole("button", { name: "Retry" })
+      await screen.findByRole("button", { name: /^Retry / })
     } finally {
       errorSpy.mockRestore()
     }
@@ -2558,7 +2628,7 @@ describe("App", () => {
       lines: [{ type: "badge", label: "Error", text: "Network error" }],
     })
 
-    const retryButton = await screen.findByRole("button", { name: "Retry" })
+    const retryButton = await screen.findByRole("button", { name: /^Retry / })
     await userEvent.click(retryButton)
 
     // Simulate successful probe result after retry (isManual branch)
@@ -2596,7 +2666,7 @@ describe("App", () => {
     })
 
     // Find and prepare to click retry
-    const retryButton = await screen.findByRole("button", { name: "Retry" })
+    const retryButton = await screen.findByRole("button", { name: /^Retry / })
 
     // Before clicking, disable "a" to make enabledIds.length === 0 when resetAutoUpdateSchedule runs
     // This simulates a race condition where settings change mid-action
