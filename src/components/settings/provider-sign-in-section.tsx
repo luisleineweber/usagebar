@@ -23,6 +23,7 @@ function formatList(items: string[]): string {
 /**
  * Sign-in for one provider. Signed out: the ways to sign in are the focus of the page.
  * Signed in: one summary line, and the same options stay available behind "Change sign-in".
+ * Unconfirmed (usage data, but no sign-in evidence): the same layout, with a "Sign in" button.
  */
 export function ProviderSignInSection({
   className,
@@ -94,17 +95,17 @@ export function ProviderSignInSection({
     )
   }
 
-  const summary =
-    signIn.sources.length > 0
-      ? `Signed in with ${formatList(signIn.sources)}.`
-      : "Signed in. The last check returned usage data."
+  const signedIn = signIn.kind === "signedIn"
+  const summary = signedIn
+    ? `Signed in with ${formatList(signIn.sources)}.`
+    : `UsageBar found no ${providerName} sign-in on this device. The last check still returned usage data.`
 
   return (
     <section className={className} aria-labelledby={headingId}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 id={headingId} className={GROUP_TITLE_CLASS}>
-            Signed in
+            {signedIn ? "Signed in" : "Sign-in"}
           </h4>
           <p className="mt-1 text-muted-foreground">{summary}</p>
         </div>
@@ -117,7 +118,7 @@ export function ProviderSignInSection({
             aria-controls={optionsId}
             onClick={() => setOptionsOpen((open) => !open)}
           >
-            Change sign-in
+            {signedIn ? "Change sign-in" : "Sign in"}
             <ChevronDown
               aria-hidden="true"
               className={cn("size-3.5 transition-transform", optionsOpen && "rotate-180")}

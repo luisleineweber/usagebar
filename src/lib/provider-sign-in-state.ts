@@ -7,11 +7,14 @@ import type { ProviderSetupCheck } from "@/lib/provider-settings"
  * Error, for example after a rate limit (HTTP 429). The Settings detail page uses this value
  * to choose between the sign-in view and the manage view.
  *
- * - signedIn: a settled probe succeeded, a local sign-in was found, or the app stores a credential.
+ * - signedIn: a local sign-in was found, or the app stores a sign-in credential.
+ * - unconfirmed: the last settled probe returned data, but no sign-in evidence exists. Usage
+ *   data alone does not prove a sign-in: Claude, for example, can return local history only.
  * - signedOut: the last settled probe rejected the credential, or no sign-in evidence exists.
  */
 export type ProviderSignIn =
   | { kind: "signedIn"; sources: string[] }
+  | { kind: "unconfirmed" }
   | { kind: "signedOut"; credentialProblem: boolean }
 
 const CREDENTIAL_ERROR_CATEGORIES = new Set<ProbeErrorCategory>([
@@ -24,14 +27,14 @@ const CREDENTIAL_ERROR_CATEGORIES = new Set<ProbeErrorCategory>([
 
 export function getProviderSignIn({
   connectionState,
-  errorCategory,
+  settledErrorCategory,
   setupChecks,
   detections,
   storedCredentialLabels,
 }: {
   connectionState: ProviderConnectionState
   /** Category of the last settled probe error; null or undefined when it did not fail. */
-  errorCategory: ProbeErrorCategory | null | undefined
+  settledErrorCategory: ProbeErrorCategory | null | undefined
   setupChecks: ProviderSetupCheck[] | undefined
   detections: SetupDetection[] | undefined
   /** Labels of credentials the app has stored for this provider. */
@@ -39,8 +42,8 @@ export function getProviderSignIn({
 }): ProviderSignIn {
   if (
     connectionState === "error" &&
-    errorCategory &&
-    CREDENTIAL_ERROR_CATEGORIES.has(errorCategory)
+    settledErrorCategory &&
+    CREDENTIAL_ERROR_CATEGORIES.has(settledErrorCategory)
   ) {
     return { kind: "signedOut", credentialProblem: true }
   }
@@ -51,6 +54,6 @@ export function getProviderSignIn({
   const sources = [...new Set([...foundChecks, ...storedCredentialLabels])]
 
   if (sources.length > 0) return { kind: "signedIn", sources }
-  if (connectionState === "connected") return { kind: "signedIn", sources: [] }
+  if (connectionState === "connected") return { kind: "unconfirmed" }
   return { kind: "signedOut", credentialProblem: false }
 }

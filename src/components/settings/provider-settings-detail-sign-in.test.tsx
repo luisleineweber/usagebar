@@ -84,7 +84,49 @@ describe("ProviderSettingsDetail sign-in views", () => {
     expect(headingOrder()[0]).toBe("Sign in")
     expect(screen.getByText(/The Codex sign-in no longer works\. Sign in again\./)).toBeVisible()
     expect(screen.queryByRole("heading", { name: "Signed in" })).not.toBeInTheDocument()
-    expect(screen.queryByText("Codex Accounts")).not.toBeInTheDocument()
+  })
+
+  it("keeps account management available to recover from a credential error", async () => {
+    // A new CLI login does not replace a pinned profile, so switching or importing must stay.
+    renderDetail({ state: { ...rateLimited, errorCategory: "credentialExpired" } })
+
+    expect(headingOrder()[0]).toBe("Sign in")
+    expect(await screen.findByText("Claude Accounts")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Import current login" })).toBeInTheDocument()
+  })
+
+  it("does not show Signed in for usage data without a sign-in", () => {
+    renderDetail({
+      state: pluginState({
+        data: { providerId: "claude", displayName: "Claude", iconUrl: "", lines: [] },
+        lastSettledError: null,
+        lastSuccessAt: Date.now(),
+        setupDetection: [{ id: "claude-oauth", state: "missing" }],
+      }),
+    })
+
+    expect(screen.queryByRole("heading", { name: "Signed in" })).not.toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Sign-in" })).toBeInTheDocument()
+    expect(screen.getByText(/UsageBar found no Claude sign-in/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument()
+  })
+
+  it("shows the sign-in view on a fresh mount while a retry after a rejected credential runs", () => {
+    // No earlier render exists, so only the shared probe state can tell the settled result.
+    renderDetail({
+      config: { secrets: { cookieHeader: { updatedAt: Date.now() } } },
+      state: pluginState({
+        loading: true,
+        error: null,
+        errorCategory: null,
+        lastSettledError: "Claude session expired.",
+        lastSettledErrorCategory: "credentialExpired",
+        setupDetection: [{ id: "claude-oauth", state: "found" }],
+      }),
+    })
+
+    expect(headingOrder()[0]).toBe("Sign in")
+    expect(screen.queryByRole("heading", { name: "Signed in" })).not.toBeInTheDocument()
   })
 
   it("keeps the sign-in view while a retry after a rejected credential runs", () => {
@@ -95,7 +137,13 @@ describe("ProviderSettingsDetail sign-in views", () => {
         plugin={codex}
         enabled
         onEnabledChange={vi.fn()}
-        state={{ ...expired, loading: true, error: null, errorCategory: null }}
+        state={{
+          ...expired,
+          loading: true,
+          error: null,
+          errorCategory: null,
+          lastSettledErrorCategory: "credentialExpired",
+        }}
       />
     )
 

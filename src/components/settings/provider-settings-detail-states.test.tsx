@@ -193,7 +193,7 @@ describe("ProviderSettingsDetail copy and labels", () => {
       state: pluginState({ data: output("cursor"), lastSuccessAt: Date.now() }),
     })
 
-    expect(screen.getByRole("heading", { name: "Signed in" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Sign-in" })).toBeInTheDocument()
     expect(screen.queryByText(/deferred|persistence is modeled|Current plugin/i)).toBeNull()
   })
 

@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import {
   AccountManagementSection,
   hasManagedAccounts,
@@ -25,7 +24,7 @@ import {
   type ProviderConfig,
   type ProviderSettingsDefinition,
 } from "@/lib/provider-settings"
-import { getProviderSignIn, type ProviderSignIn } from "@/lib/provider-sign-in-state"
+import { getProviderSignIn } from "@/lib/provider-sign-in-state"
 
 export type ProviderSettingsDetailProps = {
   plugin: PluginMeta
@@ -54,19 +53,6 @@ function storedCredentialLabels(
     .map((field) => `the stored ${field?.label}`)
 }
 
-/**
- * A running check clears the settled error category, so a retry after a rejected credential
- * would briefly look signed in. Keep the view of the last settled check while a check runs.
- */
-function useSettledSignIn(signIn: ProviderSignIn, loading: boolean, providerId: string) {
-  const [settled, setSettled] = useState({ providerId, signIn })
-  const signInKey = JSON.stringify(signIn)
-  useEffect(() => {
-    if (!loading) setSettled({ providerId, signIn: JSON.parse(signInKey) as ProviderSignIn })
-  }, [loading, providerId, signInKey])
-  return loading && settled.providerId === providerId ? settled.signIn : signIn
-}
-
 export function ProviderSettingsDetail({
   plugin,
   enabled,
@@ -91,17 +77,14 @@ export function ProviderSettingsDetail({
       lastSettledError: state?.lastSettledError,
     },
   })
-  const signIn = useSettledSignIn(
-    getProviderSignIn({
-      connectionState,
-      errorCategory: state?.errorCategory,
-      setupChecks: definition.setupChecks,
-      detections: state?.setupDetection,
-      storedCredentialLabels: storedCredentialLabels(definition, config),
-    }),
-    loading,
-    plugin.id
-  )
+  // A running check clears `errorCategory`; the last settled category stays in probe state.
+  const signIn = getProviderSignIn({
+    connectionState,
+    settledErrorCategory: loading ? state?.lastSettledErrorCategory : state?.errorCategory,
+    setupChecks: definition.setupChecks,
+    detections: state?.setupDetection,
+    storedCredentialLabels: storedCredentialLabels(definition, config),
+  })
   const actions = useProviderSettingsActions({
     providerId: plugin.id,
     definition,
@@ -124,7 +107,8 @@ export function ProviderSettingsDetail({
     !hasProviderSettingsDefinition(plugin.id) && plugin.supportMessage
       ? plugin.supportMessage
       : (definition.connectHint ?? definition.statusHint)
-  const signedIn = signIn.kind === "signedIn"
+  // Usage data without sign-in evidence uses the same layout as a sign-in: status first.
+  const signInFirst = signIn.kind === "signedOut"
   const supported = connectionState !== "unsupported"
   const showTextSetting =
     definition.textField !== undefined &&
@@ -171,8 +155,19 @@ export function ProviderSettingsDetail({
       />
 
       <div className="mt-4 pr-1 text-sm">
-        {/* Signed out, signing in is the focus. Signed in, the current status comes first. */}
-        {!supported ? status : signedIn ? [status, signInSection] : [signInSection, status]}
+        {/* Signed out, signing in is the focus. Otherwise the current status comes first. */}
+        {!supported ? status : signInFirst ? [signInSection, status] : [status, signInSection]}
+
+        {/* Account switching stays available during a credential error, to recover from it. */}
+        {supported && hasManagedAccounts(definition) ? (
+          <AccountManagementSection
+            className={GROUP_CLASS}
+            providerId={plugin.id}
+            providerName={plugin.name}
+            config={config}
+            onConfigChange={onConfigChange}
+          />
+        ) : null}
 
         {supported && showTextSetting && definition.textField ? (
           <div className={GROUP_CLASS}>
@@ -195,16 +190,6 @@ export function ProviderSettingsDetail({
             definition={definition}
             config={config}
             actions={optionalDataActions}
-          />
-        ) : null}
-
-        {supported && signedIn && hasManagedAccounts(definition) ? (
-          <AccountManagementSection
-            className={GROUP_CLASS}
-            providerId={plugin.id}
-            providerName={plugin.name}
-            config={config}
-            onConfigChange={onConfigChange}
           />
         ) : null}
 

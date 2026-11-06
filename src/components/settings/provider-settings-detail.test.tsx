@@ -337,7 +337,8 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByRole("heading", { name: "Signed in" })).toBeInTheDocument()
+    // Usage data without a found or stored credential is not proof of a sign-in.
+    expect(screen.getByRole("heading", { name: "Sign-in" })).toBeInTheDocument()
     expect(screen.getByText("Provider responded successfully.")).toBeInTheDocument()
   })
 
