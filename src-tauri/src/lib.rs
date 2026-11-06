@@ -30,6 +30,8 @@ mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]
 mod settings_window;
+#[cfg(not(test))]
+mod setup_commands;
 #[cfg(target_os = "windows")]
 mod taskbar_theme;
 #[cfg(not(test))]
@@ -75,6 +77,8 @@ use credential_commands::{
 use guided_cookie_login::capture_provider_cookie_header;
 #[cfg(not(test))]
 use probe_commands::start_probe_batch;
+#[cfg(not(test))]
+use setup_commands::detect_plugin_setup;
 
 fn pending_panel_view_slot() -> &'static Mutex<Option<String>> {
     static SLOT: OnceLock<Mutex<Option<String>>> = OnceLock::new();
@@ -244,6 +248,7 @@ pub fn run() {
             capture_provider_cookie_header,
             open_devtools,
             start_probe_batch,
+            detect_plugin_setup,
             list_plugins,
             get_log_path,
             set_provider_secret,

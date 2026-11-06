@@ -120,6 +120,13 @@ export type ProbeErrorCategory =
   | "providerResponse"
   | "unknown"
 
+export type SetupDetectionState = "found" | "missing" | "unavailable"
+
+export type SetupDetection = {
+  id: string
+  state: SetupDetectionState
+}
+
 export type ProviderInstanceRef = {
   providerId: string
   instanceId?: string
@@ -139,6 +146,7 @@ export type PluginOutput = {
   }
   history?: UsageHistory
   freshness?: DataFreshnessGroups
+  setupDetection?: SetupDetection[]
 }
 
 export type DataFreshness = {

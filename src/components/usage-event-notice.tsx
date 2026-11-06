@@ -23,7 +23,7 @@ export function UsageEventNotice({
       <div className="flex items-start gap-2">
         <Bell className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-semibold">UsageBar notification</div>
+          <div className="text-xs font-semibold">UsageBar alerts</div>
           <ul className="mt-1 space-y-1">
             {events.slice(0, 3).map((event) => (
               <li key={event.id}>

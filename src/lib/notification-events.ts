@@ -1,6 +1,6 @@
 import type { MetricLine, PluginOutput, ProviderInstanceRef } from "@/lib/plugin-types"
 import { sameProviderInstance } from "@/lib/provider-instance"
-import type { ProviderStatus } from "@/lib/provider-status"
+import { providerStatusLabel, type ProviderStatus } from "@/lib/provider-status"
 
 export type UsageEventType = "quota" | "incident" | "incidentResolved" | "reset"
 
@@ -75,6 +75,17 @@ function eventIdentity(providerId: string, output: PluginOutput | undefined): st
   return instanceId ? `${providerId}:${eventPart(instanceId)}` : providerId
 }
 
+function notificationTitle(emoji: string, providerName: string, subject: string): string {
+  return `${emoji} ${providerName}: ${subject}`
+}
+
+function notificationSentence(value: string): string {
+  const trimmed = value.trim().replace(/\s+/gu, " ")
+  if (!trimmed) return ""
+  const capitalized = `${trimmed.charAt(0).toLocaleUpperCase()}${trimmed.slice(1)}`
+  return /[.!?…]$/u.test(capitalized) ? capitalized : `${capitalized}.`
+}
+
 export function normalizeNotificationPreferences(value: unknown): NotificationPreferences {
   if (!value || typeof value !== "object") return DEFAULT_NOTIFICATION_PREFERENCES
   const raw = value as Partial<NotificationPreferences>
@@ -146,8 +157,10 @@ export function deriveUsageEvents({
             type: "quota",
             providerId,
             instanceRef: output.instanceRef,
-            title: `${output.displayName} quota warning`,
-            body: `${line.label} reached ${Math.round(current)}% used (threshold ${threshold}%).`,
+            title: notificationTitle("⚠️", output.displayName, "Quota warning"),
+            body: notificationSentence(
+              `${line.label} usage has reached ${Math.round(current)}% of its limit`
+            ),
             createdAt: now,
           })
         }
@@ -162,8 +175,8 @@ export function deriveUsageEvents({
           type: "reset",
           providerId,
           instanceRef: output.instanceRef,
-          title: `${output.displayName} quota reset`,
-          body: `${line.label} is available again.`,
+          title: notificationTitle("🔄", output.displayName, "Quota reset"),
+          body: notificationSentence(`${line.label} quota is available again`),
           createdAt: now,
         })
       }
@@ -192,8 +205,12 @@ export function deriveUsageEvents({
           type: "incident",
           providerId,
           instanceRef: output?.instanceRef,
-          title: `${displayName} service incident`,
-          body: status.description?.trim() || `${status.indicator} provider status`,
+          title: notificationTitle("🚨", displayName, "Service incident"),
+          body: notificationSentence(
+            status.description?.trim() ||
+              providerStatusLabel(status) ||
+              "Provider status is unavailable"
+          ),
           createdAt: now,
         })
       } else if (!hasIssue && hadIssue) {
@@ -203,8 +220,8 @@ export function deriveUsageEvents({
           type: "incidentResolved",
           providerId,
           instanceRef: output?.instanceRef,
-          title: `${displayName} incident resolved`,
-          body: "Provider status returned to normal.",
+          title: notificationTitle("✅", displayName, "Incident resolved"),
+          body: "Provider status is back to normal.",
           createdAt: now,
         })
       }

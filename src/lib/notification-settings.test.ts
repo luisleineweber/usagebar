@@ -35,8 +35,8 @@ function usageEvent(id: string): UsageEvent {
     id,
     type: "quota",
     providerId: "claude",
-    title: "Claude quota warning",
-    body: "Session reached 75% used.",
+    title: "⚠️ Claude: Quota warning",
+    body: "Session usage has reached 75% of its limit.",
     createdAt: 10,
   }
 }

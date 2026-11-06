@@ -463,6 +463,7 @@ mod tests {
             error: None,
             history: None,
             freshness: None,
+            setup_detection: None,
         };
 
         retain_cached_history(&mut output, &snapshots);
@@ -507,6 +508,7 @@ mod tests {
             error: None,
             history: None,
             freshness: None,
+            setup_detection: None,
         };
 
         retain_cached_history(&mut output, &snapshots);
@@ -550,6 +552,7 @@ mod tests {
             error: None,
             history: None,
             freshness: None,
+            setup_detection: None,
         };
         let snapshots = HashMap::from([(previous.provider_id.clone(), previous.clone())]);
         retain_cached_history(&mut output, &snapshots);

@@ -346,10 +346,8 @@ describe("SettingsPage", () => {
     render(<TestHarness />)
     await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
 
-    const codexRow = screen.getByRole("button", { name: /^codexnot signed in/i })
-    const openCodeRow = screen.getByRole("button", {
-      name: /^opencode zenexperimental on windows/i,
-    })
+    const codexRow = screen.getByRole("button", { name: "Codex, Disabled" })
+    const openCodeRow = screen.getByRole("button", { name: "OpenCode Zen, Setup needed" })
 
     expect(codexRow.compareDocumentPosition(openCodeRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING

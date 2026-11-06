@@ -89,6 +89,38 @@ describe("copilot plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in. Run `gh auth login` first.")
   })
 
+  it("reports gh CLI token presence without returning the token", async () => {
+    const ctx = makePluginTestContext()
+    setGhCliKeychain(ctx, "gho_local_token")
+
+    const plugin = await loadPlugin()
+
+    expect(plugin.detectSetup(ctx)).toEqual([{ id: "copilot-token", state: "found" }])
+    expect(JSON.stringify(plugin.detectSetup(ctx))).not.toContain("gho_local_token")
+  })
+
+  it("reports missing when no Copilot token source has an entry", async () => {
+    const ctx = makePluginTestContext()
+    ctx.host.keychain.readGenericPassword.mockImplementation(() => {
+      throw new Error("credential read failed: No matching entry found in secure storage")
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(plugin.detectSetup(ctx)).toEqual([{ id: "copilot-token", state: "missing" }])
+  })
+
+  it("reports unavailable, not missing, when credential access is denied", async () => {
+    const ctx = makePluginTestContext()
+    ctx.host.keychain.readGenericPassword.mockImplementation(() => {
+      throw new Error("credential read failed: Access is denied. (os error 5)")
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(plugin.detectSetup(ctx)).toEqual([{ id: "copilot-token", state: "unavailable" }])
+  })
+
   it("loads token from OpenUsage keychain", async () => {
     const ctx = makePluginTestContext()
     setKeychainToken(ctx, "ghu_keychain")

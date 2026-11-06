@@ -97,7 +97,7 @@ describe("notification event derivation", () => {
     })
 
     expect(events.map((event) => event.type)).toEqual(["quota"])
-    expect(events[0]?.body).toContain("80% used")
+    expect(events[0]?.body).toBe("Session usage has reached 80% of its limit.")
   })
 
   it("records quota resets only when the provider reset advances", () => {
@@ -109,7 +109,11 @@ describe("notification event derivation", () => {
       preferences: DEFAULT_NOTIFICATION_PREFERENCES,
     })
     expect(events).toHaveLength(1)
-    expect(events[0].type).toBe("reset")
+    expect(events[0]).toMatchObject({
+      type: "reset",
+      title: "🔄 Claude: Quota reset",
+      body: "Session quota is available again.",
+    })
   })
 
   it("isolates quota events by provider instance and ignores an account swap baseline", () => {
@@ -258,15 +262,15 @@ describe("notification event derivation", () => {
       previousOutputs: {},
       outputs: { claude: output(10) },
       previousStatuses: {},
-      statuses: { claude: status("minor", "  Elevated errors  ") },
+      statuses: { claude: status("minor", "  elevated errors  ") },
       preferences: DEFAULT_NOTIFICATION_PREFERENCES,
       now: 20,
     })
     expect(newIncident).toEqual([
       expect.objectContaining({
         type: "incident",
-        title: "Claude service incident",
-        body: "Elevated errors",
+        title: "🚨 Claude: Service incident",
+        body: "Elevated errors.",
         createdAt: 20,
       }),
     ])
@@ -280,7 +284,8 @@ describe("notification event derivation", () => {
     })
     expect(changedIncident[0]).toMatchObject({
       id: expect.stringMatching(/^incident:kilo:\d{4}-\d{2}-\d{2}$/u),
-      body: "major provider status",
+      title: "🚨 kilo: Service incident",
+      body: "Major incident.",
     })
 
     const recovery = deriveUsageEvents({
@@ -292,7 +297,8 @@ describe("notification event derivation", () => {
     })
     expect(recovery[0]).toMatchObject({
       type: "incidentResolved",
-      title: "kilo incident resolved",
+      title: "✅ kilo: Incident resolved",
+      body: "Provider status is back to normal.",
     })
   })
 

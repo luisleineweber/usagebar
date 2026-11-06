@@ -161,13 +161,16 @@
     })
   }
 
-  function loadApiKey(ctx) {
+  // Setup detection passes an `access` object so a denied secret or environment read is
+  // reported as unavailable instead of missing. The usage probe omits it.
+  function loadApiKey(ctx, access) {
     if (ctx.host.providerSecrets && typeof ctx.host.providerSecrets.read === "function") {
       try {
         const stored = readString(ctx.host.providerSecrets.read("apiKey"))
         if (stored) return stored
       } catch (e) {
         ctx.host.log.warn("provider secret read failed: " + String(e))
+        if (access && !/not found/i.test(String(e))) access.failed = true
       }
     }
 
@@ -179,11 +182,35 @@
           if (value) return value
         } catch (e) {
           ctx.host.log.warn("env read failed for " + name + ": " + String(e))
+          if (access) access.failed = true
         }
       }
     }
 
     return null
+  }
+
+  function detectSetup(ctx) {
+    let cliState = "missing"
+    if (ctx.host.fs.exists(CRED_PATH)) {
+      try {
+        const parsed = ctx.util.tryParseJson(ctx.host.fs.readText(CRED_PATH))
+        cliState = parsed && (parsed.access_token || parsed.refresh_token) ? "found" : "unavailable"
+      } catch (e) {
+        ctx.host.log.warn("setup scan could not read Kimi credentials: " + String(e))
+        cliState = "unavailable"
+      }
+    }
+
+    const apiKeyAccess = { failed: false }
+    const apiKey = loadApiKey(ctx, apiKeyAccess)
+    return [
+      { id: "kimi-cli-login", state: cliState },
+      {
+        id: "kimi-api-key",
+        state: apiKey ? "found" : apiKeyAccess.failed ? "unavailable" : "missing",
+      },
+    ]
   }
 
   function fetchBalance(ctx, apiKey) {
@@ -514,6 +541,7 @@
   var probeCore = probe
   globalThis.__openusage_plugin = {
     id: "kimi",
+    detectSetup,
     probe: function (ctx) {
       return addCcusageHistory(ctx, probeCore(ctx))
     },
