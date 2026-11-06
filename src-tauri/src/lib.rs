@@ -30,10 +30,10 @@ mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]
 mod settings_window;
-#[cfg(target_os = "windows")]
-mod taskbar_theme;
 #[cfg(not(test))]
 mod setup_commands;
+#[cfg(target_os = "windows")]
+mod taskbar_theme;
 #[cfg(not(test))]
 mod tray;
 #[cfg(target_os = "macos")]
