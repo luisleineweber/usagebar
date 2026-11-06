@@ -273,7 +273,7 @@ pub(crate) async fn start_probe_batch(
     })
 }
 
-fn resolve_instance_refs(
+pub(crate) fn resolve_instance_refs(
     app_data_dir: &std::path::Path,
     plugin_ids: &[String],
     requested: Option<Vec<ProviderInstanceRef>>,

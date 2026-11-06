@@ -246,7 +246,7 @@ Plugins may expose `detectSetup(ctx)` to report local authentication sources bef
 ]
 ```
 
-The host validates this safe shape and sends it to the settings UI. Detectors may read local files, environment variables, SQLite databases, or other declared host APIs, but they must not return credential values. `found` means the source contains usable setup data, `missing` means no setup data was found, and `unavailable` means the source could not be checked. Setup detection is local-only. UsageBar does not upload the values or the detector result.
+The host validates this safe shape and sends it to the settings UI. Detectors may read local files, environment variables, SQLite databases, or other declared host APIs, but they must not return credential values. `found` means the source contains usable setup data, `missing` means no setup data was found, and `unavailable` means the source could not be checked. Setup detection is local-only. UsageBar does not upload the values or the detector result. The settings **Scan again** action runs only `detectSetup(ctx)` in a new sandbox without network, browser, language-server, or ccusage host APIs, so a scan never contacts the provider. Report `found` only for usable credentials (for example OAuth tokens, not account metadata), and report `unavailable` when a source exists but a read or credential-store access fails.
 
 ## Output Schema
 

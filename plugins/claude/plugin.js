@@ -489,9 +489,20 @@
     return null
   }
 
+  // Account metadata from ~/.claude.json (oauthAccount) is not a login: only OAuth tokens are usable.
+  function hasUsableOAuth(credentials) {
+    const oauth = credentials && credentials.oauth
+    return !!(
+      oauth &&
+      (readNonEmptyString(oauth.accessToken) || readNonEmptyString(oauth.refreshToken))
+    )
+  }
+
   function detectSetup(ctx) {
     try {
-      return [{ id: "claude-oauth", state: loadCredentials(ctx) ? "found" : "missing" }]
+      return [
+        { id: "claude-oauth", state: hasUsableOAuth(loadCredentials(ctx)) ? "found" : "missing" },
+      ]
     } catch (e) {
       ctx.host.log.warn("setup scan could not read Claude credentials: " + String(e))
       return [{ id: "claude-oauth", state: "unavailable" }]

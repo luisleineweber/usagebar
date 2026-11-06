@@ -18,6 +18,36 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  describe("detectSetup", () => {
+    it("reports missing when no Claude login exists", async () => {
+      const ctx = makeCtx()
+      const plugin = await loadPlugin()
+      expect(plugin.detectSetup(ctx)).toEqual([{ id: "claude-oauth", state: "missing" }])
+    })
+
+    it("does not report account metadata without OAuth tokens as a login", async () => {
+      const ctx = makeCtx()
+      ctx.host.fs.exists = (path) => path === "~/.claude.json"
+      ctx.host.fs.readText = () =>
+        JSON.stringify({ oauthAccount: { emailAddress: "claude@example.com" } })
+
+      const plugin = await loadPlugin()
+      expect(plugin.detectSetup(ctx)).toEqual([{ id: "claude-oauth", state: "missing" }])
+    })
+
+    it("reports found for usable OAuth credentials without returning them", async () => {
+      const ctx = makeCtx()
+      ctx.host.keychain.readGenericPassword.mockReturnValue(
+        JSON.stringify({ claudeAiOauth: { accessToken: "local-oauth-token" } })
+      )
+
+      const plugin = await loadPlugin()
+      const result = plugin.detectSetup(ctx)
+      expect(result).toEqual([{ id: "claude-oauth", state: "found" }])
+      expect(JSON.stringify(result)).not.toContain("local-oauth-token")
+    })
+  })
+
   it("uses the captured provider instance to read managed Claude credentials", async () => {
     const ctx = makeCtx()
     ctx.instanceRef = { providerId: "claude", instanceId: "profile-claude" }
