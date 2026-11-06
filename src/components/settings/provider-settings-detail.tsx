@@ -135,6 +135,7 @@ export function ProviderSettingsDetail({
     <ProviderRuntimeStatus
       key="status"
       providerName={plugin.name}
+      errorCategory={state?.errorCategory}
       className={GROUP_CLASS}
       sourceLabel={getProviderSourceLabel(plugin.id, config)}
       lastSuccessAt={state?.lastSuccessAt ?? null}
