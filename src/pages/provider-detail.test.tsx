@@ -27,7 +27,7 @@ describe("ProviderDetailPage", () => {
     expect(screen.getAllByText("Alpha").length).toBeGreaterThan(0)
   })
 
-  it("uses the manifest fallback plan when provider data is unavailable", () => {
+  it("shows no plan badge when provider data is unavailable", () => {
     render(
       <ProviderDetailPage
         displayMode="used"
@@ -37,7 +37,6 @@ describe("ProviderDetailPage", () => {
             id: "a",
             name: "Alpha",
             iconUrl: "",
-            defaultPlan: "Free",
             lines: [],
             primaryCandidates: [],
           },
@@ -50,7 +49,7 @@ describe("ProviderDetailPage", () => {
       />
     )
 
-    expect(screen.getByText("Free")).toBeInTheDocument()
+    expect(screen.queryByText("Free")).not.toBeInTheDocument()
   })
 
   it("renders quick links when provided by plugin meta", () => {

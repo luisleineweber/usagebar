@@ -237,12 +237,14 @@ export function ProviderCard({
                         {...props}
                         variant="ghost"
                         size="icon-xs"
-                        aria-label="Retry"
+                        aria-label={`Retry ${name}`}
                         onClick={(e) => {
                           e.currentTarget.blur()
                           onRetry()
                         }}
-                        className="opacity-0 hover:opacity-100 focus-visible:opacity-100"
+                        className={
+                          error ? undefined : "opacity-0 hover:opacity-100 focus-visible:opacity-100"
+                        }
                         style={{
                           transform: "translateZ(0)",
                           backfaceVisibility: "hidden",
@@ -364,6 +366,7 @@ export function ProviderCard({
                   {group.lines.map((line, li) => (
                     <MetricLineRenderer
                       key={`${line.label}-${gi}-${li}`}
+                      providerName={name}
                       line={line}
                       displayMode={displayMode}
                       resetTimerDisplayMode={resetTimerDisplayMode}
@@ -379,6 +382,7 @@ export function ProviderCard({
                   {group.lines.map((line, li) => (
                     <MetricLineRenderer
                       key={`${line.label}-${gi}-${li}`}
+                      providerName={name}
                       line={line}
                       displayMode={displayMode}
                       resetTimerDisplayMode={resetTimerDisplayMode}

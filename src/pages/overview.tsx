@@ -7,6 +7,7 @@ import { openSettingsWindow } from "@/lib/settings-window"
 
 interface OverviewPageProps {
   plugins: DisplayPluginState[]
+  hasResolvedViews?: boolean
   onRetryPlugin?: (pluginId: string) => void
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
@@ -17,6 +18,7 @@ interface OverviewPageProps {
 
 export function OverviewPage({
   plugins,
+  hasResolvedViews = true,
   onRetryPlugin,
   displayMode,
   resetTimerDisplayMode,
@@ -24,6 +26,14 @@ export function OverviewPage({
   onResetTimerDisplayModeToggle,
   surfacePins = [],
 }: OverviewPageProps) {
+  if (plugins.length === 0 && !hasResolvedViews) {
+    return (
+      <div role="status" className="px-4 py-10 text-center text-sm text-muted-foreground">
+        Loading providers...
+      </div>
+    )
+  }
+
   if (plugins.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
@@ -53,7 +63,7 @@ export function OverviewPage({
           iconColorMode={plugin.meta.iconColorMode}
           iconAspectRatio={plugin.meta.iconAspectRatio}
           brandColor={plugin.meta.brandColor}
-          plan={plugin.data?.plan ?? plugin.lastSettledData?.plan ?? plugin.meta.defaultPlan}
+          plan={plugin.data?.plan ?? plugin.lastSettledData?.plan}
           showSeparator={index < plugins.length - 1}
           loading={plugin.loading}
           error={plugin.error}

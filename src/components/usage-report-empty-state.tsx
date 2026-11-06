@@ -1,23 +1,12 @@
 import { BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { UsageHistoryPeriod } from "@/lib/usage-history"
 
 type UsageReportEmptyStateProps = {
-  hasFilters: boolean
-  period: UsageHistoryPeriod
-  onClearFilters: () => void
-  onShowLongerPeriod: () => void
+  message: string
+  action?: { label: string; onClick: () => void }
 }
 
-export function UsageReportEmptyState({
-  hasFilters,
-  period,
-  onClearFilters,
-  onShowLongerPeriod,
-}: UsageReportEmptyStateProps) {
-  const canShowLongerPeriod = period === "7d"
-  const message = hasFilters ? "No activity matches these filters" : "No activity in this period"
-
+export function UsageReportEmptyState({ message, action }: UsageReportEmptyStateProps) {
   return (
     <div
       className="flex min-h-[86px] flex-col items-center justify-center rounded-md border border-dashed border-border/80 bg-background/40 px-3 py-3 text-center"
@@ -31,15 +20,9 @@ export function UsageReportEmptyState({
         <BarChart3 className="size-4" />
       </span>
       <p className="text-xs font-medium">{message}</p>
-      {hasFilters || canShowLongerPeriod ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="mt-2"
-          onClick={hasFilters ? onClearFilters : onShowLongerPeriod}
-        >
-          {hasFilters ? "Clear filters" : "View 30 days"}
+      {action ? (
+        <Button type="button" variant="outline" size="xs" className="mt-2" onClick={action.onClick}>
+          {action.label}
         </Button>
       ) : null}
     </div>

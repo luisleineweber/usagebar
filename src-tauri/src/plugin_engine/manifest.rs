@@ -243,8 +243,6 @@ pub struct PluginManifest {
     #[serde(default)]
     pub icon_aspect_ratio: Option<f32>,
     pub brand_color: Option<String>,
-    #[serde(default)]
-    pub default_plan: Option<String>,
     pub lines: Vec<ManifestLine>,
     #[serde(default)]
     pub detail: Option<ManifestDetail>,
@@ -688,27 +686,6 @@ mod tests {
             Some("https://status.example.com/api/v2/summary.json")
         );
         assert_eq!(status.component_names, vec!["API", "Chat"]);
-    }
-
-    #[test]
-    fn default_plan_is_parsed_when_present() {
-        let manifest = parse_manifest(
-            r#"
-            {
-              "schemaVersion": 1,
-              "id": "x",
-              "name": "X",
-              "version": "0.0.1",
-              "entry": "plugin.js",
-              "icon": "icon.svg",
-              "capabilities": {},
-              "defaultPlan": "Free",
-              "lines": []
-            }
-            "#,
-        );
-
-        assert_eq!(manifest.default_plan.as_deref(), Some("Free"));
     }
 
     #[test]

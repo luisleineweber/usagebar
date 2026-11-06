@@ -184,7 +184,6 @@ mod tests {
                 icon_color_mode: IconColorMode::default(),
                 icon_aspect_ratio: None,
                 brand_color: None,
-                default_plan: None,
                 lines: vec![],
                 detail: None,
                 links: vec![],

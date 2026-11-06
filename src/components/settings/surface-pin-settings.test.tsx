@@ -1,5 +1,8 @@
 import { render, screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const taskbar = vi.hoisted(() => ({ useTrayNumberSurface: vi.fn() }))
+vi.mock("@/hooks/use-taskbar-theme", () => taskbar)
 
 import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
 
@@ -19,6 +22,46 @@ const preview = {
 }
 
 describe("SurfacePinSettings", () => {
+  beforeEach(() => {
+    taskbar.useTrayNumberSurface.mockReset()
+    taskbar.useTrayNumberSurface.mockReturnValue("dark")
+  })
+
+  it.each([
+    { taskbarTheme: "light", fill: "#111827", background: "rgb(243, 243, 243)" },
+    { taskbarTheme: "dark", fill: "#ffffff", background: "rgb(32, 32, 32)" },
+  ] as const)(
+    "draws the number preview for the $taskbarTheme taskbar",
+    ({ taskbarTheme, fill, background }) => {
+      taskbar.useTrayNumberSurface.mockReturnValue(taskbarTheme)
+      render(
+        <SurfacePinSettings
+          menubarIconStyle="provider"
+          trayProviderSelection="first"
+          preview={preview}
+        />
+      )
+
+      const image = screen.getByAltText("Tray icon preview")
+      expect(decodeURIComponent(image.getAttribute("src") ?? "")).toContain(`fill="${fill}"`)
+      expect(image.parentElement).toHaveAttribute("data-taskbar-theme", taskbarTheme)
+      expect(image.parentElement).toHaveStyle({ backgroundColor: background })
+    }
+  )
+
+  it("does not draw the number preview before the taskbar theme is known", () => {
+    taskbar.useTrayNumberSurface.mockReturnValue(null)
+    render(
+      <SurfacePinSettings
+        menubarIconStyle="provider"
+        trayProviderSelection="first"
+        preview={preview}
+      />
+    )
+
+    expect(screen.queryByAltText("Tray icon preview")).not.toBeInTheDocument()
+  })
+
   it("renders stacked-bars guidance without provider selection or preview name", () => {
     render(
       <SurfacePinSettings menubarIconStyle="bars" trayProviderSelection="first" preview={preview} />

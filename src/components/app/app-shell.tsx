@@ -1,5 +1,5 @@
 import { useShallow } from "zustand/react/shallow"
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from "react"
 import { invoke } from "@tauri-apps/api/core"
 import {
   EyeOff,
@@ -21,6 +21,7 @@ import { useAppUiStore } from "@/stores/app-ui-store"
 import type { ActiveView } from "@/components/side-nav"
 import { UsageEventNotice } from "@/components/usage-event-notice"
 import type { UsageEvent } from "@/lib/notification-events"
+import { summarizeDataFreshness } from "@/lib/data-freshness"
 
 type AppShellProps = {
   onRefreshAll: () => void
@@ -93,10 +94,7 @@ export function AppShell({
 
   const appVersion = useAppVersion()
   const { updateStatus, triggerInstall, checkForUpdates } = useAppUpdate()
-  const lastUpdatedAt = displayPlugins.reduce<number | null>((oldest, plugin) => {
-    if (plugin.lastSuccessAt == null) return oldest
-    return oldest == null ? plugin.lastSuccessAt : Math.min(oldest, plugin.lastSuccessAt)
-  }, null)
+  const dataFreshness = summarizeDataFreshness(displayPlugins)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [arrangeMode, setArrangeMode] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
@@ -114,6 +112,11 @@ export function AppShell({
         ? { maxHeight: `${maxPanelHeightPx}px` }
         : undefined
   const contentMinHeightPx = panelPreferredMinHeightForView(activeView, navPlugins.length)
+
+  // Each view starts at the top; a scrolled Home must not hide a provider header.
+  useLayoutEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+  }, [activeView, scrollRef])
   const activeProviderId = navPlugins.some((plugin) => plugin.id === activeView)
     ? activeView
     : (selectedPlugin?.meta.id ?? resolvedSelectedPlugin?.meta.id ?? null)
@@ -252,7 +255,7 @@ export function AppShell({
             <div ref={footerRef}>
               <PanelFooter
                 version={appVersion}
-                lastUpdatedAt={lastUpdatedAt}
+                freshness={dataFreshness}
                 autoUpdateNextAt={autoUpdateNextAt}
                 updateStatus={updateStatus}
                 onUpdateInstall={triggerInstall}

@@ -89,6 +89,22 @@ describe("SideNav", () => {
     expect(onViewChange).toHaveBeenCalledWith("home")
   })
 
+  it("gives every rail row one fixed height independent of the icon size", () => {
+    render(
+      <SideNav
+        activeView="home"
+        onViewChange={() => {}}
+        plugins={[{ id: "p1", name: "Plugin 1", iconUrl: "icon.svg" }]}
+      />
+    )
+
+    for (const name of ["Home", "History", "Plugin 1", "Settings"]) {
+      const button = screen.getByRole("button", { name })
+      expect(button).toHaveClass("h-11")
+      expect(button.className).not.toMatch(/(^|\s)p-\d/)
+    }
+  })
+
   it("renders plugin icon button and uses brand color when appropriate", () => {
     const onViewChange = vi.fn()
     render(
