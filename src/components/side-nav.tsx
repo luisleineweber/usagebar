@@ -89,7 +89,7 @@ function NavButton({
       aria-label={ariaLabel}
       aria-current={isActive ? "page" : undefined}
       className={cn(
-        "relative flex shrink-0 items-center justify-center w-full p-2.5 transition-colors",
+        "relative flex h-11 shrink-0 items-center justify-center w-full px-2.5 transition-colors",
         "hover:bg-accent/40",
         isActive
           ? "bg-accent/70 text-foreground before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-page-accent before:rounded-full"

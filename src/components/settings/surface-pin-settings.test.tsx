@@ -1,5 +1,8 @@
 import { render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+const taskbar = vi.hoisted(() => ({ useTrayNumberSurface: vi.fn() }))
+vi.mock("@/hooks/use-taskbar-theme", () => taskbar)
 
 import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
 
@@ -23,21 +26,37 @@ function previewSvg() {
   return decodeURIComponent(src.replace("data:image/svg+xml,", ""))
 }
 
-function mockSystemScheme(dark: boolean) {
-  vi.spyOn(window, "matchMedia").mockImplementation((query: string) =>
-    Object.assign(new EventTarget(), {
-      matches: dark && query === "(prefers-color-scheme: dark)",
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-    })
-  )
-}
-
 describe("SurfacePinSettings", () => {
-  afterEach(() => {
-    vi.restoreAllMocks()
+  beforeEach(() => {
+    taskbar.useTrayNumberSurface.mockReset()
+    taskbar.useTrayNumberSurface.mockReturnValue("dark")
+  })
+
+  it.each([
+    { taskbarTheme: "light", fill: "#111827", background: "rgb(243, 243, 243)" },
+    { taskbarTheme: "dark", fill: "#ffffff", background: "rgb(32, 32, 32)" },
+  ] as const)(
+    "draws the number preview for the $taskbarTheme taskbar",
+    ({ taskbarTheme, fill, background }) => {
+      taskbar.useTrayNumberSurface.mockReturnValue(taskbarTheme)
+      render(
+        <SurfacePinSettings menubarIconStyle="provider" accentColor="#86c5ff" preview={preview} />
+      )
+
+      const image = screen.getByAltText("Tray icon preview")
+      expect(previewSvg()).toContain(`fill="${fill}"`)
+      expect(image.parentElement).toHaveAttribute("data-taskbar-theme", taskbarTheme)
+      expect(image.parentElement).toHaveStyle({ backgroundColor: background })
+    }
+  )
+
+  it("does not draw the number preview before the taskbar theme is known", () => {
+    taskbar.useTrayNumberSurface.mockReturnValue(null)
+    render(
+      <SurfacePinSettings menubarIconStyle="provider" accentColor="#86c5ff" preview={preview} />
+    )
+
+    expect(screen.queryByAltText("Tray icon preview")).not.toBeInTheDocument()
   })
 
   it.each(["bars", "donut"] as const)(
@@ -53,23 +72,6 @@ describe("SurfacePinSettings", () => {
 
       expect(previewSvg()).toContain("#e07c8e")
       expect(previewSvg()).not.toContain("#86c5ff")
-    }
-  )
-
-  it.each([
-    [true, "dark", "rgb(32, 33, 36)"],
-    [false, "light", "rgb(243, 243, 243)"],
-  ] as const)(
-    "follows the system color scheme for the taskbar surface (dark=%s)",
-    (dark, scheme, background) => {
-      mockSystemScheme(dark)
-      render(
-        <SurfacePinSettings menubarIconStyle="provider" accentColor="#86c5ff" preview={preview} />
-      )
-
-      const surface = screen.getByAltText("Tray icon preview").parentElement!
-      expect(surface).toHaveAttribute("data-tray-scheme", scheme)
-      expect(surface).toHaveStyle({ backgroundColor: background })
     }
   )
 

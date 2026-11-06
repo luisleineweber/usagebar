@@ -30,6 +30,8 @@ mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]
 mod settings_window;
+#[cfg(target_os = "windows")]
+mod taskbar_theme;
 #[cfg(not(test))]
 mod tray;
 #[cfg(target_os = "macos")]
@@ -255,6 +257,8 @@ pub fn run() {
             import_current_provider_account_profile,
             delete_provider_account_profile,
             update_global_shortcut,
+            #[cfg(target_os = "windows")]
+            taskbar_theme::get_taskbar_theme,
         ])
         .setup(app_startup::setup)
         .build(tauri::generate_context!())
@@ -292,7 +296,6 @@ mod tests {
             icon_color_mode: crate::plugin_engine::manifest::IconColorMode::default(),
             icon_aspect_ratio: None,
             brand_color: None,
-            default_plan: None,
             lines: Vec::new(),
             detail: None,
             links: Vec::new(),

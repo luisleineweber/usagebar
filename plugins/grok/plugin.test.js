@@ -137,7 +137,7 @@ describe("grok plugin", () => {
 
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    const line = result.lines.find((l) => l.label === "Credits used")
+    const line = result.lines.find((l) => l.label === "Credits")
 
     expect(line.type).toBe("progress")
     expect(line.used).toBeCloseTo(7.128, 3)
@@ -198,7 +198,7 @@ describe("grok plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.lines.find((l) => l.label === "Credits used").used).toBe(25)
+    expect(result.lines.find((l) => l.label === "Credits").used).toBe(25)
     expect(result.lines.find((l) => l.label === "Current period")).toBeUndefined()
   })
 

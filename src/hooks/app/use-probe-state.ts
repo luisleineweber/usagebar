@@ -182,8 +182,7 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
             loading: false,
             error: errorMessage,
             errorCategory: errorMessage ? (output.error?.category ?? "unknown") : null,
-            lastManualRefreshAt:
-              !errorMessage && isManual ? capturedAt : (existing?.lastManualRefreshAt ?? null),
+            lastManualRefreshAt: isManual ? capturedAt : (existing?.lastManualRefreshAt ?? null),
             lastSuccessAt: !errorMessage ? capturedAt : (existing?.lastSuccessAt ?? null),
             setupDetection: output.setupDetection ?? existing?.setupDetection,
           },

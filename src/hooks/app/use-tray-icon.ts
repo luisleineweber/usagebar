@@ -21,18 +21,14 @@ import {
   TRAY_TEMPLATE_FOREGROUND,
 } from "@/lib/tray-bars-icon"
 import {
-  getSystemTrayColorScheme,
   getTrayNumberColor,
   getWindowsTrayIconSizePx,
   renderTrayNumberIcon,
 } from "@/lib/tray-number-icon"
-import {
-  formatTrayBarsTooltip,
-  formatTrayNativeTitle,
-  formatTrayTooltip,
-} from "@/lib/tray-tooltip"
+import { formatTrayBarsTooltip, formatTrayNativeTitle, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { TrayState } from "@/lib/tray-state"
 import type { PluginState } from "@/hooks/app/types"
+import { useTrayNumberSurface } from "@/hooks/use-taskbar-theme"
 
 export type TrayUpdateReason = "probe" | "settings" | "init"
 
@@ -110,6 +106,8 @@ export function useTrayIcon({
   const lastLeftProviderIdRef = useRef<string | null>(null)
   const timeFormatModeRef = useRef(timeFormatMode)
   const useTemplateIconRef = useRef(shouldUseTemplateTrayIcon())
+  const trayNumberSurface = useTrayNumberSurface()
+  const trayNumberSurfaceRef = useRef(trayNumberSurface)
   const lastIconKeyRef = useRef<string | null>(null)
   const lastTooltipRef = useRef<string | null>(null)
   const lastTitleRef = useRef<string | null>(null)
@@ -149,6 +147,9 @@ export function useTrayIcon({
   useEffect(() => {
     timeFormatModeRef.current = timeFormatMode
   }, [timeFormatMode])
+  useEffect(() => {
+    trayNumberSurfaceRef.current = trayNumberSurface
+  }, [trayNumberSurface])
 
   const scheduleTrayIconUpdate = useCallback((_reason: TrayUpdateReason, delayMs = 0) => {
     if (trayUpdateTimerRef.current !== null) {
@@ -286,30 +287,24 @@ export function useTrayIcon({
       }
 
       if (!isTemplate) {
-        const scheme = getSystemTrayColorScheme()
-        const numberColor =
-          trayState.kind === "value"
-            ? getTrayNumberColor({
-                kind: "value",
-                remainingPercentExact: trayState.remainingPercentExact,
-                scheme,
-              })
-            : getTrayNumberColor({ kind: trayState.kind, scheme })
+        const taskbarTheme = trayNumberSurfaceRef.current
+        if (!taskbarTheme) {
+          setStableTrayIcon(tooltipText, formatTrayNativeTitle(trayState))
+          return
+        }
+        const numberColor = getTrayNumberColor(trayState, taskbarTheme)
         void renderTrayNumberIcon({
           value:
             trayState.kind === "value"
               ? Math.round(trayState.remainingPercentExact)
               : trayState.kind,
           sizePx: getWindowsTrayIconSizePx(window.devicePixelRatio),
-          scheme,
+          taskbarTheme,
           state: trayState,
         })
           .then((image) =>
             Promise.all([
-              setIconIfChanged(
-                `number:${getTrayStateValue(trayState)}:${scheme}:${numberColor}`,
-                image
-              ),
+              setIconIfChanged(`number:${getTrayStateValue(trayState)}:${numberColor}`, image),
               setTooltipIfChanged(tooltipText),
             ])
           )
@@ -397,6 +392,7 @@ export function useTrayIcon({
     activeView,
     trayProviderSelection,
     timeFormatMode,
+    trayNumberSurface,
     trayReady,
   ])
 

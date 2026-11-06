@@ -14,6 +14,20 @@ describe("OverviewPage", () => {
     expect(screen.getByText("No active providers yet.")).toBeInTheDocument();
   });
 
+  it("shows a loading state instead of the empty state while providers load", () => {
+    render(
+      <OverviewPage
+        plugins={[]}
+        hasResolvedViews={false}
+        displayMode="used"
+        resetTimerDisplayMode="relative"
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Loading providers");
+    expect(screen.queryByText("No active providers yet.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Set up a provider" })).not.toBeInTheDocument();
+  });
+
   it("renders provider cards", () => {
     const plugins = [
       {
@@ -39,15 +53,15 @@ describe("OverviewPage", () => {
     expect(screen.getByText("Alpha")).toBeInTheDocument();
   });
 
-  it("shows the manifest fallback plan until provider data reports a plan", () => {
+  it("shows no plan badge until the provider reports a plan", () => {
     render(
       <OverviewPage
         plugins={[
           {
-            meta: { id: "a", name: "Alpha", iconUrl: "icon", defaultPlan: "Free", lines: [] },
+            meta: { id: "a", name: "Alpha", iconUrl: "icon", lines: [] },
             data: null,
-            loading: true,
-            error: null,
+            loading: false,
+            error: "Not connected",
             lastManualRefreshAt: null,
           },
         ]}
@@ -56,7 +70,34 @@ describe("OverviewPage", () => {
       />,
     );
 
-    expect(screen.getByText("Free")).toBeInTheDocument();
+    expect(screen.queryByText("Free")).not.toBeInTheDocument();
+  });
+
+  it("keeps the last reported plan while the provider has an error", () => {
+    render(
+      <OverviewPage
+        plugins={[
+          {
+            meta: { id: "a", name: "Alpha", iconUrl: "icon", lines: [] },
+            data: null,
+            lastSettledData: {
+              providerId: "a",
+              displayName: "Alpha",
+              plan: "Pro",
+              lines: [{ type: "text", label: "Status", value: "ok" }],
+              iconUrl: "icon",
+            },
+            loading: false,
+            error: "Token expired",
+            lastManualRefreshAt: null,
+          },
+        ]}
+        displayMode="used"
+        resetTimerDisplayMode="relative"
+      />,
+    );
+
+    expect(screen.getByText("Pro")).toBeInTheDocument();
   });
 
   it("only shows overview-scoped lines", () => {

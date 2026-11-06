@@ -175,6 +175,10 @@ function zonedMidnightMs(year: number, month: number, day: number, timeZone: str
   return candidateMs
 }
 
+export function hasUsageHistory(outputs: readonly Pick<PluginOutput, "history">[]): boolean {
+  return outputs.some((output) => Boolean(output.history?.entries.length))
+}
+
 export function filterUsageHistory(
   outputs: readonly Pick<PluginOutput, "providerId" | "history" | "instanceRef">[],
   query: UsageHistoryQuery
