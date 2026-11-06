@@ -52,4 +52,72 @@ describe("ProviderAccountsSection pinned profile", () => {
     await waitFor(() => expect(screen.getByText("Account store unavailable.")).toBeInTheDocument())
     expect(onConfigChange).not.toHaveBeenCalled()
   })
+
+  describe("after a provider switch", () => {
+    const claudeProfile = { profileId: "c1", label: "Claude work", email: null, lastImportedAt: 1 }
+    const geminiPin = { profileId: "g1", label: "Gemini work", email: null, lastImportedAt: 1 }
+
+    async function switchToGemini(geminiList: Promise<(typeof geminiPin)[]>) {
+      const onConfigChange = vi.fn(async () => undefined)
+      listMock.mockImplementation((providerId: string) =>
+        providerId === "claude" ? Promise.resolve([claudeProfile]) : geminiList
+      )
+      const { rerender } = render(
+        <ProviderAccountsSection
+          providerId="claude"
+          providerName="Claude"
+          config={{ selectedAccountProfileId: "c1" }}
+          onConfigChange={onConfigChange}
+        />
+      )
+      expect(await screen.findByText("Claude work")).toBeInTheDocument()
+
+      // The Claude list is loaded. Gemini's pin is not in it, but that list is not Gemini's.
+      rerender(
+        <ProviderAccountsSection
+          providerId="gemini"
+          providerName="Gemini"
+          config={{ selectedAccountProfileId: "g1" }}
+          onConfigChange={onConfigChange}
+        />
+      )
+      return onConfigChange
+    }
+
+    it("keeps the new provider's pin while its list is delayed", async () => {
+      let resolveGemini!: (profiles: (typeof geminiPin)[]) => void
+      const onConfigChange = await switchToGemini(
+        new Promise((resolve) => (resolveGemini = resolve))
+      )
+
+      expect(screen.queryByText("Claude work")).not.toBeInTheDocument()
+      expect(onConfigChange).not.toHaveBeenCalled()
+
+      await act(async () => resolveGemini([geminiPin]))
+      expect(await screen.findByText("Gemini work")).toBeInTheDocument()
+      expect(onConfigChange).not.toHaveBeenCalled()
+    })
+
+    it("keeps the new provider's pin when its list fails", async () => {
+      let rejectGemini!: (reason: Error) => void
+      const onConfigChange = await switchToGemini(
+        new Promise((_resolve, reject) => (rejectGemini = reject))
+      )
+
+      await act(async () => rejectGemini(new Error("Gemini store unavailable.")))
+      expect(await screen.findByText("Gemini store unavailable.")).toBeInTheDocument()
+      expect(onConfigChange).not.toHaveBeenCalled()
+    })
+
+    it("still clears the new provider's pin when its successful list lacks it", async () => {
+      const onConfigChange = await switchToGemini(Promise.resolve([]))
+
+      await waitFor(() =>
+        expect(onConfigChange).toHaveBeenCalledWith("gemini", {
+          selectedAccountProfileId: undefined,
+        })
+      )
+      expect(onConfigChange).toHaveBeenCalledTimes(1)
+    })
+  })
 })

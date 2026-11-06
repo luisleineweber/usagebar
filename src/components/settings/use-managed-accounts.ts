@@ -13,9 +13,11 @@ export type ManagedAccountsApi<Profile extends ManagedAccountProfileView> = {
 /**
  * State and actions for app-managed account profiles.
  *
- * `profiles` is null until a list call succeeds. The pinned selection is cleared only when a
- * successful list does not contain it. Before the first list result, or after a failed list,
- * the selection is unknown and stays stored: clearing it then would delete a valid pin.
+ * A loaded list is bound to the `api` that returned it. Only a list from the current `api`
+ * counts: after a provider switch, the list of the previous provider says nothing about the
+ * new provider's pin. The pinned selection is cleared only when a successful list of the
+ * current provider does not contain it. Before that list arrives, or after a failed list, the
+ * selection is unknown and stays stored: clearing it then would delete a valid pin.
  */
 export function useManagedAccounts<Profile extends ManagedAccountProfileView>({
   providerId,
@@ -31,7 +33,12 @@ export function useManagedAccounts<Profile extends ManagedAccountProfileView>({
   config?: ProviderConfig
   onConfigChange?: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
 }) {
-  const [profiles, setProfiles] = useState<Profile[] | null>(null)
+  const [loaded, setLoaded] = useState<{
+    source: ManagedAccountsApi<Profile>
+    profiles: Profile[]
+  } | null>(null)
+  // Null until the current provider's list arrives; another provider's list is never used.
+  const profiles = loaded?.source === api ? loaded.profiles : null
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -39,13 +46,12 @@ export function useManagedAccounts<Profile extends ManagedAccountProfileView>({
 
   useEffect(() => {
     let cancelled = false
-    setProfiles(null)
     setLoading(true)
     setError(null)
     void api
       .list()
       .then((nextProfiles) => {
-        if (!cancelled) setProfiles(nextProfiles)
+        if (!cancelled) setLoaded({ source: api, profiles: nextProfiles })
       })
       .catch((loadError) => {
         if (!cancelled) {
@@ -75,7 +81,7 @@ export function useManagedAccounts<Profile extends ManagedAccountProfileView>({
     setMessage(null)
     try {
       const imported = await api.importCurrent()
-      setProfiles(await api.list())
+      setLoaded({ source: api, profiles: await api.list() })
       if (onConfigChange && (imported.wasFirstProfile || !selectedProfileId)) {
         await onConfigChange(providerId, { selectedAccountProfileId: imported.profile.profileId })
       }
@@ -105,7 +111,7 @@ export function useManagedAccounts<Profile extends ManagedAccountProfileView>({
     setMessage(null)
     try {
       await api.remove(profileId)
-      setProfiles(await api.list())
+      setLoaded({ source: api, profiles: await api.list() })
       if (selectedProfileId === profileId && onConfigChange) {
         await onConfigChange(providerId, { selectedAccountProfileId: undefined })
       }
