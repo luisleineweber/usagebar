@@ -7,6 +7,7 @@ import type { PluginOutput } from "@/lib/plugin-types"
 import {
   filterUsageHistory,
   entryTotalTokens,
+  hasUsageHistory,
   summarizeUsageHistory,
   type UsageHistoryPeriod,
   type UsageHistoryRecord,
@@ -419,7 +420,7 @@ export function UsageReport({
   const sources = [...new Set(records.map((record) => record.source))]
   const hasActiveFilters = Boolean(providerId || model || project)
 
-  if (!outputs.some((output) => output.history?.entries.length)) return null
+  if (!hasUsageHistory(outputs)) return null
 
   const SectionHeading = headingLevel
 
@@ -537,16 +538,26 @@ export function UsageReport({
 
       <div className="mt-2 rounded-lg bg-muted/55 px-2 py-1.5">
         {records.length === 0 ? (
-          <UsageReportEmptyState
-            hasFilters={hasActiveFilters}
-            period={period}
-            onClearFilters={() => {
-              setProviderId("")
-              setModel("")
-              setProject("")
-            }}
-            onShowLongerPeriod={() => setPeriod("30d")}
-          />
+          hasActiveFilters ? (
+            <UsageReportEmptyState
+              message="No activity matches these filters"
+              action={{
+                label: "Clear filters",
+                onClick: () => {
+                  setProviderId("")
+                  setModel("")
+                  setProject("")
+                },
+              }}
+            />
+          ) : (
+            <UsageReportEmptyState
+              message="No activity in this period"
+              action={
+                period === "7d" ? { label: "View 30 days", onClick: () => setPeriod("30d") } : undefined
+              }
+            />
+          )
         ) : groupBy === "project" ? (
           <ProjectBreakdown records={records} metric={metric} overrides={priceOverrides} />
         ) : (

@@ -203,7 +203,6 @@ export type PluginMeta = {
   iconColorMode?: PluginIconColorMode
   iconAspectRatio?: number
   brandColor?: string
-  defaultPlan?: string
   supportState?: PluginSupportState
   supportMessage?: string | null
   isSurfaced?: boolean

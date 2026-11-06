@@ -32,13 +32,11 @@ function parseVersion(version: string) {
   const normalized = normalizeVersion(version)
   const [core = "", prerelease = ""] = normalized.split("-", 2)
   const [major = "0", minor = "0", patch = "0"] = core.split(".")
-  const [channel = ""] = prerelease.split(".", 1)
   return {
     major: Number.parseInt(major, 10) || 0,
     minor: Number.parseInt(minor, 10) || 0,
     patch: Number.parseInt(patch, 10) || 0,
     prerelease,
-    channel,
   }
 }
 
@@ -79,27 +77,6 @@ export function compareVersions(left: string, right: string): number {
     if (delta !== 0) return Math.sign(delta)
   }
   return comparePrerelease(parsedLeft.prerelease, parsedRight.prerelease)
-}
-
-export function isEligibleUpdateCandidate(
-  candidateVersion: string,
-  currentVersion: string
-): boolean {
-  const candidate = parseVersion(candidateVersion)
-  const current = parseVersion(currentVersion)
-  const coreDelta = compareVersions(
-    `${candidate.major}.${candidate.minor}.${candidate.patch}`,
-    `${current.major}.${current.minor}.${current.patch}`
-  )
-
-  if (coreDelta > 0) return true
-  if (coreDelta < 0) return false
-
-  if (candidate.prerelease && current.prerelease && candidate.channel !== current.channel) {
-    return false
-  }
-
-  return compareVersions(candidateVersion, currentVersion) > 0
 }
 
 export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateReturn {
@@ -202,7 +179,7 @@ export function useAppUpdate(options: UseAppUpdateOptions = {}): UseAppUpdateRet
       if (!mountedRef.current) return
       if (update) {
         const updateVersion = normalizeVersion(update.version)
-        if (isEligibleUpdateCandidate(updateVersion, currentVersion)) {
+        if (compareVersions(updateVersion, currentVersion) > 0) {
           inFlightRef.current.checking = false
           updateRef.current = update
           setStatus({ status: "available", version: updateVersion })

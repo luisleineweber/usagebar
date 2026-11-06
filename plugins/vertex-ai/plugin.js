@@ -43,17 +43,21 @@
     return roots
   }
 
+  // Returns the first readable file, `{ unreadable: true }` when files exist but none can be
+  // read, or null when no file exists. Missing and unreadable sources must stay distinct.
   function readFirstFile(ctx, roots, relativePath) {
+    let unreadable = false
     for (let i = 0; i < roots.length; i += 1) {
       const path = joinPath(roots[i], relativePath)
       if (!ctx.host.fs.exists(path)) continue
       try {
         return { path, text: ctx.host.fs.readText(path), root: roots[i] }
       } catch (e) {
+        unreadable = true
         ctx.host.log.warn("vertex-ai failed to read " + path + ": " + String(e))
       }
     }
-    return null
+    return unreadable ? { unreadable: true } : null
   }
 
   function loadProjectFromConfig(text) {
@@ -77,6 +81,7 @@
 
     const projectFile = readFirstFile(ctx, roots, "configurations/config_default")
     if (!projectFile) return null
+    if (projectFile.unreadable) throw "Vertex AI gcloud configuration could not be read."
     return loadProjectFromConfig(projectFile.text)
   }
 
@@ -95,6 +100,9 @@
     const credentialsFile = readFirstFile(ctx, roots, "application_default_credentials.json")
     if (!credentialsFile) {
       throw "Vertex AI gcloud ADC credentials missing. Run `gcloud auth application-default login`."
+    }
+    if (credentialsFile.unreadable) {
+      throw "Vertex AI gcloud ADC credentials could not be read."
     }
 
     const parsed = ctx.util.tryParseJson(credentialsFile.text)
@@ -132,7 +140,9 @@
     const roots = gcloudRoots(ctx)
     const credentialFile = readFirstFile(ctx, roots, "application_default_credentials.json")
     let credentialState = "missing"
-    if (credentialFile) {
+    if (credentialFile && credentialFile.unreadable) {
+      credentialState = "unavailable"
+    } else if (credentialFile) {
       const parsed = ctx.util.tryParseJson(credentialFile.text)
       credentialState =
         parsed &&
@@ -143,12 +153,17 @@
           : "unavailable"
     }
 
+    let projectState
+    try {
+      projectState = loadProjectId(ctx, roots) ? "found" : "missing"
+    } catch (e) {
+      ctx.host.log.warn("setup scan could not read the Vertex AI project: " + String(e))
+      projectState = "unavailable"
+    }
+
     return [
       { id: "vertex-gcloud-adc", state: credentialState },
-      {
-        id: "vertex-project",
-        state: loadProjectId(ctx, roots) ? "found" : "missing",
-      },
+      { id: "vertex-project", state: projectState },
     ]
   }
 

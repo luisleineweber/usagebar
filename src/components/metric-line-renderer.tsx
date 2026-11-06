@@ -30,7 +30,7 @@ import {
 
 const PACE_VISUALS = {
   ahead: { dotClass: "bg-green-500" },
-  "on-track": { dotClass: "bg-yellow-500" },
+  "on-track": { dotClass: "bg-muted-foreground" },
   behind: { dotClass: "bg-red-500" },
 } satisfies Record<PaceStatus, { dotClass: string }>
 
@@ -90,6 +90,7 @@ export function PaceIndicator({
 // ---------------------------------------------------------------------------
 
 export function MetricLineRenderer({
+  providerName,
   line,
   displayMode,
   resetTimerDisplayMode,
@@ -98,6 +99,7 @@ export function MetricLineRenderer({
   now,
   refreshing,
 }: {
+  providerName: string
   line: MetricLine
   displayMode: DisplayMode
   resetTimerDisplayMode: ResetTimerDisplayMode
@@ -211,7 +213,9 @@ export function MetricLineRenderer({
     const secondaryText =
       resetLabel ??
       (line.format.kind === "percent"
-        ? `${limit}% cap`
+        ? used <= 0
+          ? "Full"
+          : null
         : line.format.kind === "dollars"
           ? `$${formatFixedPrecisionNumber(limit)} limit`
           : `${formatCountNumber(limit)} ${line.format.suffix}`)
@@ -274,6 +278,8 @@ export function MetricLineRenderer({
           )}
         </div>
         <Progress
+          aria-label={`${providerName} ${line.label}`}
+          aria-valuetext={primaryText}
           value={percent}
           indicatorColor={line.color}
           markerValue={paceMarkerValue}

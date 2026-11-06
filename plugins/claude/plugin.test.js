@@ -18,6 +18,36 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
 
+  describe("detectSetup", () => {
+    it("reports missing when no Claude login exists", async () => {
+      const ctx = makeCtx()
+      const plugin = await loadPlugin()
+      expect(plugin.detectSetup(ctx)).toEqual([{ id: "claude-oauth", state: "missing" }])
+    })
+
+    it("does not report account metadata without OAuth tokens as a login", async () => {
+      const ctx = makeCtx()
+      ctx.host.fs.exists = (path) => path === "~/.claude.json"
+      ctx.host.fs.readText = () =>
+        JSON.stringify({ oauthAccount: { emailAddress: "claude@example.com" } })
+
+      const plugin = await loadPlugin()
+      expect(plugin.detectSetup(ctx)).toEqual([{ id: "claude-oauth", state: "missing" }])
+    })
+
+    it("reports found for usable OAuth credentials without returning them", async () => {
+      const ctx = makeCtx()
+      ctx.host.keychain.readGenericPassword.mockReturnValue(
+        JSON.stringify({ claudeAiOauth: { accessToken: "local-oauth-token" } })
+      )
+
+      const plugin = await loadPlugin()
+      const result = plugin.detectSetup(ctx)
+      expect(result).toEqual([{ id: "claude-oauth", state: "found" }])
+      expect(JSON.stringify(result)).not.toContain("local-oauth-token")
+    })
+  })
+
   it("uses the captured provider instance to read managed Claude credentials", async () => {
     const ctx = makeCtx()
     ctx.instanceRef = { providerId: "claude", instanceId: "profile-claude" }
@@ -40,9 +70,7 @@ describe("claude plugin", () => {
 
     expect(result.plan).toBe("Pro")
     expect(result.lines.find((line) => line.label === "Session")?.used).toBe(12)
-    expect(ctx.host.providerSecrets.read).toHaveBeenCalledWith(
-      "account:profile-claude:authJson"
-    )
+    expect(ctx.host.providerSecrets.read).toHaveBeenCalledWith("account:profile-claude:authJson")
     expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
   })
 
@@ -153,7 +181,7 @@ describe("claude plugin", () => {
 
   it("throws when credentials are unreadable", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () => "{bad json"
     ctx.host.keychain.readGenericPassword.mockReturnValue("{bad}")
     const plugin = await loadPlugin()
@@ -162,7 +190,7 @@ describe("claude plugin", () => {
 
   it("treats credentials file read failures as missing credentials", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () => {
       throw new Error("disk read failed")
     }
@@ -173,7 +201,7 @@ describe("claude plugin", () => {
 
   it("warns when credentials file exists but lacks a usable access token", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { refreshToken: "only-refresh" } })
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
@@ -193,7 +221,7 @@ describe("claude plugin", () => {
 
   it("falls back to keychain when credentials file is corrupt", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () => "{bad json"
     ctx.host.keychain.readGenericPassword.mockReturnValue(
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
@@ -211,7 +239,7 @@ describe("claude plugin", () => {
 
   it("prefers keychain over a stale credentials file", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = vi.fn(() =>
       JSON.stringify({
         claudeAiOauth: {
@@ -260,7 +288,7 @@ describe("claude plugin", () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
@@ -281,7 +309,7 @@ describe("claude plugin", () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
@@ -305,7 +333,7 @@ describe("claude plugin", () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
@@ -324,7 +352,7 @@ describe("claude plugin", () => {
   it("appends max rate limit tier to the plan label when present", async () => {
     const runCase = async (rateLimitTier, expectedPlan) => {
       const ctx = makeCtx()
-      ctx.host.fs.exists = () => true
+      ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
       ctx.host.fs.readText = () =>
         JSON.stringify({
           claudeAiOauth: {
@@ -352,7 +380,7 @@ describe("claude plugin", () => {
   it("recognizes Claude Ultra from subscription type or rate limit tier", async () => {
     const runCase = async (subscriptionType, rateLimitTier) => {
       const ctx = makeCtx()
-      ctx.host.fs.exists = () => true
+      ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
       ctx.host.fs.readText = () =>
         JSON.stringify({
           claudeAiOauth: {
@@ -381,7 +409,7 @@ describe("claude plugin", () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
@@ -399,7 +427,7 @@ describe("claude plugin", () => {
   it("throws token expired on 401", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "" })
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
@@ -408,7 +436,7 @@ describe("claude plugin", () => {
   it("throws HTTP status details for non-auth usage failures", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Usage request failed (HTTP 429)")
@@ -430,14 +458,16 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Sonnet")).toBeTruthy()
-    expect(result.lines.find((line) => line.label === "Extra usage spent")).toBeTruthy()
+    const extraUsage = result.lines.find((line) => line.label === "Extra usage")
+    expect(extraUsage?.type).toBe("text")
+    expect(extraUsage?.value).toMatch(/^\$[\d.,]+ spent$/)
   })
 
   it("omits extra usage line when used credits are zero and no limit exists", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
@@ -447,7 +477,7 @@ describe("claude plugin", () => {
     })
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
-    expect(result.lines.find((line) => line.label === "Extra usage spent")).toBeUndefined()
+    expect(result.lines.find((line) => line.label === "Extra usage")).toBeUndefined()
   })
 
   it("uses keychain credentials when value is hex-encoded JSON", async () => {
@@ -662,7 +692,7 @@ describe("claude plugin", () => {
   it("throws on http errors and parse failures", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValueOnce({ status: 500, bodyText: "" })
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("HTTP 500")
@@ -674,7 +704,7 @@ describe("claude plugin", () => {
   it("throws on request errors", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockImplementation(() => {
       throw new Error("boom")
     })
@@ -685,7 +715,7 @@ describe("claude plugin", () => {
   it("shows status badge when no usage data and ccusage is unavailable", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({}),
@@ -703,7 +733,7 @@ describe("claude plugin", () => {
   it("passes resetsAt through as ISO when present", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     const now = new Date("2026-02-02T00:00:00.000Z").getTime()
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now)
     const fiveHourIso = new Date(now + 30_000).toISOString()
@@ -726,7 +756,7 @@ describe("claude plugin", () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () =>
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "pro" } })
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({
       status: 200,
       bodyText: JSON.stringify({
@@ -742,7 +772,7 @@ describe("claude plugin", () => {
 
   it("refreshes token when expired and persists updated credentials", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -814,13 +844,13 @@ describe("claude plugin", () => {
 
   it("retries usage request after 401 by refreshing once", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
           accessToken: "token",
           refreshToken: "refresh",
-          expiresAt: Date.now() + 60_000,
+          expiresAt: Date.now() + 3_600_000,
           subscriptionType: "pro",
         },
       })
@@ -857,7 +887,7 @@ describe("claude plugin", () => {
 
   it("throws session expired when refresh returns invalid_grant", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -880,7 +910,7 @@ describe("claude plugin", () => {
 
   it("throws token expired when usage remains unauthorized after refresh", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -906,7 +936,7 @@ describe("claude plugin", () => {
 
   it("throws token expired when refresh is unauthorized", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -963,7 +993,7 @@ describe("claude plugin", () => {
 
   it("logs when saving credentials file fails", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -996,7 +1026,7 @@ describe("claude plugin", () => {
 
   it("continues when refresh request throws non-string error (returns null)", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -1024,7 +1054,7 @@ describe("claude plugin", () => {
 
   it("falls back to keychain when file oauth exists but has no access token", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { refreshToken: "only-refresh" } })
     ctx.host.keychain.readGenericPassword.mockReturnValue(
       JSON.stringify({ claudeAiOauth: { accessToken: "keychain-token", subscriptionType: "pro" } })
@@ -1062,7 +1092,7 @@ describe("claude plugin", () => {
 
     const runCase = async (refreshResp) => {
       const ctx = makeCtx()
-      ctx.host.fs.exists = () => true
+      ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
       ctx.host.fs.readText = () => baseCreds
       ctx.host.http.request.mockImplementation((opts) => {
         if (String(opts.url).includes("/v1/oauth/token")) return refreshResp
@@ -1090,7 +1120,7 @@ describe("claude plugin", () => {
     const ctx = makeCtx()
     const now = 1_700_000_000_000
     vi.spyOn(Date, "now").mockReturnValue(now)
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -1118,7 +1148,7 @@ describe("claude plugin", () => {
 
   it("handles malformed ccusage payload shape as runner_failed", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({ claudeAiOauth: { accessToken: "token", subscriptionType: "   " } })
     ctx.host.http.request.mockReturnValue({
@@ -1138,13 +1168,13 @@ describe("claude plugin", () => {
 
   it("throws usage request failed after refresh when retry errors", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
           accessToken: "token",
           refreshToken: "refresh",
-          expiresAt: Date.now() + 60_000,
+          expiresAt: Date.now() + 3_600_000,
         },
       })
 
@@ -1184,7 +1214,7 @@ describe("claude plugin", () => {
 
   it("throws usage request failed when retryOnceOnAuth throws a non-string error", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -1204,7 +1234,7 @@ describe("claude plugin", () => {
 
   it("throws token expired when refresh response cannot be parsed", async () => {
     const ctx = makeCtx()
-    ctx.host.fs.exists = () => true
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
       JSON.stringify({
         claudeAiOauth: {
@@ -1236,7 +1266,7 @@ describe("claude plugin", () => {
 
     function makeProbeCtx({ ccusageResult = { status: "runner_failed" } } = {}) {
       const ctx = makeCtx()
-      ctx.host.fs.exists = () => true
+      ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
       ctx.host.fs.readText = () => CRED_JSON
       ctx.host.http.request.mockReturnValue({ status: 200, bodyText: USAGE_RESPONSE })
       ctx.host.ccusage.query = vi.fn(() => ccusageResult)
@@ -1698,12 +1728,13 @@ describe("claude plugin", () => {
     it("passes custom path and offline pricing controls to ccusage", async () => {
       const ctx = makeProbeCtx({ ccusageResult: okUsage([]) })
       ctx.host.providerConfig = {
-        get: vi.fn((key) =>
-          ({
-            historyPath: "D:/usage/claude",
-            pricingMode: "display",
-            offlinePricing: "enabled",
-          })[key] ?? null
+        get: vi.fn(
+          (key) =>
+            ({
+              historyPath: "D:/usage/claude",
+              pricingMode: "display",
+              offlinePricing: "enabled",
+            })[key] ?? null
         ),
       }
       const plugin = await loadPlugin()

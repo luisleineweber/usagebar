@@ -143,7 +143,7 @@ plugins/claude/
 1. **Boot:** `useSettingsBootstrap` loads all `plugin.json` manifests → `pluginsMeta`.
 2. **Bundle:** plugins are pre-copied to the Tauri resource bundle by `bun run bundle:plugins` — the resource path is what actually executes at runtime.
 3. **Execute:** `startBatch(pluginIds)` invokes the Rust plugin host which evals `index.js` inside a sandboxed JS context. If present, `detectSetup(ctx)` checks declared local sources and returns safe status values only.
-4. **Output:** the plugin returns a `PluginOutput` object (or throws). The Rust host emits a `probe-result` event back to the WebView, including setup detection when available.
+4. **Output:** the plugin returns a `PluginOutput` object (or throws). The Rust host emits a `probe-result` event back to the WebView, including setup detection when available. The settings **Scan again** action calls `detect_plugin_setup` instead, which runs only `detectSetup(ctx)` without network host APIs and returns the safe status values directly.
 5. **Display:** the React frontend receives the event, updates `pluginStates`, and re-renders the relevant `ProviderCard`.
 
 ### `PluginOutput` shape (`src/lib/plugin-types.ts`)

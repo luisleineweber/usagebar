@@ -20,7 +20,7 @@ UsageBar reads a non-expired CLI token from the auth file, calls the billing end
 
 | Line | Source | Format |
 | --- | --- | --- |
-| Credits used | `config.used` / `config.monthlyLimit` | percent progress |
+| Credits | `config.used` / `config.monthlyLimit` | percent progress |
 | Pay as you go | `config.onDemandCap` | badge |
 | Plan | `subscription_tier_display` | provider badge |
 

@@ -506,9 +506,10 @@ export function ProviderSettingsDetail({
         {setupChecks.length > 0 ? (
           <SetupAssistant
             checks={setupChecks}
+            providerId={plugin.id}
+            accountId={config?.selectedAccountProfileId}
             detections={state?.setupDetection}
             loading={Boolean(state?.loading)}
-            onScan={onRetry}
           />
         ) : null}
 
