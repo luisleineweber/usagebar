@@ -12,6 +12,23 @@ export const TASKBAR_BACKGROUND = {
   light: "#f3f3f3",
 } as const satisfies Record<TaskbarTheme, string>
 
+/** Only Windows has the native taskbar theme lookup. */
+export function isWindowsTrayPlatform(): boolean {
+  return navigator.userAgent.toLowerCase().includes("windows")
+}
+
+/**
+ * The surface behind the tray number. Windows uses the taskbar theme and has no
+ * surface until it is known. Linux panels have no common theme lookup; GNOME
+ * draws a dark top bar, so Linux uses the dark surface.
+ */
+export function getTrayNumberSurface(
+  isWindows: boolean,
+  taskbarTheme: TaskbarTheme | null
+): TaskbarTheme | null {
+  return isWindows ? taskbarTheme : "dark"
+}
+
 function isTaskbarTheme(value: unknown): value is TaskbarTheme {
   return value === "light" || value === "dark"
 }

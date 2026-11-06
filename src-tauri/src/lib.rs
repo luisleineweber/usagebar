@@ -30,6 +30,7 @@ mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]
 mod settings_window;
+#[cfg(target_os = "windows")]
 mod taskbar_theme;
 #[cfg(not(test))]
 mod tray;
@@ -256,6 +257,7 @@ pub fn run() {
             import_current_provider_account_profile,
             delete_provider_account_profile,
             update_global_shortcut,
+            #[cfg(target_os = "windows")]
             taskbar_theme::get_taskbar_theme,
         ])
         .setup(app_startup::setup)

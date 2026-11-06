@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const taskbar = vi.hoisted(() => ({ useTaskbarTheme: vi.fn() }))
+const taskbar = vi.hoisted(() => ({ useTrayNumberSurface: vi.fn() }))
 vi.mock("@/hooks/use-taskbar-theme", () => taskbar)
 
 import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
@@ -23,8 +23,8 @@ const preview = {
 
 describe("SurfacePinSettings", () => {
   beforeEach(() => {
-    taskbar.useTaskbarTheme.mockReset()
-    taskbar.useTaskbarTheme.mockReturnValue("dark")
+    taskbar.useTrayNumberSurface.mockReset()
+    taskbar.useTrayNumberSurface.mockReturnValue("dark")
   })
 
   it.each([
@@ -33,7 +33,7 @@ describe("SurfacePinSettings", () => {
   ] as const)(
     "draws the number preview for the $taskbarTheme taskbar",
     ({ taskbarTheme, fill, background }) => {
-      taskbar.useTaskbarTheme.mockReturnValue(taskbarTheme)
+      taskbar.useTrayNumberSurface.mockReturnValue(taskbarTheme)
       render(
         <SurfacePinSettings
           menubarIconStyle="provider"
@@ -50,7 +50,7 @@ describe("SurfacePinSettings", () => {
   )
 
   it("does not draw the number preview before the taskbar theme is known", () => {
-    taskbar.useTaskbarTheme.mockReturnValue(null)
+    taskbar.useTrayNumberSurface.mockReturnValue(null)
     render(
       <SurfacePinSettings
         menubarIconStyle="provider"

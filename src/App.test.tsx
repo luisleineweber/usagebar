@@ -58,6 +58,7 @@ const state = vi.hoisted(() => ({
   renderTrayBarsIconMock: vi.fn(),
   renderTrayNumberIconMock: vi.fn(),
   loadTaskbarThemeMock: vi.fn(),
+  isWindowsTrayPlatformMock: vi.fn(),
   probeHandlers: null as null | {
     onResult: (output: PluginOutput) => void
     onBatchComplete: () => void
@@ -284,7 +285,11 @@ vi.mock("@/lib/tray-bars-icon", async () => {
 
 vi.mock("@/lib/taskbar-theme", async () => {
   const actual = await vi.importActual<typeof import("@/lib/taskbar-theme")>("@/lib/taskbar-theme")
-  return { ...actual, loadTaskbarTheme: state.loadTaskbarThemeMock }
+  return {
+    ...actual,
+    isWindowsTrayPlatform: state.isWindowsTrayPlatformMock,
+    loadTaskbarTheme: state.loadTaskbarThemeMock,
+  }
 })
 
 vi.mock("@/lib/tray-number-icon", async () => {
@@ -500,6 +505,8 @@ describe("App", () => {
     state.renderTrayNumberIconMock.mockResolvedValue({})
     state.loadTaskbarThemeMock.mockReset()
     state.loadTaskbarThemeMock.mockResolvedValue("dark")
+    state.isWindowsTrayPlatformMock.mockReset()
+    state.isWindowsTrayPlatformMock.mockReturnValue(true)
     Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
       configurable: true,
       get() {
@@ -1049,6 +1056,20 @@ describe("App", () => {
         expect.objectContaining({ taskbarTheme: "light" })
       )
     )
+  })
+
+  it("draws the Linux tray number without the Windows taskbar lookup", async () => {
+    state.isWindowsTrayPlatformMock.mockReturnValue(false)
+
+    render(<App />)
+
+    await waitFor(() =>
+      expect(state.renderTrayNumberIconMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ taskbarTheme: "dark" })
+      )
+    )
+    expect(state.loadTaskbarThemeMock).not.toHaveBeenCalled()
+    expect(eventState.handlers.has("taskbar-theme-changed")).toBe(false)
   })
 
   it("redraws the Windows tray number when the taskbar theme changes", async () => {

@@ -28,7 +28,7 @@ import {
 import { formatTrayBarsTooltip, formatTrayNativeTitle, formatTrayTooltip } from "@/lib/tray-tooltip"
 import type { TrayState } from "@/lib/tray-state"
 import type { PluginState } from "@/hooks/app/types"
-import { useTaskbarTheme } from "@/hooks/use-taskbar-theme"
+import { useTrayNumberSurface } from "@/hooks/use-taskbar-theme"
 
 export type TrayUpdateReason = "probe" | "settings" | "init"
 
@@ -106,8 +106,8 @@ export function useTrayIcon({
   const lastLeftProviderIdRef = useRef<string | null>(null)
   const timeFormatModeRef = useRef(timeFormatMode)
   const useTemplateIconRef = useRef(shouldUseTemplateTrayIcon())
-  const taskbarTheme = useTaskbarTheme(!useTemplateIconRef.current)
-  const taskbarThemeRef = useRef(taskbarTheme)
+  const trayNumberSurface = useTrayNumberSurface()
+  const trayNumberSurfaceRef = useRef(trayNumberSurface)
   const lastIconKeyRef = useRef<string | null>(null)
   const lastTooltipRef = useRef<string | null>(null)
   const lastTitleRef = useRef<string | null>(null)
@@ -148,8 +148,8 @@ export function useTrayIcon({
     timeFormatModeRef.current = timeFormatMode
   }, [timeFormatMode])
   useEffect(() => {
-    taskbarThemeRef.current = taskbarTheme
-  }, [taskbarTheme])
+    trayNumberSurfaceRef.current = trayNumberSurface
+  }, [trayNumberSurface])
 
   const scheduleTrayIconUpdate = useCallback((_reason: TrayUpdateReason, delayMs = 0) => {
     if (trayUpdateTimerRef.current !== null) {
@@ -287,7 +287,7 @@ export function useTrayIcon({
       }
 
       if (!isTemplate) {
-        const taskbarTheme = taskbarThemeRef.current
+        const taskbarTheme = trayNumberSurfaceRef.current
         if (!taskbarTheme) {
           setStableTrayIcon(tooltipText, formatTrayNativeTitle(trayState))
           return
@@ -392,7 +392,7 @@ export function useTrayIcon({
     activeView,
     trayProviderSelection,
     timeFormatMode,
-    taskbarTheme,
+    trayNumberSurface,
     trayReady,
   ])
 

@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const handlers = new Map<string, (event: { payload: unknown }) => void>()
@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }))
 vi.mock("@tauri-apps/api/event", () => ({ listen: mocks.listen }))
 
-import { useTaskbarTheme } from "@/hooks/use-taskbar-theme"
+import { useTaskbarTheme, useTrayNumberSurface } from "@/hooks/use-taskbar-theme"
 import { TASKBAR_THEME_EVENT } from "@/lib/taskbar-theme"
 
 describe("useTaskbarTheme", () => {
@@ -57,6 +57,29 @@ describe("useTaskbarTheme", () => {
     expect(result.current).toBe("light")
   })
 
+  it("reads the theme only after the change listener is registered", async () => {
+    let finishRegistration: () => void = () => {}
+    mocks.listen.mockImplementationOnce(
+      (name: string, handler: (event: { payload: unknown }) => void) =>
+        new Promise((resolve) => {
+          finishRegistration = () => {
+            mocks.handlers.set(name, handler)
+            resolve(() => mocks.handlers.delete(name))
+          }
+        })
+    )
+    mocks.invoke.mockResolvedValue("dark")
+    const { result } = renderHook(() => useTaskbarTheme(true))
+
+    await waitFor(() => expect(mocks.listen).toHaveBeenCalled())
+    expect(mocks.invoke).not.toHaveBeenCalled()
+
+    await act(async () => finishRegistration())
+
+    await waitFor(() => expect(result.current).toBe("dark"))
+    expect(mocks.invoke).toHaveBeenCalledWith("get_taskbar_theme")
+  })
+
   it("reports an unexpected native value instead of guessing a theme", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.invoke.mockResolvedValue("blue")
@@ -73,5 +96,39 @@ describe("useTaskbarTheme", () => {
     expect(result.current).toBeNull()
     expect(mocks.invoke).not.toHaveBeenCalled()
     expect(mocks.listen).not.toHaveBeenCalled()
+  })
+})
+
+describe("useTrayNumberSurface", () => {
+  const originalUserAgent = navigator.userAgent
+
+  function setUserAgent(userAgent: string) {
+    Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: userAgent })
+  }
+
+  beforeEach(() => {
+    mocks.handlers.clear()
+    mocks.invoke.mockReset()
+    mocks.listen.mockClear()
+  })
+
+  afterEach(() => setUserAgent(originalUserAgent))
+
+  it("uses the dark surface on Linux without the Windows lookup", () => {
+    setUserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15")
+    const { result } = renderHook(() => useTrayNumberSurface())
+
+    expect(result.current).toBe("dark")
+    expect(mocks.invoke).not.toHaveBeenCalled()
+    expect(mocks.listen).not.toHaveBeenCalled()
+  })
+
+  it("uses the taskbar theme on Windows", async () => {
+    setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/130.0")
+    mocks.invoke.mockResolvedValue("light")
+    const { result } = renderHook(() => useTrayNumberSurface())
+
+    expect(result.current).toBeNull()
+    await waitFor(() => expect(result.current).toBe("light"))
   })
 })

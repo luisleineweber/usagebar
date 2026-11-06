@@ -1,6 +1,6 @@
 import { shouldUseTemplateTrayIcon } from "@/hooks/app/use-tray-icon"
 import { makeTrayBarsSvg, TRAY_BRAND_FOREGROUND } from "@/lib/tray-bars-icon"
-import { useTaskbarTheme } from "@/hooks/use-taskbar-theme"
+import { useTrayNumberSurface } from "@/hooks/use-taskbar-theme"
 import { TASKBAR_BACKGROUND } from "@/lib/taskbar-theme"
 import { makeTrayNumberSvg } from "@/lib/tray-number-icon"
 import type { TraySettingsPreview } from "@/lib/tray-preview"
@@ -22,8 +22,8 @@ export function SurfacePinSettings({
       ? preview.providerBars
       : preview.bars
   const useTemplateIcon = shouldUseTemplateTrayIcon()
-  // The preview reads the same taskbar theme as the real tray icon.
-  const taskbarTheme = useTaskbarTheme(!useTemplateIcon)
+  // The preview reads the same surface as the real tray icon.
+  const taskbarTheme = useTrayNumberSurface()
   const useWindowsNumberPreview = !useTemplateIcon && menubarIconStyle === "provider"
   const traySvg = useWindowsNumberPreview
     ? taskbarTheme &&
