@@ -1,5 +1,9 @@
 # Lessons
 
+## 2026-11-02
+
+- Guided login read cookies only on a success page load. When a provider set the approved cookie later through XHR, Connect stayed pending until a reload. Fix: after the success page loads, read the cookies at a fixed interval on the worker thread. Prevention: the native `late-capture` and `destroy` checks in `src-tauri/tests/guided_cookie_login.rs`.
+
 ## 2026-11-01
 
 - The updater rework allowed unsigned Windows installers only for prereleases, so the next stable publish would fail without an Authenticode certificate. Fix: allow unsigned installers for all releases and keep the Tauri updater key required. Prevention: `scripts/publish-workflow.test.mjs` runs in CI.
@@ -14,6 +18,12 @@
 - The skipped Rust audit hid an unsafe rustls version and a withdrawn chacha20 version. Fix: update only those two lockfile entries. Prevention: require both dependency audits to pass before PR completion.
 - Linux Rust lint failed because Windows imports, data, and mutable lists compiled without Windows callers. Fix: compile Windows code only where needed, use fixed credential lists, and remove unused non-Windows secret-store functions. Prevention: keep the Linux and Windows all-target Clippy checks active in CI.
 - One App test made four preference changes and exceeded the time limit even when run alone. Fix: test each preference change separately with the same event checks and time limit. Prevention: use one interaction per async test when the interactions test separate behavior.
+
+## 2026-10-08
+
+- GitHub CLI selected the upstream remote because this repository had no default. Fix: set luisleineweber/usagebar as the default and use explicit --repo for PR commands. Prevention: check the selected repository before creating or finding a PR.
+- Guided login opened a blank window because a synchronous Tauri command waited for cookie capture on the native event loop. Fix: use an async command and run the blocking capture wait on a worker thread. Prevention: run the native Windows IPC test in CI; check that a page script runs and that closing the login window returns cancellation.
+- Abacus AI and Perplexity still opened blank windows because their initial URLs started a cookie read inside a native navigation event. The same read blocked Zed and OpenCode Zen at their target URLs. Fix: send completed page events to the existing capture worker, read cookies there, and keep the window open when sign-in cookies are absent. Prevention: test page scripts, empty-cookie cancellation, and approved-cookie capture for all four providers with real Windows WebView2.
 
 ## 2026-08-31
 
@@ -328,6 +338,7 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - History page border: keep shared report spacing but disable the provider-card divider on standalone pages.
 - History page top spacing: reduce only the standalone report padding; keep provider-card spacing unchanged.
 - ccusage fixture runner: `npx` read the repository package overrides and failed with `EOVERRIDE`. Run external package tools from an isolated temporary directory so project npm settings cannot affect them.
+- OpenCode Go expired key: the usage API returned 401 `api_key_expired` and the plugin failed with a wrong "API key invalid" message. Report `api_key_expired` as an `Expired` badge in the overview, with no plan and no Free quota, because an expired key does not prove a Free account. Remove manifest `defaultPlan` values that would fill an unknown plan. Handle each documented provider error code explicitly; do not map all 401 responses to one error.
 - Radio tab stop: Base UI 1.7 (still in 1.9) sets the roving tab stop of a radio group only when the items first mount. A stored value that loads later moves the checked state but leaves the tab stop on the old item. Fix: set `tabIndex` from the checked state on each settings radio item. Prevention: test the tab stop after a value change with `rerender`, not only on first render.
 - Shortcut trigger: a `div role="button"` that showed the unset prompt twice got the name "Click to set Click to set" and contained the clear button. Fix: use a native button with a name for purpose and state, and keep the clear button as a sibling. Prevention: assert the accessible name and that nested controls do not exist.
 - Dependent controls: confirm what a parent toggle gates in the delivery code before disabling children. Notification event types also feed the recent events list, so only quiet hours depend on Windows delivery.

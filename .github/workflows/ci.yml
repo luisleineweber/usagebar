@@ -41,10 +41,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          # GTK3 is required by Tauri's Linux WebView backend. Its glib 0.18
-          # bindings contain an unsound VariantStrIter API that this app does
-          # not use, and GTK3 cannot move to glib >= 0.20 independently.
-          cargo audit --ignore RUSTSEC-2024-0429 --json > ../cargo-audit.json
+          cargo audit --json > ../cargo-audit.json
           audit_status=$?
           set -e
           node ../scripts/report-cargo-audit.mjs ../cargo-audit.json | tee -a "$GITHUB_STEP_SUMMARY"
@@ -172,3 +169,7 @@ jobs:
       - name: Compile Rust backend tests (Windows)
         if: runner.os == 'Windows'
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --no-run
+
+      - name: Test native guided login (Windows)
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --test guided_cookie_login

@@ -6,7 +6,6 @@
   "entry": "plugin.js",
   "icon": "icon.svg",
   "brandColor": "#000000",
-  "defaultPlan": "Free",
   "platformSupport": {
     "windows": {
       "state": "supported"
@@ -34,6 +33,11 @@
       "label": "Free",
       "scope": "overview",
       "primaryOrder": 1
+    },
+    {
+      "type": "badge",
+      "label": "Go key",
+      "scope": "overview"
     },
     {
       "type": "text",
