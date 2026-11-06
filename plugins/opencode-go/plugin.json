@@ -35,6 +35,11 @@
       "primaryOrder": 1
     },
     {
+      "type": "badge",
+      "label": "Go key",
+      "scope": "overview"
+    },
+    {
       "type": "text",
       "label": "Zen balance",
       "scope": "detail"
