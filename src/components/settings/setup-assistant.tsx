@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, CircleX, LoaderCircle, ScanSearch } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { SetupDetection } from "@/lib/plugin-types"
+import { useSetupScan } from "@/hooks/use-setup-scan"
+import type { ProviderInstanceRef, SetupDetection } from "@/lib/plugin-types"
 import type { ProviderSetupCheck } from "@/lib/provider-settings"
 import { cn } from "@/lib/utils"
 
@@ -33,17 +34,31 @@ function StatusIcon({ state }: { state: ReturnType<typeof getDetectionState> }) 
   return <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-muted-foreground" />
 }
 
+/**
+ * "Scan again" runs only the local setup detector (`detect_plugin_setup`), never the usage
+ * probe, so the scan sends nothing to the provider.
+ */
 export function SetupAssistant({
   checks,
-  detections,
-  loading,
-  onScan,
+  providerId,
+  instanceRef,
+  detections: probeDetections,
+  loading: probeLoading,
 }: {
   checks: ProviderSetupCheck[]
+  providerId: string
+  instanceRef?: ProviderInstanceRef
+  /** Detections from the last usage probe. */
   detections?: SetupDetection[]
+  /** True while a usage probe runs. */
   loading: boolean
-  onScan?: () => void
 }) {
+  const { detections, scanning, error, scan } = useSetupScan({
+    providerId,
+    instanceRef,
+    probeDetections,
+  })
+  const loading = scanning || probeLoading
   return (
     <section
       className="border-t border-border/55 py-4"
@@ -59,13 +74,23 @@ export function SetupAssistant({
             Local checks show which sign-in sources are ready. Secrets stay on this device.
           </p>
         </div>
-        {onScan ? (
-          <Button type="button" size="xs" variant="outline" onClick={onScan} disabled={loading}>
-            <ScanSearch className="size-3.5" aria-hidden="true" />
-            {loading ? "Scanning…" : "Scan again"}
-          </Button>
-        ) : null}
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          onClick={() => void scan()}
+          disabled={loading}
+        >
+          <ScanSearch className="size-3.5" aria-hidden="true" />
+          {loading ? "Scanning…" : "Scan again"}
+        </Button>
       </div>
+
+      {error ? (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          Setup scan failed: {error}
+        </p>
+      ) : null}
 
       <div className="mt-3 space-y-2">
         {checks.map((check) => {

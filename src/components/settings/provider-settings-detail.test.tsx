@@ -9,6 +9,12 @@ vi.mock("@/lib/guided-cookie-login", () => ({
   captureProviderCookieHeader: guidedLoginMock,
 }))
 
+const scanProviderSetupMock = vi.hoisted(() => vi.fn())
+
+vi.mock("@/lib/setup-scan", () => ({
+  scanProviderSetup: scanProviderSetupMock,
+}))
+
 const codexPlugin = {
   id: "codex",
   name: "Codex",
@@ -784,6 +790,38 @@ describe("ProviderSettingsDetail", () => {
     expect(screen.getByRole("group", { name: "Kimi CLI login: Found" })).toBeInTheDocument()
     expect(screen.getByRole("group", { name: "Moonshot API key: Not found" })).toBeInTheDocument()
     expect(screen.getAllByText(/Never uploaded/i)).toHaveLength(2)
+  })
+
+  it("scans setup sources locally without starting a usage probe", async () => {
+    const onRetry = vi.fn()
+    scanProviderSetupMock.mockResolvedValue([
+      { id: "kimi-cli-login", state: "found" },
+      { id: "kimi-api-key", state: "found" },
+    ])
+    render(
+      <ProviderSettingsDetail
+        plugin={kimiPlugin}
+        enabled
+        state={{
+          data: null,
+          loading: false,
+          error: null,
+          lastManualRefreshAt: null,
+          lastSuccessAt: null,
+          setupDetection: [],
+        }}
+        onEnabledChange={vi.fn()}
+        onRetry={onRetry}
+      />
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Scan again" }))
+
+    expect(scanProviderSetupMock).toHaveBeenCalledWith("kimi", undefined)
+    expect(
+      await screen.findByRole("group", { name: "Moonshot API key: Found" })
+    ).toBeInTheDocument()
+    expect(onRetry).not.toHaveBeenCalled()
   })
 
   it("shows explicit Kilo API-key guidance", () => {

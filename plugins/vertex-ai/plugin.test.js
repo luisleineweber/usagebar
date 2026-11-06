@@ -53,6 +53,63 @@ describe("vertex-ai plugin", () => {
     vi.resetModules()
   })
 
+  function denyRead(ctx, deniedPath) {
+    const readText = ctx.host.fs.readText
+    ctx.host.fs.readText = (path) => {
+      if (path === deniedPath) throw new Error("access denied")
+      return readText(path)
+    }
+  }
+
+  describe("detectSetup", () => {
+    it("reports missing when no gcloud files exist", async () => {
+      const ctx = makePluginTestContext()
+      const plugin = await loadPlugin()
+
+      expect(plugin.detectSetup(ctx)).toEqual([
+        { id: "vertex-gcloud-adc", state: "missing" },
+        { id: "vertex-project", state: "missing" },
+      ])
+    })
+
+    it("reports unavailable, not missing, for unreadable gcloud files", async () => {
+      const ctx = makePluginTestContext()
+      writeAdc(ctx)
+      writeProject(ctx)
+      denyRead(ctx, ADC_PATH)
+      denyRead(ctx, CONFIG_PATH)
+      const plugin = await loadPlugin()
+
+      expect(plugin.detectSetup(ctx)).toEqual([
+        { id: "vertex-gcloud-adc", state: "unavailable" },
+        { id: "vertex-project", state: "unavailable" },
+      ])
+    })
+
+    it("reports found for readable ADC and project files without returning values", async () => {
+      const ctx = makePluginTestContext()
+      writeAdc(ctx)
+      writeProject(ctx)
+      const plugin = await loadPlugin()
+
+      const result = plugin.detectSetup(ctx)
+      expect(result).toEqual([
+        { id: "vertex-gcloud-adc", state: "found" },
+        { id: "vertex-project", state: "found" },
+      ])
+      expect(JSON.stringify(result)).not.toContain("refresh-token")
+    })
+  })
+
+  it("reports unreadable ADC credentials instead of missing credentials", async () => {
+    const ctx = makePluginTestContext()
+    writeAdc(ctx)
+    denyRead(ctx, ADC_PATH)
+    const plugin = await loadPlugin()
+
+    expect(() => plugin.probe(ctx)).toThrow("Vertex AI gcloud ADC credentials could not be read.")
+  })
+
   it("throws when ADC credentials are missing", async () => {
     const ctx = makePluginTestContext()
     const plugin = await loadPlugin()

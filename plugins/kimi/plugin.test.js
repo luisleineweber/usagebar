@@ -55,6 +55,31 @@ describe("kimi plugin", () => {
     expect(JSON.stringify(plugin.detectSetup(ctx))).not.toContain("moonshot-secret")
   })
 
+  it("reports a missing API key as missing", async () => {
+    const ctx = makeCtx()
+    ctx.host.providerSecrets.read.mockImplementation(() => {
+      throw new Error("provider secret not found")
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(plugin.detectSetup(ctx)).toEqual([
+      { id: "kimi-cli-login", state: "missing" },
+      { id: "kimi-api-key", state: "missing" },
+    ])
+  })
+
+  it("reports a denied API key read as unavailable, not missing", async () => {
+    const ctx = makeCtx()
+    ctx.host.providerSecrets.read.mockImplementation(() => {
+      throw new Error("credential read failed: Access is denied. (os error 5)")
+    })
+
+    const plugin = await loadPlugin()
+
+    expect(plugin.detectSetup(ctx)).toContainEqual({ id: "kimi-api-key", state: "unavailable" })
+  })
+
   it("renders Moonshot API balance when only an API key is configured", async () => {
     const ctx = makeCtx()
     setEnv(ctx, { MOONSHOT_API_KEY: "moonshot-key" })

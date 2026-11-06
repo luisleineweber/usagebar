@@ -29,13 +29,31 @@
     enterprise: 3900,
   }
 
-  function readJson(ctx, path) {
+  function isMissingCredentialError(error) {
+    const message = String(error).toLowerCase()
+    return (
+      message.includes("no entry") ||
+      message.includes("no matching entry found") ||
+      message.includes("element not found") ||
+      message.includes("credential not found") ||
+      message.includes("os error 1168")
+    )
+  }
+
+  // Setup detection passes an `access` object so a denied or unreadable source is reported as
+  // unavailable instead of missing. The usage probe omits it.
+  function noteAccessFailure(access, error) {
+    if (access && !isMissingCredentialError(error)) access.failed = true
+  }
+
+  function readJson(ctx, path, access) {
     try {
       if (!ctx.host.fs.exists(path)) return null
       const text = ctx.host.fs.readText(path)
       return ctx.util.tryParseJson(text)
     } catch (e) {
       ctx.host.log.warn("readJson failed for " + path + ": " + String(e))
+      noteAccessFailure(access, e)
       return null
     }
   }
@@ -77,7 +95,7 @@
     return cachedLogin === activeLogin
   }
 
-  function loadTokenFromKeychain(ctx, activeLogin) {
+  function loadTokenFromKeychain(ctx, activeLogin, access) {
     try {
       const raw = ctx.host.keychain.readGenericPassword(KEYCHAIN_SERVICE)
       if (raw) {
@@ -93,6 +111,7 @@
       }
     } catch (e) {
       ctx.host.log.info("OpenUsage keychain read failed: " + String(e))
+      noteAccessFailure(access, e)
     }
     return null
   }
@@ -160,7 +179,7 @@
     return users.length === 1 ? users[0] : null
   }
 
-  function loadGhActiveLogin(ctx) {
+  function loadGhActiveLogin(ctx, access) {
     const paths = getGhHostsPaths(ctx)
     for (let i = 0; i < paths.length; i += 1) {
       const path = paths[i]
@@ -170,6 +189,7 @@
         if (login) return login
       } catch (e) {
         ctx.host.log.info("gh hosts read failed: " + String(e))
+        noteAccessFailure(access, e)
       }
     }
     return null
@@ -183,7 +203,7 @@
     return token
   }
 
-  function loadTokenFromGhCliAccount(ctx, login) {
+  function loadTokenFromGhCliAccount(ctx, login, access) {
     if (!login || typeof ctx.host.keychain.readGenericPasswordForAccount !== "function") {
       return null
     }
@@ -196,12 +216,13 @@
       }
     } catch (e) {
       ctx.host.log.info("gh CLI account read failed: " + String(e))
+      noteAccessFailure(access, e)
     }
     return null
   }
 
-  function loadTokenFromGhCli(ctx, activeLogin) {
-    const activeAccountToken = loadTokenFromGhCliAccount(ctx, activeLogin)
+  function loadTokenFromGhCli(ctx, activeLogin, access) {
+    const activeAccountToken = loadTokenFromGhCliAccount(ctx, activeLogin, access)
     if (activeAccountToken) return activeAccountToken
 
     try {
@@ -215,12 +236,13 @@
       }
     } catch (e) {
       ctx.host.log.info("gh CLI keychain read failed: " + String(e))
+      noteAccessFailure(access, e)
     }
     return null
   }
 
-  function loadTokenFromStateFile(ctx, activeLogin) {
-    const data = readJson(ctx, ctx.app.pluginDataDir + "/auth.json")
+  function loadTokenFromStateFile(ctx, activeLogin, access) {
+    const data = readJson(ctx, ctx.app.pluginDataDir + "/auth.json", access)
     if (data && data.token) {
       if (!shouldUseCachedToken(activeLogin, data)) {
         ctx.host.log.info("state token ignored because active gh account changed")
@@ -232,7 +254,7 @@
     return null
   }
 
-  function loadTokenFromGhCommand(ctx, activeLogin) {
+  function loadTokenFromGhCommand(ctx, activeLogin, access) {
     if (!ctx.host.gh || typeof ctx.host.gh.readAuthToken !== "function") {
       return null
     }
@@ -244,25 +266,28 @@
       }
     } catch (e) {
       ctx.host.log.info("gh auth token command failed: " + String(e))
+      noteAccessFailure(access, e)
     }
     return null
   }
 
-  function loadToken(ctx, activeLogin) {
+  function loadToken(ctx, activeLogin, access) {
     return (
-      loadTokenFromKeychain(ctx, activeLogin) ||
-      loadTokenFromGhCli(ctx, activeLogin) ||
-      loadTokenFromGhCommand(ctx, activeLogin) ||
-      loadTokenFromStateFile(ctx, activeLogin)
+      loadTokenFromKeychain(ctx, activeLogin, access) ||
+      loadTokenFromGhCli(ctx, activeLogin, access) ||
+      loadTokenFromGhCommand(ctx, activeLogin, access) ||
+      loadTokenFromStateFile(ctx, activeLogin, access)
     )
   }
 
   function detectSetup(ctx) {
-    const activeLogin = loadGhActiveLogin(ctx)
+    const access = { failed: false }
+    const activeLogin = loadGhActiveLogin(ctx, access)
+    const token = loadToken(ctx, activeLogin, access)
     return [
       {
         id: "copilot-token",
-        state: loadToken(ctx, activeLogin) ? "found" : "missing",
+        state: token ? "found" : access.failed ? "unavailable" : "missing",
       },
     ]
   }
