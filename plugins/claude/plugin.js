@@ -10,6 +10,45 @@
     "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
 
+  function rateLimitPath(ctx) {
+    return (
+      ctx.app.pluginDataDir +
+      "/rate-limit-" +
+      encodeURIComponent(ctx.instanceRef?.instanceId || "default") +
+      ".json"
+    )
+  }
+
+  function checkRateLimit(ctx) {
+    const path = rateLimitPath(ctx)
+    if (!ctx.host.fs.exists(path)) return
+    const state = JSON.parse(ctx.host.fs.readText(path))
+    if (Date.now() < state.retryAt) {
+      throw (
+        "Usage request failed (HTTP 429). Try again after " +
+        new Date(state.retryAt).toISOString() +
+        "."
+      )
+    }
+  }
+
+  function checkRateLimitResponse(ctx, response) {
+    if (response.status !== 429) return response
+    const headers = response.headers || {}
+    const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
+    const value = key ? String(headers[key]).trim() : ""
+    const now = Date.now()
+    const retryAt = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value)
+    ctx.host.fs.writeText(
+      rateLimitPath(ctx),
+      JSON.stringify({
+        retryAt: Math.max(now + REFRESH_BUFFER_MS, Number.isFinite(retryAt) ? retryAt : 0),
+      })
+    )
+    checkRateLimit(ctx)
+    return response
+  }
+
   function reportOption(ctx, key) {
     if (!ctx.host.providerConfig || typeof ctx.host.providerConfig.get !== "function") return null
     try {
@@ -493,18 +532,21 @@
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
     try {
-      const resp = ctx.util.request({
-        method: "POST",
-        url: oauthConfig.refreshUrl,
-        headers: { "Content-Type": "application/json" },
-        bodyText: JSON.stringify({
-          grant_type: "refresh_token",
-          refresh_token: oauth.refreshToken,
-          client_id: oauthConfig.clientId,
-          scope: oauthConfig.scopes,
-        }),
-        timeoutMs: 15000,
-      })
+      const resp = checkRateLimitResponse(
+        ctx,
+        ctx.util.request({
+          method: "POST",
+          url: oauthConfig.refreshUrl,
+          headers: { "Content-Type": "application/json" },
+          bodyText: JSON.stringify({
+            grant_type: "refresh_token",
+            refresh_token: oauth.refreshToken,
+            client_id: oauthConfig.clientId,
+            scope: oauthConfig.scopes,
+          }),
+          timeoutMs: 15000,
+        })
+      )
 
       if (resp.status === 400 || resp.status === 401) {
         let errorCode = null
@@ -555,18 +597,21 @@
   }
 
   function fetchUsage(ctx, accessToken) {
-    return ctx.util.request({
-      method: "GET",
-      url: USAGE_URL,
-      headers: {
-        Authorization: "Bearer " + accessToken.trim(),
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "anthropic-beta": "oauth-2025-04-20",
-        "User-Agent": "claude-code/2.1.69",
-      },
-      timeoutMs: 10000,
-    })
+    return checkRateLimitResponse(
+      ctx,
+      ctx.util.request({
+        method: "GET",
+        url: USAGE_URL,
+        headers: {
+          Authorization: "Bearer " + accessToken.trim(),
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "anthropic-beta": "oauth-2025-04-20",
+          "User-Agent": "claude-code/2.1.69",
+        },
+        timeoutMs: 10000,
+      })
+    )
   }
 
   function queryTokenUsage(ctx) {
@@ -1019,6 +1064,7 @@
   }
 
   function probe(ctx) {
+    checkRateLimit(ctx)
     const creds = loadCredentials(ctx)
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const webResult = buildClaudeWebResult(ctx)
@@ -1050,9 +1096,11 @@
 
     const nowMs = Date.now()
     let accessToken = creds.oauth.accessToken
+    let attemptedRefresh = false
 
     // Proactively refresh if token is expired or about to expire
     if (needsRefresh(ctx, creds.oauth, nowMs)) {
+      attemptedRefresh = true
       ctx.host.log.info("token needs refresh (expired or expiring soon)")
       const refreshed = refreshToken(ctx, creds)
       if (refreshed) {
@@ -1070,6 +1118,7 @@
           try {
             return fetchUsage(ctx, token || accessToken)
           } catch (e) {
+            if (typeof e === "string") throw e
             ctx.host.log.error("usage request exception: " + String(e))
             if (didRefresh) {
               throw "Usage request failed after refresh. Try again."
@@ -1078,6 +1127,8 @@
           }
         },
         refresh: () => {
+          if (attemptedRefresh) return null
+          attemptedRefresh = true
           ctx.host.log.info("usage returned 401, attempting refresh")
           didRefresh = true
           return refreshToken(ctx, creds)
