@@ -1,60 +1,37 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
-import { AccountManagementSection } from "@/components/settings/account-management-section"
+import {
+  AccountManagementSection,
+  hasManagedAccounts,
+} from "@/components/settings/account-management-section"
+import { getProviderSettingsDefinition } from "@/lib/provider-settings"
 
 vi.mock("@/components/settings/codex-accounts-section", () => ({
-  CodexAccountsSection: () => null,
+  CodexAccountsSection: () => <p>Codex accounts</p>,
+}))
+vi.mock("@/components/settings/provider-accounts-section", () => ({
+  ProviderAccountsSection: ({ providerName }: { providerName: string }) => (
+    <p>{providerName} accounts</p>
+  ),
 }))
 
-const definition = {
-  providerId: "claude",
-  displayName: "Claude",
-  secretField: "cookieHeader",
-} as never
-
 describe("AccountManagementSection", () => {
-  it("shows connection state and account actions", () => {
-    const onPing = vi.fn()
-    const onReauthenticate = vi.fn()
-    const onRemoveCredential = vi.fn()
-    render(
-      <AccountManagementSection
-        providerId="claude"
-        definition={definition}
-        connected
-        stale
-        credentialStored
-        onPing={onPing}
-        onReauthenticate={onReauthenticate}
-        onRemoveCredential={onRemoveCredential}
-      />
-    )
+  it("shows only the account list, without a second connection state", () => {
+    render(<AccountManagementSection className="" providerId="claude" providerName="Claude" />)
 
-    expect(screen.getByText("Stale")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "Ping now" }))
-    fireEvent.click(screen.getByRole("button", { name: "Re-authenticate" }))
-    fireEvent.click(screen.getByRole("button", { name: "Remove credential" }))
-
-    expect(onPing).toHaveBeenCalledTimes(1)
-    expect(onReauthenticate).toHaveBeenCalledTimes(1)
-    expect(onRemoveCredential).toHaveBeenCalledTimes(1)
+    expect(screen.getByText("Claude accounts")).toBeInTheDocument()
+    expect(screen.queryByText("Account & Connection")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /re-authenticate/i })).not.toBeInTheDocument()
   })
 
-  it("hides credential removal when no credential is stored", () => {
-    render(
-      <AccountManagementSection
-        providerId="claude"
-        definition={definition}
-        connected={false}
-        stale={false}
-        credentialStored={false}
-        onPing={vi.fn()}
-        onReauthenticate={vi.fn()}
-        onRemoveCredential={vi.fn()}
-      />
-    )
+  it("uses the Codex account list for Codex", () => {
+    render(<AccountManagementSection className="" providerId="codex" providerName="Codex" />)
 
-    expect(screen.getByText("Attention needed")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Remove credential" })).not.toBeInTheDocument()
+    expect(screen.getByText("Codex accounts")).toBeInTheDocument()
+  })
+
+  it("is available only for providers with managed accounts", () => {
+    expect(hasManagedAccounts(getProviderSettingsDefinition("claude"))).toBe(true)
+    expect(hasManagedAccounts(getProviderSettingsDefinition("openrouter"))).toBe(false)
   })
 })

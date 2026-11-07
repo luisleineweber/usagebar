@@ -35,6 +35,8 @@ function StatusIcon({ state }: { state: ReturnType<typeof getDetectionState> }) 
 }
 
 /**
+ * Local sign-in sources for one provider account, shown inside the sign-in section.
+ *
  * "Scan again" runs only the local setup detector (`detect_plugin_setup`), never the usage
  * probe, so the scan sends nothing to the provider.
  */
@@ -61,18 +63,17 @@ export function SetupAssistant({
   })
   const loading = scanning || probeLoading
   return (
-    <section
-      className="border-t border-border/55 py-4"
-      aria-labelledby="provider-setup-assistant-heading"
-      aria-busy={loading}
-    >
+    <div role="group" aria-labelledby="provider-setup-detection-heading" aria-busy={loading}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h4 id="provider-setup-assistant-heading" className="text-sm font-semibold">
-            Setup assistant
-          </h4>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Local checks show which sign-in sources are ready. Secrets stay on this device.
+          <h5
+            id="provider-setup-detection-heading"
+            className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
+          >
+            On this device
+          </h5>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Local checks only. Secrets stay on this device.
           </p>
         </div>
         <Button
@@ -93,7 +94,7 @@ export function SetupAssistant({
         </p>
       ) : null}
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-2 space-y-2">
         {checks.map((check) => {
           const state = getDetectionState(check, detections, loading)
           return (
@@ -122,12 +123,12 @@ export function SetupAssistant({
                 {statusCopy(state)}
               </span>
               <p className="basis-full pl-6 text-xs text-muted-foreground">
-                Source: {check.source}. {check.description} Never uploaded.
+                Source: {check.source}. {check.description}
               </p>
             </div>
           )
         })}
       </div>
-    </section>
+    </div>
   )
 }

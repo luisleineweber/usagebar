@@ -1,76 +1,41 @@
-import { Button } from "@/components/ui/button"
 import { CodexAccountsSection } from "@/components/settings/codex-accounts-section"
 import { ProviderAccountsSection } from "@/components/settings/provider-accounts-section"
-import { getProviderAccountCapabilities } from "@/lib/account-capabilities"
 import type { ProviderConfig, ProviderSettingsDefinition } from "@/lib/provider-settings"
 
-function providerAccountName(providerId: string): string {
-  if (providerId === "claude") return "Claude"
-  if (providerId === "codex") return "Codex"
-  if (providerId === "gemini") return "Gemini"
-  return providerId
+/** Whether the provider supports app-managed account profiles. */
+export function hasManagedAccounts(definition: ProviderSettingsDefinition): boolean {
+  return definition.managedAccounts === true
 }
 
+/**
+ * App-managed account profiles. The header already shows the connection state, and the
+ * sign-in section owns credential actions, so this section shows only the accounts.
+ */
 export function AccountManagementSection({
+  className,
   providerId,
-  definition,
-  connected,
-  stale,
+  providerName,
   config,
-  credentialStored,
   onConfigChange,
-  onPing,
-  onReauthenticate,
-  onRemoveCredential,
 }: {
+  className: string
   providerId: string
-  definition: ProviderSettingsDefinition
-  connected: boolean
-  stale: boolean
+  providerName: string
   config?: ProviderConfig
-  credentialStored: boolean
   onConfigChange?: (providerId: string, patch: Partial<ProviderConfig>) => Promise<void>
-  onPing: () => void
-  onReauthenticate: () => void
-  onRemoveCredential: () => void
 }) {
-  const capabilities = getProviderAccountCapabilities(providerId, definition)
   return (
-    <div className="border-t border-border/55 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Account & Connection
-          </h4>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {connected ? (stale ? "Last successful data is stale." : "Provider connection is healthy.") : "Provider is not connected."}
-          </p>
-        </div>
-        <span className={connected && !stale ? "text-xs font-medium text-primary" : "text-xs font-medium text-destructive"}>
-          {connected ? (stale ? "Stale" : "Connected") : "Attention needed"}
-        </span>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {capabilities.ping ? <Button type="button" size="xs" variant="outline" onClick={onPing}>Ping now</Button> : null}
-        {capabilities.reauthenticate ? <Button type="button" size="xs" variant="outline" onClick={onReauthenticate}>Re-authenticate</Button> : null}
-        {capabilities.removeCredential && credentialStored ? (
-          <Button type="button" size="xs" variant="outline" className="text-destructive hover:text-destructive" onClick={onRemoveCredential}>
-            Remove credential
-          </Button>
-        ) : null}
-      </div>
-      {capabilities.managedProfiles ? (
-        providerId === "codex" ? (
-          <CodexAccountsSection config={config} onConfigChange={onConfigChange} />
-        ) : (
-          <ProviderAccountsSection
-            providerId={providerId}
-            providerName={providerAccountName(providerId)}
-            config={config}
-            onConfigChange={onConfigChange}
-          />
-        )
-      ) : null}
+    <div className={className}>
+      {providerId === "codex" ? (
+        <CodexAccountsSection config={config} onConfigChange={onConfigChange} />
+      ) : (
+        <ProviderAccountsSection
+          providerId={providerId}
+          providerName={providerName}
+          config={config}
+          onConfigChange={onConfigChange}
+        />
+      )}
     </div>
   )
 }

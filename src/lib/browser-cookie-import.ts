@@ -44,7 +44,7 @@ export function browserImportMessage(result: BrowserCookieImportResult): string 
     case "ok":
       return `Imported ${result.matchedCount} approved session cookie${result.matchedCount === 1 ? "" : "s"}.`
     case "notEnabled":
-      return "Enable browser import for this provider first."
+      return "Turn on Microsoft Edge import first."
     case "notInstalled":
       return "Microsoft Edge or the selected profile was not found."
     case "noMatch":

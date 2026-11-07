@@ -251,14 +251,14 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText("How to connect")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument()
     expect(
       screen.getByText(/Install Codex CLI, sign in on this machine, then retry\./)
     ).toBeInTheDocument()
     expect(
       screen.queryByText(/copy the Cookie request header from DevTools/i)
     ).not.toBeInTheDocument()
-    expect(screen.getByLabelText("Codex Dashboard Cookie header")).toBeInTheDocument()
+    expect(screen.getByLabelText("Dashboard Cookie header")).toBeInTheDocument()
   })
 
   it("keeps dark provider brand colors off the detail heading", () => {
@@ -305,7 +305,7 @@ describe("ProviderSettingsDetail", () => {
     expect(
       screen.queryByText(/copy the Cookie request header containing sessionKey from DevTools/i)
     ).not.toBeInTheDocument()
-    expect(screen.getByLabelText("Claude Claude web Cookie header")).toBeInTheDocument()
+    expect(screen.getByLabelText("Claude web Cookie header")).toBeInTheDocument()
   })
 
   it("shows loading state while refreshing", () => {
@@ -343,7 +343,8 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByText("Connection details")).toBeInTheDocument()
+    // Usage data without a found or stored credential is not proof of a sign-in.
+    expect(screen.getByRole("heading", { name: "Sign-in" })).toBeInTheDocument()
     expect(screen.getByText("Provider responded successfully.")).toBeInTheDocument()
   })
 
@@ -366,7 +367,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    await userEvent.type(screen.getByLabelText("Ollama Cookie header"), "session=abc123")
+    await userEvent.type(screen.getByLabelText("Cookie header"), "session=abc123")
     await userEvent.click(screen.getByRole("button", { name: "Save secret" }))
 
     await waitFor(() => {
@@ -403,7 +404,7 @@ describe("ProviderSettingsDetail", () => {
       screen.getByText(/Run `ollama signin` or set OLLAMA_API_KEY to confirm Cloud auth/)
     ).toBeInTheDocument()
     expect(screen.getByText(/settings-page quota percentages/)).toBeInTheDocument()
-    expect(screen.getByLabelText("Ollama Cookie header")).toBeInTheDocument()
+    expect(screen.getByLabelText("Cookie header")).toBeInTheDocument()
   })
 
   it("shows precise string-shaped secret save errors", async () => {
@@ -427,7 +428,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    await userEvent.type(screen.getByLabelText("Ollama Cookie header"), "session=abc123")
+    await userEvent.type(screen.getByLabelText("Cookie header"), "session=abc123")
     await userEvent.click(screen.getByRole("button", { name: "Save secret" }))
 
     await waitFor(() => {
@@ -464,6 +465,8 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
+    // A stored credential means signed in, so the credential sits behind Change sign-in.
+    await userEvent.click(screen.getByRole("button", { name: "Change sign-in" }))
     await userEvent.click(screen.getByRole("button", { name: "Clear secret" }))
 
     await waitFor(() => {
@@ -492,7 +495,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    const input = screen.getByLabelText("OpenCode Zen Workspace ID")
+    const input = screen.getByLabelText("Workspace ID")
     await userEvent.clear(input)
     await userEvent.type(input, "wrk_new")
     await userEvent.click(screen.getByRole("button", { name: "Save" }))
@@ -522,7 +525,7 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    await userEvent.selectOptions(screen.getByLabelText("OpenCode Zen source"), "auto")
+    await userEvent.selectOptions(screen.getByLabelText("Source"), "auto")
 
     await waitFor(() => {
       expect(onConfigChange).toHaveBeenCalledWith("opencode", { source: "auto" })
@@ -669,7 +672,7 @@ describe("ProviderSettingsDetail", () => {
       screen.getByText(/showing premium requests plus paid chat quota units/i)
     ).toBeInTheDocument()
     expect(screen.getByText(/org:ORG or enterprise:SLUG/)).toBeInTheDocument()
-    expect(screen.getByLabelText("Copilot Billing scope")).toBeInTheDocument()
+    expect(screen.getByLabelText("Billing scope")).toBeInTheDocument()
   })
 
   it("shows explicit Codebuff API-token guidance", () => {
@@ -762,10 +765,10 @@ describe("ProviderSettingsDetail", () => {
         /Run `kimi login` for session and weekly quota; save a Moonshot API key only if you also want official API billing balance\./
       )
     ).toBeInTheDocument()
-    expect(screen.getByLabelText("Kimi Code (Moonshot) Moonshot API key")).toBeInTheDocument()
+    expect(screen.getByLabelText("Moonshot API key")).toBeInTheDocument()
   })
 
-  it("shows setup source status and provenance", () => {
+  it("shows setup source status and provenance", async () => {
     render(
       <ProviderSettingsDetail
         plugin={kimiPlugin}
@@ -786,10 +789,11 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(screen.getByRole("heading", { name: "Setup assistant" })).toBeInTheDocument()
+    // A found local login means signed in; the checks stay available behind Change sign-in.
+    expect(screen.getByText("Signed in with Kimi CLI login.")).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Change sign-in" }))
     expect(screen.getByRole("group", { name: "Kimi CLI login: Found" })).toBeInTheDocument()
     expect(screen.getByRole("group", { name: "Moonshot API key: Not found" })).toBeInTheDocument()
-    expect(screen.getAllByText(/Never uploaded/i)).toHaveLength(2)
   })
 
   it("scans setup sources locally without starting a usage probe", async () => {
@@ -912,13 +916,10 @@ describe("ProviderSettingsDetail", () => {
     expect(
       screen.getByText(/Use guided dashboard login, sign in to Zed in the opened window/)
     ).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        /Zed billing spend uses a live browser-backed dashboard request; local telemetry remains the fallback\./
-      )
-    ).toBeInTheDocument()
+    expect(screen.queryByText(/Windows experimental\./)).not.toBeInTheDocument()
+    expect(screen.getByText("Experimental")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Connect dashboard" })).toBeInTheDocument()
-    expect(screen.getByLabelText("Zed Cookie header")).toBeInTheDocument()
+    expect(screen.getByLabelText("Cookie header")).toBeInTheDocument()
   })
 
   it("captures and stores Zed dashboard cookies through guided login", async () => {
@@ -965,7 +966,7 @@ describe("ProviderSettingsDetail", () => {
     ).toBeInTheDocument()
   })
 
-  it("runs guided login from the provider-neutral re-authenticate action", async () => {
+  it("runs guided login from Change sign-in when a session is stored", async () => {
     guidedLoginMock.mockResolvedValueOnce({
       cookieHeader: "zed.session=reauth",
       finalUrl: "https://dashboard.zed.dev/org_123/billing/usage",
@@ -985,11 +986,13 @@ describe("ProviderSettingsDetail", () => {
           lastSuccessAt: null,
         }}
         onEnabledChange={vi.fn()}
+        config={{ secrets: { cookieHeader: { updatedAt: 1 } } }}
         onSecretSave={onSecretSave}
       />
     )
 
-    await userEvent.click(screen.getByRole("button", { name: "Re-authenticate" }))
+    await userEvent.click(screen.getByRole("button", { name: "Change sign-in" }))
+    await userEvent.click(screen.getByRole("button", { name: "Connect dashboard" }))
 
     await waitFor(() => expect(guidedLoginMock).toHaveBeenCalledTimes(1))
     expect(onSecretSave).toHaveBeenCalledWith("zed", "cookieHeader", "zed.session=reauth")
@@ -1011,12 +1014,9 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
-    expect(
-      screen.getByText(
-        "This provider currently relies on local auto-detection and does not expose editable settings yet."
-      )
-    ).toBeInTheDocument()
-    expect(screen.queryByLabelText("Cursor source")).not.toBeInTheDocument()
+    expect(screen.queryByText("Provider Settings")).not.toBeInTheDocument()
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Source")).not.toBeInTheDocument()
   })
 
   it("shows explicit Synthetic API-key guidance", () => {
@@ -1072,7 +1072,7 @@ describe("ProviderSettingsDetail", () => {
       )
     ).toBeInTheDocument()
     expect(screen.getByText(/Run `auggie login` to confirm local Augment auth/)).toBeInTheDocument()
-    expect(screen.getByLabelText("Augment Cookie header")).toBeInTheDocument()
+    expect(screen.getByLabelText("Cookie header")).toBeInTheDocument()
   })
 
   it("shows Alibaba Coding Plan and Token Plan credential fields", () => {
@@ -1104,7 +1104,7 @@ describe("ProviderSettingsDetail", () => {
         /UsageBar stores it in the app credential vault and uses it for the Coding Plan quotas endpoint\./
       )
     ).toBeInTheDocument()
-    expect(screen.getByLabelText("Alibaba Coding Plan Bailian Cookie header")).toBeInTheDocument()
+    expect(screen.getByLabelText("Bailian Cookie header")).toBeInTheDocument()
   })
 
   it("saves and clears the Alibaba Bailian Cookie header", async () => {
@@ -1129,7 +1129,7 @@ describe("ProviderSettingsDetail", () => {
     )
 
     await userEvent.type(
-      screen.getByLabelText("Alibaba Coding Plan Bailian Cookie header"),
+      screen.getByLabelText("Bailian Cookie header"),
       "  login=ticket; sec_token=csrf  "
     )
     await userEvent.click(screen.getAllByRole("button", { name: "Save secret" })[1])
@@ -1159,6 +1159,8 @@ describe("ProviderSettingsDetail", () => {
       />
     )
 
+    // Saving a sign-in secret switches the page to the signed-in view.
+    await userEvent.click(screen.getByRole("button", { name: "Change sign-in" }))
     await userEvent.click(screen.getByRole("button", { name: "Clear secret" }))
     await waitFor(() => {
       expect(onSecretDelete).toHaveBeenCalledWith("alibaba", "cookieHeader")
@@ -1221,7 +1223,7 @@ describe("ProviderSettingsDetail", () => {
         /UsageBar stores it in the app credential vault and uses it for the subscription and quota endpoints\./
       )
     ).toBeInTheDocument()
-    expect(screen.getByLabelText("Z.ai API key")).toBeInTheDocument()
+    expect(screen.getByLabelText("API key")).toBeInTheDocument()
   })
 
   it("shows explicit MiniMax API-key guidance", () => {
@@ -1255,7 +1257,7 @@ describe("ProviderSettingsDetail", () => {
         /UsageBar stores it in the app credential vault and uses it for the Coding Plan remains endpoint\./
       )
     ).toBeInTheDocument()
-    expect(screen.getByLabelText("MiniMax API key")).toBeInTheDocument()
+    expect(screen.getByLabelText("API key")).toBeInTheDocument()
   })
 
   it("shows explicit Amp API-key guidance", () => {
@@ -1289,7 +1291,7 @@ describe("ProviderSettingsDetail", () => {
         /UsageBar stores it in the app credential vault and uses it for the Amp internal balance endpoint\./
       )
     ).toBeInTheDocument()
-    expect(screen.getByLabelText("Amp API key")).toBeInTheDocument()
+    expect(screen.getByLabelText("API key")).toBeInTheDocument()
   })
 
   it("shows explicit Antigravity offline guidance", () => {

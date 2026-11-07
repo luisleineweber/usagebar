@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import { useState } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -183,7 +183,7 @@ describe("SettingsPage", () => {
   })
 
   it("keeps provider rows readable on narrower layouts", () => {
-    const { container } = render(
+    render(
       <SettingsPage
         {...defaultProps}
         settingsTab="providers"
@@ -193,7 +193,11 @@ describe("SettingsPage", () => {
       />
     )
 
-    expect(container.querySelector(".flex-wrap.items-start.gap-3")).toBeTruthy()
+    // Long provider names truncate in the row, and the detail actions wrap instead of overflow.
+    const row = screen.getByRole("button", { name: "OpenCode Zen, Setup needed" })
+    expect(row.querySelector(".truncate")).toHaveTextContent("OpenCode Zen")
+    const actions = screen.getByRole("button", { name: "Check again" }).parentElement
+    expect(actions).toHaveClass("flex-wrap")
   })
 
   it("renders global settings on the General tab", () => {
@@ -314,8 +318,11 @@ describe("SettingsPage", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
     await userEvent.click(screen.getByRole("button", { name: /codex/i }))
 
-    expect(screen.getByTestId("provider-settings-codex")).toBeInTheDocument()
-    expect(screen.getAllByText("Not signed in").length).toBeGreaterThan(0)
+    const detail = screen.getByTestId("provider-settings-codex")
+    expect(detail).toBeInTheDocument()
+    // Codex is turned off: the detail shows that state, not the error of an earlier check.
+    expect(within(detail).getAllByText("Disabled").length).toBeGreaterThan(0)
+    expect(within(detail).getByText("Enable this provider to check it.")).toBeInTheDocument()
   })
 
   it("keeps provider-row clicks inside Settings", async () => {

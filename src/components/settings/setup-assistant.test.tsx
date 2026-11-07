@@ -42,7 +42,10 @@ describe("SetupAssistant", () => {
     expect(screen.getByText("Found")).toBeInTheDocument()
     expect(screen.getByText("Not found")).toBeInTheDocument()
     expect(screen.getAllByText(/Source:/i)).toHaveLength(2)
-    expect(screen.getAllByText(/never uploaded/i)).toHaveLength(2)
+    expect(screen.getByText(/Secrets stay on this device/)).toBeInTheDocument()
+    // The privacy note appears once for the list, not again after every check.
+    expect(screen.queryByText(/never uploaded/i)).not.toBeInTheDocument()
+    expect(screen.getByRole("group", { name: "On this device" })).toBeInTheDocument()
   })
 
   it("reports pending checks while a probe runs and disables the scan action", () => {
@@ -179,11 +182,21 @@ describe("SetupAssistant", () => {
   it("ignores a scan that finishes after a change to another provider or an unmount", async () => {
     const finishFirstScan = deferredScan()
     const { rerender, unmount } = render(
-      <SetupAssistant checks={checks} loading={false} detections={noProbeDetections} providerId="kimi" />
+      <SetupAssistant
+        checks={checks}
+        loading={false}
+        detections={noProbeDetections}
+        providerId="kimi"
+      />
     )
     fireEvent.click(screen.getByRole("button", { name: "Scan again" }))
     rerender(
-      <SetupAssistant checks={checks} loading={false} detections={noProbeDetections} providerId="claude" />
+      <SetupAssistant
+        checks={checks}
+        loading={false}
+        detections={noProbeDetections}
+        providerId="claude"
+      />
     )
     await act(async () => finishFirstScan(accountAResult))
     expect(screen.queryByText("Found")).not.toBeInTheDocument()

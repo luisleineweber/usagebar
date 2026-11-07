@@ -60,7 +60,7 @@ describe("browser cookie import adapter", () => {
   it.each<[BrowserCookieImportCode, number, string]>([
     ["ok", 1, "Imported 1 approved session cookie."],
     ["ok", 2, "Imported 2 approved session cookies."],
-    ["notEnabled", 0, "Enable browser import for this provider first."],
+    ["notEnabled", 0, "Turn on Microsoft Edge import first."],
     ["notInstalled", 0, "Microsoft Edge or the selected profile was not found."],
     ["noMatch", 0, "No approved signed-in session was found."],
     ["browserLocked", 0, "Edge is using the cookie database."],
