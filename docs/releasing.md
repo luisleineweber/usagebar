@@ -5,7 +5,7 @@ This repo treats a release as a tagged, reproducible build with matching version
 Current release:
 
 ```text
-v0.1.1
+v0.2.0
 ```
 
 ## Preflight
@@ -13,7 +13,7 @@ v0.1.1
 Before cutting a tag:
 
 ```bash
-bun run release:check -- --release-tag v0.1.1 --require-clean
+bun run release:check -- --release-tag v0.2.0 --require-clean
 ```
 
 The preflight currently verifies:

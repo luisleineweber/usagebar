@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.2.0
+
+### Highlights
+
+- Added a signed in-app update flow with separate stable and prerelease update channels.
+- Added a local setup detection assistant that scans this computer for provider setup and keeps the scan local.
+- Added copyable recovery instructions for provider errors. Copied text excludes provider error details.
+- Polished the provider selection list, provider detail pages, sign-in details, and account details.
+- Kept provider panels sticky on wide Settings windows and improved the General settings controls.
+
+### Fixes
+
+- Applied a cooldown after failed refreshes and enforced persistent Claude rate-limit backoff.
+- Kept Windows guided provider login responsive and captured cookies that load after the success page.
+- Showed OpenCode Go free usage for expired keys and kept the plan unknown.
+- Showed only plans that the provider reports.
+- Showed the full label for unused percent quotas.
+- Colored tray number glyphs for the Windows taskbar theme.
+- Showed the refreshing state in the footer and kept the update action separate.
+- Reduced release manifest polling and offered later prerelease stages of the same version.
+- Updated vulnerable dependencies.
+
+### Notes
+
+- Windows installers remain unsigned until the project gets an Authenticode certificate. Windows can show `Unknown publisher` or SmartScreen warnings.
+- Stable releases use signed Tauri updater metadata.
+
 ## 0.1.1
 
 ### Highlights
