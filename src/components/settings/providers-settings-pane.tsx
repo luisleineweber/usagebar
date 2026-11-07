@@ -13,10 +13,12 @@
  * JSDOM-based tests never apply CSS, so both panels remain in the DOM; tests pass unchanged.
  */
 
-import { useEffect, useMemo, useState } from "react"
-import { ArrowLeft, ChevronRight, Eye } from "lucide-react"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ProviderIcon } from "@/components/provider-icon"
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react"
+import { ArrowLeft } from "lucide-react"
+import {
+  PROVIDER_LIST_NAV_ATTRIBUTE,
+  ProviderListRow,
+} from "@/components/settings/provider-list-row"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 import { ProviderSettingsDetail } from "@/components/settings/provider-settings-detail"
 import type { SettingsPluginState } from "@/hooks/app/use-settings-plugin-list"
@@ -48,135 +50,40 @@ export function orderSettingsProviders<T extends Pick<SettingsPluginState, "id" 
 }
 
 // ---------------------------------------------------------------------------
-// Row subtitle
+// Keyboard navigation
 // ---------------------------------------------------------------------------
 
-function getProviderSubtitle(plugin: SettingsPluginState): string {
-  if (plugin.supportState === "comingSoonOnWindows") {
-    return plugin.supportMessage ?? "Coming soon on Windows."
-  }
-  if (plugin.state.loading) return "Refreshing provider status..."
-  if (plugin.state.error) return plugin.state.error
-  if (plugin.state.lastSuccessAt) return "Connected"
-  if (plugin.supportMessage) return plugin.supportMessage
-  return plugin.enabled ? "Not connected yet" : "Disabled"
-}
+const LIST_NAV_KEYS = new Set(["ArrowUp", "ArrowDown", "Home", "End"])
 
-// ---------------------------------------------------------------------------
-// Provider row
-// ---------------------------------------------------------------------------
+/**
+ * Every row keeps two Tab stops (open + enable), so both actions stay reachable.
+ * Arrow keys add a faster path: ArrowUp/ArrowDown/Home/End move focus to the same
+ * control in another row.
+ */
+export function handleProviderListKeyDown(event: KeyboardEvent<HTMLElement>) {
+  if (!LIST_NAV_KEYS.has(event.key) || event.altKey || event.ctrlKey || event.metaKey) return
+  if (!(event.target instanceof HTMLElement)) return
+  const column = event.target.getAttribute(PROVIDER_LIST_NAV_ATTRIBUTE)
+  if (!column) return
 
-function ProviderRow({
-  plugin,
-  selected,
-  isDark,
-  onSelect,
-  onToggle,
-  onShow,
-}: {
-  plugin: SettingsPluginState
-  selected: boolean
-  isDark: boolean
-  onSelect: () => void
-  onToggle: (id: string) => void
-  onShow: (id: string) => void
-}) {
-  const isConnected = Boolean(plugin.state.data || plugin.state.lastSuccessAt)
-
-  return (
-    /*
-     * Provider row and enable controls are separate semantic controls.
-     * The native controls stay separate, so their events do not overlap.
-     *
-     * Each control has its own focus and keyboard behavior.
-     */
-    <div
-      className={cn(
-        "group flex w-full flex-wrap items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors sm:flex-nowrap sm:items-center",
-        selected
-          ? "border-border bg-muted/70 text-foreground shadow-sm"
-          : "border-transparent bg-transparent hover:border-border/55 hover:bg-muted/35"
-      )}
-    >
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 text-left outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] sm:items-center"
-        onClick={onSelect}
-      >
-        {/* Icon + status dot */}
-        <div className="relative">
-          <ProviderIcon
-            iconUrl={plugin.iconUrl}
-            darkIconUrl={plugin.darkIconUrl}
-            iconColorMode={plugin.iconColorMode}
-            iconAspectRatio={plugin.iconAspectRatio}
-            fit="natural"
-            brandColor={plugin.brandColor}
-            isDark={isDark}
-            className={plugin.iconAspectRatio ? "h-3 w-3" : "size-5"}
-            ariaHidden
-            testId="provider-icon"
-          />
-          <span
-            className={cn(
-              "absolute -right-1 -top-1 size-2.5 rounded-full border border-card",
-              isConnected ? "bg-emerald-400" : plugin.enabled ? "bg-amber-400" : "bg-muted"
-            )}
-          />
-        </div>
-
-        {/* Name + subtitle */}
-        <span className="min-w-0 flex-1">
-          <span
-            className={cn("block text-sm font-medium", !plugin.enabled && "text-muted-foreground")}
-          >
-            {plugin.name}
-          </span>
-          <span className="block break-words text-xs leading-5 text-muted-foreground">
-            {getProviderSubtitle(plugin)}
-          </span>
-        </span>
-
-        {/*
-        ChevronRight — only visible on narrow screens to signal "tap to configure".
-        Hidden at xl because the two-column layout makes the right panel always visible.
-      */}
-        <ChevronRight
-          aria-hidden="true"
-          className="size-4 shrink-0 self-center text-muted-foreground/50 xl:hidden"
-        />
-      </button>
-
-      {/* Enable / disable checkbox */}
-      <Checkbox
-        key={`${plugin.id}-${plugin.enabled}`}
-        aria-label={`Enable ${plugin.name}`}
-        checked={plugin.enabled}
-        disabled={!plugin.supported}
-        className={cn(
-          "self-start sm:self-auto",
-          selected &&
-            "data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground"
-        )}
-        onCheckedChange={(checked) => {
-          const nextEnabled = checked === true
-          if (nextEnabled === plugin.enabled) return
-          onToggle(plugin.id)
-        }}
-      />
-      {plugin.hidden ? (
-        <button
-          type="button"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-label={`Show ${plugin.name} in sidebar`}
-          title="Show in sidebar"
-          onClick={() => onShow(plugin.id)}
-        >
-          <Eye className="size-4" />
-        </button>
-      ) : null}
-    </div>
+  const items = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(
+      `[${PROVIDER_LIST_NAV_ATTRIBUTE}="${column}"]`
+    )
+  ).filter(
+    (item) => item.getAttribute("aria-disabled") !== "true" && !item.hasAttribute("disabled")
   )
+  const index = items.indexOf(event.target)
+  if (index === -1) return
+
+  const nextIndex =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? items.length - 1
+        : Math.min(Math.max(index + (event.key === "ArrowDown" ? 1 : -1), 0), items.length - 1)
+  event.preventDefault()
+  items[nextIndex]?.focus()
 }
 
 // ---------------------------------------------------------------------------
@@ -261,21 +168,24 @@ export function ProvidersSettingsPane({
           <span>{providers.filter((p) => p.supported).length} supported</span>
         </div>
 
-        <div className="pr-1">
-          <div className="space-y-2.5">
-            {settingsProviders.map((plugin) => (
-              <ProviderRow
-                key={plugin.id}
-                plugin={plugin}
-                selected={plugin.id === selectedProvider?.id}
-                isDark={isDark}
-                onSelect={() => handleRowSelect(plugin.id)}
-                onToggle={onToggle}
-                onShow={onShow}
-              />
-            ))}
-          </div>
-        </div>
+        {/* Keyboard handling is delegated from the focusable controls inside the list. */}
+        <ul
+          aria-label="Providers"
+          className="divide-y divide-border overflow-hidden rounded-lg border border-border"
+          onKeyDown={handleProviderListKeyDown}
+        >
+          {settingsProviders.map((plugin) => (
+            <ProviderListRow
+              key={plugin.id}
+              plugin={plugin}
+              selected={plugin.id === selectedProvider?.id}
+              isDark={isDark}
+              onSelect={() => handleRowSelect(plugin.id)}
+              onToggle={onToggle}
+              onShow={onShow}
+            />
+          ))}
+        </ul>
       </section>
 
       {/* ── Right column: provider detail ───────────────────────────── */}

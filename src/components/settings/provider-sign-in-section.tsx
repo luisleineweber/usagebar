@@ -62,6 +62,8 @@ export function ProviderSignInSection({
       {hasChecks ? (
         <SetupAssistant
           checks={definition.setupChecks ?? []}
+          providerId={providerId}
+          accountId={config?.selectedAccountProfileId}
           detections={detections}
           loading={loading}
         />
