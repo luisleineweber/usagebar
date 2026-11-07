@@ -152,15 +152,15 @@ export function ProvidersSettingsPane({
   const detailHidden = activePanel === "list"
 
   return (
-    <div className="grid gap-6 py-1 xl:grid-cols-[340px_minmax(0,1fr)] xl:gap-7">
+    <div className="grid gap-6 py-1 xl:h-full xl:min-h-0 xl:grid-cols-[340px_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)] xl:gap-7">
       {/* ── Left column: provider list ──────────────────────────────── */}
       <section
         className={cn(
-          "xl:flex xl:flex-col xl:border-b-0 xl:border-r xl:pb-0 xl:pr-6",
+          "xl:flex xl:min-h-0 xl:flex-col xl:border-b-0 xl:border-r xl:pb-0 xl:pr-6",
           listHidden ? "hidden xl:flex" : "flex flex-col"
         )}
       >
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="mb-3 flex shrink-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span>{providers.filter((p) => p.enabled).length} enabled</span>
           <span aria-hidden className="text-border">
             /
@@ -171,7 +171,7 @@ export function ProvidersSettingsPane({
         {/* Keyboard handling is delegated from the focusable controls inside the list. */}
         <ul
           aria-label="Providers"
-          className="divide-y divide-border overflow-hidden rounded-lg border border-border"
+          className="divide-y divide-border overflow-hidden rounded-lg border border-border xl:min-h-0 xl:overflow-y-auto xl:overscroll-contain"
           onKeyDown={handleProviderListKeyDown}
         >
           {settingsProviders.map((plugin) => (
@@ -192,7 +192,7 @@ export function ProvidersSettingsPane({
       <div
         className={cn(
           // On xl: always visible
-          "xl:block xl:min-w-0 xl:pl-1",
+          "xl:block xl:min-h-0 xl:min-w-0 xl:overflow-y-auto xl:overscroll-contain xl:pl-1",
           // On narrow: toggle visibility
           detailHidden
             ? "hidden xl:block" // hidden on narrow, always shown on xl

@@ -413,8 +413,10 @@ export function SettingsWindowApp() {
   ])
 
   return (
-    <div className="min-h-screen bg-background px-6 py-6 text-foreground md:px-10 md:py-10">
-      <div className="mx-auto w-full max-w-7xl">
+    <div
+      className={`min-h-screen bg-background px-6 py-6 text-foreground md:px-10 md:py-10 ${isFirstRun === false ? "xl:h-dvh xl:overflow-hidden" : ""}`}
+    >
+      <div className={`mx-auto w-full max-w-7xl ${isFirstRun === false ? "xl:h-full" : ""}`}>
         {isFirstRun === true ? (
           <FirstRunOnboarding
             providers={settingsPlugins}
