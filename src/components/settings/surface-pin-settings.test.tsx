@@ -21,6 +21,11 @@ const preview = {
   },
 }
 
+function previewSvg() {
+  const src = screen.getByAltText("Tray icon preview").getAttribute("src") ?? ""
+  return decodeURIComponent(src.replace("data:image/svg+xml,", ""))
+}
+
 describe("SurfacePinSettings", () => {
   beforeEach(() => {
     taskbar.useTrayNumberSurface.mockReset()
@@ -35,15 +40,11 @@ describe("SurfacePinSettings", () => {
     ({ taskbarTheme, fill, background }) => {
       taskbar.useTrayNumberSurface.mockReturnValue(taskbarTheme)
       render(
-        <SurfacePinSettings
-          menubarIconStyle="provider"
-          trayProviderSelection="first"
-          preview={preview}
-        />
+        <SurfacePinSettings menubarIconStyle="provider" accentColor="#86c5ff" preview={preview} />
       )
 
       const image = screen.getByAltText("Tray icon preview")
-      expect(decodeURIComponent(image.getAttribute("src") ?? "")).toContain(`fill="${fill}"`)
+      expect(previewSvg()).toContain(`fill="${fill}"`)
       expect(image.parentElement).toHaveAttribute("data-taskbar-theme", taskbarTheme)
       expect(image.parentElement).toHaveStyle({ backgroundColor: background })
     }
@@ -52,45 +53,37 @@ describe("SurfacePinSettings", () => {
   it("does not draw the number preview before the taskbar theme is known", () => {
     taskbar.useTrayNumberSurface.mockReturnValue(null)
     render(
-      <SurfacePinSettings
-        menubarIconStyle="provider"
-        trayProviderSelection="first"
-        preview={preview}
-      />
+      <SurfacePinSettings menubarIconStyle="provider" accentColor="#86c5ff" preview={preview} />
     )
 
     expect(screen.queryByAltText("Tray icon preview")).not.toBeInTheDocument()
   })
 
-  it("renders stacked-bars guidance without provider selection or preview name", () => {
-    render(
-      <SurfacePinSettings menubarIconStyle="bars" trayProviderSelection="first" preview={preview} />
-    )
+  it.each(["bars", "donut"] as const)(
+    "draws the %s preview in the selected accent color like the Windows tray",
+    (menubarIconStyle) => {
+      render(
+        <SurfacePinSettings
+          menubarIconStyle={menubarIconStyle}
+          accentColor="#e07c8e"
+          preview={preview}
+        />
+      )
+
+      expect(previewSvg()).toContain("#e07c8e")
+      expect(previewSvg()).not.toContain("#86c5ff")
+    }
+  )
+
+  it("renders the preview image without explanatory text", () => {
+    render(<SurfacePinSettings menubarIconStyle="bars" accentColor="#86c5ff" preview={preview} />)
 
     expect(screen.getByAltText("Tray icon preview")).toHaveAttribute(
       "src",
       expect.stringMatching(/^data:image\/svg\+xml,/)
     )
-    expect(screen.getByText("Stacked bars show the first four providers.")).toBeInTheDocument()
-    expect(screen.queryByText(/Preview:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Stacked bars show/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Metric [12]/)).not.toBeInTheDocument()
-  })
-
-  it("explains the latest provider in the live preview", () => {
-    render(
-      <SurfacePinSettings
-        menubarIconStyle="provider"
-        trayProviderSelection="last"
-        preview={preview}
-      />
-    )
-
-    expect(
-      screen.getByText(
-        "Starts with the first provider. After you leave a provider, Dashboard and History show that latest provider until you leave another one. This resets after restart."
-      )
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/Preview:/)).not.toBeInTheDocument()
   })
 
   it.each(["provider", "bars", "donut"] as const)(
@@ -99,7 +92,7 @@ describe("SurfacePinSettings", () => {
       render(
         <SurfacePinSettings
           menubarIconStyle={menubarIconStyle}
-          trayProviderSelection="first"
+          accentColor="#86c5ff"
           preview={preview}
         />
       )
