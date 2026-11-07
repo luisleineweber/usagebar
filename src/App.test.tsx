@@ -1370,14 +1370,15 @@ describe("App", () => {
     expect(state.saveDisplayModeMock).toHaveBeenCalledWith("used")
   })
 
-  it("keeps Windows tray style controls and explains the compact mode", async () => {
+  it("keeps Windows tray style controls and explains that compact ignores usage mode", async () => {
     renderSettingsWindow()
     expect(await screen.findByText("Tray Icon")).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Compact" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Stacked bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
     expect(screen.queryByRole("radio", { name: "Merged" })).not.toBeInTheDocument()
-    expect(screen.getByText(/Compact shows remaining usage as a number/)).toBeInTheDocument()
+    expect(screen.getByText("Compact always shows remaining usage.")).toBeInTheDocument()
+    expect(screen.queryByText(/Stacked bars compare/)).not.toBeInTheDocument()
   })
 
   it("keeps the Settings window from acquiring the native tray handle", async () => {
@@ -2717,9 +2718,9 @@ describe("App", () => {
 
     renderSettingsWindow()
 
-    // Should show the placeholder text (appears twice: as main text and as hint)
-    const placeholders = await screen.findAllByText(/Click to set/i)
-    expect(placeholders.length).toBeGreaterThan(0)
+    expect(
+      await screen.findByRole("button", { name: "Click to set global shortcut" })
+    ).toHaveTextContent("Click to set")
   })
 
   it("logs error when loading global shortcut fails", async () => {

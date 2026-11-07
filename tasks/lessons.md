@@ -44,7 +44,7 @@
 
 ## 2026-08-31
 
-- The RustSec report failed CI for informational unmaintained-crate warnings, while a yanked transitive `chacha20` release also remained in the lockfile. Fix: update `chacha20` to `0.10.2`, make the reporter block only vulnerability, unsound, and yanked findings, and document the Tauri GTK3 `glib` exception. Prevention: keep informational findings visible, but separate them from blocking security findings.
+- The RustSec report failed CI for informational unmaintained-crate warnings, while a yanked transitive `chacha20` release also remained in the lockfile. Fix: update `chacha20` to `0.10.2`, make the reporter block only vulnerability, unsound, and yanked findings, and document the Tauri GTK3 `glib` exception. Prevention: keep informational findings visible, but separate them from blocking security findings. Superseded on 2026-11-01: only vulnerabilities fail the report.
 
 ## 2026-08-28
 
@@ -370,3 +370,7 @@ Keep this file short. Retain only recent or frequently relevant prevention rules
 - The taskbar theme fix had three gaps: Linux Clippy failed on Windows-only dead code, the first read started before the change listener existed, and Linux called the Windows-only lookup and kept the unknown tray icon. Fix: compile the Rust module and command only on Windows, await listener registration before the read, and use an explicit Windows check with a dark surface on Linux. Prevention: gate platform-only Rust with `cfg` at the module level; test listener-before-read ordering and the non-Windows tray path.
 - Managed account selection: the "clear missing selection" effect ran while the profile list was still the initial empty array, so it deleted the pinned account before the list loaded. Keep the list `null` until a list call succeeds, and clear a selection only from a successful list. Prevention: test a pinned profile with a delayed and with a failed list response.
 - Vitest `beforeEach(() => mock.mockReset())` returns the mock, and Vitest runs a returned function as teardown. The mock then ran once more after each test and caused an unhandled rejection. Use a block body in hooks.
+- Radio tab stop: Base UI 1.7 (still in 1.9) sets the roving tab stop of a radio group only when the items first mount. A stored value that loads later moves the checked state but leaves the tab stop on the old item. Fix: set `tabIndex` from the checked state on each settings radio item. Prevention: test the tab stop after a value change with `rerender`, not only on first render.
+- Shortcut trigger: a `div role="button"` that showed the unset prompt twice got the name "Click to set Click to set" and contained the clear button. Fix: use a native button with a name for purpose and state, and keep the clear button as a sibling. Prevention: assert the accessible name and that nested controls do not exist.
+- Dependent controls: confirm what a parent toggle gates in the delivery code before disabling children. Notification event types also feed the recent events list, so only quiet hours depend on Windows delivery.
+- Accent options: colored label text failed 4.5:1 on neutral surfaces. Keep option text on the foreground token and put the brand color on the swatch and border.

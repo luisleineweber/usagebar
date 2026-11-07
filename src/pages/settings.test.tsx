@@ -273,8 +273,8 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("radio", { name: "Compact" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Stacked bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: "First provider" })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: "Latest provider" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "First in list" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Last opened" })).toBeInTheDocument()
     expect(screen.queryByRole("radio", { name: "Merged" })).not.toBeInTheDocument()
     await user.click(screen.getByRole("radio", { name: "Stacked bars" }))
     expect(onMenubarIconStyleChange).toHaveBeenCalledWith("bars")
@@ -283,8 +283,8 @@ describe("SettingsPage", () => {
   it("hides provider selection for stacked bars", () => {
     render(<TestHarness menubarIconStyle="bars" />)
 
-    expect(screen.queryByRole("radio", { name: "First provider" })).not.toBeInTheDocument()
-    expect(screen.queryByRole("radio", { name: "Latest provider" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "First in list" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "Last opened" })).not.toBeInTheDocument()
     expect(screen.getByText("Stacked bars show the first four providers.")).toBeInTheDocument()
   })
 
@@ -292,7 +292,7 @@ describe("SettingsPage", () => {
     const onTrayProviderSelectionChange = vi.fn()
     render(<TestHarness onTrayProviderSelectionChange={onTrayProviderSelectionChange} />)
 
-    await userEvent.click(screen.getByRole("radio", { name: "Latest provider" }))
+    await userEvent.click(screen.getByRole("radio", { name: "Last opened" }))
 
     expect(onTrayProviderSelectionChange).toHaveBeenCalledWith("last")
   })

@@ -1,20 +1,24 @@
 import { shouldUseTemplateTrayIcon } from "@/hooks/app/use-tray-icon"
-import { makeTrayBarsSvg, TRAY_BRAND_FOREGROUND } from "@/lib/tray-bars-icon"
+import { makeTrayBarsSvg } from "@/lib/tray-bars-icon"
 import { useTrayNumberSurface } from "@/hooks/use-taskbar-theme"
 import { TASKBAR_BACKGROUND } from "@/lib/taskbar-theme"
 import { makeTrayNumberSvg } from "@/lib/tray-number-icon"
 import type { TraySettingsPreview } from "@/lib/tray-preview"
-import type { MenubarIconStyle, TrayProviderSelection } from "@/lib/settings"
+import type { AccentColor, MenubarIconStyle } from "@/lib/settings"
+
+const TEMPLATE_PREVIEW_BACKGROUND = "#202124"
+// Template icons take the OS tint; on the dark preview surface that tint is white.
+const TEMPLATE_PREVIEW_FOREGROUND = "#ffffff"
 
 type SurfacePinSettingsProps = {
   menubarIconStyle: MenubarIconStyle
-  trayProviderSelection: TrayProviderSelection
+  accentColor: AccentColor
   preview: TraySettingsPreview
 }
 
 export function SurfacePinSettings({
   menubarIconStyle,
-  trayProviderSelection,
+  accentColor,
   preview,
 }: SurfacePinSettingsProps) {
   const trayBars =
@@ -44,17 +48,14 @@ export function SurfacePinSettings({
         style: menubarIconStyle,
         percentText: menubarIconStyle === "provider" ? preview.providerPercentText : undefined,
         providerIconUrl: preview.providerIconUrl,
-        foregroundColor: TRAY_BRAND_FOREGROUND,
+        // Windows draws bars and donut in the raw accent color, like the real tray icon.
+        foregroundColor: useTemplateIcon ? TEMPLATE_PREVIEW_FOREGROUND : accentColor,
       })
   const trayPreviewUrl = traySvg ? `data:image/svg+xml,${encodeURIComponent(traySvg)}` : null
   const previewBackground =
-    !useTemplateIcon && taskbarTheme ? TASKBAR_BACKGROUND[taskbarTheme] : "#202124"
-  const explanation =
-    menubarIconStyle === "bars"
-      ? "Stacked bars show the first four providers."
-      : trayProviderSelection === "first"
-        ? "Always shows the first enabled provider in your saved order."
-        : "Starts with the first provider. After you leave a provider, Dashboard and History show that latest provider until you leave another one. This resets after restart."
+    !useTemplateIcon && taskbarTheme
+      ? TASKBAR_BACKGROUND[taskbarTheme]
+      : TEMPLATE_PREVIEW_BACKGROUND
 
   return (
     <div className="rounded-lg bg-muted p-3">
@@ -68,7 +69,6 @@ export function SurfacePinSettings({
           <img src={trayPreviewUrl} alt="Tray icon preview" className="h-9 max-w-full" />
         )}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">{explanation}</p>
     </div>
   )
 }
