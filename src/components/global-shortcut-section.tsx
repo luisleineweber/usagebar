@@ -228,8 +228,7 @@ export function GlobalShortcutSection({
     }
   }
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const handleClear = () => {
     onGlobalShortcutChange(null)
   }
 
@@ -238,16 +237,8 @@ export function GlobalShortcutSection({
     stopRecording()
   }
 
-  // Display value logic
-  const getDisplayValue = (): string => {
-    if (isRecording) {
-      if (pendingDisplay) return pendingDisplay
-      return "Press keys..."
-    }
-    return globalShortcut ? formatShortcutForDisplay(globalShortcut) : "Click to set"
-  }
-
-  const hasShortcut = globalShortcut !== null
+  const recordingDisplay = pendingDisplay || "Press keys..."
+  const shortcutDisplay = globalShortcut ? formatShortcutForDisplay(globalShortcut) : null
 
   return (
     <section className="border-t border-border/55 pt-4">
@@ -268,34 +259,37 @@ export function GlobalShortcutSection({
               !pendingDisplay && "text-muted-foreground"
             )}
           >
-            {getDisplayValue()}
+            {recordingDisplay}
           </div>
         ) : (
           <div
             className={cn(
-              "w-full h-8 px-3 text-sm rounded-md border bg-muted/50",
-              "flex items-center text-left hover:bg-muted transition-colors cursor-pointer",
-              !hasShortcut && "text-muted-foreground"
+              "flex h-8 w-full items-center rounded-md border bg-muted/50 text-sm transition-colors",
+              "hover:bg-muted focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50"
             )}
-            onClick={startRecording}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") startRecording()
-            }}
-            role="button"
-            tabIndex={0}
           >
-            <span>{getDisplayValue()}</span>
-            {hasShortcut ? (
+            <button
+              type="button"
+              onClick={startRecording}
+              aria-label={
+                shortcutDisplay ? `Global shortcut: ${shortcutDisplay}` : "Click to set global shortcut"
+              }
+              className={cn(
+                "flex h-full min-w-0 flex-1 cursor-pointer items-center px-3 text-left outline-none",
+                !shortcutDisplay && "text-muted-foreground"
+              )}
+            >
+              {shortcutDisplay ?? "Click to set"}
+            </button>
+            {shortcutDisplay && (
               <button
                 type="button"
                 onClick={handleClear}
-                className="ml-auto p-0.5 rounded hover:bg-background/50 text-muted-foreground hover:text-foreground transition-colors"
+                className="mr-2 rounded p-0.5 text-muted-foreground outline-none transition-colors hover:bg-background/50 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 aria-label="Clear shortcut"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-            ) : (
-              <span className="ml-auto text-xs text-muted-foreground">Click to set</span>
             )}
           </div>
         )}

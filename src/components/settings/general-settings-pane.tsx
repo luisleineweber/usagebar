@@ -36,6 +36,9 @@ import { getTimeFormatter } from "@/lib/reset-tooltip"
 import { cn } from "@/lib/utils"
 
 const DENSE_SEGMENTED_GROUP_CLASS = "grid grid-cols-2 gap-2 lg:grid-cols-4"
+// Base UI sets the roving tab stop only on mount, so it misses stored values that load later.
+// Radio arrow keys move selection with focus, so the checked item is always the tab stop.
+const rovingTabIndex = (isChecked: boolean) => (isChecked ? 0 : -1)
 const TWO_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-2"
 const THREE_OPTION_GROUP_CLASS = "grid grid-cols-1 gap-2 sm:grid-cols-3"
 const SETTINGS_SECTION_CLASS =
@@ -71,6 +74,7 @@ function SettingsRadioGroup<T extends string | number>({
           <RadioGroupItem
             key={option.value}
             value={option.value}
+            tabIndex={rovingTabIndex(isActive)}
             className={cn(
               "min-h-9 w-full cursor-pointer rounded-md border bg-clip-padding px-2.5 text-sm font-medium transition-all",
               "inline-flex items-center justify-center whitespace-nowrap",
@@ -231,39 +235,39 @@ export function GeneralSettingsPane({
           options={MENUBAR_ICON_STYLE_OPTIONS}
           value={menubarIconStyle}
           onValueChange={onMenubarIconStyleChange}
-          className={DENSE_SEGMENTED_GROUP_CLASS}
+          className={THREE_OPTION_GROUP_CLASS}
           ariaLabel="Tray icon style"
         />
-        <p className="mt-2 text-xs text-muted-foreground">
-          Compact shows remaining usage as a number. Stacked bars compare multiple providers, while
-          Donut combines a provider icon with its usage.
-        </p>
-        <div
-          className={
-            menubarIconStyle === "bars"
-              ? "mt-4 flex justify-end"
-              : "mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start"
-          }
-        >
-          {menubarIconStyle !== "bars" && (
-            <div>
-              <h4 className="mb-2 text-sm font-medium">Provider selection</h4>
-              <SettingsRadioGroup
-                options={TRAY_PROVIDER_SELECTION_OPTIONS}
-                value={trayProviderSelection}
-                onValueChange={onTrayProviderSelectionChange}
-                className={TWO_OPTION_GROUP_CLASS}
-                ariaLabel="Tray provider selection"
-              />
-            </div>
-          )}
-          <div className={menubarIconStyle === "bars" ? "w-full sm:w-48" : undefined}>
-            <SurfacePinSettings
-              menubarIconStyle={menubarIconStyle}
-              trayProviderSelection={trayProviderSelection}
-              preview={traySettingsPreview}
-            />
+        <p className="mt-2 text-xs text-muted-foreground">Compact always shows remaining usage.</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start">
+          <div>
+            <h4 className="mb-2 text-sm font-medium">Provider selection</h4>
+            {menubarIconStyle === "bars" ? (
+              <p className="text-xs text-muted-foreground">
+                Stacked bars show the first four providers.
+              </p>
+            ) : (
+              <>
+                <SettingsRadioGroup
+                  options={TRAY_PROVIDER_SELECTION_OPTIONS}
+                  value={trayProviderSelection}
+                  onValueChange={onTrayProviderSelectionChange}
+                  className={TWO_OPTION_GROUP_CLASS}
+                  ariaLabel="Tray provider selection"
+                />
+                {trayProviderSelection === "last" && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Shows the first provider until you open one after a restart.
+                  </p>
+                )}
+              </>
+            )}
           </div>
+          <SurfacePinSettings
+            menubarIconStyle={menubarIconStyle}
+            accentColor={accentColor}
+            preview={traySettingsPreview}
+          />
         </div>
       </section>
 
@@ -306,19 +310,26 @@ export function GeneralSettingsPane({
               <RadioGroupItem
                 key={option.value}
                 value={option.value}
-                aria-label={option.label}
+                tabIndex={rovingTabIndex(isActive)}
                 className={cn(
-                  "min-h-10 w-full cursor-pointer rounded-md border bg-background px-2 text-sm font-medium outline-none transition-all",
+                  "inline-flex min-h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border bg-background px-2 text-sm font-medium outline-none transition-all",
                   "focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-                  isActive && "ring-2 ring-offset-2"
+                  isActive ? "ring-2 ring-offset-2" : "text-foreground dark:bg-input/30"
                 )}
                 style={{
                   borderColor: displayColor,
                   backgroundColor: isActive ? displayColor : undefined,
-                  color: isActive ? getContrastTextColor(displayColor) : displayColor,
+                  color: isActive ? getContrastTextColor(displayColor) : undefined,
                   outlineColor: displayColor,
                 }}
               >
+                {!isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: displayColor }}
+                  />
+                )}
                 {option.label}
               </RadioGroupItem>
             )

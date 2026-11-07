@@ -68,12 +68,9 @@ export function ResetSettingsSection({ onResetAllSettings }: ResetSettingsSectio
 
   return (
     <section className="border-t border-border/55 pt-4" aria-labelledby="reset-settings-heading">
-      <h3 id="reset-settings-heading" className="mb-0 text-base font-semibold">
+      <h3 id="reset-settings-heading" className="mb-3 text-base font-semibold">
         Reset Settings
       </h3>
-      <p className="mb-3 text-sm text-muted-foreground">
-        Restore UsageBar preferences to their defaults.
-      </p>
       <Button
         ref={triggerRef}
         type="button"

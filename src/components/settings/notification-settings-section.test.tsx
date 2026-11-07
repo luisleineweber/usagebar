@@ -71,6 +71,7 @@ describe("NotificationSettingsSection", () => {
 
   it("updates quiet hours after initialization", async () => {
     const user = userEvent.setup()
+    loadPreferencesMock.mockResolvedValue({ ...defaultPreferences, enabled: true })
     render(<NotificationSettingsSection />)
 
     const quietHours = await screen.findByRole("checkbox", { name: "Quiet hours" })
@@ -155,5 +156,47 @@ describe("NotificationSettingsSection", () => {
       await screen.findByText("Windows notification permission was not granted.")
     ).toBeInTheDocument()
     expect(savePreferencesMock).not.toHaveBeenCalled()
+  })
+
+  it("disables quiet hours while Windows notifications are off", async () => {
+    render(<NotificationSettingsSection />)
+
+    const quietHours = await screen.findByRole("checkbox", { name: "Quiet hours" })
+    await waitFor(() => expect(quietHours).toHaveAttribute("aria-disabled", "true"))
+    expect(screen.getByLabelText("Quiet hours start")).toBeDisabled()
+    expect(screen.getByLabelText("Quiet hours end")).toBeDisabled()
+    expect(screen.getByRole("checkbox", { name: "75% used" })).not.toHaveAttribute(
+      "aria-disabled",
+      "true"
+    )
+    expect(screen.getByRole("checkbox", { name: "Quota resets" })).not.toHaveAttribute(
+      "aria-disabled",
+      "true"
+    )
+  })
+
+  it("enables quiet-hours times only when quiet hours are on", async () => {
+    const user = userEvent.setup()
+    loadPreferencesMock.mockResolvedValue({ ...defaultPreferences, enabled: true })
+    render(<NotificationSettingsSection />)
+
+    const quietHours = await screen.findByRole("checkbox", { name: "Quiet hours" })
+    await waitFor(() => expect(quietHours).not.toHaveAttribute("aria-disabled", "true"))
+    expect(screen.getByLabelText("Quiet hours start")).toBeDisabled()
+
+    await user.click(quietHours)
+    await waitFor(() => expect(screen.getByLabelText("Quiet hours start")).toBeEnabled())
+    expect(screen.getByLabelText("Quiet hours end")).toBeEnabled()
+  })
+
+  it("groups event types under their own labels", async () => {
+    render(<NotificationSettingsSection />)
+
+    const thresholds = await screen.findByRole("group", { name: "Quota thresholds" })
+    const otherEvents = screen.getByRole("group", { name: "Other events" })
+    const incidents = screen.getByRole("checkbox", { name: "Incidents and recovery" })
+    expect(thresholds).not.toContainElement(incidents)
+    expect(otherEvents).toContainElement(incidents)
+    expect(otherEvents).toContainElement(screen.getByRole("checkbox", { name: "Quota resets" }))
   })
 })

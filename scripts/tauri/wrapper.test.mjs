@@ -130,6 +130,20 @@ test("local dev uses an isolated Tauri identifier", () => {
   assert.notEqual(devConfig.identifier, releaseConfig.identifier)
 })
 
+test("local dev does not require the release-only CLI sidecar", () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+  const releaseConfig = JSON.parse(
+    readFileSync(path.join(repoRoot, "src-tauri", "tauri.conf.json"), "utf8")
+  )
+  const devConfig = JSON.parse(
+    readFileSync(path.join(repoRoot, "src-tauri", "tauri.dev.conf.json"), "utf8")
+  )
+
+  // Only beforeBuildCommand prepares the sidecar, so a clean checkout has no binary in dev.
+  assert.ok(releaseConfig.bundle.externalBin.length > 0)
+  assert.deepEqual(devConfig.bundle.externalBin, [])
+})
+
 test("every provider manifest resolves to a real provider icon", () => {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
   const pluginsDir = path.join(repoRoot, "plugins")
