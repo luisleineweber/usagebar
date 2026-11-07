@@ -1,27 +1,37 @@
 import { shouldUseTemplateTrayIcon } from "@/hooks/app/use-tray-icon"
-import { makeTrayBarsSvg, TRAY_BRAND_FOREGROUND } from "@/lib/tray-bars-icon"
+import { makeTrayBarsSvg } from "@/lib/tray-bars-icon"
+import { useTrayNumberSurface } from "@/hooks/use-taskbar-theme"
+import { TASKBAR_BACKGROUND } from "@/lib/taskbar-theme"
 import { makeTrayNumberSvg } from "@/lib/tray-number-icon"
 import type { TraySettingsPreview } from "@/lib/tray-preview"
-import type { MenubarIconStyle, TrayProviderSelection } from "@/lib/settings"
+import type { AccentColor, MenubarIconStyle } from "@/lib/settings"
+
+const TEMPLATE_PREVIEW_BACKGROUND = "#202124"
+// Template icons take the OS tint; on the dark preview surface that tint is white.
+const TEMPLATE_PREVIEW_FOREGROUND = "#ffffff"
 
 type SurfacePinSettingsProps = {
   menubarIconStyle: MenubarIconStyle
-  trayProviderSelection: TrayProviderSelection
+  accentColor: AccentColor
   preview: TraySettingsPreview
 }
 
 export function SurfacePinSettings({
   menubarIconStyle,
-  trayProviderSelection,
+  accentColor,
   preview,
 }: SurfacePinSettingsProps) {
   const trayBars =
     menubarIconStyle === "provider" || menubarIconStyle === "donut"
       ? preview.providerBars
       : preview.bars
-  const useWindowsNumberPreview = !shouldUseTemplateTrayIcon() && menubarIconStyle === "provider"
+  const useTemplateIcon = shouldUseTemplateTrayIcon()
+  // The preview reads the same surface as the real tray icon.
+  const taskbarTheme = useTrayNumberSurface()
+  const useWindowsNumberPreview = !useTemplateIcon && menubarIconStyle === "provider"
   const traySvg = useWindowsNumberPreview
-    ? makeTrayNumberSvg({
+    ? taskbarTheme &&
+      makeTrayNumberSvg({
         value:
           preview.state?.kind === "value"
             ? Math.round(preview.state.remainingPercentExact)
@@ -29,7 +39,7 @@ export function SurfacePinSettings({
               ? "error"
               : "unknown",
         sizePx: 36,
-        scheme: "dark",
+        taskbarTheme,
         state: preview.state,
       })
     : makeTrayBarsSvg({
@@ -38,23 +48,27 @@ export function SurfacePinSettings({
         style: menubarIconStyle,
         percentText: menubarIconStyle === "provider" ? preview.providerPercentText : undefined,
         providerIconUrl: preview.providerIconUrl,
-        foregroundColor: TRAY_BRAND_FOREGROUND,
+        // Windows draws bars and donut in the raw accent color, like the real tray icon.
+        foregroundColor: useTemplateIcon ? TEMPLATE_PREVIEW_FOREGROUND : accentColor,
       })
-  const trayPreviewUrl = `data:image/svg+xml,${encodeURIComponent(traySvg)}`
-  const explanation =
-    menubarIconStyle === "bars"
-      ? "Stacked bars show the first four providers."
-      : trayProviderSelection === "first"
-        ? "Always shows the first enabled provider in your saved order."
-        : "Starts with the first provider. After you leave a provider, Dashboard and History show that latest provider until you leave another one. This resets after restart."
+  const trayPreviewUrl = traySvg ? `data:image/svg+xml,${encodeURIComponent(traySvg)}` : null
+  const previewBackground =
+    !useTemplateIcon && taskbarTheme
+      ? TASKBAR_BACKGROUND[taskbarTheme]
+      : TEMPLATE_PREVIEW_BACKGROUND
 
   return (
     <div className="rounded-lg bg-muted p-3">
       <p className="text-xs font-medium text-muted-foreground">Live preview</p>
-      <div className="mt-2 flex min-h-12 items-center justify-center rounded-md bg-[#202124] px-3">
-        <img src={trayPreviewUrl} alt="Tray icon preview" className="h-9 max-w-full" />
+      <div
+        data-taskbar-theme={useTemplateIcon ? undefined : (taskbarTheme ?? undefined)}
+        className="mt-2 flex min-h-12 items-center justify-center rounded-md px-3"
+        style={{ backgroundColor: previewBackground }}
+      >
+        {trayPreviewUrl && (
+          <img src={trayPreviewUrl} alt="Tray icon preview" className="h-9 max-w-full" />
+        )}
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">{explanation}</p>
     </div>
   )
 }

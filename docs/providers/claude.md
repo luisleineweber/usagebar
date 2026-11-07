@@ -148,3 +148,11 @@ Content-Type: application/json
   "expires_in": 3600, // seconds
 }
 ```
+
+### HTTP 429 handling
+
+OAuth usage and token refresh responses save a per-profile retry deadline in plugin data. All probe entry points check it before network requests, including startup and manual refresh. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. A token refresh 429 stops the probe before usage requests. Each probe attempts token refresh at most once.
+
+The tray retains successful data within the current session. It does not load the separate usage API disk cache on startup. A first-probe error therefore shows an error card, even if the usage API has an older snapshot. A 429 does not remove session data.
+
+Separate installed and dev instances have separate data directories. Each instance must run this change to enforce its own backoff.

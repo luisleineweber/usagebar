@@ -109,6 +109,7 @@ export function AppContent({
     activeView === "home" ? (
       <OverviewPage
         plugins={displayPlugins}
+        hasResolvedViews={hasResolvedViews}
         onRetryPlugin={onRetryPlugin}
         displayMode={displayMode}
         resetTimerDisplayMode={resetTimerDisplayMode}

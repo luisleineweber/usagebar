@@ -1,3 +1,6 @@
 {
-  "identifier": "com.sunstory.usagebar.dev"
+  "identifier": "com.sunstory.usagebar.dev",
+  "bundle": {
+    "externalBin": []
+  }
 }

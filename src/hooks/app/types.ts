@@ -11,6 +11,8 @@ export type PluginState = {
   lastSettledData?: PluginOutput | null
   /** Last settled probe error; null = last settled probe succeeded; undefined = no probe settled yet. */
   lastSettledError?: string | null
+  /** Category of the last settled probe error. Same lifecycle as `lastSettledError`. */
+  lastSettledErrorCategory?: ProbeErrorCategory | null
   instanceRef?: ProviderInstanceRef
   history?: ProviderUsageHistory
   loading: boolean

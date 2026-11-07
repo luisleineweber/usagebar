@@ -305,6 +305,39 @@ describe("CodexAccountsSection", () => {
     })
   })
 
+  it("does not clear the pinned profile before a delayed list response", async () => {
+    let resolveList!: (profiles: typeof mockProfiles) => void
+    listProfilesMock.mockReturnValue(new Promise((resolve) => (resolveList = resolve)))
+    const onConfigChange = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <CodexAccountsSection
+        config={{ selectedAccountProfileId: "p1" }}
+        onConfigChange={onConfigChange}
+      />
+    )
+    expect(onConfigChange).not.toHaveBeenCalled()
+
+    await act(async () => resolveList(mockProfiles))
+    expect(await screen.findByText("Profile A")).toBeInTheDocument()
+    expect(onConfigChange).not.toHaveBeenCalled()
+  })
+
+  it("does not clear the pinned profile after a failed list load", async () => {
+    listProfilesMock.mockRejectedValue(new Error("list failed"))
+    const onConfigChange = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <CodexAccountsSection
+        config={{ selectedAccountProfileId: "p1" }}
+        onConfigChange={onConfigChange}
+      />
+    )
+
+    await waitFor(() => expect(screen.getByText("list failed")).toBeInTheDocument())
+    expect(onConfigChange).not.toHaveBeenCalled()
+  })
+
   it("does not render stale clear call when onConfigChange is missing", async () => {
     listProfilesMock.mockResolvedValue([mockProfiles[1]])
 

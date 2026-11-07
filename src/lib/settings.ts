@@ -105,8 +105,8 @@ export const MENUBAR_ICON_STYLE_OPTIONS: { value: MenubarIconStyle; label: strin
 ]
 
 export const TRAY_PROVIDER_SELECTION_OPTIONS: { value: TrayProviderSelection; label: string }[] = [
-  { value: "first", label: "First provider" },
-  { value: "last", label: "Latest provider" },
+  { value: "first", label: "First in list" },
+  { value: "last", label: "Last opened" },
 ]
 
 export const AUTO_UPDATE_OPTIONS: { value: AutoUpdateIntervalMinutes; label: string }[] =

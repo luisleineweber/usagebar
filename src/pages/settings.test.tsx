@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import { useState } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -183,7 +183,7 @@ describe("SettingsPage", () => {
   })
 
   it("keeps provider rows readable on narrower layouts", () => {
-    const { container } = render(
+    render(
       <SettingsPage
         {...defaultProps}
         settingsTab="providers"
@@ -193,7 +193,11 @@ describe("SettingsPage", () => {
       />
     )
 
-    expect(container.querySelector(".flex-wrap.items-start.gap-3")).toBeTruthy()
+    // Long provider names truncate in the row, and the detail actions wrap instead of overflow.
+    const row = screen.getByRole("button", { name: "OpenCode Zen, Setup needed" })
+    expect(row.querySelector(".truncate")).toHaveTextContent("OpenCode Zen")
+    const actions = screen.getByRole("button", { name: "Check again" }).parentElement
+    expect(actions).toHaveClass("flex-wrap")
   })
 
   it("renders global settings on the General tab", () => {
@@ -269,8 +273,8 @@ describe("SettingsPage", () => {
     expect(screen.getByRole("radio", { name: "Compact" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Stacked bars" })).toBeInTheDocument()
     expect(screen.getByRole("radio", { name: "Donut" })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: "First provider" })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: "Latest provider" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "First in list" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Last opened" })).toBeInTheDocument()
     expect(screen.queryByRole("radio", { name: "Merged" })).not.toBeInTheDocument()
     await user.click(screen.getByRole("radio", { name: "Stacked bars" }))
     expect(onMenubarIconStyleChange).toHaveBeenCalledWith("bars")
@@ -279,8 +283,8 @@ describe("SettingsPage", () => {
   it("hides provider selection for stacked bars", () => {
     render(<TestHarness menubarIconStyle="bars" />)
 
-    expect(screen.queryByRole("radio", { name: "First provider" })).not.toBeInTheDocument()
-    expect(screen.queryByRole("radio", { name: "Latest provider" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "First in list" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("radio", { name: "Last opened" })).not.toBeInTheDocument()
     expect(screen.getByText("Stacked bars show the first four providers.")).toBeInTheDocument()
   })
 
@@ -288,7 +292,7 @@ describe("SettingsPage", () => {
     const onTrayProviderSelectionChange = vi.fn()
     render(<TestHarness onTrayProviderSelectionChange={onTrayProviderSelectionChange} />)
 
-    await userEvent.click(screen.getByRole("radio", { name: "Latest provider" }))
+    await userEvent.click(screen.getByRole("radio", { name: "Last opened" }))
 
     expect(onTrayProviderSelectionChange).toHaveBeenCalledWith("last")
   })
@@ -314,8 +318,11 @@ describe("SettingsPage", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
     await userEvent.click(screen.getByRole("button", { name: /codex/i }))
 
-    expect(screen.getByTestId("provider-settings-codex")).toBeInTheDocument()
-    expect(screen.getAllByText("Not signed in").length).toBeGreaterThan(0)
+    const detail = screen.getByTestId("provider-settings-codex")
+    expect(detail).toBeInTheDocument()
+    // Codex is turned off: the detail shows that state, not the error of an earlier check.
+    expect(within(detail).getAllByText("Disabled").length).toBeGreaterThan(0)
+    expect(within(detail).getByText("Enable this provider to check it.")).toBeInTheDocument()
   })
 
   it("keeps provider-row clicks inside Settings", async () => {
@@ -346,10 +353,8 @@ describe("SettingsPage", () => {
     render(<TestHarness />)
     await userEvent.click(screen.getByRole("tab", { name: "Providers" }))
 
-    const codexRow = screen.getByRole("button", { name: /^codexnot signed in/i })
-    const openCodeRow = screen.getByRole("button", {
-      name: /^opencode zenexperimental on windows/i,
-    })
+    const codexRow = screen.getByRole("button", { name: "Codex, Disabled" })
+    const openCodeRow = screen.getByRole("button", { name: "OpenCode Zen, Setup needed" })
 
     expect(codexRow.compareDocumentPosition(openCodeRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING

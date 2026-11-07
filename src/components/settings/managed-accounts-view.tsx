@@ -26,8 +26,7 @@ export function managedAccountCopy(providerId: string, providerName: string) {
 }
 
 /**
- * Shared list for app-managed account profiles. It is a nested subsection of
- * Account & Connection: a top divider and top spacing only, so the parent owns the bottom gap.
+ * Shared list for app-managed account profiles. The parent section owns the divider and spacing.
  */
 export function ManagedAccountsView({
   providerId,

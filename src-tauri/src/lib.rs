@@ -15,6 +15,8 @@ mod credential_support;
 mod dev_data_migration;
 #[cfg(not(test))]
 mod global_shortcut;
+#[cfg(not(test))]
+mod guided_cookie_login;
 mod local_http_api;
 mod panel;
 mod plugin_commands;
@@ -28,6 +30,10 @@ mod provider_secret_store;
 mod provider_secrets;
 #[cfg(not(test))]
 mod settings_window;
+#[cfg(not(test))]
+mod setup_commands;
+#[cfg(target_os = "windows")]
+mod taskbar_theme;
 #[cfg(not(test))]
 mod tray;
 #[cfg(target_os = "macos")]
@@ -62,13 +68,17 @@ use tauri_plugin_log::{Target, TargetKind};
 
 #[cfg(not(test))]
 use credential_commands::{
-    capture_provider_cookie_header, delete_codex_account_profile, delete_provider_account_profile,
-    delete_provider_secret, import_browser_cookies, import_current_codex_account_profile,
+    delete_codex_account_profile, delete_provider_account_profile, delete_provider_secret,
+    import_browser_cookies, import_current_codex_account_profile,
     import_current_provider_account_profile, list_browser_import_sources,
     list_codex_account_profiles, list_provider_account_profiles, set_provider_secret,
 };
 #[cfg(not(test))]
+use guided_cookie_login::capture_provider_cookie_header;
+#[cfg(not(test))]
 use probe_commands::start_probe_batch;
+#[cfg(not(test))]
+use setup_commands::detect_plugin_setup;
 
 fn pending_panel_view_slot() -> &'static Mutex<Option<String>> {
     static SLOT: OnceLock<Mutex<Option<String>>> = OnceLock::new();
@@ -238,6 +248,7 @@ pub fn run() {
             capture_provider_cookie_header,
             open_devtools,
             start_probe_batch,
+            detect_plugin_setup,
             list_plugins,
             get_log_path,
             set_provider_secret,
@@ -251,6 +262,8 @@ pub fn run() {
             import_current_provider_account_profile,
             delete_provider_account_profile,
             update_global_shortcut,
+            #[cfg(target_os = "windows")]
+            taskbar_theme::get_taskbar_theme,
         ])
         .setup(app_startup::setup)
         .build(tauri::generate_context!())
@@ -288,7 +301,6 @@ mod tests {
             icon_color_mode: crate::plugin_engine::manifest::IconColorMode::default(),
             icon_aspect_ratio: None,
             brand_color: None,
-            default_plan: None,
             lines: Vec::new(),
             detail: None,
             links: Vec::new(),

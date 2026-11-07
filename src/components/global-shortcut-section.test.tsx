@@ -109,7 +109,7 @@ describe("GlobalShortcutSection", () => {
 
   it("clears and exits recording on Escape", async () => {
     const { onGlobalShortcutChange } = renderSection("CommandOrControl+Shift+U")
-    const trigger = screen.getByRole("button", { name: /Cmd \+ Shift \+ U/i })
+    const trigger = screen.getByRole("button", { name: "Global shortcut: Cmd + Shift + U" })
     await userEvent.click(trigger)
 
     const textbox = screen.getByRole("textbox", { name: /Press keys/i })
@@ -127,18 +127,35 @@ describe("GlobalShortcutSection", () => {
     expect(screen.queryByRole("textbox", { name: /Press keys/i })).toBeNull()
   })
 
-  it("starts recording from keyboard activation keys", () => {
+  it("starts recording from keyboard activation keys", async () => {
     renderSection()
-    const trigger = screen.getByRole("button", { name: /Click to set/i })
+    screen.getByRole("button", { name: "Click to set global shortcut" }).focus()
 
-    fireEvent.keyDown(trigger, { key: "Enter" })
+    await userEvent.keyboard("{Enter}")
     expect(screen.getByRole("textbox", { name: /Press keys/i })).toBeInTheDocument()
 
     fireEvent.blur(screen.getByRole("textbox", { name: /Press keys/i }))
     expect(screen.queryByRole("textbox", { name: /Press keys/i })).toBeNull()
 
-    fireEvent.keyDown(trigger, { key: " " })
+    screen.getByRole("button", { name: "Click to set global shortcut" }).focus()
+    await userEvent.keyboard(" ")
     expect(screen.getByRole("textbox", { name: /Press keys/i })).toBeInTheDocument()
+  })
+
+  it("shows the unset prompt once and names the trigger by purpose and state", () => {
+    renderSection()
+
+    expect(screen.getAllByText("Click to set")).toHaveLength(1)
+    expect(screen.getByRole("button", { name: "Click to set global shortcut" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Clear shortcut/i })).toBeNull()
+  })
+
+  it("names the trigger with the current shortcut and keeps the clear button separate", () => {
+    renderSection("CommandOrControl+Shift+U")
+
+    const trigger = screen.getByRole("button", { name: "Global shortcut: Cmd + Shift + U" })
+    const clear = screen.getByRole("button", { name: "Clear shortcut" })
+    expect(trigger).not.toContainElement(clear)
   })
 
   it("focuses the recording textbox after starting", async () => {

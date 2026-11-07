@@ -50,6 +50,8 @@ pub(crate) fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
     }));
 
     crate::tray::create(app.handle())?;
+    #[cfg(target_os = "windows")]
+    crate::taskbar_theme::watch(app.handle().clone());
 
     app.handle()
         .plugin(tauri_plugin_updater::Builder::new().build())?;

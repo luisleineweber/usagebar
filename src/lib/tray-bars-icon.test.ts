@@ -6,7 +6,7 @@ vi.mock("@tauri-apps/api/image", () => ({
   },
 }))
 
-import { TRAY_BRAND_FOREGROUND, getTrayIconSizePx, makeTrayBarsSvg, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
+import { getTrayIconSizePx, makeTrayBarsSvg, renderTrayBarsIcon } from "@/lib/tray-bars-icon"
 
 describe("tray-bars-icon", () => {
   it("getTrayIconSizePx renders 18px at 1x and 36px at 2x", () => {
@@ -85,15 +85,15 @@ describe("tray-bars-icon", () => {
     }
   })
 
-  it("supports a brand foreground for non-template tray icons", () => {
+  it("supports an accent foreground for non-template tray icons", () => {
     const svg = makeTrayBarsSvg({
       bars: [{ id: "a", fraction: 0.5 }],
       sizePx: 36,
       style: "bars",
-      foregroundColor: TRAY_BRAND_FOREGROUND,
+      foregroundColor: "#e07c8e",
     })
 
-    expect(svg).toContain(`fill="${TRAY_BRAND_FOREGROUND}"`)
+    expect(svg).toContain('fill="#e07c8e"')
     expect(svg).not.toContain('fill="black"')
   })
 
