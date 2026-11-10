@@ -19,17 +19,33 @@
     )
   }
 
-  function checkRateLimit(ctx) {
+  function readRateLimitRetryAt(ctx) {
     const path = rateLimitPath(ctx)
-    if (!ctx.host.fs.exists(path)) return
+    if (!ctx.host.fs.exists(path)) return null
     const state = JSON.parse(ctx.host.fs.readText(path))
-    if (Date.now() < state.retryAt) {
-      throw (
-        "Usage request failed (HTTP 429). Try again after " +
-        new Date(state.retryAt).toISOString() +
-        "."
-      )
+    return Date.now() < state.retryAt ? state.retryAt : null
+  }
+
+  function rateLimitMessage(retryAt) {
+    return (
+      "Usage request failed (HTTP 429). Try again after " + new Date(retryAt).toISOString() + "."
+    )
+  }
+
+  function checkRateLimit(ctx) {
+    const retryAt = readRateLimitRetryAt(ctx)
+    if (retryAt !== null) throw rateLimitMessage(retryAt)
+  }
+
+  // The OAuth usage endpoint has its own rate limit. The claude.ai web usage endpoint reports
+  // the same quota windows, so a configured web session can answer while OAuth backs off.
+  function probeDuringRateLimit(ctx, retryAt) {
+    const webResult = buildClaudeWebResult(ctx)
+    if (webResult) {
+      ctx.host.log.info("OAuth usage is rate limited; using Claude web session")
+      return webResult
     }
+    throw rateLimitMessage(retryAt)
   }
 
   function checkRateLimitResponse(ctx, response) {
@@ -1084,7 +1100,18 @@
   }
 
   function probe(ctx) {
-    checkRateLimit(ctx)
+    const activeRetryAt = readRateLimitRetryAt(ctx)
+    if (activeRetryAt !== null) return probeDuringRateLimit(ctx, activeRetryAt)
+    try {
+      return probeWithCredentials(ctx)
+    } catch (e) {
+      const retryAt = readRateLimitRetryAt(ctx)
+      if (retryAt === null) throw e
+      return probeDuringRateLimit(ctx, retryAt)
+    }
+  }
+
+  function probeWithCredentials(ctx) {
     const creds = loadCredentials(ctx)
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const webResult = buildClaudeWebResult(ctx)
