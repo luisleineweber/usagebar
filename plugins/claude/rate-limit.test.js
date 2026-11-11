@@ -163,3 +163,41 @@ it("keeps the 429 error when the Claude web session cannot answer", async () => 
 
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
 })
+
+it("keeps the 429 error for a managed profile and never reads the shared web session", async () => {
+  const ctx = makeCtx()
+  mockOAuthRateLimitWithWebSession(ctx)
+  ctx.instanceRef = { providerId: "claude", instanceId: "work" }
+  ctx.host.providerSecrets.read.mockImplementation((key) => {
+    if (key === "account:work:authJson") {
+      return JSON.stringify({ claudeAiOauth: { accessToken: "managed-token" } })
+    }
+    return key === "cookieHeader" ? "sessionKey=sk-ant-web-session" : null
+  })
+  vi.resetModules()
+  await import("./plugin.js")
+
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  expect(
+    ctx.host.http.request.mock.calls.some(([request]) => request.url.includes("claude.ai"))
+  ).toBe(false)
+  expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
+})
+
+it.each([401, 403])(
+  "keeps the 429 error when the Claude web session returns %s",
+  async (status) => {
+    const ctx = makeCtx()
+    mockOAuthRateLimitWithWebSession(ctx)
+    const webRequest = ctx.host.http.request.getMockImplementation()
+    ctx.host.http.request.mockImplementation((request) =>
+      request.url.includes("claude.ai") ? { status, bodyText: "" } : webRequest(request)
+    )
+    vi.resetModules()
+    await import("./plugin.js")
+
+    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  }
+)
