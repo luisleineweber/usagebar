@@ -1557,11 +1557,7 @@ fn inject_sqlite<'js>(
                 let mut stmt = conn.prepare(&sql).map_err(|e| {
                     Exception::throw_message(&ctx_inner, &format!("sqlite prepare failed: {}", e))
                 })?;
-                let column_names: Vec<String> = stmt
-                    .column_names()
-                    .iter()
-                    .map(|name| (*name).to_string())
-                    .collect();
+                let column_names: Vec<String> = stmt.column_names().map(str::to_string).collect();
                 let mut rows = stmt.query([]).map_err(|e| {
                     Exception::throw_message(&ctx_inner, &format!("sqlite query failed: {}", e))
                 })?;
