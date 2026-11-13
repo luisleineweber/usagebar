@@ -9,6 +9,8 @@
   const DEFAULT_SCOPES =
     "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
+  const WEB_SESSION_EXPIRED_MESSAGE =
+    "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
   function rateLimitPath(ctx) {
     return (
@@ -19,17 +21,43 @@
     )
   }
 
-  function checkRateLimit(ctx) {
+  function readRateLimitRetryAt(ctx) {
     const path = rateLimitPath(ctx)
-    if (!ctx.host.fs.exists(path)) return
+    if (!ctx.host.fs.exists(path)) return null
     const state = JSON.parse(ctx.host.fs.readText(path))
-    if (Date.now() < state.retryAt) {
-      throw (
-        "Usage request failed (HTTP 429). Try again after " +
-        new Date(state.retryAt).toISOString() +
-        "."
-      )
+    return Date.now() < state.retryAt ? state.retryAt : null
+  }
+
+  function rateLimitMessage(retryAt) {
+    return (
+      "Usage request failed (HTTP 429). Try again after " + new Date(retryAt).toISOString() + "."
+    )
+  }
+
+  function checkRateLimit(ctx) {
+    const retryAt = readRateLimitRetryAt(ctx)
+    if (retryAt !== null) throw rateLimitMessage(retryAt)
+  }
+
+  // The OAuth usage endpoint has its own rate limit. The claude.ai web usage endpoint reports
+  // the same quota windows, so a configured web session can answer while OAuth backs off.
+  // A managed profile must never read the provider-wide web session: it may belong to another
+  // account. An expired web session is not usable either, so the 429 error stays visible.
+  function probeDuringRateLimit(ctx, retryAt) {
+    if (readManagedProfileId(ctx)) throw rateLimitMessage(retryAt)
+    let webResult
+    try {
+      webResult = buildClaudeWebResult(ctx)
+    } catch (e) {
+      if (e !== WEB_SESSION_EXPIRED_MESSAGE) throw e
+      ctx.host.log.warn("OAuth usage is rate limited and the Claude web session is expired")
+      throw rateLimitMessage(retryAt)
     }
+    if (webResult) {
+      ctx.host.log.info("OAuth usage is rate limited; using Claude web session")
+      return webResult
+    }
+    throw rateLimitMessage(retryAt)
   }
 
   function checkRateLimitResponse(ctx, response) {
@@ -229,7 +257,7 @@
       return null
     }
     if (ctx.util.isAuthStatus(response.status)) {
-      throw "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
+      throw WEB_SESSION_EXPIRED_MESSAGE
     }
     if (response.status < 200 || response.status >= 300) {
       ctx.host.log.warn("claude web " + description + " returned HTTP " + String(response.status))
@@ -1084,7 +1112,18 @@
   }
 
   function probe(ctx) {
-    checkRateLimit(ctx)
+    const activeRetryAt = readRateLimitRetryAt(ctx)
+    if (activeRetryAt !== null) return probeDuringRateLimit(ctx, activeRetryAt)
+    try {
+      return probeWithCredentials(ctx)
+    } catch (e) {
+      const retryAt = readRateLimitRetryAt(ctx)
+      if (retryAt === null) throw e
+      return probeDuringRateLimit(ctx, retryAt)
+    }
+  }
+
+  function probeWithCredentials(ctx) {
     const creds = loadCredentials(ctx)
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const webResult = buildClaudeWebResult(ctx)
