@@ -419,7 +419,7 @@ describe("ProviderCard", () => {
         lines={[
           {
             type: "progress",
-            label: "Designs",
+            label: "Fable",
             used: 0,
             limit: 100,
             format: { kind: "percent" },

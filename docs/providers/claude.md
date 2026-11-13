@@ -45,6 +45,11 @@ Returns rate limit windows and optional extra credits.
     "utilization": 0,
     "resets_at": "2026-02-01T00:00:00Z",
   },
+  "seven_day_fable": {
+    // separate weekly Fable limit (optional, plan-dependent; null when absent)
+    "utilization": 12,
+    "resets_at": "2026-02-01T00:00:00Z",
+  },
   "extra_usage": {
     // on-demand overage credits (optional)
     "is_enabled": true,
@@ -56,6 +61,8 @@ Returns rate limit windows and optional extra credits.
 ```
 
 All windows are enforced simultaneously — hitting any limit throttles the user.
+
+UsageBar shows the `Fable` bar only when `seven_day_fable` has a numeric `utilization`. A `null` or missing window shows no bar; it is never shown as 0 %. Other product windows (Claude Design, routines) are not shown.
 
 ## Authentication
 
