@@ -52,7 +52,7 @@ tauri-plugin-autostart = "2.5.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 regex-lite = "0.1.9"
 keyring = "3.6.3"
-rusqlite = { version = "0.37.0", features = ["bundled"] }
+rusqlite = { version = "0.41.0", features = ["bundled"] }
 raw-window-handle = "0.6"
 tauri-plugin-notification = "2"
 
