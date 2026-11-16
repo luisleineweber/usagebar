@@ -40,12 +40,7 @@
     },
     {
       "type": "progress",
-      "label": "Designs",
-      "scope": "detail"
-    },
-    {
-      "type": "progress",
-      "label": "Daily Routines",
+      "label": "Fable",
       "scope": "detail"
     },
     {
