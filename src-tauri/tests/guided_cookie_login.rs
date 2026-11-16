@@ -34,7 +34,12 @@ fn is_missing_credential_error(_: &str) -> bool {
 fn main() {
     if let Some(provider_id) = std::env::args().nth(1) {
         let mode = std::env::args().nth(2).expect("native test mode");
-        run_login_test(provider_id, &mode);
+        let identifier = std::env::args().nth(3).expect("native test app identifier");
+        assert!(
+            identifier.starts_with(TEST_IDENTIFIER_PREFIX),
+            "native test app identifier must start with {TEST_IDENTIFIER_PREFIX}"
+        );
+        run_login_test(provider_id, &mode, identifier);
         return;
     }
 
@@ -43,12 +48,16 @@ fn main() {
     for provider_id in ["zed", "opencode", "abacus", "perplexity"] {
         for mode in ["cancel", "destroy", "capture", "late-capture"] {
             println!("Checking guided login for {provider_id}: {mode}");
+            let identifier = format!("{TEST_IDENTIFIER_PREFIX}{}", uuid::Uuid::new_v4());
             let status = std::process::Command::new(&executable)
-                .args([provider_id, mode])
+                .args([provider_id, mode, &identifier])
                 .status()
                 .expect("run native provider test");
             if !status.success() {
                 failed.push(format!("{provider_id}: {mode}"));
+            }
+            if let Err(error) = remove_test_profile(&identifier) {
+                failed.push(format!("{provider_id}: {mode} profile cleanup: {error}"));
             }
         }
     }
@@ -56,7 +65,33 @@ fn main() {
 }
 
 #[cfg(target_os = "windows")]
-fn run_login_test(provider_id: String, mode: &str) {
+const TEST_IDENTIFIER_PREFIX: &str = "com.usagebar.login-test.";
+
+// Tauri puts the WebView2 profile in the local data folder named after the app
+// identifier. Remove it after the child process exits so test runs leave no data.
+#[cfg(target_os = "windows")]
+fn remove_test_profile(identifier: &str) -> Result<(), String> {
+    use std::time::{Duration, Instant};
+
+    let profile = dirs::data_local_dir()
+        .ok_or("local data folder is not available")?
+        .join(identifier);
+    // WebView2 helper processes can hold profile files briefly after the app exits.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match std::fs::remove_dir_all(&profile) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) if Instant::now() >= deadline => {
+                return Err(format!("could not remove {}: {error}", profile.display()));
+            }
+            Err(_) => std::thread::sleep(Duration::from_millis(200)),
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn run_login_test(provider_id: String, mode: &str, identifier: String) {
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::sync::mpsc;
@@ -96,7 +131,7 @@ fn run_login_test(provider_id: String, mode: &str) {
     });
 
     let mut context = tauri::test::mock_context(tauri::test::noop_assets());
-    context.config_mut().identifier = format!("com.usagebar.login-test.{}", uuid::Uuid::new_v4());
+    context.config_mut().identifier = identifier;
     let app = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             guided_cookie_login::capture_provider_cookie_header

@@ -18,7 +18,9 @@ fixture cookie. It loads the target page and checks that the result contains
 only the approved cookie. Each check fails after ten seconds if the native event
 loop or cookie read blocks.
 
-The test uses a separate browser profile. It does not read user account cookies
+Each check uses a new browser profile in the local app data folder. The test
+removes the profile after the check process exits. The test fails if it cannot
+remove the profile. It does not read user account cookies
 or store credentials. It does not require provider accounts or working remote pages.
 The Windows CI job runs the same native test. The test executable uses the
 Common Controls v6 manifest required by WebView2.
