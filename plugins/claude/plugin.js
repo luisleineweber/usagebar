@@ -247,11 +247,11 @@
       throw "Claude web " + description + " request failed (HTTP " + response.status + ")."
     }
     const parsed = ctx.util.tryParseJson(response.bodyText)
-    const validShape =
+    const isValidResponse =
       path === "/organizations"
         ? Array.isArray(parsed)
         : parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    if (validShape) return parsed
+    if (isValidResponse) return parsed
     if (optional) return null
     throw "Claude web " + description + " response invalid."
   }
