@@ -124,84 +124,6 @@ function mockOAuthRateLimitWithWebSession(ctx) {
   })
 }
 
-it("answers an OAuth 429 with the configured Claude web session", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  vi.resetModules()
-  await import("./plugin.js")
-
-  const result = globalThis.__openusage_plugin.probe(ctx)
-
-  expect(result.lines.find((line) => line.label === "Session")?.used).toBe(42)
-})
-
-it("skips OAuth during backoff and keeps using the Claude web session", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  vi.resetModules()
-  await import("./plugin.js")
-  globalThis.__openusage_plugin.probe(ctx)
-  ctx.host.http.request.mockClear()
-
-  const result = globalThis.__openusage_plugin.probe(ctx)
-
-  expect(result.lines.find((line) => line.label === "Session")?.used).toBe(42)
-  expect(
-    ctx.host.http.request.mock.calls.some(([request]) => request.url.includes("/api/oauth/usage"))
-  ).toBe(false)
-})
-
-it("keeps the 429 error when the Claude web session cannot answer", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  const webRequest = ctx.host.http.request.getMockImplementation()
-  ctx.host.http.request.mockImplementation((request) =>
-    request.url.includes("claude.ai") ? { status: 429, bodyText: "" } : webRequest(request)
-  )
-  vi.resetModules()
-  await import("./plugin.js")
-
-  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-})
-
-it("keeps the 429 error for a managed profile and never reads the shared web session", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  ctx.instanceRef = { providerId: "claude", instanceId: "work" }
-  ctx.host.providerSecrets.read.mockImplementation((key) => {
-    if (key === "account:work:authJson") {
-      return JSON.stringify({ claudeAiOauth: { accessToken: "managed-token" } })
-    }
-    return key === "cookieHeader" ? "sessionKey=sk-ant-web-session" : null
-  })
-  vi.resetModules()
-  await import("./plugin.js")
-
-  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  expect(
-    ctx.host.http.request.mock.calls.some(([request]) => request.url.includes("claude.ai"))
-  ).toBe(false)
-  expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
-})
-
-it.each([401, 403])(
-  "keeps the 429 error when the Claude web session returns %s",
-  async (status) => {
-    const ctx = makeCtx()
-    mockOAuthRateLimitWithWebSession(ctx)
-    const webRequest = ctx.host.http.request.getMockImplementation()
-    ctx.host.http.request.mockImplementation((request) =>
-      request.url.includes("claude.ai") ? { status, bodyText: "" } : webRequest(request)
-    )
-    vi.resetModules()
-    await import("./plugin.js")
-
-    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  }
-)
-
 it("allows a valid replacement token to use usage during a refresh hold", async () => {
   const ctx = makeCtx()
   ctx.host.keychain.readGenericPassword.mockReturnValue(
@@ -236,3 +158,54 @@ it("keeps a usage hold after token rotation", async () => {
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
   expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
 })
+
+it("uses a valid token near expiry during a refresh hold", async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date("2026-11-03T13:15:00Z"))
+  const ctx = makeCtx()
+  const credentials = (expiresAt) =>
+    JSON.stringify({ claudeAiOauth: { accessToken: "test", refreshToken: "refresh", expiresAt } })
+  ctx.host.keychain.readGenericPassword.mockReturnValue(credentials(1))
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+  ctx.host.keychain.readGenericPassword.mockReturnValue(credentials(Date.now() + 120000))
+  ctx.host.http.request.mockReturnValue({
+    status: 200,
+    bodyText: JSON.stringify({ five_hour: { utilization: 27 } }),
+  })
+  const result = globalThis.__openusage_plugin.probe(ctx)
+  expect(result.lines.find((line) => line.label === "Session")?.used).toBe(27)
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
+  expect(ctx.host.http.request.mock.calls[1][0].url).toContain("/api/oauth/usage")
+})
+
+it.each(["usage", "refresh"])(
+  "keeps %s 429 visible without shared web access",
+  async (endpoint) => {
+    const ctx = makeCtx()
+    mockOAuthRateLimitWithWebSession(ctx)
+    ctx.host.keychain.readGenericPassword.mockReturnValue(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: "test",
+          refreshToken: "refresh",
+          expiresAt: endpoint === "refresh" ? 1 : Date.now() + 3600000,
+        },
+      })
+    )
+    const request = ctx.host.http.request.getMockImplementation()
+    ctx.host.http.request.mockImplementation((options) =>
+      options.url.includes("/v1/oauth/token") ? { status: 429, bodyText: "" } : request(options)
+    )
+    vi.resetModules()
+    await import("./plugin.js")
+    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+    expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
+    expect(
+      ctx.host.http.request.mock.calls.some(([request]) => request.url.includes("claude.ai"))
+    ).toBe(false)
+  }
+)

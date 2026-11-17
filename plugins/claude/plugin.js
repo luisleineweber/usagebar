@@ -13,9 +13,14 @@
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
   function rateLimitPath(ctx, endpoint = "usage") {
+    const prefixes = { usage: "rate-limit-", refresh: "rate-limit-refresh-" }
+    if (!Object.prototype.hasOwnProperty.call(prefixes, endpoint)) {
+      throw new Error("Unknown Claude rate-limit endpoint: " + endpoint)
+    }
     return (
       ctx.app.pluginDataDir +
-      (endpoint === "usage" ? "/rate-limit-" : "/rate-limit-refresh-") +
+      "/" +
+      prefixes[endpoint] +
       encodeURIComponent(ctx.instanceRef?.instanceId || "default") +
       ".json"
     )
@@ -37,27 +42,6 @@
   function checkRateLimit(ctx, endpoint = "usage") {
     const retryAt = readRateLimitRetryAt(ctx, endpoint)
     if (retryAt !== null) throw rateLimitMessage(retryAt)
-  }
-
-  // The OAuth usage endpoint has its own rate limit. The claude.ai web usage endpoint reports
-  // the same quota windows, so a configured web session can answer while OAuth backs off.
-  // A managed profile must never read the provider-wide web session: it may belong to another
-  // account. An expired web session is not usable either, so the 429 error stays visible.
-  function probeDuringRateLimit(ctx, retryAt) {
-    if (readManagedProfileId(ctx)) throw rateLimitMessage(retryAt)
-    let webResult
-    try {
-      webResult = buildClaudeWebResult(ctx)
-    } catch (e) {
-      if (e !== WEB_SESSION_EXPIRED_MESSAGE) throw e
-      ctx.host.log.warn("OAuth usage is rate limited and the Claude web session is expired")
-      throw rateLimitMessage(retryAt)
-    }
-    if (webResult) {
-      ctx.host.log.info("OAuth usage is rate limited; using Claude web session")
-      return webResult
-    }
-    throw rateLimitMessage(retryAt)
   }
 
   function checkRateLimitResponse(ctx, response, endpoint = "usage") {
@@ -577,7 +561,7 @@
       return null
     }
 
-    checkRateLimit(ctx, "refresh")
+    if (readRateLimitRetryAt(ctx, "refresh") !== null) return null
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
     try {
@@ -1064,18 +1048,24 @@
 
   function probe(ctx) {
     const activeRetryAt = readRateLimitRetryAt(ctx)
-    if (activeRetryAt !== null) return probeDuringRateLimit(ctx, activeRetryAt)
+    if (activeRetryAt !== null) throw rateLimitMessage(activeRetryAt)
     try {
       return probeWithCredentials(ctx)
     } catch (e) {
-      const retryAt = readRateLimitRetryAt(ctx)
+      const retryAt = readRateLimitRetryAt(ctx) ?? readRateLimitRetryAt(ctx, "refresh")
       if (retryAt === null) throw e
-      return probeDuringRateLimit(ctx, retryAt)
+      throw rateLimitMessage(retryAt)
     }
   }
 
   function probeWithCredentials(ctx) {
     const creds = loadCredentials(ctx)
+    if (
+      !creds?.oauth?.accessToken?.trim() ||
+      (typeof creds.oauth.expiresAt === "number" && creds.oauth.expiresAt <= Date.now())
+    ) {
+      checkRateLimit(ctx, "refresh")
+    }
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const webResult = buildClaudeWebResult(ctx)
       if (webResult) {

@@ -158,9 +158,9 @@ Content-Type: application/json
 
 ### HTTP 429 handling
 
-OAuth usage and token refresh responses save a per-profile retry deadline in plugin data. All probe entry points check it before network requests, including startup and manual refresh. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. A token refresh 429 stops the probe before usage requests. Each probe attempts token refresh at most once.
+OAuth usage and token refresh responses save separate per-profile retry deadlines in plugin data. Usage holds survive token rotation and credential replacement. Token identity does not prove an account change. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token refresh at most once.
 
-During an OAuth retry deadline, the probe uses the Claude web session (`cookieHeader`) when one is configured and no managed account profile is selected. The web usage endpoint reports the same quota windows and has a separate rate limit. The web session is provider-wide and can belong to another account, so a selected managed profile keeps the HTTP 429 error and does not read it. Without a web session, with an expired web session (HTTP 401 or 403), or when the web request fails, the probe keeps the HTTP 429 error.
+During any OAuth hold, HTTP 429 remains visible and the probe does not read the shared web cookie or make web requests. An organization match does not prove that the same user owns the cookie. A still-valid access token can request OAuth usage during a refresh hold; an expired token keeps the refresh hold visible.
 
 The tray retains successful data within the current session. It does not load the separate usage API disk cache on startup. A first-probe error therefore shows an error card, even if the usage API has an older snapshot. A 429 does not remove session data.
 
