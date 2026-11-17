@@ -147,7 +147,10 @@ fn retain_cached_history(
 }
 
 fn history_has_cost(history: &UsageHistory) -> bool {
-    history.entries.iter().any(|entry| entry.cost_usd.is_some())
+    history
+        .entries
+        .iter()
+        .any(|entry| entry.cost_usd.is_some() || entry.charged_cost_usd.is_some())
 }
 
 fn retained_marker(
@@ -436,6 +439,7 @@ mod tests {
                 project: None,
                 account: None,
                 cost_usd: None,
+                charged_cost_usd: None,
                 requests: None,
                 input_tokens: None,
                 output_tokens: None,

@@ -298,6 +298,7 @@ mod tests {
             project: project.map(str::to_string),
             account: None,
             cost_usd: Some(1.5),
+            charged_cost_usd: None,
             requests: Some(2.0),
             input_tokens: Some(10.0),
             output_tokens: Some(5.0),

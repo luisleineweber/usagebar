@@ -116,6 +116,8 @@ pub(crate) fn redact_body(body: &str) -> String {
         "email",
         "login",
         "analytics_tracking_id",
+        "owningUser",
+        "owningTeam",
     ];
     for key in sensitive_keys {
         let pattern = format!(r#""{}":\s*"([^"]+)""#, key);

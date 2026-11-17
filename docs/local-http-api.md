@@ -65,6 +65,8 @@ Returns grouped cached usage history. Use `provider`, `from`, `to`, `model`, `pr
 
 History response `schemaVersion` is `2`. Every field in `totals` and group `totals` is `number | null`. `null` means the selected entries did not provide that metric; it is not zero.
 
+`costUsd` is the token cost at the model vendor's list price. `chargedCostUsd` is the amount that the provider charged or deducted from the plan. They are separate totals. UsageBar never adds one to the other and never uses one in place of the other. Only providers that report a charged amount, such as Cursor, set `chargedCostUsd`.
+
 ### Unsupported Methods
 
 `GET` and `OPTIONS` are supported on the API routes. Other methods return `405 Method Not Allowed`.

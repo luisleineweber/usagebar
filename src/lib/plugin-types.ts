@@ -162,7 +162,13 @@ export type UsageHistoryEntry = {
   model?: string
   project?: string
   account?: string
+  /** Token cost at the model vendor's list price (API rate). Not an amount billed to the user. */
   costUsd?: number
+  /**
+   * Amount the provider charged or deducted from the plan for this usage.
+   * Never derived from `costUsd`. Omitted when the provider does not report it.
+   */
+  chargedCostUsd?: number
   requests?: number
   inputTokens?: number
   outputTokens?: number

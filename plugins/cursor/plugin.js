@@ -9,6 +9,12 @@
   const REST_USAGE_URL = "https://cursor.com/api/usage"
   const USAGE_SUMMARY_URL = "https://cursor.com/api/usage-summary"
   const STRIPE_URL = "https://cursor.com/api/auth/stripe"
+  const USAGE_EVENTS_URL = "https://cursor.com/api/dashboard/get-filtered-usage-events"
+  const USAGE_EVENTS_ORIGIN = "https://cursor.com"
+  const USAGE_EVENTS_PAGE_SIZE = 500
+  // Safety cap so a paging fault cannot loop forever (40 * 500 = 20k events per window).
+  const USAGE_EVENTS_MAX_PAGES = 40
+  const USAGE_HISTORY_DAYS = 30
   const CLIENT_ID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
   const LOGIN_HINT = "Sign in via Cursor app or run `agent login`."
@@ -503,7 +509,330 @@
     )
   }
 
+  // ---------------------------------------------------------------------------
+  // Usage event history
+  //
+  // Two cost values come from each event and keep separate meanings:
+  // - `tokenUsage.totalCents` is the token cost at the model vendor's list price.
+  //   It maps to history `costUsd`, the same meaning as the ccusage-based providers.
+  // - `chargedCents` is the amount that Cursor deducted from the plan or charged.
+  //   It maps to history `chargedCostUsd`.
+  // The plugin never adds one to the other and never uses one in place of the other.
+  // A bucket metric is set only when every event in the bucket reports a valid value.
+  // ---------------------------------------------------------------------------
+
+  function eventsFailure(reason) {
+    return { ok: false, reason: reason }
+  }
+
+  function nonNegativeNumber(value) {
+    if (typeof value === "number") {
+      return Number.isFinite(value) && value >= 0 ? value : null
+    }
+    if (typeof value === "string" && value.trim() !== "") {
+      var parsed = Number(value)
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+    }
+    return null
+  }
+
+  function nonNegativeInteger(value) {
+    var number = nonNegativeNumber(value)
+    return number !== null && Number.isInteger(number) ? number : null
+  }
+
+  function stableStringify(value) {
+    if (Array.isArray(value)) {
+      return "[" + value.map(stableStringify).join(",") + "]"
+    }
+    if (value && typeof value === "object") {
+      return "{" + Object.keys(value).sort().map(function (key) {
+        return JSON.stringify(key) + ":" + stableStringify(value[key])
+      }).join(",") + "}"
+    }
+    return JSON.stringify(value === undefined ? null : value)
+  }
+
+  function parseUsageEventsPage(ctx, bodyText) {
+    var body = ctx.util.tryParseJson(bodyText)
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return eventsFailure("invalid JSON")
+    }
+    var keys = Object.keys(body)
+    // An empty query returns an empty object. Any other shape must carry the event list,
+    // so an error envelope cannot pass as confirmed empty usage.
+    if (keys.length === 0) return { ok: true, total: 0, events: [] }
+
+    var total = null
+    if (Object.prototype.hasOwnProperty.call(body, "totalUsageEventsCount")) {
+      total = nonNegativeInteger(body.totalUsageEventsCount)
+      if (total === null) return eventsFailure("invalid totalUsageEventsCount")
+    }
+    if (!Object.prototype.hasOwnProperty.call(body, "usageEventsDisplay")) {
+      if (total !== null && keys.length === 1) return { ok: true, total: total, events: [] }
+      return eventsFailure("missing usageEventsDisplay")
+    }
+    if (!Array.isArray(body.usageEventsDisplay)) {
+      return eventsFailure("usageEventsDisplay is not an array")
+    }
+    return { ok: true, total: total, events: body.usageEventsDisplay }
+  }
+
+  function fetchUsageEventsPage(ctx, session, page, startMs, endMs) {
+    var resp
+    try {
+      resp = ctx.util.request({
+        method: "POST",
+        url: USAGE_EVENTS_URL,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          // Cursor checks the Origin header on dashboard POST requests (CSRF guard).
+          Origin: USAGE_EVENTS_ORIGIN,
+          Cookie: "WorkosCursorSessionToken=" + session.sessionToken,
+        },
+        bodyText: JSON.stringify({
+          page: page,
+          pageSize: USAGE_EVENTS_PAGE_SIZE,
+          startDate: String(startMs),
+          endDate: String(endMs),
+        }),
+        timeoutMs: 15000,
+      })
+    } catch (e) {
+      return eventsFailure("request failed: " + String(e))
+    }
+    if (resp.status < 200 || resp.status >= 300) {
+      return eventsFailure("HTTP " + String(resp.status))
+    }
+    return parseUsageEventsPage(ctx, resp.bodyText)
+  }
+
+  // Number of rows at the end of `previous` that repeat at the start of `current`.
+  function boundaryOverlap(previous, current) {
+    var limit = Math.min(previous.length, current.length)
+    for (var count = limit; count > 0; count--) {
+      var matches = true
+      for (var i = 0; i < count; i++) {
+        if (previous[previous.length - count + i] !== current[i]) {
+          matches = false
+          break
+        }
+      }
+      if (matches) return count
+    }
+    return 0
+  }
+
+  // The endpoint has no stable event ID, and two real events can be identical.
+  // Remove rows only when the reported total proves that pages overlap, and only
+  // as many rows as that total allows, taken from adjacent page boundaries.
+  function reconcilePages(pages, expectedTotal) {
+    var rawCount = pages.reduce(function (sum, page) { return sum + page.length }, 0)
+    if (rawCount < expectedTotal) {
+      return eventsFailure("incomplete pages: expected " + expectedTotal + ", received " + rawCount)
+    }
+    var removalsLeft = rawCount - expectedTotal
+    var keys = pages.map(function (page) { return page.map(stableStringify) })
+    var events = pages.length > 0 ? pages[0].slice() : []
+    for (var p = 1; p < pages.length; p++) {
+      var removeCount = removalsLeft > 0
+        ? Math.min(boundaryOverlap(keys[p - 1], keys[p]), removalsLeft)
+        : 0
+      removalsLeft -= removeCount
+      events = events.concat(pages[p].slice(removeCount))
+    }
+    if (removalsLeft !== 0 || events.length !== expectedTotal) {
+      return eventsFailure("inconsistent pages: expected " + expectedTotal + ", received " + rawCount)
+    }
+    return { ok: true, events: events }
+  }
+
+  function fetchUsageEvents(ctx, session, startMs, endMs) {
+    var pages = []
+    var expectedTotal = null
+    var completed = false
+    for (var page = 1; page <= USAGE_EVENTS_MAX_PAGES; page++) {
+      var result = fetchUsageEventsPage(ctx, session, page, startMs, endMs)
+      if (!result.ok) return result
+      if (result.total !== null) {
+        if (expectedTotal !== null && expectedTotal !== result.total) {
+          return eventsFailure("total changed between pages")
+        }
+        expectedTotal = result.total
+      }
+      if (result.events.length === 0) {
+        completed = true
+        break
+      }
+      pages.push(result.events)
+      if (result.events.length < USAGE_EVENTS_PAGE_SIZE) {
+        completed = true
+        break
+      }
+    }
+    // A full last page at the cap does not prove that no more events exist.
+    if (!completed) return eventsFailure("page limit reached")
+    if (expectedTotal === null) {
+      return { ok: true, events: pages.reduce(function (all, p) { return all.concat(p) }, []) }
+    }
+    return reconcilePages(pages, expectedTotal)
+  }
+
+  function localDayStartMs(ms) {
+    var date = new Date(ms)
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  }
+
+  function localDayPeriod(dayStartMs) {
+    var start = new Date(dayStartMs)
+    var end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1)
+    return { periodStart: start.toISOString(), periodEnd: end.toISOString() }
+  }
+
+  function readTokenCount(tokenUsage, field) {
+    if (!tokenUsage) return null
+    return nonNegativeNumber(tokenUsage[field])
+  }
+
+  function normalizeUsageEvent(raw) {
+    if (!raw || typeof raw !== "object") return null
+    var timestampMs = nonNegativeInteger(raw.timestamp)
+    if (timestampMs === null || timestampMs === 0) return null
+    var tokenUsage = raw.tokenUsage && typeof raw.tokenUsage === "object" ? raw.tokenUsage : null
+    var model = typeof raw.model === "string" ? raw.model.trim() : ""
+    return {
+      timestampMs: timestampMs,
+      model: model || null,
+      inputTokens: readTokenCount(tokenUsage, "inputTokens"),
+      outputTokens: readTokenCount(tokenUsage, "outputTokens"),
+      cacheReadTokens: readTokenCount(tokenUsage, "cacheReadTokens"),
+      cacheCreationTokens: readTokenCount(tokenUsage, "cacheWriteTokens"),
+      listPriceCents: readTokenCount(tokenUsage, "totalCents"),
+      chargedCents: nonNegativeNumber(raw.chargedCents),
+    }
+  }
+
+  var BUCKET_METRICS = [
+    "inputTokens",
+    "outputTokens",
+    "cacheReadTokens",
+    "cacheCreationTokens",
+    "listPriceCents",
+    "chargedCents",
+  ]
+
+  // A null sum means at least one event in the bucket did not report the metric.
+  function addToBucket(bucket, event) {
+    bucket.requests += 1
+    for (var i = 0; i < BUCKET_METRICS.length; i++) {
+      var metric = BUCKET_METRICS[i]
+      var value = event[metric]
+      bucket[metric] = bucket[metric] === null || value === null ? null : bucket[metric] + value
+    }
+  }
+
+  function bucketEntry(bucket) {
+    var entry = localDayPeriod(bucket.dayStartMs)
+    if (bucket.model) entry.model = bucket.model
+    entry.requests = bucket.requests
+    if (bucket.inputTokens !== null) entry.inputTokens = bucket.inputTokens
+    if (bucket.outputTokens !== null) entry.outputTokens = bucket.outputTokens
+    if (bucket.cacheReadTokens !== null) entry.cacheReadTokens = bucket.cacheReadTokens
+    if (bucket.cacheCreationTokens !== null) entry.cacheCreationTokens = bucket.cacheCreationTokens
+    if (
+      bucket.inputTokens !== null &&
+      bucket.outputTokens !== null &&
+      bucket.cacheReadTokens !== null &&
+      bucket.cacheCreationTokens !== null
+    ) {
+      entry.totalTokens =
+        bucket.inputTokens + bucket.outputTokens + bucket.cacheReadTokens + bucket.cacheCreationTokens
+    }
+    if (bucket.listPriceCents !== null) entry.costUsd = bucket.listPriceCents / 100
+    if (bucket.chargedCents !== null) entry.chargedCostUsd = bucket.chargedCents / 100
+    return entry
+  }
+
+  function buildUsageEventHistory(rawEvents) {
+    var buckets = {}
+    var order = []
+    var skipped = 0
+    for (var i = 0; i < rawEvents.length; i++) {
+      var event = normalizeUsageEvent(rawEvents[i])
+      if (!event) {
+        skipped += 1
+        continue
+      }
+      var dayStartMs = localDayStartMs(event.timestampMs)
+      var key = dayStartMs + "\u0000" + (event.model || "")
+      if (!buckets[key]) {
+        buckets[key] = {
+          dayStartMs: dayStartMs,
+          model: event.model,
+          requests: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          listPriceCents: 0,
+          chargedCents: 0,
+        }
+        order.push(key)
+      }
+      addToBucket(buckets[key], event)
+    }
+    order.sort(function (a, b) {
+      var left = buckets[a]
+      var right = buckets[b]
+      if (left.dayStartMs !== right.dayStartMs) return left.dayStartMs - right.dayStartMs
+      return String(left.model || "").localeCompare(String(right.model || ""))
+    })
+    return {
+      skipped: skipped,
+      history: {
+        version: 1,
+        source: "cursor-usage-events",
+        timeZone: "system-local",
+        entries: order.map(function (key) { return bucketEntry(buckets[key]) }),
+      },
+    }
+  }
+
+  function fetchUsageEventHistory(ctx, accessToken, nowMs) {
+    var session = buildSessionToken(ctx, accessToken)
+    if (!session) {
+      ctx.host.log.warn("usage events: cannot build session token; history omitted")
+      return undefined
+    }
+    var now = new Date(nowMs)
+    // Calendar arithmetic keeps whole local days across daylight saving changes.
+    var startMs = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - (USAGE_HISTORY_DAYS - 1)
+    ).getTime()
+    var fetched = fetchUsageEvents(ctx, session, startMs, nowMs)
+    if (!fetched.ok) {
+      ctx.host.log.warn("usage events unavailable (" + fetched.reason + "); history omitted")
+      return undefined
+    }
+    var built = buildUsageEventHistory(fetched.events)
+    if (built.skipped > 0) {
+      ctx.host.log.warn("usage events: skipped " + built.skipped + " events without a valid timestamp")
+    }
+    return built.history
+  }
+
   function probe(ctx) {
+    const state = { accessToken: null }
+    const result = probeSummary(ctx, state)
+    const history = fetchUsageEventHistory(ctx, state.accessToken, Date.now())
+    if (history) result.history = history
+    return result
+  }
+
+  function probeSummary(ctx, state) {
     const authState = loadAuthState(ctx)
     let accessToken = authState.accessToken
     const refreshTokenValue = authState.refreshToken
@@ -584,6 +913,7 @@
     }
 
     ctx.host.log.info("usage fetch succeeded")
+    state.accessToken = accessToken
 
     const usage = ctx.util.tryParseJson(usageResp.bodyText)
     if (usage === null) {

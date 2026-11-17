@@ -224,6 +224,7 @@ describe("summarizeUsageHistory", () => {
     expect(summary.entryCount).toBe(3)
     expect(summary.totals).toEqual({
       costUsd: null,
+      chargedCostUsd: null,
       requests: 5,
       inputTokens: null,
       outputTokens: 77,
@@ -232,6 +233,30 @@ describe("summarizeUsageHistory", () => {
       reasoningTokens: null,
       totalTokens: null,
     })
+  })
+
+  it("sums charged cost apart from list-price cost and keeps partial charged totals unknown", () => {
+    const charged = summarizeUsageHistory(
+      [
+        output("cursor", [
+          historyEntry({ costUsd: 2, chargedCostUsd: 0.5 }),
+          historyEntry({ costUsd: 1, chargedCostUsd: 0 }),
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    expect(charged.totals.costUsd).toBe(3)
+    expect(charged.totals.chargedCostUsd).toBe(0.5)
+
+    const partial = summarizeUsageHistory(
+      [
+        output("cursor", [historyEntry({ costUsd: 2, chargedCostUsd: 0.5 })]),
+        output("codex", [historyEntry({ costUsd: 1 })]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    expect(partial.totals.costUsd).toBe(3)
+    expect(partial.totals.chargedCostUsd).toBeNull()
   })
 
   it("selects the top model by cost, then tokens and requests", () => {
@@ -294,6 +319,7 @@ describe("summarizeUsageHistory", () => {
 
     expect(summary.totals).toEqual({
       costUsd: null,
+      chargedCostUsd: null,
       requests: null,
       inputTokens: null,
       outputTokens: null,
