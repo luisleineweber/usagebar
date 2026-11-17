@@ -8,6 +8,7 @@ import { useDarkMode } from "@/hooks/use-dark-mode"
 import { GlobalShortcutSection } from "@/components/global-shortcut-section"
 import { SurfacePinSettings } from "@/components/settings/surface-pin-settings"
 import { NotificationSettingsSection } from "@/components/settings/notification-settings-section"
+import { PanelPlacementSettings } from "@/components/settings/panel-placement-settings"
 import { ResetSettingsSection } from "@/components/settings/reset-settings-section"
 import type { TraySettingsPreview } from "@/lib/tray-preview"
 import { PROJECT_ISSUES_URL } from "@/lib/project-metadata"
@@ -285,6 +286,11 @@ export function GeneralSettingsPane({
             Show History in bar
           </label>
         </div>
+      </section>
+
+      <section className={SETTINGS_SECTION_CLASS}>
+        <h3 className="mb-3 text-base font-semibold">Panel Position</h3>
+        <PanelPlacementSettings />
       </section>
 
       <section className={SETTINGS_SECTION_CLASS}>

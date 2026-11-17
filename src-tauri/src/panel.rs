@@ -3,8 +3,11 @@ use std::sync::{Mutex, OnceLock};
 #[cfg(target_os = "windows")]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size, WebviewWindow,
+    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalPosition, PhysicalSize, Position,
+    Size, WebviewWindow,
 };
+
+use crate::panel_floating_geometry::PhysicalRect;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos,
@@ -314,6 +317,33 @@ fn apply_window_bounds_windows(
     status != 0
 }
 
+/// Move and size the panel to physical `bounds`. The position is left alone
+/// while the user drags the panel.
+pub(crate) fn apply_physical_bounds(window: &WebviewWindow, bounds: PhysicalRect) {
+    let bounds = PhysicalWindowBounds {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+    };
+    let apply_position = !crate::panel_move_tracking::user_move_in_progress();
+
+    #[cfg(target_os = "windows")]
+    if apply_window_bounds_windows(window, bounds, apply_position) {
+        return;
+    }
+
+    if apply_position {
+        let _ = window.set_position(Position::Physical(PhysicalPosition::new(
+            bounds.x, bounds.y,
+        )));
+    }
+    let _ = window.set_size(Size::Physical(PhysicalSize::new(
+        bounds.width,
+        bounds.height,
+    )));
+}
+
 fn apply_window_bounds(
     window: &WebviewWindow,
     logical_x: f64,
@@ -323,6 +353,16 @@ fn apply_window_bounds(
     apply_position: bool,
     pin_bottom_edge: bool,
 ) {
+    // A floating panel keeps the user's spot instead of the tray anchor.
+    if let Some(bounds) =
+        crate::panel_floating::floating_bounds(window, logical_width, logical_height)
+    {
+        apply_physical_bounds(window, bounds);
+        return;
+    }
+
+    // Never pull the panel back to the tray while the user drags it.
+    let apply_position = apply_position && !crate::panel_move_tracking::user_move_in_progress();
     let scale_factor = window.scale_factor().ok().unwrap_or(1.0);
     let bounds = physical_window_bounds(
         logical_x,
@@ -570,6 +610,16 @@ pub fn position_panel_at_tray_icon(
     let vertical_anchor =
         position_panel_from_anchor(app_handle, &icon_position, &icon_size, None, None, true);
     save_tray_anchor(&icon_position, &icon_size, vertical_anchor);
+}
+
+/// Place the panel back at its tray anchor, or at the taskbar corner when no
+/// tray anchor is known yet.
+pub(crate) fn reanchor_panel(app_handle: &AppHandle) {
+    if stored_tray_anchor().is_some() {
+        reposition_panel(app_handle, stored_panel_height());
+    } else if let Some(window) = get_or_init_panel!(app_handle) {
+        position_panel_at_taskbar(app_handle, &window);
+    }
 }
 
 pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f64>) {

@@ -11,10 +11,12 @@ import {
 } from "lucide-react"
 import { AppContent, type AppContentActionProps } from "@/components/app/app-content"
 import { PanelFooter } from "@/components/panel-footer"
+import { PanelMoveHandle } from "@/components/panel-move-handle"
 import { SideNav, type NavPlugin, type PluginContextAction } from "@/components/side-nav"
 import type { DisplayPluginState } from "@/hooks/app/use-app-plugin-views"
 import { useAppVersion } from "@/hooks/app/use-app-version"
 import { panelPreferredMinHeightForView, usePanel } from "@/hooks/app/use-panel"
+import { usePanelPlacement } from "@/hooks/app/use-panel-placement"
 import { useAppUpdate } from "@/hooks/use-app-update"
 import { openSettingsWindow } from "@/lib/settings-window"
 import { useAppUiStore } from "@/stores/app-ui-store"
@@ -77,6 +79,7 @@ export function AppShell({
     scrollRef,
     contentMeasureRef,
     footerRef,
+    headerRef,
     canScrollDown,
     panelHeightPx,
     maxPanelHeightPx,
@@ -92,6 +95,7 @@ export function AppShell({
     onPanelFocus,
   })
 
+  const { placement } = usePanelPlacement()
   const appVersion = useAppVersion()
   const { updateStatus, triggerInstall, checkForUpdates } = useAppUpdate()
   const dataFreshness = summarizeDataFreshness(displayPlugins)
@@ -228,6 +232,9 @@ export function AppShell({
             ref={contentColumnRef}
             className="flex min-h-0 min-w-0 flex-1 flex-col bg-card px-3 pb-1.5 pt-2 dark:bg-muted/50"
           >
+            <div ref={headerRef}>
+              <PanelMoveHandle placement={placement} />
+            </div>
             <div className="relative flex-1 min-h-0">
               <div ref={scrollRef} className="h-full overflow-y-auto scrollbar-none">
                 <div
