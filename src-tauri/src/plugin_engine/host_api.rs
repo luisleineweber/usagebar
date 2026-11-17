@@ -2201,6 +2201,16 @@ mod tests {
     }
 
     #[test]
+    fn redact_body_and_log_message_redact_factory_api_keys() {
+        let key = "fk-1234567890abcdefghij";
+        let body = format!(r#"{{"detail": "invalid key {}"}}"#, key);
+        assert!(!redact_body(&body).contains(key));
+        assert!(redact_body(&body).contains("fk-1...ghij"));
+        let msg = format!("usage request failed for {}", key);
+        assert!(!redact_log_message(&msg).contains(key));
+    }
+
+    #[test]
     fn redact_body_redacts_json_password_field() {
         let body = r#"{"password": "supersecretpassword123"}"#;
         let redacted = redact_body(body);

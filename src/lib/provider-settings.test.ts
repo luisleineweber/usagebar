@@ -103,6 +103,14 @@ describe("getProviderSettingsDefinition", () => {
     expect(getProviderSettingsDefinition("mistral").secretField?.key).toBe("adminApiKey")
   })
 
+  it("offers an optional Factory API key that signs in through the app vault", () => {
+    const def = getProviderSettingsDefinition("factory")
+    expect(def.mode).toBe("editable")
+    expect(def.secretField?.key).toBe("apiKey")
+    expect(def.secretFieldRole).toBeUndefined()
+    expect(def.sourceOptions).toBeUndefined()
+  })
+
   it("defines both Alibaba credential fields", () => {
     const definition = getProviderSettingsDefinition("alibaba")
     expect(definition.secretField?.key).toBe("apiKey")
@@ -498,6 +506,13 @@ describe("getProviderSourceLabel", () => {
 
   it("returns fallback for amp without apiKey", () => {
     expect(getProviderSourceLabel("amp")).toBe("Amp CLI credentials")
+  })
+
+  it("labels the stored Factory API key and the local droid login separately", () => {
+    expect(getProviderSourceLabel("factory", { secrets: { apiKey: { updatedAt: 1000 } } })).toBe(
+      "Stored Factory API key"
+    )
+    expect(getProviderSourceLabel("factory")).toBe("Local droid login")
   })
 
   it("returns GitHub auth + scope for copilot with workspaceId", () => {

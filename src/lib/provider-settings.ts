@@ -249,14 +249,21 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
     },
   },
   factory: {
-    mode: "detected",
+    mode: "editable",
     title: "Factory Setup",
     summary:
-      "Reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it automatically.",
+      "Uses a stored Factory API key when one is saved. Otherwise reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it automatically.",
     statusHint:
-      "Run `droid` so ~/.factory/auth.v2.file plus ~/.factory/auth.v2.key exists before launching UsageBar. Legacy auth.encrypted and auth.json still work.",
+      "A saved API key takes precedence over the local droid login. Remove the key to use ~/.factory/auth.v2.file plus ~/.factory/auth.v2.key again.",
     connectHint:
-      "Install the Factory CLI (`droid`), sign in, restart UsageBar if needed, then retry.",
+      "Save a Factory API key here, or install the Factory CLI (`droid`) and sign in, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description:
+        "Optional. Paste a Factory API key for an account without a local droid login. UsageBar stores it in the app credential vault and sends it only to api.factory.ai. While a key is saved, UsageBar does not use the local droid login.",
+      placeholder: "fk-...",
+    },
   },
   gemini: {
     mode: "automatic",
@@ -927,6 +934,8 @@ export function getProviderSourceLabel(
     return config?.secrets?.apiKey ? "Stored MiniMax API key" : "MiniMax API key/env"
   if (providerId === "amp")
     return config?.secrets?.apiKey ? "Stored Amp API key" : "Amp CLI credentials"
+  if (providerId === "factory")
+    return config?.secrets?.apiKey ? "Stored Factory API key" : "Local droid login"
   if (providerId === "copilot")
     return config?.workspaceId ? "GitHub auth + billing scope" : "GitHub auth"
   if (providerId === "claude")

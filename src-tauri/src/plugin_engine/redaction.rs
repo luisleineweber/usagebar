@@ -79,7 +79,7 @@ pub(crate) fn redact_body(body: &str) -> String {
         .to_string();
 
     let api_key_pattern =
-        regex_lite::Regex::new(r#"["']?(sk-|pk-|api_|key_|secret_)[A-Za-z0-9_-]{12,}["']?"#)
+        regex_lite::Regex::new(r#"["']?(sk-|pk-|fk-|api_|key_|secret_)[A-Za-z0-9_-]{12,}["']?"#)
             .unwrap();
     result = api_key_pattern
         .replace_all(&result, |caps: &regex_lite::Captures| {
@@ -142,7 +142,9 @@ pub(crate) fn redact_log_message(msg: &str) -> String {
             })
             .to_string();
     }
-    if let Ok(api_re) = regex_lite::Regex::new(r#"(sk-|pk-|api_|key_|secret_)[A-Za-z0-9_-]{12,}"#) {
+    if let Ok(api_re) =
+        regex_lite::Regex::new(r#"(sk-|pk-|fk-|api_|key_|secret_)[A-Za-z0-9_-]{12,}"#)
+    {
         result = api_re
             .replace_all(&result, |caps: &regex_lite::Captures| {
                 redact_value(&caps[0])
