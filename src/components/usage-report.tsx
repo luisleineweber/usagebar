@@ -29,9 +29,13 @@ type UsageReportProps = {
   nowMs?: number
 }
 
-const PERIOD_OPTIONS: { value: UsageHistoryPeriod; label: string }[] = [
-  { value: "7d", label: "7d" },
-  { value: "30d", label: "30d" },
+type ReportPeriod = Extract<UsageHistoryPeriod, "7d" | "30d" | "weekToDate" | "monthToDate">
+
+const PERIOD_OPTIONS: { value: ReportPeriod; label: string; caption: string }[] = [
+  { value: "7d", label: "7d", caption: "last 7 days" },
+  { value: "30d", label: "30d", caption: "last 30 days" },
+  { value: "weekToDate", label: "This week", caption: "week to date, from Monday" },
+  { value: "monthToDate", label: "This month", caption: "month to date" },
 ]
 
 const METRIC_OPTIONS: { value: ReportMetric; label: string }[] = [
@@ -369,7 +373,7 @@ export function UsageReport({
   stale = false,
   nowMs,
 }: UsageReportProps) {
-  const [period, setPeriod] = useState<UsageHistoryPeriod>("30d")
+  const [period, setPeriod] = useState<ReportPeriod>("30d")
   const [metric, setMetric] = useState<ReportMetric>("cost")
   const [providerId, setProviderId] = useState("")
   const [model, setModel] = useState("")
@@ -382,10 +386,11 @@ export function UsageReport({
   }, [])
 
   const available = useMemo(() => {
-    const records = filterUsageHistory(outputs, {
-      period: "30d",
-      nowMs,
-    })
+    // Month to date can start before the rolling 30-day window, so offer filter values
+    // from every selectable period.
+    const records = PERIOD_OPTIONS.flatMap((option) =>
+      filterUsageHistory(outputs, { period: option.value, nowMs })
+    )
     return {
       providerIds: [...new Set(records.map((record) => record.providerId))].sort(),
       models: [
@@ -458,9 +463,7 @@ export function UsageReport({
         <div className="text-right tabular-nums">
           <strong className="block text-base">{formatMetric(selectedValue, metric)}</strong>
           <span className="text-[11px] text-muted-foreground">
-            {period === "30d"
-              ? "last 30 days"
-              : PERIOD_OPTIONS.find((option) => option.value === period)?.label.toLowerCase()}
+            {PERIOD_OPTIONS.find((option) => option.value === period)?.caption}
           </span>
         </div>
       </div>
@@ -554,7 +557,9 @@ export function UsageReport({
             <UsageReportEmptyState
               message="No activity in this period"
               action={
-                period === "7d" ? { label: "View 30 days", onClick: () => setPeriod("30d") } : undefined
+                period === "7d"
+                  ? { label: "View 30 days", onClick: () => setPeriod("30d") }
+                  : undefined
               }
             />
           )

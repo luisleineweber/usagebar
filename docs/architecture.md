@@ -167,6 +167,18 @@ type PluginOutput = {
 | `"badge"` | Labelled pill badge | `label`, `text`, optional `color` |
 | `"progress"` | Bar with pace/reset logic | `label`, `used`, `limit`, `format`, `resetsAt?`, `periodDurationMs?` |
 
+### Usage history periods (`src/lib/usage-history.ts`)
+
+The history report resolves every period in the history source time zone, so local midnight stays correct across daylight-saving changes.
+
+| Period | UI label | Window |
+|---|---|---|
+| `7d`, `30d` | `7d`, `30d` | Rolling: today and the 6 or 29 calendar days before it, until now |
+| `weekToDate` | This week | From local midnight on Monday of the current week until now (ISO 8601 week start, as in Germany and most of Europe) |
+| `monthToDate` | This month | From local midnight on day 1 of the current month until now |
+
+The week start is fixed to Monday and does not follow the system locale, so every user sees the same range. A period with no entries reports `null` totals, not zero. History older than the cached entries is unknown and is not shown as zero.
+
 ---
 
 ## How to add a new provider

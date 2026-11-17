@@ -1,6 +1,11 @@
 import type { PluginOutput, ProviderInstanceRef, UsageHistoryEntry } from "@/lib/plugin-types"
 
-export type UsageHistoryPeriod = "today" | "yesterday" | "7d" | "30d"
+/**
+ * Rolling periods (`7d`, `30d`) include today and the days before it.
+ * Calendar-to-date periods start at local midnight on the first day of the current
+ * ISO 8601 week (Monday) or the current month, and end now.
+ */
+export type UsageHistoryPeriod = "today" | "yesterday" | "7d" | "30d" | "weekToDate" | "monthToDate"
 
 export type UsageHistoryFilters = {
   providerIds?: readonly string[]
@@ -49,7 +54,14 @@ export type UsageHistorySummary = {
   topModel: UsageHistoryTopModel | null
 }
 
-const PERIODS: readonly UsageHistoryPeriod[] = ["today", "yesterday", "7d", "30d"]
+const PERIODS: readonly UsageHistoryPeriod[] = [
+  "today",
+  "yesterday",
+  "7d",
+  "30d",
+  "weekToDate",
+  "monthToDate",
+]
 
 function finiteOrNull(value: number | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
@@ -101,8 +113,12 @@ export function getUsageHistoryWindow(
     }
   }
 
-  const days = period === "7d" ? 7 : period === "30d" ? 30 : 1
-  const first = shiftCalendarDate(today, -(days - 1))
+  const first =
+    period === "weekToDate"
+      ? shiftCalendarDate(today, -isoWeekdayIndex(today))
+      : period === "monthToDate"
+        ? { ...today, day: 1 }
+        : shiftCalendarDate(today, -(ROLLING_DAYS[period] - 1))
   return {
     startMs: zonedMidnightMs(first.year, first.month, first.day, timeZone),
     endMs: nowMs,
@@ -110,6 +126,13 @@ export function getUsageHistoryWindow(
 }
 
 type CalendarDate = { year: number; month: number; day: number }
+
+const ROLLING_DAYS = { today: 1, "7d": 7, "30d": 30 } as const
+
+/** Days since the ISO 8601 week start: Monday = 0, Sunday = 6. */
+function isoWeekdayIndex(date: CalendarDate): number {
+  return (new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay() + 6) % 7
+}
 
 function zonedFormatter(timeZone: string, withTime = false): Intl.DateTimeFormat {
   const options: Intl.DateTimeFormatOptions = {
