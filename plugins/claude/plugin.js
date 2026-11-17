@@ -40,33 +40,6 @@
     if (retryAt !== null) throw rateLimitMessage(retryAt)
   }
 
-  // The OAuth usage endpoint has its own rate limit. The claude.ai web usage endpoint reports
-  // the same quota windows, so a configured web session can answer while OAuth backs off.
-  // A managed profile must never read the provider-wide web session: it may belong to another
-  // account. An expired web session is not usable either, so the 429 error stays visible.
-  function probeDuringRateLimit(ctx, retryAt) {
-    if (readManagedProfileId(ctx)) throw rateLimitMessage(retryAt)
-    const credentials = loadCredentials(ctx)
-    const account = credentials && credentials.fullData && credentials.fullData.oauthAccount
-    const uuid = readNonEmptyString(account && account.organizationUuid)
-    const id = readNonEmptyString(account && account.organizationId)
-    if (!hasUsableOAuth(credentials) || !(uuid || id) || (uuid && id && uuid !== id)) {
-      throw rateLimitMessage(retryAt)
-    }
-    let webResult
-    try {
-      webResult = buildClaudeWebResult(ctx, uuid || id)
-    } catch (e) {
-      ctx.host.log.warn("Claude web fallback failed during OAuth backoff: " + String(e))
-      throw rateLimitMessage(retryAt)
-    }
-    if (webResult) {
-      ctx.host.log.info("OAuth usage is rate limited; using Claude web session")
-      return webResult
-    }
-    throw rateLimitMessage(retryAt)
-  }
-
   function checkRateLimitResponse(ctx, response, channel = "") {
     if (response.status !== 429) return response
     const headers = response.headers || {}
@@ -274,7 +247,11 @@
       throw "Claude web " + description + " request failed (HTTP " + response.status + ")."
     }
     const parsed = ctx.util.tryParseJson(response.bodyText)
-    if (parsed && typeof parsed === "object") return parsed
+    const validShape =
+      path === "/organizations"
+        ? Array.isArray(parsed)
+        : parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    if (validShape) return parsed
     if (optional) return null
     throw "Claude web " + description + " response invalid."
   }
@@ -972,7 +949,7 @@
     return { plan: null, lines: lines }
   }
 
-  function buildClaudeWebResult(ctx, expectedOrganizationId = null) {
+  function buildClaudeWebResult(ctx) {
     if (readManagedProfileId(ctx)) return null
     checkRateLimit(ctx, "web-")
     const cookieHeader = loadStoredCookieHeader(ctx)
@@ -984,15 +961,7 @@
     }
 
     const orgs = requestClaudeWebJson(ctx, sessionKey, "/organizations", "organizations")
-    const matches =
-      expectedOrganizationId && Array.isArray(orgs)
-        ? orgs.filter((org) => org && org.uuid === expectedOrganizationId)
-        : []
-    const org = expectedOrganizationId
-      ? matches.length === 1
-        ? matches[0]
-        : null
-      : selectWebOrganization(orgs)
+    const org = selectWebOrganization(orgs)
     if (!org || !org.uuid) {
       ctx.host.log.warn("claude web organization lookup returned no usable organization")
       return null
@@ -1084,15 +1053,10 @@
   }
 
   function probe(ctx) {
-    const activeRetryAt = readRateLimitRetryAt(ctx)
-    if (activeRetryAt !== null) return probeDuringRateLimit(ctx, activeRetryAt)
-    try {
-      return probeWithCredentials(ctx)
-    } catch (e) {
-      const retryAt = readRateLimitRetryAt(ctx)
-      if (retryAt === null) throw e
-      return probeDuringRateLimit(ctx, retryAt)
-    }
+    // The shared web cookie has no verified user binding to the selected OAuth token.
+    // Keep OAuth backoff visible instead of substituting another account's usage.
+    checkRateLimit(ctx)
+    return probeWithCredentials(ctx)
   }
 
   function probeWithCredentials(ctx) {

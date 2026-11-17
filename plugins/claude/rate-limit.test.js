@@ -28,7 +28,6 @@ it("recovers after the retry deadline and accepts later successful probes", asyn
   ctx.host.keychain.readGenericPassword.mockReturnValue(
     JSON.stringify({
       claudeAiOauth: { accessToken: "token" },
-      oauthAccount: { organizationUuid: "org-1" },
     })
   )
   ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
@@ -105,174 +104,76 @@ it.each([
   expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
 })
 
-function mockOAuthRateLimitWithWebSession(ctx) {
-  ctx.host.keychain.readGenericPassword.mockReturnValue(
-    JSON.stringify({
-      claudeAiOauth: { accessToken: "token" },
-      oauthAccount: { organizationUuid: "org-1" },
-    })
-  )
-  ctx.host.providerSecrets.read.mockImplementation((key) =>
-    key === "cookieHeader" ? "sessionKey=sk-ant-web-session" : null
-  )
-  ctx.host.http.request.mockImplementation(({ url }) => {
-    if (url.includes("/api/oauth/usage")) return { status: 429, bodyText: "" }
-    if (url.endsWith("/organizations")) {
-      return {
-        status: 200,
-        bodyText: JSON.stringify([{ uuid: "org-1", name: "Claude Team", capabilities: ["chat"] }]),
-      }
-    }
-    if (url.endsWith("/usage")) {
-      return { status: 200, bodyText: JSON.stringify({ five_hour: { utilization: 42 } }) }
-    }
-    return { status: 404, bodyText: "" }
-  })
-}
-
-it("answers an OAuth 429 with the configured Claude web session", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  vi.resetModules()
-  await import("./plugin.js")
-
-  const result = globalThis.__openusage_plugin.probe(ctx)
-
-  expect(result.lines.find((line) => line.label === "Session")?.used).toBe(42)
-})
-
-it("skips OAuth during backoff and keeps using the Claude web session", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  vi.resetModules()
-  await import("./plugin.js")
-  globalThis.__openusage_plugin.probe(ctx)
-  ctx.host.http.request.mockClear()
-
-  const result = globalThis.__openusage_plugin.probe(ctx)
-
-  expect(result.lines.find((line) => line.label === "Session")?.used).toBe(42)
-  expect(
-    ctx.host.http.request.mock.calls.some(([request]) => request.url.includes("/api/oauth/usage"))
-  ).toBe(false)
-})
-
-it("keeps the 429 error when the Claude web session cannot answer", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  const webRequest = ctx.host.http.request.getMockImplementation()
-  ctx.host.http.request.mockImplementation((request) =>
-    request.url.includes("claude.ai") ? { status: 429, bodyText: "" } : webRequest(request)
-  )
-  vi.resetModules()
-  await import("./plugin.js")
-
-  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-})
-
-it("keeps the 429 error for a managed profile and never reads the shared web session", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  ctx.instanceRef = { providerId: "claude", instanceId: "work" }
-  ctx.host.providerSecrets.read.mockImplementation((key) => {
-    if (key === "account:work:authJson") {
-      return JSON.stringify({ claudeAiOauth: { accessToken: "managed-token" } })
-    }
-    return key === "cookieHeader" ? "sessionKey=sk-ant-web-session" : null
-  })
-  vi.resetModules()
-  await import("./plugin.js")
-
-  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  expect(
-    ctx.host.http.request.mock.calls.some(([request]) => request.url.includes("claude.ai"))
-  ).toBe(false)
-  expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
-})
-
-it.each([401, 403])(
-  "keeps the 429 error when the Claude web session returns %s",
-  async (status) => {
-    const ctx = makeCtx()
-    mockOAuthRateLimitWithWebSession(ctx)
-    const webRequest = ctx.host.http.request.getMockImplementation()
-    ctx.host.http.request.mockImplementation((request) =>
-      request.url.includes("claude.ai") ? { status, bodyText: "" } : webRequest(request)
-    )
-    vi.resetModules()
-    await import("./plugin.js")
-
-    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  }
-)
-
+// Synthetic adversarial records. These are not evidence of a Claude credential schema.
 it.each([
   undefined,
-  {},
-  { organizationUuid: "other" },
-  { organizationName: "org-1" },
-  { organizationUuid: "org-1", organizationId: "other" },
-])("keeps OAuth 429 for unverified identity %j, including active backoff", async (oauthAccount) => {
+  { organizationUuid: "shared-org", accountUuid: "oauth-user" },
+  { organizationUuid: "other-org", accountUuid: "oauth-user" },
+])("keeps OAuth 429 without reading shared cookies for metadata %j", async (oauthAccount) => {
   const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
   ctx.host.keychain.readGenericPassword.mockReturnValue(
     JSON.stringify({
       claudeAiOauth: { accessToken: "token" },
       oauthAccount,
     })
   )
+  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-other-user")
+  ctx.host.http.request.mockImplementation(({ url }) => {
+    if (url.includes("/api/oauth/usage")) return { status: 429, bodyText: "" }
+    if (url.endsWith("/organizations"))
+      return {
+        status: 200,
+        bodyText: JSON.stringify([{ uuid: "shared-org", capabilities: ["chat"] }]),
+      }
+    return { status: 200, bodyText: JSON.stringify({ five_hour: { utilization: 42 } }) }
+  })
   vi.resetModules()
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  vi.resetModules()
+  await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  expect(
-    ctx.host.http.request.mock.calls.some(([r]) => r.url.endsWith("/organizations/org-1/usage"))
-  ).toBe(false)
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+  expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
 })
 
-it("honors a web Retry-After without retrying during OAuth backoff", async () => {
+it("keeps managed OAuth 429 without reading shared cookies", async () => {
   const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  const request = ctx.host.http.request.getMockImplementation()
-  ctx.host.http.request.mockImplementation((r) =>
-    r.url.includes("claude.ai")
-      ? { status: 429, headers: { "Retry-After": "600" }, bodyText: "" }
-      : request(r)
+  ctx.instanceRef = { providerId: "claude", instanceId: "work" }
+  ctx.host.providerSecrets.read.mockImplementation((key) =>
+    key === "account:work:authJson"
+      ? JSON.stringify({ claudeAiOauth: { accessToken: "managed-token" } })
+      : "sessionKey=sk-ant-other-user"
   )
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
   vi.resetModules()
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  const count = ctx.host.http.request.mock.calls.length
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-  expect(ctx.host.http.request).toHaveBeenCalledTimes(count)
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+  expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
 })
 
-it.each([500, 401, 403])("keeps OAuth 429 for web HTTP %s", async (status) => {
+it("honors web Retry-After without OAuth, then recovers", async () => {
+  vi.useFakeTimers()
   const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  const request = ctx.host.http.request.getMockImplementation()
-  ctx.host.http.request.mockImplementation((r) =>
-    r.url.includes("claude.ai") ? { status, bodyText: "" } : request(r)
-  )
+  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
+  ctx.host.http.request.mockReturnValue({
+    status: 429,
+    headers: { "Retry-After": "600" },
+    bodyText: "",
+  })
   vi.resetModules()
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
-})
-
-it("rejects duplicate matching web organizations", async () => {
-  const ctx = makeCtx()
-  mockOAuthRateLimitWithWebSession(ctx)
-  const request = ctx.host.http.request.getMockImplementation()
-  ctx.host.http.request.mockImplementation((r) =>
-    r.url.endsWith("/organizations")
-      ? { status: 200, bodyText: JSON.stringify([{ uuid: "org-1" }, { uuid: "org-1" }]) }
-      : request(r)
-  )
+  vi.advanceTimersByTime(599_999)
   vi.resetModules()
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+  vi.advanceTimersByTime(1)
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
 })
 
 it.each([500, 429])("surfaces required web HTTP %s without OAuth", async (status) => {
@@ -282,4 +183,74 @@ it.each([500, 429])("surfaces required web HTTP %s without OAuth", async (status
   vi.resetModules()
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP " + status)
+})
+
+it.each([
+  ["usage", []],
+  ["organizations", { uuid: "org-1" }],
+])("rejects invalid required web %s response shape", async (description, body) => {
+  const ctx = makeCtx()
+  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
+  ctx.host.http.request.mockImplementation(({ url }) => ({
+    status: 200,
+    bodyText: JSON.stringify(
+      url.endsWith("/" + description) ? body : [{ uuid: "org-1", capabilities: ["chat"] }]
+    ),
+  }))
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow(
+    "Claude web " + description + " response invalid."
+  )
+})
+
+it.each([
+  ["usage", []],
+  ["organizations", { uuid: "org-1" }],
+])("keeps OAuth 429 during backoff with invalid web %s configured", async (description, body) => {
+  const ctx = makeCtx()
+  ctx.host.keychain.readGenericPassword.mockReturnValue(
+    JSON.stringify({
+      claudeAiOauth: { accessToken: "token" },
+    })
+  )
+  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
+  ctx.host.http.request.mockImplementation(({ url }) =>
+    url.includes("/api/oauth/usage")
+      ? { status: 429, bodyText: "" }
+      : {
+          status: 200,
+          bodyText: JSON.stringify(
+            url.endsWith("/" + description) ? body : [{ uuid: "org-1", capabilities: ["chat"] }]
+          ),
+        }
+  )
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+  expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
+})
+
+it("ignores an array from the optional web overage endpoint", async () => {
+  const ctx = makeCtx()
+  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
+  ctx.host.http.request.mockImplementation(({ url }) => ({
+    status: 200,
+    bodyText: JSON.stringify(
+      url.endsWith("/organizations")
+        ? [{ uuid: "org-1", capabilities: ["chat"] }]
+        : url.endsWith("/usage")
+          ? { five_hour: { utilization: 42 } }
+          : []
+    ),
+  }))
+  vi.resetModules()
+  await import("./plugin.js")
+  const result = globalThis.__openusage_plugin.probe(ctx)
+  expect(result.lines.find((line) => line.label === "Session")?.used).toBe(42)
+  expect(result.lines.some((line) => line.label === "Extra usage")).toBe(false)
 })
