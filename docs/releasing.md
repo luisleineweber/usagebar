@@ -8,7 +8,7 @@ Release in preparation (not yet published):
 v0.2.1
 ```
 
-The published v0.2.0 base is commit `75697e838a2df805fa565d512f4325e4a39c84b6`. The local `v0.2.0` tag points to unrelated upstream history. Do not use or change that tag for this release.
+The published v0.2.0 base is commit `75697e838a2df805fa565d512f4325e4a39c84b6`. The local `v0.2.0` tag points to unrelated upstream history. The local `v0.2.1` tag also points to unrelated upstream history, at `0aff5a36` (`chore: bump version to 0.2.1`), which is not an ancestor of `origin/main`. Do not use, delete, or move either local tag for this release.
 
 ## Preflight
 
@@ -71,8 +71,10 @@ The publish workflow lives in [.github/workflows/publish.yml](../.github/workflo
 
 You can publish in two ways:
 
-1. Push a `v*` tag, for example `v0.2.1`
-2. Trigger `Publish` manually with `workflow_dispatch` and provide `release_tag`
+1. Push the verified final commit explicitly to the remote release tag: `git push origin <final-sha>:refs/tags/v0.2.1`. Replace `<final-sha>` with the full verified final commit SHA. Never push the local `v0.2.1` tag.
+2. Trigger `Publish` manually with `workflow_dispatch`, set `release_tag` to `v0.2.1`, and set `ref` to the full verified final commit SHA.
+
+Verify the remote tag target with `git ls-remote --tags origin v0.2.1`. It must match the verified final commit SHA. If the remote tag already points elsewhere, stop and resolve the conflict before publishing. Do not force-push a release tag.
 
 The workflow runs the same release preflight, builds platform artifacts, and verifies that the GitHub release contains:
 
@@ -108,8 +110,10 @@ Use the release gate above for the final local artifact or GitHub release candid
 - Install, launch, CLI, and uninstall checks in a disposable Windows test environment.
 - Signed in-app update from the actual published v0.2.0 build to the exact final candidate, with settings and provider data preserved.
 - SQLite runtime checks for provider reads and usage history, including existing data, after the rusqlite upgrade.
-- Account identity checks after the separate fix is included, including managed profile selection and credential source isolation.
+- Claude checks after the separate worktree changes are combined: OAuth backoff keeps HTTP 429 without reading the shared web cookie; ordinary web access still works when OAuth is unavailable; web HTTP 429 uses a separate retry deadline; the subscription plan remains unknown (`null`) instead of using the organization name. Include managed profile selection and credential source isolation checks.
 - Required CI and dependency audits on the combined final source.
+
+The release notes describe the intended combined behavior. The release and Claude changes remain in separate worktrees. Integration and combined tests are not complete.
 
 Metadata preparation does not complete these checks. Do not install or uninstall apps, or change user data, as part of metadata preparation.
 
@@ -133,5 +137,5 @@ Provider-specific local files such as CLI auth, IDE SQLite databases, browser co
 2. Add or refresh the matching `CHANGELOG.md` section
 3. Run `bun run release:check -- --release-tag vX.Y.Z --require-clean`
 4. Run `bun run build:release -- --bundles nsis`
-5. Push the tag or trigger the publish workflow manually
+5. Push the verified final commit explicitly to the remote tag, or trigger the publish workflow with that commit as `ref`, as described above; verify the remote tag target
 6. Confirm the GitHub release has the expected assets
