@@ -12,20 +12,75 @@
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
+  const RATE_LIMIT_BASE_WAIT_MS = 5 * 60 * 1000
+  const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000
+  const RATE_LIMIT_MAX_WAIT_MS = 60 * 60 * 1000
+
+  // A managed profile lives in this app's secret store, so its ID only identifies an account
+  // inside this app data dir. The default account is the machine-wide Claude Code login, so all
+  // UsageBar builds of this user (installed and dev) share one hold for it.
   function rateLimitPath(ctx) {
-    return (
-      ctx.app.pluginDataDir +
-      "/rate-limit-" +
-      encodeURIComponent(ctx.instanceRef?.instanceId || "default") +
-      ".json"
-    )
+    const profileId = readManagedProfileId(ctx)
+    if (profileId) {
+      return ctx.app.pluginDataDir + "/rate-limit-" + encodeURIComponent(profileId) + ".json"
+    }
+    if (!ctx.app.sharedPluginDataDir) throw "Claude rate-limit state is unavailable."
+    return ctx.app.sharedPluginDataDir + "/rate-limit-default.json"
   }
 
-  function readRateLimitRetryAt(ctx) {
+  // { retryAt, streak, recordedAt }: streak counts consecutive 429s and resets only on a
+  // successful usage response; recordedAt lets an older in-flight success keep a newer hold.
+  function readRateLimitState(ctx) {
     const path = rateLimitPath(ctx)
     if (!ctx.host.fs.exists(path)) return null
     const state = JSON.parse(ctx.host.fs.readText(path))
-    return Date.now() < state.retryAt ? state.retryAt : null
+    return {
+      retryAt: Number(state.retryAt) || 0,
+      streak: Number.isInteger(state.streak) && state.streak >= 0 ? state.streak : 1,
+      recordedAt: Number(state.recordedAt) || 0,
+    }
+  }
+
+  function writeRateLimitState(ctx, state) {
+    ctx.host.fs.writeTextAtomic(rateLimitPath(ctx), JSON.stringify(state))
+  }
+
+  // A skewed or edited timestamp cannot hold requests longer than the longest real wait.
+  function activeRetryAt(state, now) {
+    if (!state || now >= state.retryAt) return null
+    return Math.min(state.retryAt, now + RATE_LIMIT_MAX_WAIT_MS)
+  }
+
+  function readRateLimitRetryAt(ctx) {
+    return activeRetryAt(readRateLimitState(ctx), Date.now())
+  }
+
+  function recordRateLimit(ctx, retryAfterMs) {
+    const now = Date.now()
+    const state = readRateLimitState(ctx)
+    const retryAfterAt = now + Math.min(retryAfterMs, RATE_LIMIT_MAX_WAIT_MS)
+    const active = activeRetryAt(state, now)
+    if (active !== null) {
+      // A request that was in flight when the hold started does not count as a new 429.
+      if (retryAfterAt > active) writeRateLimitState(ctx, { ...state, retryAt: retryAfterAt })
+      return
+    }
+    const streak = (state ? state.streak : 0) + 1
+    const backoff = Math.min(
+      RATE_LIMIT_BASE_WAIT_MS * 2 ** Math.min(streak - 1, 10),
+      RATE_LIMIT_MAX_BACKOFF_MS
+    )
+    writeRateLimitState(ctx, {
+      retryAt: Math.max(now + backoff, retryAfterAt),
+      streak,
+      recordedAt: now,
+    })
+  }
+
+  function clearRateLimitAfterSuccess(ctx, requestStartedAt) {
+    const state = readRateLimitState(ctx)
+    if (!state || state.streak === 0 || state.recordedAt >= requestStartedAt) return
+    writeRateLimitState(ctx, { retryAt: 0, streak: 0, recordedAt: Date.now() })
   }
 
   function rateLimitMessage(retryAt) {
@@ -60,19 +115,17 @@
     throw rateLimitMessage(retryAt)
   }
 
-  function checkRateLimitResponse(ctx, response) {
-    if (response.status !== 429) return response
+  function retryAfterMs(response, now) {
     const headers = response.headers || {}
     const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
     const value = key ? String(headers[key]).trim() : ""
-    const now = Date.now()
     const retryAt = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value)
-    ctx.host.fs.writeText(
-      rateLimitPath(ctx),
-      JSON.stringify({
-        retryAt: Math.max(now + REFRESH_BUFFER_MS, Number.isFinite(retryAt) ? retryAt : 0),
-      })
-    )
+    return Number.isFinite(retryAt) ? Math.max(0, retryAt - now) : 0
+  }
+
+  function checkRateLimitResponse(ctx, response) {
+    if (response.status !== 429) return response
+    recordRateLimit(ctx, retryAfterMs(response, Date.now()))
     checkRateLimit(ctx)
     return response
   }
@@ -645,7 +698,8 @@
   }
 
   function fetchUsage(ctx, accessToken) {
-    return checkRateLimitResponse(
+    const requestStartedAt = Date.now()
+    const response = checkRateLimitResponse(
       ctx,
       ctx.util.request({
         method: "GET",
@@ -660,6 +714,10 @@
         timeoutMs: 10000,
       })
     )
+    if (response.status >= 200 && response.status < 300) {
+      clearRateLimitAfterSuccess(ctx, requestStartedAt)
+    }
+    return response
   }
 
   function queryTokenUsage(ctx) {

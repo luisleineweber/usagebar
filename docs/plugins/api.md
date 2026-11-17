@@ -12,6 +12,7 @@ type ProbeContext = {
     platform: string // OS platform (e.g., "macos")
     appDataDir: string // App data directory
     pluginDataDir: string // Plugin-specific data dir (auto-created)
+    sharedPluginDataDir?: string // Plugin data dir shared by all UsageBar builds (fs capability)
   }
   host: HostApi
 }
@@ -31,8 +32,11 @@ Application metadata:
 | `platform`      | OS platform (e.g., `"macos"`, `"windows"`, `"linux"`)   |
 | `appDataDir`    | App's data directory path                               |
 | `pluginDataDir` | Plugin-specific data directory (auto-created on demand) |
+| `sharedPluginDataDir` | Plugin data directory shared by installed and dev builds (requires `fs`) |
 
 The `pluginDataDir` is unique per plugin (`{appDataDir}/plugins_data/{pluginId}/`) and is automatically created when the plugin runs. Use it to store config files, cached data, or state.
+
+The `sharedPluginDataDir` is `{parent of appDataDir}/com.sunstory.usagebar.shared/plugins_data/{pluginId}/`. Installed and dev builds of the same OS user see the same directory. Use it only for small non-secret coordination state that is keyed by a machine-wide identity, such as a rate-limit hold for a login that every build reads from the same place. Never key it by IDs that exist only in one build's settings or secret store, and never store tokens there. Write it with `writeTextAtomic` so a concurrent reader never sees a partial file.
 
 ## Logging
 
@@ -58,6 +62,7 @@ ctx.host.log.error("API request failed: " + error.message)
 host.fs.exists(path: string): boolean
 host.fs.readText(path: string): string   // Throws on error
 host.fs.writeText(path: string, content: string): void  // Throws on error
+host.fs.writeTextAtomic(path: string, content: string): void  // Temp file + replace; throws on error
 host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened; per-entry errors are silently skipped
 ```
 

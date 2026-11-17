@@ -10,6 +10,7 @@ export const makeCtx = () => {
       platform: "darwin",
       appDataDir: "/tmp/openusage-test",
       pluginDataDir: "/tmp/openusage-test/plugin",
+      sharedPluginDataDir: "/tmp/openusage-shared/plugin",
     },
     host: {
       fs: {
@@ -23,6 +24,7 @@ export const makeCtx = () => {
         },
         readText: (path) => files.get(path),
         writeText: vi.fn((path, text) => files.set(path, text)),
+        writeTextAtomic: vi.fn((path, text) => files.set(path, text)),
         remove: vi.fn((path) => files.delete(path)),
         listDir: (path) => {
           const base = String(path).replace(/\/+$/, "")
