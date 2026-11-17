@@ -570,84 +570,99 @@
     })
   }
 
+  // Refresh outcomes: "refreshed", "unavailable" (no refresh token), "failed" (temporary
+  // network, server, or response failure) and "rejected" (the token endpoint refused the grant).
   function refreshToken(ctx, creds) {
     const { oauth, source, fullData } = creds
     if (!oauth.refreshToken) {
       ctx.host.log.warn("refresh skipped: no refresh token")
-      return null
+      return { kind: "unavailable" }
     }
 
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
+    let rawResp
     try {
-      const resp = checkRateLimitResponse(
-        ctx,
-        ctx.util.request({
-          method: "POST",
-          url: oauthConfig.refreshUrl,
-          headers: { "Content-Type": "application/json" },
-          bodyText: JSON.stringify({
-            grant_type: "refresh_token",
-            refresh_token: oauth.refreshToken,
-            client_id: oauthConfig.clientId,
-            scope: oauthConfig.scopes,
-          }),
-          timeoutMs: 15000,
-        })
-      )
-
-      if (resp.status === 400 || resp.status === 401) {
-        let errorCode = null
-        const body = ctx.util.tryParseJson(resp.bodyText)
-        if (body) errorCode = body.error || body.error_description
-        ctx.host.log.error("refresh failed: status=" + resp.status + " error=" + String(errorCode))
-        if (errorCode === "invalid_grant") {
-          throw "Session expired. Run `claude` to log in again."
-        }
-        throw "Token expired. Run `claude` to log in again."
-      }
-      if (resp.status < 200 || resp.status >= 300) {
-        ctx.host.log.warn("refresh returned unexpected status: " + resp.status)
-        return null
-      }
-
-      const body = ctx.util.tryParseJson(resp.bodyText)
-      if (!body) {
-        ctx.host.log.warn("refresh response not valid JSON")
-        return null
-      }
-      const newAccessToken = body.access_token
-      if (!newAccessToken) {
-        ctx.host.log.warn("refresh response missing access_token")
-        return null
-      }
-
-      // Update oauth credentials
-      oauth.accessToken = newAccessToken
-      if (body.refresh_token) oauth.refreshToken = body.refresh_token
-      if (typeof body.expires_in === "number") {
-        oauth.expiresAt = Date.now() + body.expires_in * 1000
-      }
-
-      // Persist updated credentials
-      fullData.claudeAiOauth = oauth
-      saveCredentials(ctx, source, fullData, creds.secretKey)
-
-      ctx.host.log.info(
-        "refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s"
-      )
-      return newAccessToken
+      rawResp = ctx.util.request({
+        method: "POST",
+        url: oauthConfig.refreshUrl,
+        headers: { "Content-Type": "application/json" },
+        bodyText: JSON.stringify({
+          grant_type: "refresh_token",
+          refresh_token: oauth.refreshToken,
+          client_id: oauthConfig.clientId,
+          scope: oauthConfig.scopes,
+        }),
+        timeoutMs: 15000,
+      })
     } catch (e) {
-      if (typeof e === "string") throw e
-      ctx.host.log.error("refresh exception: " + String(e))
-      return null
+      ctx.host.log.error("refresh request exception: " + String(e))
+      return { kind: "failed", message: "Token refresh failed. Check your connection." }
     }
+    const resp = checkRateLimitResponse(ctx, rawResp)
+
+    if (resp.status === 400 || resp.status === 401) {
+      // OAuth token endpoints report refused grants with RFC 6749 error codes.
+      const body = ctx.util.tryParseJson(resp.bodyText)
+      const errorCode = body && typeof body.error === "string" ? body.error : null
+      ctx.host.log.error("refresh failed: status=" + resp.status + " error=" + String(errorCode))
+      if (errorCode === "invalid_grant") {
+        return { kind: "rejected", message: "Session expired. Run `claude` to log in again." }
+      }
+      if (errorCode === "invalid_scope") {
+        return {
+          kind: "rejected",
+          message:
+            "Invalid token: Claude refused the requested OAuth scopes. Run `claude` to log in again.",
+        }
+      }
+      return {
+        kind: "rejected",
+        message:
+          "Token refresh rejected (HTTP " +
+          String(resp.status) +
+          "). Run `claude` to log in again if this persists.",
+      }
+    }
+    if (resp.status < 200 || resp.status >= 300) {
+      ctx.host.log.warn("refresh returned unexpected status: " + resp.status)
+      return {
+        kind: "failed",
+        message: "Token refresh failed (HTTP " + String(resp.status) + "). Try again later.",
+      }
+    }
+
+    const body = ctx.util.tryParseJson(resp.bodyText)
+    const newAccessToken = body ? readNonEmptyString(body.access_token) : null
+    if (!newAccessToken) {
+      ctx.host.log.warn("refresh response has no usable access_token")
+      return {
+        kind: "failed",
+        message:
+          "Provider response invalid: Claude token refresh returned no access token. Try again later.",
+      }
+    }
+
+    oauth.accessToken = newAccessToken
+    if (body.refresh_token) oauth.refreshToken = body.refresh_token
+    if (typeof body.expires_in === "number") {
+      oauth.expiresAt = Date.now() + body.expires_in * 1000
+    }
+
+    fullData.claudeAiOauth = oauth
+    saveCredentials(ctx, source, fullData, creds.secretKey)
+
+    ctx.host.log.info(
+      "refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s"
+    )
+    return { kind: "refreshed", accessToken: newAccessToken }
   }
 
-  function fetchUsage(ctx, accessToken) {
-    return checkRateLimitResponse(
-      ctx,
-      ctx.util.request({
+  // Only the HTTP request itself is a connection failure. Local failures stay visible as-is.
+  function fetchUsage(ctx, accessToken, afterRefresh) {
+    let resp
+    try {
+      resp = ctx.util.request({
         method: "GET",
         url: USAGE_URL,
         headers: {
@@ -659,7 +674,27 @@
         },
         timeoutMs: 10000,
       })
-    )
+    } catch (e) {
+      ctx.host.log.error("usage request exception: " + String(e))
+      throw afterRefresh
+        ? "Usage request failed after refresh. Try again."
+        : "Usage request failed. Check your connection."
+    }
+    return checkRateLimitResponse(ctx, resp)
+  }
+
+  // Anthropic reports a token without a required OAuth scope as a 403 permission_error.
+  // Other 403 responses deny access; they do not prove an expired sign-in.
+  function usageForbiddenMessage(ctx, resp) {
+    const body = ctx.util.tryParseJson(resp.bodyText)
+    const error = body && typeof body.error === "object" ? body.error : null
+    const type = error && typeof error.type === "string" ? error.type : null
+    const message = error && typeof error.message === "string" ? error.message : ""
+    ctx.host.log.error("usage returned 403: error.type=" + String(type))
+    if (type === "permission_error" && /scope requirement/i.test(message)) {
+      return "Invalid token: Claude login lacks the OAuth scope required for usage. Run `claude` to log in again."
+    }
+    return "Usage request denied (HTTP 403). Check your Claude account access."
   }
 
   function queryTokenUsage(ctx) {
@@ -1102,56 +1137,43 @@
       throw "Not logged in. Run `claude` to authenticate."
     }
 
-    const nowMs = Date.now()
     let accessToken = creds.oauth.accessToken
     let attemptedRefresh = false
+    let refreshFailure = null
 
-    // Proactively refresh if token is expired or about to expire
-    if (needsRefresh(ctx, creds.oauth, nowMs)) {
+    // Each probe refreshes at most once. A temporary refresh failure is kept so that a later
+    // HTTP 401 reports that failure instead of an expired sign-in.
+    function attemptRefresh() {
       attemptedRefresh = true
+      const result = refreshToken(ctx, creds)
+      if (result.kind === "refreshed") {
+        accessToken = result.accessToken
+        return true
+      }
+      if (result.kind === "rejected") throw result.message
+      if (result.kind === "failed") refreshFailure = result.message
+      return false
+    }
+
+    if (needsRefresh(ctx, creds.oauth, Date.now())) {
       ctx.host.log.info("token needs refresh (expired or expiring soon)")
-      const refreshed = refreshToken(ctx, creds)
-      if (refreshed) {
-        accessToken = refreshed
-      } else {
+      if (!attemptRefresh()) {
         ctx.host.log.warn("proactive refresh failed, trying with existing token")
       }
     }
 
-    let resp
-    let didRefresh = false
-    try {
-      resp = ctx.util.retryOnceOnAuth({
-        request: (token) => {
-          try {
-            return fetchUsage(ctx, token || accessToken)
-          } catch (e) {
-            if (typeof e === "string") throw e
-            ctx.host.log.error("usage request exception: " + String(e))
-            if (didRefresh) {
-              throw "Usage request failed after refresh. Try again."
-            }
-            throw "Usage request failed. Check your connection."
-          }
-        },
-        refresh: () => {
-          if (attemptedRefresh) return null
-          attemptedRefresh = true
-          ctx.host.log.info("usage returned 401, attempting refresh")
-          didRefresh = true
-          return refreshToken(ctx, creds)
-        },
-      })
-    } catch (e) {
-      if (typeof e === "string") throw e
-      ctx.host.log.error("usage request failed: " + String(e))
-      throw "Usage request failed. Check your connection."
+    let resp = fetchUsage(ctx, accessToken, false)
+    if (resp.status === 401 && !attemptedRefresh) {
+      ctx.host.log.info("usage returned 401, attempting refresh")
+      if (attemptRefresh()) resp = fetchUsage(ctx, accessToken, true)
     }
 
-    if (ctx.util.isAuthStatus(resp.status)) {
-      ctx.host.log.error("usage returned auth error after all retries: status=" + resp.status)
+    if (resp.status === 401) {
+      ctx.host.log.error("usage returned 401 after refresh handling")
+      if (refreshFailure) throw refreshFailure
       throw "Token expired. Run `claude` to log in again."
     }
+    if (resp.status === 403) throw usageForbiddenMessage(ctx, resp)
 
     if (resp.status < 200 || resp.status >= 300) {
       ctx.host.log.error("usage returned error: status=" + resp.status)

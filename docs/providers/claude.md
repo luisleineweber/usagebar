@@ -132,7 +132,7 @@ The profile UUID also scopes cached snapshots, local history, quota notification
 
 ### Token Refresh
 
-Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively on 401/403.
+Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively once on HTTP 401. A usage HTTP 403 does not start a refresh.
 
 ```
 POST https://platform.claude.com/v1/oauth/token
@@ -155,6 +155,26 @@ Content-Type: application/json
   "expires_in": 3600, // seconds
 }
 ```
+
+### Error causes
+
+The probe keeps these causes separate:
+
+| Cause                     | Response                                                                           | Message                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Expired sign-in           | Usage HTTP 401 after the refresh attempt, or no refresh token                      | ``Token expired. Run `claude` to log in again.``                                                           |
+| Refused refresh grant     | Refresh HTTP 400/401 with `invalid_grant`                                          | ``Session expired. Run `claude` to log in again.``                                                         |
+| Missing OAuth scope       | Usage HTTP 403 `permission_error` with "scope requirement" in its message          | `Invalid token: Claude login lacks the OAuth scope required for usage. …`                                  |
+| Refused refresh scope     | Refresh HTTP 400/401 with `invalid_scope`                                          | `Invalid token: Claude refused the requested OAuth scopes. …`                                              |
+| Other refresh rejection   | Refresh HTTP 400/401 with another or no error code                                 | `Token refresh rejected (HTTP <status>). …`                                                                |
+| Denied access             | Other usage HTTP 403                                                               | `Usage request denied (HTTP 403). …`                                                                       |
+| Temporary refresh failure | Refresh network error, or an unexpected refresh status, followed by usage HTTP 401 | `Token refresh failed. Check your connection.` or `Token refresh failed (HTTP <status>). Try again later.` |
+| Invalid refresh response  | Refresh 2xx without a usable `access_token`, followed by usage HTTP 401            | `Provider response invalid: Claude token refresh returned no access token. …`                              |
+| Usage network failure     | The usage HTTP request throws                                                      | `Usage request failed. Check your connection.`                                                             |
+| Usage server failure      | Other usage non-2xx status                                                         | `Usage request failed (HTTP <status>). Try again later.`                                                   |
+| Rate limit                | HTTP 429 from usage or refresh                                                     | See [HTTP 429 handling](#http-429-handling).                                                               |
+
+A temporary refresh failure does not stop the probe. The current access token can still be valid. Local failures, such as a failed write of the retry deadline, keep their own error and are not reported as connection failures.
 
 ### HTTP 429 handling
 
