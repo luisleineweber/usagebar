@@ -1,6 +1,6 @@
 [package]
 name = "usagebar"
-version = "0.2.0"
+version = "0.2.1"
 description = "UsageBar is a Windows-first desktop tracker for AI coding subscription usage"
 authors = ["Robin Ebers"]
 edition = "2024"

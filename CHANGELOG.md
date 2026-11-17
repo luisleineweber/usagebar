@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.1
+
+### Security
+
+- Updated rusqlite to 0.41.0 and libsqlite3-sys to 0.39.1 to address RUSTSEC-2026-0459 in bundled SQLite.
+- Updated quinn-udp to 0.5.16 to address RUSTSEC-2026-0538, which can cause a receive loop to spin after a truncated datagram on affected targets.
+
+### Changes
+
+- Added the optional Claude weekly Fable metric. The bar is omitted when the usage window is missing or invalid.
+- Removed the Claude Designs and Daily Routines bars.
+- During Claude OAuth rate-limit backoff, use a configured web session only when no managed account profile is selected. Managed profiles keep the HTTP 429 error. Missing, expired, or failed web sessions also keep that error. OAuth retry deadlines remain in effect.
+
+### Notes
+
+- Account identity work is pending in a separate change. These notes do not confirm that fix or its tests.
+- Installer, update, SQLite, and identity checks must run against the combined final candidate before release.
+- Windows installers remain unsigned until the project gets an Authenticode certificate. Windows can show `Unknown publisher` or SmartScreen warnings. Stable releases use signed Tauri updater metadata.
+
 ## 0.2.0
 
 ### Highlights
