@@ -12,17 +12,17 @@
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
-  function rateLimitPath(ctx) {
+  function rateLimitPath(ctx, endpoint = "usage") {
     return (
       ctx.app.pluginDataDir +
-      "/rate-limit-" +
+      (endpoint === "usage" ? "/rate-limit-" : "/rate-limit-refresh-") +
       encodeURIComponent(ctx.instanceRef?.instanceId || "default") +
       ".json"
     )
   }
 
-  function readRateLimitRetryAt(ctx) {
-    const path = rateLimitPath(ctx)
+  function readRateLimitRetryAt(ctx, endpoint = "usage") {
+    const path = rateLimitPath(ctx, endpoint)
     if (!ctx.host.fs.exists(path)) return null
     const state = JSON.parse(ctx.host.fs.readText(path))
     return Date.now() < state.retryAt ? state.retryAt : null
@@ -34,8 +34,8 @@
     )
   }
 
-  function checkRateLimit(ctx) {
-    const retryAt = readRateLimitRetryAt(ctx)
+  function checkRateLimit(ctx, endpoint = "usage") {
+    const retryAt = readRateLimitRetryAt(ctx, endpoint)
     if (retryAt !== null) throw rateLimitMessage(retryAt)
   }
 
@@ -60,7 +60,7 @@
     throw rateLimitMessage(retryAt)
   }
 
-  function checkRateLimitResponse(ctx, response) {
+  function checkRateLimitResponse(ctx, response, endpoint = "usage") {
     if (response.status !== 429) return response
     const headers = response.headers || {}
     const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
@@ -68,12 +68,12 @@
     const now = Date.now()
     const retryAt = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value)
     ctx.host.fs.writeText(
-      rateLimitPath(ctx),
+      rateLimitPath(ctx, endpoint),
       JSON.stringify({
         retryAt: Math.max(now + REFRESH_BUFFER_MS, Number.isFinite(retryAt) ? retryAt : 0),
       })
     )
-    checkRateLimit(ctx)
+    checkRateLimit(ctx, endpoint)
     return response
   }
 
@@ -577,6 +577,7 @@
       return null
     }
 
+    checkRateLimit(ctx, "refresh")
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
     try {
@@ -593,7 +594,8 @@
             scope: oauthConfig.scopes,
           }),
           timeoutMs: 15000,
-        })
+        }),
+        "refresh"
       )
 
       if (resp.status === 400 || resp.status === 401) {

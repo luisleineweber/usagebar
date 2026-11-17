@@ -201,3 +201,38 @@ it.each([401, 403])(
     expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
   }
 )
+
+it("allows a valid replacement token to use usage during a refresh hold", async () => {
+  const ctx = makeCtx()
+  ctx.host.keychain.readGenericPassword.mockReturnValue(
+    JSON.stringify({ claudeAiOauth: { accessToken: "old", refreshToken: "refresh", expiresAt: 1 } })
+  )
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+  ctx.host.keychain.readGenericPassword.mockReturnValue(
+    JSON.stringify({
+      claudeAiOauth: { accessToken: "replacement", expiresAt: Date.now() + 3600000 },
+    })
+  )
+  ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).not.toThrow()
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(2)
+})
+
+it("keeps a usage hold after token rotation", async () => {
+  const ctx = makeCtx()
+  ctx.host.keychain.readGenericPassword.mockReturnValue(
+    JSON.stringify({ claudeAiOauth: { accessToken: "old" } })
+  )
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+  ctx.host.keychain.readGenericPassword.mockReturnValue(
+    JSON.stringify({ claudeAiOauth: { accessToken: "rotated" } })
+  )
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+})
