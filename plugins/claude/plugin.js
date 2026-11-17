@@ -554,6 +554,12 @@
     })
   }
 
+  function isTokenExpired(oauth) {
+    if (oauth?.expiresAt === null || oauth?.expiresAt === undefined) return true
+    const expiresAt = Number(oauth.expiresAt)
+    return !Number.isFinite(expiresAt) || Date.now() >= expiresAt
+  }
+
   function refreshToken(ctx, creds) {
     const { oauth, source, fullData } = creds
     if (!oauth.refreshToken) {
@@ -561,7 +567,11 @@
       return null
     }
 
-    if (readRateLimitRetryAt(ctx, "refresh") !== null) return null
+    const retryAt = readRateLimitRetryAt(ctx, "refresh")
+    if (retryAt !== null) {
+      if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
+      return null
+    }
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
     try {
@@ -1060,10 +1070,7 @@
 
   function probeWithCredentials(ctx) {
     const creds = loadCredentials(ctx)
-    if (
-      !creds?.oauth?.accessToken?.trim() ||
-      (typeof creds.oauth.expiresAt === "number" && creds.oauth.expiresAt <= Date.now())
-    ) {
+    if (!creds?.oauth?.accessToken?.trim() || isTokenExpired(creds?.oauth)) {
       checkRateLimit(ctx, "refresh")
     }
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {

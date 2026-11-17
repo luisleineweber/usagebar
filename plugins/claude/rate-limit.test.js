@@ -209,3 +209,30 @@ it.each(["usage", "refresh"])(
     ).toBe(false)
   }
 )
+
+it.each(["string", "race"])("blocks expired tokens during a refresh hold (%s)", async (mode) => {
+  const ctx = makeCtx()
+  ctx.host.keychain.readGenericPassword.mockReturnValue(
+    JSON.stringify({
+      claudeAiOauth: { accessToken: "test", refreshToken: "refresh", expiresAt: 1 },
+    })
+  )
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+  ctx.host.http.request.mockClear()
+  const now = Date.now()
+  const expiresAt = mode === "string" ? String(now - 1) : now + 1
+  ctx.host.keychain.readGenericPassword.mockReturnValue(
+    JSON.stringify({ claudeAiOauth: { accessToken: "test", refreshToken: "refresh", expiresAt } })
+  )
+  if (mode === "race") {
+    let calls = 0
+    vi.spyOn(Date, "now").mockImplementation(() => (++calls <= 3 ? now : now + 2))
+  }
+  ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+  expect(ctx.host.http.request).not.toHaveBeenCalled()
+  vi.restoreAllMocks()
+})
