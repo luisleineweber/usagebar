@@ -1,3 +1,7 @@
+#[path = "claude_refresh.rs"]
+mod claude_refresh;
+#[path = "claude_refresh_host.rs"]
+mod claude_refresh_host;
 use crate::plugin_engine::browser_bridge;
 use crate::plugin_engine::env::*;
 use crate::plugin_engine::manifest::HostCapabilities;
@@ -268,7 +272,7 @@ pub(crate) fn inject_host_api_with_instance_and_cache<'js>(
 
     probe_ctx.set("nowIso", iso_now())?;
 
-    if let Some(instance_ref) = instance_ref {
+    if let Some(instance_ref) = instance_ref.clone() {
         let instance_obj = Object::new(ctx.clone())?;
         instance_obj.set("providerId", instance_ref.provider_id)?;
         if let Some(instance_id) = instance_ref.instance_id {
@@ -323,6 +327,21 @@ pub(crate) fn inject_host_api_with_instance_and_cache<'js>(
     }
     if capabilities.provider_secrets {
         inject_provider_secrets(ctx, &host, plugin_id, app_data_dir)?;
+        if plugin_id == "claude" && capabilities.http {
+            if let Some(instance) = instance_ref
+                .as_ref()
+                .filter(|instance| instance.provider_id == "claude")
+            {
+                let secrets: Object = host.get("providerSecrets")?;
+                claude_refresh_host::inject(
+                    ctx,
+                    &secrets,
+                    app_data_dir,
+                    instance,
+                    &capabilities.http_domains,
+                )?;
+            }
+        }
     }
     if capabilities.sqlite_read || capabilities.sqlite_write {
         inject_sqlite(ctx, &host, capabilities.sqlite_write)?;

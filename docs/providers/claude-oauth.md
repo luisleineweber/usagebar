@@ -4,6 +4,9 @@
 
 By default, UsageBar uses the official Claude Code OAuth credentials (client ID: `9d1c250a-e61b-44d9-88ed-5944d1962f5e`). This works for most users without any additional configuration.
 
+Claude Code retains refresh ownership of local credentials and imported copies. Custom OAuth settings
+do not transfer that ownership. UsageBar never writes these Claude Code documents.
+
 ## Custom OAuth Configuration
 
 If you need to use your own OAuth credentials (for enterprise compliance, custom deployments, or legal requirements), you can configure UsageBar to use custom OAuth settings.

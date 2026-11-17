@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
+import { ownCredentials } from "./test-helpers.js"
 
 const loadPlugin = async () => {
   await import("./plugin.js")
@@ -805,13 +806,33 @@ describe("claude plugin", () => {
       }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
-    expect(ctx.host.fs.writeText).toHaveBeenCalled()
+    expect(ctx.host.providerSecrets.write).toHaveBeenCalled()
   })
 
-  it("refreshes keychain credentials and writes back to keychain", async () => {
+  it("reports a credential write failure after token rotation", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
+    ctx.host.fs.readText = () =>
+      JSON.stringify({
+        claudeAiOauth: { accessToken: "old", refreshToken: "refresh", expiresAt: 1 },
+      })
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      bodyText: JSON.stringify({ access_token: "new", refresh_token: "rotated", expires_in: 3600 }),
+    })
+    ownCredentials(ctx)
+    ctx.host.providerSecrets.refreshClaudeCredentials.mockImplementation(() => {
+      throw "Could not save refreshed Claude credentials"
+    })
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("Could not save refreshed Claude credentials")
+  })
+
+  it("refreshes owned managed credentials and writes back to the vault", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = () => false
     ctx.host.keychain.readGenericPassword.mockReturnValue(
@@ -840,9 +861,10 @@ describe("claude plugin", () => {
       }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.keychain.writeGenericPassword).toHaveBeenCalled()
+    expect(ctx.host.providerSecrets.write).toHaveBeenCalled()
   })
 
   it("retries usage request after 401 by refreshing once", async () => {
@@ -881,6 +903,7 @@ describe("claude plugin", () => {
       }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
     expect(usageCalls).toBe(2)
@@ -907,6 +930,7 @@ describe("claude plugin", () => {
       return { status: 500, bodyText: "" }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Session expired")
   })
@@ -933,6 +957,7 @@ describe("claude plugin", () => {
       return { status: 200, bodyText: JSON.stringify({ access_token: "token2", expires_in: 3600 }) }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
   })
@@ -956,75 +981,9 @@ describe("claude plugin", () => {
       return { status: 500, bodyText: "" }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
-  })
-
-  it("logs when saving keychain credentials fails", async () => {
-    const ctx = makeCtx()
-    ctx.host.fs.exists = () => false
-    ctx.host.keychain.readGenericPassword.mockReturnValue(
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "old-token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1000,
-        },
-      })
-    )
-    ctx.host.keychain.writeGenericPassword.mockImplementation(() => {
-      throw new Error("write fail")
-    })
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }),
-        }
-      }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
-    })
-    const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.log.error).toHaveBeenCalled()
-  })
-
-  it("logs when saving credentials file fails", async () => {
-    const ctx = makeCtx()
-    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "old-token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1000,
-        },
-      })
-    ctx.host.fs.writeText.mockImplementation(() => {
-      throw new Error("disk full")
-    })
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return {
-          status: 200,
-          bodyText: JSON.stringify({ access_token: "new-token", expires_in: 3600 }),
-        }
-      }
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          five_hour: { utilization: 10, resets_at: "2099-01-01T00:00:00.000Z" },
-        }),
-      }
-    })
-    const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).not.toThrow()
-    expect(ctx.host.log.error).toHaveBeenCalled()
   })
 
   it("continues when refresh request throws non-string error (returns null)", async () => {
@@ -1051,6 +1010,7 @@ describe("claude plugin", () => {
       }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).not.toThrow()
   })
@@ -1080,6 +1040,7 @@ describe("claude plugin", () => {
     ctx.host.keychain.readGenericPassword.mockReturnValue(
       JSON.stringify({ claudeAiOauth: { refreshToken: "only-refresh" } })
     )
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Not logged in")
   })
@@ -1109,6 +1070,7 @@ describe("claude plugin", () => {
 
       delete globalThis.__openusage_plugin
       vi.resetModules()
+      ownCredentials(ctx)
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
       expect(result.lines.find((line) => line.label === "Session")).toBeTruthy()
@@ -1140,6 +1102,7 @@ describe("claude plugin", () => {
       }),
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     plugin.probe(ctx)
     expect(
@@ -1191,6 +1154,7 @@ describe("claude plugin", () => {
       return { status: 200, bodyText: JSON.stringify({ access_token: "token2", expires_in: 3600 }) }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Usage request failed after refresh")
   })
@@ -1254,6 +1218,7 @@ describe("claude plugin", () => {
       return { status: 500, bodyText: "" }
     })
 
+    ownCredentials(ctx)
     const plugin = await loadPlugin()
     expect(() => plugin.probe(ctx)).toThrow("Token expired")
   })
@@ -1446,7 +1411,6 @@ describe("claude plugin", () => {
           },
         ]),
       })
-
       const plugin = await loadPlugin()
       const result = plugin.probe(ctx)
 

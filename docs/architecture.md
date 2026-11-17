@@ -239,3 +239,12 @@ type PluginOutput = {
 - **IPC:** JS must use **camelCase** parameters (`{ batchId, pluginIds }`). Tauri auto-converts to Rust snake_case.
 - **Tailwind:** use design tokens (`text-muted-foreground`, `bg-destructive/5`, etc.) over hardcoded colors.
 - **Icons:** use `iconColorMode: "multicolor"` for artwork with fixed colors. Other icons use the brand-color mask.
+
+## Claude credential refresh ownership
+
+The probe coordinator combines work for one captured provider instance. It is not a cross-process
+credential lock. Each probe has a new JavaScript runtime. Claude Code credential documents and managed
+imports remain read-only during probes. Explicitly UsageBar-owned managed refresh uses the host
+transaction in `plugin_engine/claude_refresh.rs` and its host binding. A user-wide OS file lock covers
+separate UsageBar processes. The host retains a rotated document and its lock until a verified store
+write succeeds. The captured instance controls the destination; a pending document cannot cross profiles.

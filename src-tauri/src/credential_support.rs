@@ -279,7 +279,7 @@ fn claude_credentials_path() -> Option<PathBuf> {
     Some(dirs::home_dir()?.join(".claude").join(".credentials.json"))
 }
 
-fn normalize_claude_auth(json: JsonValue) -> Option<ResolvedClaudeAuth> {
+fn normalize_claude_auth(mut json: JsonValue) -> Option<ResolvedClaudeAuth> {
     let object = json.as_object()?;
     let oauth = object.get("claudeAiOauth")?.as_object()?;
     let access_token = json_string_field(oauth, "accessToken");
@@ -300,6 +300,11 @@ fn normalize_claude_auth(json: JsonValue) -> Option<ResolvedClaudeAuth> {
         })
         .map(str::to_string);
 
+    // Import copies a Claude Code login; it does not create a separate refresh chain.
+    json.as_object_mut()?.insert(
+        "usagebarCredentialOwner".into(),
+        JsonValue::String("claude-code".into()),
+    );
     Some(ResolvedClaudeAuth {
         auth_json: serde_json::to_string_pretty(&json).ok()?,
         email,
@@ -551,6 +556,19 @@ mod tests {
         assert_eq!(auth.email.as_deref(), Some("claude@example.com"));
         assert_eq!(auth.account_id.as_deref(), Some("org-claude"));
         assert!(auth.auth_json.contains("accessToken"));
+    }
+
+    #[test]
+    fn imported_claude_credentials_keep_cli_ownership_and_full_document() {
+        let auth = normalize_claude_auth(serde_json::json!({
+            "usagebarCredentialOwner": "usagebar",
+            "claudeAiOauth": { "accessToken": "synthetic", "refreshToken": "synthetic-refresh", "unknown": true },
+            "unrelated": { "keep": true }
+        })).unwrap();
+        let document: serde_json::Value = serde_json::from_str(&auth.auth_json).unwrap();
+        assert_eq!(document["usagebarCredentialOwner"], "claude-code");
+        assert_eq!(document["claudeAiOauth"]["unknown"], true);
+        assert_eq!(document["unrelated"]["keep"], true);
     }
 
     #[test]

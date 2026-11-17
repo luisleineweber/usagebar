@@ -293,6 +293,33 @@ auth.tokens.access_token = refreshedAccessToken
 ctx.host.providerSecrets.write(secretKey, JSON.stringify(auth))
 ```
 
+### Claude credential refresh transaction
+
+For the Claude plugin with HTTP and provider-secret capabilities and a captured managed instance:
+
+```typescript
+host.providerSecrets.refreshClaudeCredentials(optionsJson: string): string
+// optionsJson: { refreshUrl, clientId, scopes, expectedAccessToken }
+// result JSON: { credentials: string | null, response: HttpResponse | null }
+```
+
+The host binds the secret key to the captured instance. JavaScript cannot supply another profile key.
+The credential document must have `usagebarCredentialOwner: "usagebar"`. Imported Claude Code
+credentials retain Claude Code ownership. The endpoint must pass the plugin HTTP domain allowlist.
+
+The host reloads the document under a process mutex and a user-wide OS file lock. It sends the refresh
+request, retains the full updated document before storage, and verifies the write with a fresh read.
+It returns stored credentials, or a non-success/malformed HTTP response for the existing plugin handling.
+A transport failure returns both fields as null and logs an error.
+
+A failed write throws. The host keeps the rotated document and OS lock in memory across JavaScript
+runtimes. The next call for that profile retries storage without another refresh. A different profile
+cannot receive the pending document. Other refresh callers receive a busy error until storage succeeds.
+A changed profile document is never overwritten. Pending memory does not survive process exit or a crash.
+Do not close UsageBar after a storage error until the write succeeds.
+
+The host does not log the options, request body, credential document, or response body.
+
 ## SQLite
 
 ### Query (Read-Only)

@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
+import { ownCredentials } from "./test-helpers.js"
 
 afterEach(() => vi.useRealTimers())
 
@@ -53,6 +54,7 @@ it("does not refresh twice when usage rejects a proactively refreshed token", as
       ? { status: 200, bodyText: JSON.stringify({ access_token: "new", expires_in: 3600 }) }
       : { status: 401, bodyText: "{}" }
   )
+  ownCredentials(ctx)
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("Token expired")
   expect(
@@ -87,6 +89,7 @@ it.each([
     headers: { "Retry-After": retryAfter },
     bodyText: "{}",
   })
+  if (endpoint === "refresh") ownCredentials(ctx)
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
   vi.resetModules()

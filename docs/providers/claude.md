@@ -132,7 +132,20 @@ The profile UUID also scopes cached snapshots, local history, quota notification
 
 ### Token Refresh
 
-Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively on 401/403.
+Claude Code owns credentials from its keychain and local files. UsageBar reads these documents and
+reloads the same source when usage rejects an old access token. It does not refresh or write them.
+Importing a managed profile preserves that ownership. Imports do not create an independent refresh
+chain. When an imported access token expires, run Claude Code and re-import that account. A selected
+managed profile never reads another local login as a fallback.
+
+Direct refresh requires a separate UsageBar-owned managed credential document with
+`usagebarCredentialOwner: "usagebar"`. Missing or unknown ownership stays with Claude Code. Do not add
+this field to a copy of a Claude Code login. This change adds no separate login flow or user setting.
+For explicitly owned documents, refresh runs five minutes before expiry or after an auth response.
+The host serializes refresh across runtimes and UsageBar processes. It preserves the full credential
+document and stores rotated tokens before returning them. A write failure is visible. The host retains
+the new document and lock in memory, and retries storage before another refresh. Keep UsageBar open
+until storage succeeds; pending memory cannot survive process exit.
 
 ```
 POST https://platform.claude.com/v1/oauth/token
