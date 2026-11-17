@@ -111,7 +111,7 @@ When configured, UsageBar calls:
 - `GET https://claude.ai/api/organizations/{org_id}/usage`
 - Best-effort `GET https://claude.ai/api/organizations/{org_id}/overage_spend_limit`
 
-This mirrors CodexBar's web/API probing in a Windows-friendly manual-cookie form. Local OAuth credentials are still preferred; the web fallback is only used when OAuth credentials are unavailable.
+This mirrors CodexBar's web/API probing in a Windows-friendly manual-cookie form. Local OAuth credentials are still preferred; the web fallback is also available during OAuth backoff when the organization identity is verified. Organization names do not identify subscription plans. The web result leaves the plan unknown. Required web requests report transport, HTTP, and invalid-response errors. The overage request remains best effort, except for authentication and rate-limit errors.
 
 ### Optional Microsoft Edge import
 
@@ -160,7 +160,9 @@ Content-Type: application/json
 
 OAuth usage and token refresh responses save a per-profile retry deadline in plugin data. All probe entry points check it before network requests, including startup and manual refresh. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. A token refresh 429 stops the probe before usage requests. Each probe attempts token refresh at most once.
 
-During an OAuth retry deadline, the probe uses the Claude web session (`cookieHeader`) when one is configured and no managed account profile is selected. The web usage endpoint reports the same quota windows and has a separate rate limit. The web session is provider-wide and can belong to another account, so a selected managed profile keeps the HTTP 429 error and does not read it. Without a web session, with an expired web session (HTTP 401 or 403), or when the web request fails, the probe keeps the HTTP 429 error.
+During an OAuth retry deadline, the default instance can use the provider-wide `cookieHeader` only when the selected OAuth credential record contains `oauthAccount.organizationUuid` or `organizationId`. If both fields exist, they must agree. Exactly one web organization must have that UUID. Missing, conflicting, duplicate, or mismatched identity keeps HTTP 429. Names, email addresses, and metadata from a separate account file are not identity evidence. Managed profiles never read shared cookies. Web failures keep the OAuth HTTP 429 error during this fallback.
+
+Web HTTP 429 responses save a separate per-instance retry deadline. The same Retry-After rules apply. Probes do not repeat web requests before that deadline, including when OAuth is also in backoff.
 
 The tray retains successful data within the current session. It does not load the separate usage API disk cache on startup. A first-probe error therefore shows an error card, even if the usage API has an older snapshot. A 429 does not remove session data.
 

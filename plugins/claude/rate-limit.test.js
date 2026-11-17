@@ -26,7 +26,10 @@ it("recovers after the retry deadline and accepts later successful probes", asyn
   vi.setSystemTime(new Date("2026-11-03T13:15:00Z"))
   const ctx = makeCtx()
   ctx.host.keychain.readGenericPassword.mockReturnValue(
-    JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+    JSON.stringify({
+      claudeAiOauth: { accessToken: "token" },
+      oauthAccount: { organizationUuid: "org-1" },
+    })
   )
   ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
   vi.resetModules()
@@ -104,7 +107,10 @@ it.each([
 
 function mockOAuthRateLimitWithWebSession(ctx) {
   ctx.host.keychain.readGenericPassword.mockReturnValue(
-    JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
+    JSON.stringify({
+      claudeAiOauth: { accessToken: "token" },
+      oauthAccount: { organizationUuid: "org-1" },
+    })
   )
   ctx.host.providerSecrets.read.mockImplementation((key) =>
     key === "cookieHeader" ? "sessionKey=sk-ant-web-session" : null
@@ -201,3 +207,79 @@ it.each([401, 403])(
     expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
   }
 )
+
+it.each([
+  undefined,
+  {},
+  { organizationUuid: "other" },
+  { organizationName: "org-1" },
+  { organizationUuid: "org-1", organizationId: "other" },
+])("keeps OAuth 429 for unverified identity %j, including active backoff", async (oauthAccount) => {
+  const ctx = makeCtx()
+  mockOAuthRateLimitWithWebSession(ctx)
+  ctx.host.keychain.readGenericPassword.mockReturnValue(
+    JSON.stringify({
+      claudeAiOauth: { accessToken: "token" },
+      oauthAccount,
+    })
+  )
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  expect(
+    ctx.host.http.request.mock.calls.some(([r]) => r.url.endsWith("/organizations/org-1/usage"))
+  ).toBe(false)
+})
+
+it("honors a web Retry-After without retrying during OAuth backoff", async () => {
+  const ctx = makeCtx()
+  mockOAuthRateLimitWithWebSession(ctx)
+  const request = ctx.host.http.request.getMockImplementation()
+  ctx.host.http.request.mockImplementation((r) =>
+    r.url.includes("claude.ai")
+      ? { status: 429, headers: { "Retry-After": "600" }, bodyText: "" }
+      : request(r)
+  )
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  const count = ctx.host.http.request.mock.calls.length
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(count)
+})
+
+it.each([500, 401, 403])("keeps OAuth 429 for web HTTP %s", async (status) => {
+  const ctx = makeCtx()
+  mockOAuthRateLimitWithWebSession(ctx)
+  const request = ctx.host.http.request.getMockImplementation()
+  ctx.host.http.request.mockImplementation((r) =>
+    r.url.includes("claude.ai") ? { status, bodyText: "" } : request(r)
+  )
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+})
+
+it("rejects duplicate matching web organizations", async () => {
+  const ctx = makeCtx()
+  mockOAuthRateLimitWithWebSession(ctx)
+  const request = ctx.host.http.request.getMockImplementation()
+  ctx.host.http.request.mockImplementation((r) =>
+    r.url.endsWith("/organizations")
+      ? { status: 200, bodyText: JSON.stringify([{ uuid: "org-1" }, { uuid: "org-1" }]) }
+      : request(r)
+  )
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP 429")
+})
+
+it.each([500, 429])("surfaces required web HTTP %s without OAuth", async (status) => {
+  const ctx = makeCtx()
+  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
+  ctx.host.http.request.mockReturnValue({ status, bodyText: "" })
+  vi.resetModules()
+  await import("./plugin.js")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("HTTP " + status)
+})
