@@ -8,7 +8,7 @@ OpenCode has two similarly named products, and UsageBar surfaces them in one pro
 - `OpenCode Zen`: pay-as-you-go model access. You add balance and are charged per request.
 
 This page is for the visible OpenCode provider. Go quota windows come from the official usage API.
-SQLite and `ccusage` remain local-history sources. Zen balance support still exists as a hidden
+The history chart uses `ccusage`. The direct SQLite query reads legacy assistant messages for detection and Free request counting; it does not read v2 `session_message` rows. Completed v2 compactions contribute to ccusage chart history, but do not change the direct Free request count. Zen balance support still exists as a hidden
 compatibility path for older saved cookies or environment-based setups.
 
 ## Overview

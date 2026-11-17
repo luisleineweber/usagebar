@@ -11,7 +11,9 @@ const hostSource = readFileSync(
   path.join(repoRoot, "src-tauri", "src", "plugin_engine", "ccusage_host_api.rs"),
   "utf8"
 )
-const version = hostSource.match(/const CCUSAGE_VERSION: &str = "(\d+\.\d+\.\d+)";/)?.[1]
+const version =
+  process.env.CCUSAGE_TEST_VERSION ||
+  hostSource.match(/const CCUSAGE_VERSION: &str = "(\d+\.\d+\.\d+)";/)?.[1]
 if (!version) throw new Error("could not read CCUSAGE_VERSION from ccusage_host_api.rs")
 const since = "20260801"
 const until = "20260804"
@@ -39,7 +41,15 @@ function lastJsonObject(stdout) {
   throw new Error("ccusage did not emit a JSON object")
 }
 
-function runFixture({ provider, envName, relativeHome, expectedPath }) {
+function runFixture({
+  provider,
+  envName,
+  relativeHome,
+  expectedPath,
+  expectedDay,
+  start = since,
+  end = until,
+}) {
   const home = path.join(fixtureRoot, relativeHome)
   const commandArgs = [
     "--yes",
@@ -50,9 +60,9 @@ function runFixture({ provider, envName, relativeHome, expectedPath }) {
     "--order",
     "desc",
     "--since",
-    since,
+    start,
     "--until",
-    until,
+    end,
     "--offline",
     "--timezone",
     "UTC",
@@ -75,6 +85,17 @@ function runFixture({ provider, envName, relativeHome, expectedPath }) {
   }
 
   const actual = { daily: lastJsonObject(result.stdout).daily }
+  if (expectedDay) {
+    const day = actual.daily[0]
+    if (actual.daily.length !== 1 || !day)
+      throw new Error(`${provider} affected fixture has no daily row`)
+    for (const [key, value] of Object.entries(expectedDay)) {
+      if (day[key] !== value)
+        throw new Error(`${provider} affected fixture: ${key} expected ${value}, got ${day[key]}`)
+    }
+    console.log(`${provider} affected fixture passed with ccusage@${version}`)
+    return
+  }
   const expected = readJson(expectedPath)
   const actualText = JSON.stringify(actual)
   const expectedText = JSON.stringify(expected)
@@ -87,6 +108,34 @@ function runFixture({ provider, envName, relativeHome, expectedPath }) {
 }
 
 try {
+  runFixture({
+    provider: "codex",
+    envName: "CODEX_HOME",
+    relativeHome: "spawned-codex",
+    start: "20261101",
+    end: "20261101",
+    expectedDay: {
+      inputTokens: 16000,
+      cacheReadTokens: 4000,
+      outputTokens: 200,
+      totalTokens: 20200,
+    },
+  })
+  runFixture({
+    provider: "opencode",
+    envName: "OPENCODE_DATA_DIR",
+    relativeHome: "compaction-opencode",
+    start: "20261101",
+    end: "20261101",
+    expectedDay: {
+      inputTokens: 110,
+      cacheReadTokens: 30,
+      cacheCreationTokens: 5,
+      outputTokens: 22,
+      totalTokens: 174,
+      totalCost: 0.03,
+    },
+  })
   runFixture({
     provider: "codex",
     envName: "CODEX_HOME",

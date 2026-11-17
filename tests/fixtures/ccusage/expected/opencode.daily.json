@@ -12,7 +12,8 @@
           "cost": 0.02,
           "inputTokens": 20,
           "modelName": "gpt-5.2",
-          "outputTokens": 4
+          "outputTokens": 4,
+          "storedCost": 0.02
         }
       ],
       "modelsUsed": ["gpt-5.2"],
@@ -32,7 +33,8 @@
           "cost": 0.04,
           "inputTokens": 40,
           "modelName": "gpt-5.2",
-          "outputTokens": 8
+          "outputTokens": 8,
+          "storedCost": 0.04
         }
       ],
       "modelsUsed": ["gpt-5.2"],

@@ -718,6 +718,46 @@ describe("opencode-go plugin", () => {
     expect(ctx.host.log.warn).toHaveBeenCalledWith("opencode auth file is not valid json")
   })
 
+  it("keeps ccusage completed compaction cost and token components in history", async () => {
+    const ctx = makeCtx()
+    setHistoryQuery(ctx, [{ createdMs: Date.now(), modelId: "qwen-free", cost: 0 }])
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: {
+        daily: [
+          {
+            date: "2026-11-01",
+            totalTokens: 174,
+            totalCost: 0.03,
+            modelBreakdowns: [
+              {
+                modelName: "gpt-5",
+                inputTokens: 110,
+                outputTokens: 22,
+                cacheReadTokens: 30,
+                cacheCreationTokens: 5,
+                cost: 0.03,
+                storedCost: 0.03,
+              },
+            ],
+          },
+        ],
+      },
+    })
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.history.entries).toEqual([
+      expect.objectContaining({
+        model: "gpt-5",
+        inputTokens: 110,
+        outputTokens: 22,
+        cacheReadTokens: 30,
+        cacheCreationTokens: 5,
+        costUsd: 0.03,
+      }),
+    ])
+    expect(result.history.entries[0]).not.toHaveProperty("totalTokens")
+  })
+
   it("adds complete ccusage model history and skips invalid days", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-05-26T12:00:00.000Z"))
