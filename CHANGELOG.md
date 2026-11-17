@@ -11,13 +11,13 @@
 
 - Added the optional Claude weekly Fable metric. The bar is omitted when the usage window is missing or invalid.
 - Removed the Claude Designs and Daily Routines bars.
-- Removed the Claude web fallback during OAuth rate-limit backoff because the shared web cookie cannot be reliably bound to the same user. OAuth backoff always keeps HTTP 429 and never reads that cookie. Web access remains supported when OAuth credentials are unavailable.
+- During Claude OAuth rate-limit backoff, UsageBar keeps the HTTP 429 error, reads no shared web cookie, and makes no web requests. An organization match does not prove the same user. The web session is used only when OAuth credentials are unavailable and no managed profile is selected.
 - Added a separate retry deadline for Claude web HTTP 429 responses.
 - Stopped using the Claude organization name as the subscription plan. The plan remains unknown (`null`).
 
 ### Notes
 
-- These notes describe the intended combined release. The release and Claude changes remain in separate worktrees; integration and combined tests are not complete.
+- Merge [PR #30](https://github.com/luisleineweber/usagebar/pull/30) and [PR #33](https://github.com/luisleineweber/usagebar/pull/33) first, then rebuild and test the combined candidate before tagging. Integration and combined tests are not complete. The separate OAuth usage and refresh retry holds depend on PR #33 being merged.
 - Installer, update, SQLite, and identity checks must run against the combined final candidate before release.
 - Windows installers remain unsigned until the project gets an Authenticode certificate. Windows can show `Unknown publisher` or SmartScreen warnings. Stable releases use signed Tauri updater metadata.
 
