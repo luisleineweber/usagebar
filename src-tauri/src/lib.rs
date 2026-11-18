@@ -19,6 +19,7 @@ mod global_shortcut;
 mod guided_cookie_login;
 mod local_http_api;
 mod panel;
+mod panel_anchor_monitor;
 mod panel_floating;
 mod panel_floating_geometry;
 mod panel_move_tracking;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { isTauri } from "@tauri-apps/api/core"
 import {
+  isMovablePanelSupported,
   listenPanelPlacement,
   loadPanelPlacement,
   setPanelMovable,
@@ -8,14 +9,15 @@ import {
 } from "@/lib/panel-placement"
 
 /**
- * Tracks the native panel placement. Returns null until it is known, so the
- * UI never shows move controls from a guess.
+ * Tracks the native panel placement. Returns null until it is known, and
+ * always null where the movable panel is not supported, so the UI never shows
+ * move controls from a guess.
  */
 export function usePanelPlacement() {
   const [placement, setPlacement] = useState<PanelPlacement | null>(null)
 
   useEffect(() => {
-    if (!isTauri()) return
+    if (!isTauri() || !isMovablePanelSupported()) return
     let cancelled = false
     let unlisten: (() => void) | null = null
     let changed = false

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const handlers = new Map<string, (event: { payload: unknown }) => void>()
@@ -34,10 +34,47 @@ function mockNative(initial: { movable: boolean; floating: boolean }) {
   })
 }
 
+const WINDOWS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/131.0"
+
 describe("PanelPlacementSettings", () => {
   beforeEach(() => {
     mocks.handlers.clear()
     mocks.invoke.mockReset()
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(WINDOWS_USER_AGENT)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("keeps keyboard focus on the checkbox after a save", async () => {
+    mockNative({ movable: false, floating: false })
+    render(<PanelPlacementSettings />)
+    const checkbox = await screen.findByRole("checkbox", { name: "Movable panel" })
+    checkbox.focus()
+
+    fireEvent.click(checkbox)
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: "Movable panel" })).toBeChecked()
+    )
+
+    // The same element stays mounted and focused, so a second Space works.
+    expect(screen.getByRole("checkbox", { name: "Movable panel" })).toBe(checkbox)
+    expect(checkbox).toHaveFocus()
+  })
+
+  it("hides the setting and never calls native code outside Windows", async () => {
+    vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15"
+    )
+    mockNative({ movable: true, floating: true })
+    const { container } = render(<PanelPlacementSettings />)
+
+    await act(async () => {})
+
+    expect(container).toBeEmptyDOMElement()
+    expect(mocks.invoke).not.toHaveBeenCalled()
+    expect(mocks.listen).not.toHaveBeenCalled()
   })
 
   it("shows the anchored default and turns Movable panel on", async () => {

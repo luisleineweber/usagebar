@@ -7,6 +7,7 @@ use tauri::{
     Size, WebviewWindow,
 };
 
+use crate::panel_anchor_monitor::{AnchorPoint, MonitorBounds, anchor_monitor_index};
 use crate::panel_floating_geometry::PhysicalRect;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -420,7 +421,10 @@ fn position_panel_at_taskbar(app_handle: &tauri::AppHandle, window: &WebviewWind
     let Some(monitor) = monitor else {
         return;
     };
+    position_panel_at_taskbar_on(window, &monitor);
+}
 
+fn position_panel_at_taskbar_on(window: &WebviewWindow, monitor: &tauri::Monitor) {
     let scale_factor = monitor.scale_factor();
     let work_area = monitor.work_area();
     let work_area_rect = LogicalRect {
@@ -502,6 +506,54 @@ fn resolved_panel_height(measured_window_h: f64, panel_height_override: Option<f
         .unwrap_or(measured_window_h)
 }
 
+/// The center of an anchor rect, or its origin when the units differ.
+fn anchor_point(position: &Position, size: &Size) -> AnchorPoint {
+    match (position, size) {
+        (Position::Physical(pos), Size::Physical(size)) => AnchorPoint::Physical {
+            x: f64::from(pos.x) + f64::from(size.width) / 2.0,
+            y: f64::from(pos.y) + f64::from(size.height) / 2.0,
+        },
+        (Position::Physical(pos), Size::Logical(_)) => AnchorPoint::Physical {
+            x: f64::from(pos.x),
+            y: f64::from(pos.y),
+        },
+        (Position::Logical(pos), Size::Logical(size)) => AnchorPoint::Logical {
+            x: pos.x + size.width / 2.0,
+            y: pos.y + size.height / 2.0,
+        },
+        (Position::Logical(pos), Size::Physical(_)) => AnchorPoint::Logical { x: pos.x, y: pos.y },
+    }
+}
+
+/// The monitor the anchor is on. A floating panel may sit on another monitor,
+/// so the window's current monitor is only the fallback.
+fn anchor_monitor(
+    window: &WebviewWindow,
+    position: &Position,
+    size: &Size,
+) -> Option<tauri::Monitor> {
+    if let Ok(monitors) = window.available_monitors() {
+        let bounds: Vec<MonitorBounds> = monitors
+            .iter()
+            .map(|monitor| MonitorBounds {
+                x: monitor.position().x,
+                y: monitor.position().y,
+                width: monitor.size().width,
+                height: monitor.size().height,
+                scale_factor: monitor.scale_factor(),
+            })
+            .collect();
+        if let Some(index) = anchor_monitor_index(&bounds, anchor_point(position, size)) {
+            return monitors.into_iter().nth(index);
+        }
+    }
+    window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
+}
+
 fn position_panel_from_anchor(
     app_handle: &tauri::AppHandle,
     icon_position: &Position,
@@ -513,14 +565,7 @@ fn position_panel_from_anchor(
     let window = app_handle
         .get_webview_window("main")
         .expect("main window should exist");
-    let monitor = match window.current_monitor() {
-        Ok(Some(monitor)) => monitor,
-        Ok(None) => match window.primary_monitor() {
-            Ok(Some(monitor)) => monitor,
-            _ => return None,
-        },
-        Err(_) => return None,
-    };
+    let monitor = anchor_monitor(&window, icon_position, icon_size)?;
 
     let scale_factor = monitor.scale_factor();
     let (icon_x, icon_y) = logical_point(icon_position, scale_factor);
@@ -612,13 +657,19 @@ pub fn position_panel_at_tray_icon(
     save_tray_anchor(&icon_position, &icon_size, vertical_anchor);
 }
 
-/// Place the panel back at its tray anchor, or at the taskbar corner when no
-/// tray anchor is known yet.
+/// Place the panel back at its tray anchor, or at the taskbar corner of the
+/// primary monitor (where Windows shows the tray) when no anchor is known yet.
 pub(crate) fn reanchor_panel(app_handle: &AppHandle) {
     if stored_tray_anchor().is_some() {
         reposition_panel(app_handle, stored_panel_height());
-    } else if let Some(window) = get_or_init_panel!(app_handle) {
-        position_panel_at_taskbar(app_handle, &window);
+        return;
+    }
+    let Some(window) = get_or_init_panel!(app_handle) else {
+        return;
+    };
+    match app_handle.primary_monitor() {
+        Ok(Some(monitor)) => position_panel_at_taskbar_on(&window, &monitor),
+        _ => position_panel_at_taskbar(app_handle, &window),
     }
 }
 
@@ -644,9 +695,35 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
 #[cfg(test)]
 mod tests {
     use super::{
-        LogicalRect, PhysicalWindowBounds, VerticalAnchor, compute_panel_placement,
+        LogicalRect, PhysicalWindowBounds, VerticalAnchor, anchor_point, compute_panel_placement,
         physical_window_bounds, preferred_tray_vertical_anchor, taskbar_panel_position,
     };
+    use crate::panel_anchor_monitor::AnchorPoint;
+    use tauri::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Position, Size};
+
+    #[test]
+    fn tray_anchor_uses_the_icon_center_in_matching_units() {
+        assert_eq!(
+            anchor_point(
+                &Position::Physical(PhysicalPosition::new(1780, 1040)),
+                &Size::Physical(PhysicalSize::new(40, 40)),
+            ),
+            AnchorPoint::Physical {
+                x: 1800.0,
+                y: 1060.0
+            }
+        );
+        assert_eq!(
+            anchor_point(
+                &Position::Logical(LogicalPosition::new(-1012.0, 588.0)),
+                &Size::Logical(LogicalSize::new(24.0, 24.0)),
+            ),
+            AnchorPoint::Logical {
+                x: -1000.0,
+                y: 600.0
+            }
+        );
+    }
 
     #[test]
     fn cursor_style_anchor_stays_within_work_area() {

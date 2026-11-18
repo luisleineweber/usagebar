@@ -104,22 +104,129 @@ pub(crate) fn resolve_floating_bounds(
     monitors: &[MonitorArea],
 ) -> Option<PhysicalRect> {
     let monitor = choose_monitor(monitors, requested_origin, logical_width, logical_height)?;
+    Some(bounds_on(
+        monitor,
+        requested_origin,
+        logical_width,
+        logical_height,
+    ))
+}
+
+/// The panel at `origin`, sized for and clamped into `monitor`'s work area.
+fn bounds_on(
+    monitor: MonitorArea,
+    origin: (i32, i32),
+    logical_width: f64,
+    logical_height: f64,
+) -> PhysicalRect {
     let scale = sanitized_scale(monitor.scale_factor);
     let (width, height) = physical_panel_size(logical_width, logical_height, scale);
     let inset = (FLOATING_EDGE_INSET_LOGICAL * scale).round() as i32;
     let area = monitor.work_area;
-
-    Some(PhysicalRect {
-        x: clamp_axis(requested_origin.0, area.x, area.width, width, inset),
-        y: clamp_axis(requested_origin.1, area.y, area.height, height, inset),
+    PhysicalRect {
+        x: clamp_axis(origin.0, area.x, area.width, width, inset),
+        y: clamp_axis(origin.1, area.y, area.height, height, inset),
         width,
         height,
-    })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NudgeAxis {
+    Horizontal,
+    Vertical,
+}
+
+/// The nearest work area past `from`'s edge in the nudge direction that
+/// shares part of the panel's span on the other axis.
+fn adjacent_monitor(
+    monitors: &[MonitorArea],
+    from: &PhysicalRect,
+    panel: &PhysicalRect,
+    axis: NudgeAxis,
+    forward: bool,
+) -> Option<MonitorArea> {
+    let span = |start: i32, length: u32| (i64::from(start), i64::from(start) + i64::from(length));
+    monitors
+        .iter()
+        .copied()
+        .filter_map(|monitor| {
+            let area = monitor.work_area;
+            let (gap, overlap) = match axis {
+                NudgeAxis::Horizontal => {
+                    let gap = if forward {
+                        i64::from(area.x) - from.right()
+                    } else {
+                        i64::from(from.x) - area.right()
+                    };
+                    let (a0, a1) = span(area.y, area.height);
+                    let (p0, p1) = span(panel.y, panel.height);
+                    (gap, a1.min(p1) - a0.max(p0))
+                }
+                NudgeAxis::Vertical => {
+                    let gap = if forward {
+                        i64::from(area.y) - from.bottom()
+                    } else {
+                        i64::from(from.y) - area.bottom()
+                    };
+                    let (a0, a1) = span(area.x, area.width);
+                    let (p0, p1) = span(panel.x, panel.width);
+                    (gap, a1.min(p1) - a0.max(p0))
+                }
+            };
+            (gap >= 0 && overlap > 0).then_some((gap, std::cmp::Reverse(overlap), monitor))
+        })
+        .min_by_key(|(gap, overlap, _)| (*gap, *overlap))
+        .map(|(_, _, monitor)| monitor)
+}
+
+/// Where the panel goes after a keyboard nudge of `logical_delta` from
+/// `current_origin`.
+///
+/// The panel moves within its work area and stops at the edge. A further
+/// nudge into that edge moves it fully onto the adjacent work area in that
+/// direction, if there is one. A diagonal delta uses its larger axis.
+pub(crate) fn resolve_nudged_bounds(
+    current_origin: (i32, i32),
+    logical_delta: (f64, f64),
+    logical_width: f64,
+    logical_height: f64,
+    monitors: &[MonitorArea],
+) -> Option<PhysicalRect> {
+    let current = choose_monitor(monitors, current_origin, logical_width, logical_height)?;
+    let here = bounds_on(current, current_origin, logical_width, logical_height);
+    let requested = nudged_origin(current_origin, logical_delta, current.scale_factor);
+    let moved = bounds_on(current, requested, logical_width, logical_height);
+
+    let (axis, delta) = if logical_delta.0.abs() >= logical_delta.1.abs() {
+        (NudgeAxis::Horizontal, logical_delta.0)
+    } else {
+        (NudgeAxis::Vertical, logical_delta.1)
+    };
+    let blocked = match axis {
+        NudgeAxis::Horizontal => moved.x == here.x && requested.0 != here.x,
+        NudgeAxis::Vertical => moved.y == here.y && requested.1 != here.y,
+    };
+    if delta == 0.0 || !blocked {
+        return Some(moved);
+    }
+
+    let forward = delta > 0.0;
+    let Some(next) = adjacent_monitor(monitors, &current.work_area, &here, axis, forward) else {
+        return Some(moved);
+    };
+    // An extreme origin on the nudge axis clamps to the near edge of `next`.
+    let near_edge = if forward { i32::MIN } else { i32::MAX };
+    let origin = match axis {
+        NudgeAxis::Horizontal => (near_edge, here.y),
+        NudgeAxis::Vertical => (here.x, near_edge),
+    };
+    Some(bounds_on(next, origin, logical_width, logical_height))
 }
 
 /// The origin after a keyboard nudge of `(dx, dy)` logical px on a monitor
 /// with `scale_factor`.
-pub(crate) fn nudged_origin(
+fn nudged_origin(
     current_origin: (i32, i32),
     logical_delta: (f64, f64),
     scale_factor: f64,
@@ -258,6 +365,77 @@ mod tests {
         assert_eq!(
             resolve_floating_bounds((50, 50), 400.0, 500.0, &broken),
             Some(rect(50, 50, 400, 500))
+        );
+    }
+
+    /// Primary at 100% and a 150% monitor directly to its right.
+    fn side_by_side() -> Vec<MonitorArea> {
+        vec![
+            monitor(0, 0, 1920, 1040, 1.0),
+            monitor(1920, 0, 2560, 1400, 1.5),
+        ]
+    }
+
+    #[test]
+    fn nudge_moves_within_the_work_area_and_stops_at_the_edge() {
+        let monitors = side_by_side();
+        assert_eq!(
+            resolve_nudged_bounds((1400, 200), (10.0, 0.0), 400.0, 500.0, &monitors),
+            Some(rect(1410, 200, 400, 500))
+        );
+        // A step past the edge stops at the edge first; it does not jump.
+        assert_eq!(
+            resolve_nudged_bounds((1500, 200), (50.0, 0.0), 400.0, 500.0, &monitors),
+            Some(rect(1512, 200, 400, 500))
+        );
+    }
+
+    #[test]
+    fn nudge_at_the_edge_crosses_onto_the_adjacent_monitor_and_back() {
+        let monitors = side_by_side();
+        let right = resolve_nudged_bounds((1512, 200), (10.0, 0.0), 400.0, 500.0, &monitors);
+        // Fully on the 150% monitor: 12 px inset, 600x750 size.
+        assert_eq!(right, Some(rect(1932, 200, 600, 750)));
+
+        let back = resolve_nudged_bounds((1932, 200), (-10.0, 0.0), 400.0, 500.0, &monitors);
+        assert_eq!(back, Some(rect(1512, 200, 400, 500)));
+    }
+
+    #[test]
+    fn nudge_left_crosses_onto_a_negative_origin_monitor() {
+        let monitors = vec![
+            monitor(0, 0, 1920, 1040, 1.0),
+            monitor(-2560, -200, 2560, 1380, 1.5),
+        ];
+        assert_eq!(
+            resolve_nudged_bounds((8, 300), (-10.0, 0.0), 400.0, 500.0, &monitors),
+            Some(rect(-612, 300, 600, 750))
+        );
+    }
+
+    #[test]
+    fn nudge_up_crosses_onto_a_monitor_above() {
+        assert_eq!(
+            resolve_nudged_bounds((100, 8), (0.0, -10.0), 400.0, 500.0, &mixed_layout()),
+            Some(rect(100, -683, 500, 625))
+        );
+    }
+
+    #[test]
+    fn nudge_at_an_outer_edge_without_a_neighbor_stays_put() {
+        let monitors = side_by_side();
+        assert_eq!(
+            resolve_nudged_bounds((8, 200), (-10.0, 0.0), 400.0, 500.0, &monitors),
+            Some(rect(8, 200, 400, 500))
+        );
+        // The right monitor does not span this far down, so it is no neighbor.
+        let short_right = vec![
+            monitor(0, 0, 1920, 1040, 1.0),
+            monitor(1920, 0, 1920, 300, 1.0),
+        ];
+        assert_eq!(
+            resolve_nudged_bounds((1512, 532), (10.0, 0.0), 400.0, 500.0, &short_right),
+            Some(rect(1512, 532, 400, 500))
         );
     }
 

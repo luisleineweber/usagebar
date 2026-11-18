@@ -229,7 +229,8 @@ type PluginOutput = {
 | `src-tauri/src/panel_floating.rs` | Opt-in movable panel: commands, remembered spot, return to tray |
 | `src-tauri/src/panel_floating_geometry.rs` | Pure physical-pixel geometry: monitor choice and work-area clamping |
 | `src-tauri/src/panel_placement_store.rs` | `panel-placement.json` persistence (movable flag and floating origin) |
-| `src-tauri/src/panel_move_tracking.rs` | Win32 subclass: user move loops and display, DPI, work-area changes |
+| `src-tauri/src/panel_move_tracking.rs` | Win32 subclass: user move loops and display, DPI, work-area changes, handled via a posted message |
+| `src-tauri/src/panel_anchor_monitor.rs` | Picks the tray anchor's monitor, so re-anchoring uses that monitor's work area and scale |
 | `src-tauri/src/tray.rs` | Tray icon + context menu wiring |
 | `plugins/` | Provider plugin source (one folder per provider) |
 

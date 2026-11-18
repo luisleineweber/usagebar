@@ -11,7 +11,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 use crate::panel_floating_geometry::{
-    MonitorArea, PhysicalRect, nudged_origin, resolve_floating_bounds,
+    MonitorArea, PhysicalRect, resolve_floating_bounds, resolve_nudged_bounds,
 };
 use crate::panel_move_tracking::{self, PanelWindowSignal};
 use crate::panel_placement_store::{self, FloatingOrigin, PanelPlacement};
@@ -19,6 +19,8 @@ use crate::panel_placement_store::{self, FloatingOrigin, PanelPlacement};
 pub(crate) const PANEL_PLACEMENT_CHANGED_EVENT: &str = "panel-placement-changed";
 /// The largest keyboard step the UI may request, in logical px.
 const MAX_NUDGE_LOGICAL: f64 = 200.0;
+/// Move tracking exists only for Win32, matching the Windows-first scope.
+const MOVABLE_PANEL_SUPPORTED: bool = cfg!(target_os = "windows");
 
 /// What the UI needs to render the move controls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -68,6 +70,15 @@ pub(crate) fn with_user_origin(
     })
 }
 
+/// Only turning movable on needs platform support; turning it off always works.
+pub(crate) fn check_movable_supported(enabled: bool, supported: bool) -> Result<(), String> {
+    if enabled && !supported {
+        Err("Movable panel is only available on Windows".to_string())
+    } else {
+        Ok(())
+    }
+}
+
 pub(crate) fn validate_nudge(dx: f64, dy: f64) -> Result<(f64, f64), String> {
     let valid = |value: f64| value.is_finite() && value.abs() <= MAX_NUDGE_LOGICAL;
     if valid(dx) && valid(dy) {
@@ -95,8 +106,9 @@ fn handle_window_signal(signal: PanelWindowSignal) {
     let Some(app_handle) = APP.get().cloned() else {
         return;
     };
-    // Defer past the current window message so Windows and tao finish their
-    // own move or DPI handling before the panel is placed again.
+    // The subclass already deferred this signal through a posted message, so
+    // tao has finished its own move or DPI handling. On the main thread this
+    // runs inline.
     let scheduled = app_handle.clone().run_on_main_thread(move || match signal {
         PanelWindowSignal::UserMoveEnded { x, y } => record_user_move(&app_handle, x, y),
         PanelWindowSignal::DisplayChanged => reapply_floating_bounds(&app_handle),
@@ -158,11 +170,15 @@ fn logical_panel_size(window: &WebviewWindow) -> Result<(f64, f64), String> {
     Ok((size.width as f64 / scale, size.height as f64 / scale))
 }
 
-/// Clamp `origin` into a work area, move the window there, and remember it.
-fn place_and_remember(app_handle: &AppHandle, origin: (i32, i32)) -> Result<(), String> {
+/// Move the window to the bounds `resolve` picks for its logical size and
+/// remember them as the floating origin.
+fn place_and_remember(
+    app_handle: &AppHandle,
+    resolve: impl FnOnce(f64, f64, &[MonitorArea]) -> Option<PhysicalRect>,
+) -> Result<(), String> {
     let window = main_window(app_handle)?;
     let (width, height) = logical_panel_size(&window)?;
-    let bounds = resolve_floating_bounds(origin, width, height, &monitor_areas(&window))
+    let bounds = resolve(width, height, &monitor_areas(&window))
         .ok_or_else(|| "no monitor is available for the panel".to_string())?;
     let remembered = FloatingOrigin {
         x: bounds.x,
@@ -184,7 +200,10 @@ fn place_and_remember(app_handle: &AppHandle, origin: (i32, i32)) -> Result<(), 
 }
 
 fn record_user_move(app_handle: &AppHandle, x: i32, y: i32) {
-    if let Err(error) = place_and_remember(app_handle, (x, y)) {
+    let placed = place_and_remember(app_handle, |width, height, monitors| {
+        resolve_floating_bounds((x, y), width, height, monitors)
+    });
+    if let Err(error) = placed {
         log::error!("movable panel: could not remember the moved panel: {error}");
     }
 }
@@ -221,6 +240,7 @@ pub(crate) fn set_movable(
     app_handle: &AppHandle,
     enabled: bool,
 ) -> Result<PanelPlacementView, String> {
+    check_movable_supported(enabled, MOVABLE_PANEL_SUPPORTED)?;
     let was_floating = panel_placement_store::current()
         .active_floating_origin()
         .is_some();
@@ -265,9 +285,9 @@ pub(crate) fn nudge(
     let delta = validate_nudge(dx, dy)?;
     let window = main_window(app_handle)?;
     let position = window.outer_position().map_err(|error| error.to_string())?;
-    let scale = window.scale_factor().map_err(|error| error.to_string())?;
-    let origin = nudged_origin((position.x, position.y), delta, scale);
-    place_and_remember(app_handle, origin)?;
+    place_and_remember(app_handle, |width, height, monitors| {
+        resolve_nudged_bounds((position.x, position.y), delta, width, height, monitors)
+    })?;
     Ok(placement_view())
 }
 
@@ -347,6 +367,17 @@ mod tests {
             with_user_origin(with_movable(PanelPlacement::default(), true), ORIGIN),
             Some(floating())
         );
+    }
+
+    #[test]
+    fn movable_can_be_turned_on_only_where_move_tracking_exists() {
+        assert_eq!(check_movable_supported(true, true), Ok(()));
+        assert_eq!(check_movable_supported(false, false), Ok(()));
+        assert_eq!(
+            check_movable_supported(true, false),
+            Err("Movable panel is only available on Windows".to_string())
+        );
+        assert_eq!(MOVABLE_PANEL_SUPPORTED, cfg!(target_os = "windows"));
     }
 
     #[test]

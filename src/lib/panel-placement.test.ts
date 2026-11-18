@@ -18,6 +18,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: mocks.listen }))
 import {
   DEFAULT_PANEL_MOVABLE,
   PANEL_PLACEMENT_CHANGED_EVENT,
+  isMovablePanelSupported,
   listenPanelPlacement,
   loadPanelPlacement,
   nudgePanel,
@@ -36,6 +37,15 @@ describe("panel placement", () => {
 
   it("is anchored to the tray by default", () => {
     expect(DEFAULT_PANEL_MOVABLE).toBe(false)
+  })
+
+  it("is supported only on Windows, where native move tracking exists", () => {
+    const userAgent = vi.spyOn(window.navigator, "userAgent", "get")
+    userAgent.mockReturnValue("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/131.0")
+    expect(isMovablePanelSupported()).toBe(true)
+    userAgent.mockReturnValue("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36")
+    expect(isMovablePanelSupported()).toBe(false)
+    userAgent.mockRestore()
   })
 
   it("accepts only the native placement shape", () => {

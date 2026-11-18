@@ -7,8 +7,11 @@ import { usePanelPlacement } from "@/hooks/app/use-panel-placement"
 import { returnPanelToTray } from "@/lib/panel-placement"
 import { getErrorMessage } from "@/lib/error-utils"
 
-/** Opt-in movable tray panel. The panel stays anchored to the tray by default. */
-export function PanelPlacementSettings() {
+/**
+ * Opt-in movable tray panel. The panel stays anchored to the tray by default.
+ * The section is hidden where the movable panel is not supported.
+ */
+export function PanelPlacementSettings({ className }: { className?: string }) {
   const { placement, updateMovable } = usePanelPlacement()
   const [error, setError] = useState<string | null>(null)
 
@@ -22,12 +25,13 @@ export function PanelPlacementSettings() {
 
   if (!placement) return null
 
+  // No state-dependent key: a remount after each save would drop keyboard focus.
   return (
-    <div>
+    <section className={className}>
+      <h3 className="mb-3 text-base font-semibold">Panel Position</h3>
       <div className="flex items-center gap-2 text-sm text-foreground">
         <Checkbox
           id="movable-panel"
-          key={`movable-panel-${placement.movable}`}
           aria-describedby="movable-panel-hint"
           checked={placement.movable}
           onCheckedChange={(checked) => run(() => updateMovable(checked === true))}
@@ -52,6 +56,6 @@ export function PanelPlacementSettings() {
         </Button>
       ) : null}
       <SettingsFeedbackLine message={null} error={error} />
-    </div>
+    </section>
   )
 }

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
+import { isWindowsTrayPlatform } from "@/lib/taskbar-theme"
 
 /**
  * Placement of the tray panel. The native side owns geometry and persistence.
@@ -11,6 +12,12 @@ export type PanelPlacement = {
 }
 
 export const PANEL_PLACEMENT_CHANGED_EVENT = "panel-placement-changed"
+
+/** Only Windows tracks native panel moves, so only Windows offers the movable panel. */
+export function isMovablePanelSupported(): boolean {
+  return isWindowsTrayPlatform()
+}
+
 export const DEFAULT_PANEL_MOVABLE = false
 
 /** Keyboard steps for the move handle, in logical px. */

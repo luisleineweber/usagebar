@@ -288,10 +288,7 @@ export function GeneralSettingsPane({
         </div>
       </section>
 
-      <section className={SETTINGS_SECTION_CLASS}>
-        <h3 className="mb-3 text-base font-semibold">Panel Position</h3>
-        <PanelPlacementSettings />
-      </section>
+      <PanelPlacementSettings className={SETTINGS_SECTION_CLASS} />
 
       <section className={SETTINGS_SECTION_CLASS}>
         <h3 className="mb-3 text-base font-semibold">App Theme</h3>
