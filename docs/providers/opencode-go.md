@@ -8,7 +8,7 @@ OpenCode has two similarly named products, and UsageBar surfaces them in one pro
 - `OpenCode Zen`: pay-as-you-go model access. You add balance and are charged per request.
 
 This page is for the visible OpenCode provider. Go quota windows come from the official usage API.
-The history chart uses `ccusage`. The direct SQLite query reads legacy assistant messages for detection and Free request counting; it does not read v2 `session_message` rows. Completed v2 compactions contribute to ccusage chart history, but do not change the direct Free request count. Zen balance support still exists as a hidden
+The history chart uses `ccusage`. Legacy assistant messages and v2 `session_message` rows can provide detection evidence. The direct Free request count uses legacy assistant messages; it is unavailable when that source is missing. Completed v2 compactions contribute to ccusage chart history. Zen balance support still exists as a hidden
 compatibility path for older saved cookies or environment-based setups.
 
 ## Overview
@@ -24,7 +24,7 @@ compatibility path for older saved cookies or environment-based setups.
 The plugin enables when either condition is true:
 
 - `~/.local/share/opencode/auth.json` contains an `opencode-go` or current `opencode` entry with a non-empty `key`
-- local OpenCode history already contains `opencode-go` or current `opencode` assistant messages with numeric `cost`
+- local OpenCode history contains legacy `opencode-go` or `opencode` assistant messages with numeric `cost`, or v2 assistant or compaction rows for one of those providers
 
 If neither signal exists, the plugin stays hidden. When an `opencode-go` key exists, UsageBar calls the
 official usage API. The API response, not local history or auth metadata, decides whether Go quota

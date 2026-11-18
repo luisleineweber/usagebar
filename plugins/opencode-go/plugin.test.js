@@ -1,3 +1,4 @@
+import { entryTotalTokens } from "../../src/lib/usage-history"
 import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
@@ -718,6 +719,48 @@ describe("opencode-go plugin", () => {
     expect(ctx.host.log.warn).toHaveBeenCalledWith("opencode auth file is not valid json")
   })
 
+  it("detects v2-only history without inferring a Free count", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockImplementation((_path, sql) => {
+      if (String(sql).includes("FROM session_message")) return JSON.stringify([{ present: 1 }])
+      throw new Error("no such table: message")
+    })
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: { daily: [{ date: "2026-11-01", totalTokens: 174 }] },
+    })
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.plan).toBeUndefined()
+    expect(result.lines.some((line) => line.label === "Free")).toBe(false)
+    expect(ctx.host.ccusage.query).toHaveBeenCalled()
+    expect(entryTotalTokens(result.history.entries[0])).toBe(174)
+  })
+
+  it("keeps a multi-model daily total without assigning it to a model", async () => {
+    const ctx = makeCtx()
+    setHistoryQuery(ctx, [{ createdMs: Date.now(), modelId: "qwen-free", cost: 0 }])
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: {
+        daily: [
+          {
+            date: "2026-11-01",
+            totalTokens: 174,
+            totalCost: 0.03,
+            modelBreakdowns: [
+              { modelName: "a", inputTokens: 100 },
+              { modelName: "b", inputTokens: 10 },
+            ],
+          },
+        ],
+      },
+    })
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.history.entries).toHaveLength(1)
+    expect(result.history.entries[0].model).toBeUndefined()
+    expect(entryTotalTokens(result.history.entries[0])).toBe(174)
+  })
+
   it("keeps ccusage completed compaction cost and token components in history", async () => {
     const ctx = makeCtx()
     setHistoryQuery(ctx, [{ createdMs: Date.now(), modelId: "qwen-free", cost: 0 }])
@@ -755,7 +798,7 @@ describe("opencode-go plugin", () => {
         costUsd: 0.03,
       }),
     ])
-    expect(result.history.entries[0]).not.toHaveProperty("totalTokens")
+    expect(entryTotalTokens(result.history.entries[0])).toBe(174)
   })
 
   it("adds complete ccusage model history and skips invalid days", async () => {
