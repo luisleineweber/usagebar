@@ -427,13 +427,13 @@ describe("claude plugin", () => {
     expect(sessionLine.resetsAt).toBeUndefined()
   })
 
-  it("throws token expired on 401", async () => {
+  it("throws a rejected sign-in on 401 when expiry is not confirmed", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
     ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "" })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Token expired")
+    expect(() => plugin.probe(ctx)).toThrow("Invalid token: Claude rejected the sign-in (HTTP 401)")
   })
 
   it("throws HTTP status details for non-auth usage failures", async () => {
@@ -911,7 +911,7 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Session expired")
   })
 
-  it("throws token expired when usage remains unauthorized after refresh", async () => {
+  it("throws a rejected sign-in when usage remains unauthorized after refresh", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
@@ -934,7 +934,7 @@ describe("claude plugin", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Token expired")
+    expect(() => plugin.probe(ctx)).toThrow("Invalid token: Claude rejected the sign-in (HTTP 401)")
   })
 
   it("logs when saving keychain credentials fails", async () => {

@@ -9,6 +9,27 @@
   const DEFAULT_SCOPES =
     "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
+  // Keep in sync with plugin.json capabilities.httpDomains. The host blocks other domains.
+  const ALLOWED_REFRESH_DOMAINS = ["api.anthropic.com", "platform.claude.com", "claude.ai"]
+  // Known values are logged as-is. Any other provider value is logged as "other".
+  const OAUTH_ERROR_CODES = [
+    "invalid_request",
+    "invalid_client",
+    "invalid_grant",
+    "unauthorized_client",
+    "unsupported_grant_type",
+    "invalid_scope",
+  ]
+  const API_ERROR_TYPES = [
+    "invalid_request_error",
+    "authentication_error",
+    "permission_error",
+    "not_found_error",
+    "request_too_large",
+    "rate_limit_error",
+    "api_error",
+    "overloaded_error",
+  ]
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
@@ -570,6 +591,16 @@
     })
   }
 
+  function logLabel(value, knownValues) {
+    if (value === null) return "none"
+    return knownValues.indexOf(value) !== -1 ? value : "other"
+  }
+
+  function isAllowedRefreshUrl(url) {
+    const match = /^https:\/\/([^/?#@:]+)(?::\d+)?(?:[/?#]|$)/i.exec(String(url))
+    return Boolean(match) && ALLOWED_REFRESH_DOMAINS.indexOf(match[1].toLowerCase()) !== -1
+  }
+
   // Refresh outcomes: "refreshed", "unavailable" (no refresh token), "failed" (temporary
   // network, server, or response failure) and "rejected" (the token endpoint refused the grant).
   function refreshToken(ctx, creds) {
@@ -580,6 +611,14 @@
     }
 
     const oauthConfig = getOAuthConfig(ctx)
+    if (!isAllowedRefreshUrl(oauthConfig.refreshUrl)) {
+      ctx.host.log.error("refresh skipped: refreshUrl is outside the allowed domains")
+      throw (
+        "Claude OAuth config invalid: refreshUrl must use https on " +
+        ALLOWED_REFRESH_DOMAINS.join(", ") +
+        ". Fix ~/.usagebar/config.json."
+      )
+    }
     ctx.host.log.info("attempting token refresh")
     let rawResp
     try {
@@ -605,7 +644,9 @@
       // OAuth token endpoints report refused grants with RFC 6749 error codes.
       const body = ctx.util.tryParseJson(resp.bodyText)
       const errorCode = body && typeof body.error === "string" ? body.error : null
-      ctx.host.log.error("refresh failed: status=" + resp.status + " error=" + String(errorCode))
+      ctx.host.log.error(
+        "refresh failed: status=" + resp.status + " error=" + logLabel(errorCode, OAUTH_ERROR_CODES)
+      )
       if (errorCode === "invalid_grant") {
         return { kind: "rejected", message: "Session expired. Run `claude` to log in again." }
       }
@@ -645,9 +686,9 @@
 
     oauth.accessToken = newAccessToken
     if (body.refresh_token) oauth.refreshToken = body.refresh_token
-    if (typeof body.expires_in === "number") {
-      oauth.expiresAt = Date.now() + body.expires_in * 1000
-    }
+    const expiresAt =
+      typeof body.expires_in === "number" ? Date.now() + body.expires_in * 1000 : null
+    if (expiresAt !== null) oauth.expiresAt = expiresAt
 
     fullData.claudeAiOauth = oauth
     saveCredentials(ctx, source, fullData, creds.secretKey)
@@ -655,7 +696,7 @@
     ctx.host.log.info(
       "refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s"
     )
-    return { kind: "refreshed", accessToken: newAccessToken }
+    return { kind: "refreshed", accessToken: newAccessToken, expiresAt }
   }
 
   // Only the HTTP request itself is a connection failure. Local failures stay visible as-is.
@@ -683,14 +724,31 @@
     return checkRateLimitResponse(ctx, resp)
   }
 
+  function readApiError(ctx, resp) {
+    const body = ctx.util.tryParseJson(resp.bodyText)
+    const error = body && typeof body.error === "object" && body.error ? body.error : null
+    return {
+      type: error && typeof error.type === "string" ? error.type : null,
+      message: error && typeof error.message === "string" ? error.message : "",
+    }
+  }
+
+  // An HTTP 401 proves expiry only when the token's known expiry time has passed, or when
+  // Anthropic's authentication_error says the token expired. A revoked or otherwise rejected
+  // token gets a neutral message.
+  function usageUnauthorizedMessage(ctx, resp, expiredLocally) {
+    const { type, message } = readApiError(ctx, resp)
+    ctx.host.log.error("usage returned 401: error.type=" + logLabel(type, API_ERROR_TYPES))
+    const expiredRemotely = type === "authentication_error" && /expired/i.test(message)
+    if (expiredLocally || expiredRemotely) return "Token expired. Run `claude` to log in again."
+    return "Invalid token: Claude rejected the sign-in (HTTP 401). Run `claude` to log in again."
+  }
+
   // Anthropic reports a token without a required OAuth scope as a 403 permission_error.
   // Other 403 responses deny access; they do not prove an expired sign-in.
   function usageForbiddenMessage(ctx, resp) {
-    const body = ctx.util.tryParseJson(resp.bodyText)
-    const error = body && typeof body.error === "object" ? body.error : null
-    const type = error && typeof error.type === "string" ? error.type : null
-    const message = error && typeof error.message === "string" ? error.message : ""
-    ctx.host.log.error("usage returned 403: error.type=" + String(type))
+    const { type, message } = readApiError(ctx, resp)
+    ctx.host.log.error("usage returned 403: error.type=" + logLabel(type, API_ERROR_TYPES))
     if (type === "permission_error" && /scope requirement/i.test(message)) {
       return "Invalid token: Claude login lacks the OAuth scope required for usage. Run `claude` to log in again."
     }
@@ -1138,20 +1196,27 @@
     }
 
     let accessToken = creds.oauth.accessToken
+    let tokenExpiresAt = creds.oauth.expiresAt
     let attemptedRefresh = false
-    let refreshFailure = null
+    let refreshProblem = null
 
-    // Each probe refreshes at most once. A temporary refresh failure is kept so that a later
-    // HTTP 401 reports that failure instead of an expired sign-in.
+    function tokenExpired() {
+      return typeof tokenExpiresAt === "number" && tokenExpiresAt <= Date.now()
+    }
+
+    // Each probe refreshes at most once. A failed or rejected refresh is kept while the current
+    // token can still be valid; the saved problem is reported only if usage then returns HTTP 401.
+    // A rejected refresh for a token that has already expired ends the probe at once.
     function attemptRefresh() {
       attemptedRefresh = true
       const result = refreshToken(ctx, creds)
       if (result.kind === "refreshed") {
         accessToken = result.accessToken
+        tokenExpiresAt = result.expiresAt
         return true
       }
-      if (result.kind === "rejected") throw result.message
-      if (result.kind === "failed") refreshFailure = result.message
+      if (result.kind === "rejected" && tokenExpired()) throw result.message
+      if (result.kind === "failed" || result.kind === "rejected") refreshProblem = result.message
       return false
     }
 
@@ -1169,9 +1234,11 @@
     }
 
     if (resp.status === 401) {
-      ctx.host.log.error("usage returned 401 after refresh handling")
-      if (refreshFailure) throw refreshFailure
-      throw "Token expired. Run `claude` to log in again."
+      if (refreshProblem) {
+        ctx.host.log.error("usage returned 401 after a failed token refresh")
+        throw refreshProblem
+      }
+      throw usageUnauthorizedMessage(ctx, resp, tokenExpired())
     }
     if (resp.status === 403) throw usageForbiddenMessage(ctx, resp)
 
