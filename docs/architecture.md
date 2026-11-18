@@ -179,6 +179,8 @@ The history report resolves every period in the history source time zone, so loc
 
 The week start is fixed to Monday and does not follow the system locale, so every user sees the same range. A period with no entries reports `null` totals, not zero. History older than the cached entries is unknown and is not shown as zero.
 
+A provider that returns history must cover the last 31 calendar days (today and the 30 days before it), or at least from the earlier of its 30-day window start and day 1 of the current month. Otherwise month to date on the 31st misses day 1 and shows a total that is too low.
+
 ---
 
 ## How to add a new provider

@@ -13,11 +13,12 @@ The OpenAI API provider reads organization-level API spend and completions usage
 - `Today`: current UTC-day API spend.
 - `7 days`: spend over the current UTC day plus the previous six UTC days.
 - `30 days`: spend over the current UTC day plus the previous 29 UTC days.
-- `Tokens`: total input/output tokens from the completions usage endpoint.
-- `Requests`: model request count from the completions usage endpoint.
+- `Tokens`: total input/output tokens from the completions usage endpoint in the 30-day window.
+- `Requests`: model request count from the completions usage endpoint in the 30-day window.
 - `Top model`: model with the highest token total in the 30-day window.
 
 ## Notes
 
+- Usage history starts at the earlier of the 30-day window start and the first UTC day of the current month. This keeps month-to-date history complete on the 31st. The displayed lines keep their own windows.
 - This provider does not read ChatGPT/Codex subscription quota. Use the `Codex` provider for ChatGPT/Codex subscription usage.
 - Only aggregate usage/cost data is exposed in UsageBar and the local HTTP API. API keys are not returned by plugin output.
