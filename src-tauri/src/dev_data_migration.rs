@@ -42,8 +42,11 @@ fn migrate_from_source(source_dir: &Path, target_dir: &Path) -> Result<Migration
         merge_settings(&source_settings, &target_settings_path(target_dir))?;
         report.copied_files += 1;
     }
-    if copy_file_if_missing(&source_secrets, &target_dir.join("provider-secrets.json"))? {
-        report.copied_files += 1;
+    if source_secrets.exists() {
+        let _lock = crate::file_lock::exclusive(&target_dir.join("provider-secrets.lock"), true)?;
+        if copy_file_if_missing(&source_secrets, &target_dir.join("provider-secrets.json"))? {
+            report.copied_files += 1;
+        }
     }
     if source_plugin_data.exists() {
         report.copied_files +=

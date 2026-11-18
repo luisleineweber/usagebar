@@ -37,66 +37,44 @@ fn managed_profile_secret_key(profile_id: &str) -> String {
 }
 
 fn save_managed_profile_secret(
-    _app_data_dir: &std::path::Path,
+    app_data_dir: &std::path::Path,
     provider_id: &str,
     profile_id: &str,
     auth_json: &str,
 ) -> Result<(), String> {
-    let secret_key = managed_profile_secret_key(profile_id);
-
-    #[cfg(target_os = "windows")]
-    {
-        provider_secret_store::save_provider_secret(
-            _app_data_dir,
-            provider_id,
-            &secret_key,
-            auth_json,
+    crate::protected_store::save(
+        app_data_dir,
+        provider_id,
+        &managed_profile_secret_key(profile_id),
+        auth_json,
+    )
+    .map_err(|error| {
+        format!(
+            "Could not save imported {} profile auth: {}",
+            provider_id, error
         )
-        .map_err(|error| {
-            format!(
-                "Could not save imported {} profile auth: {}",
-                provider_id, error
-            )
-        })
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let service = crate::provider_secret_service(provider_id, &secret_key);
-        let entry = crate::open_provider_secret_entry(crate::provider_secret_entry_spec(&service))
-            .map_err(|error| format!("Could not access the system credential vault: {}", error))?;
-        entry.set_password(auth_json).map_err(|error| {
-            format!(
-                "Could not save imported {} profile auth: {}",
-                provider_id, error
-            )
-        })
-    }
+    })
 }
 
 fn delete_managed_profile_secret(
-    _app_data_dir: &std::path::Path,
+    app_data_dir: &std::path::Path,
     provider_id: &str,
     profile_id: &str,
 ) -> Result<(), String> {
     let secret_key = managed_profile_secret_key(profile_id);
-
-    #[cfg(target_os = "windows")]
-    provider_secret_store::delete_provider_secret(_app_data_dir, provider_id, &secret_key)
-        .map_err(|error| {
-            format!(
-                "Could not remove imported {} profile auth: {}",
-                provider_id, error
-            )
-        })?;
-
-    let service = crate::provider_secret_service(provider_id, &secret_key);
-    crate::delete_provider_secret_service(&service).map_err(|error| {
+    crate::protected_store::delete(app_data_dir, provider_id, &secret_key).map_err(|error| {
         format!(
             "Could not remove imported {} profile auth: {}",
             provider_id, error
         )
-    })
+    })?;
+    #[cfg(target_os = "windows")]
+    {
+        // Remove legacy vault entries after the protected file transaction.
+        let service = crate::provider_secret_service(provider_id, &secret_key);
+        crate::delete_provider_secret_service(&service)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -223,6 +201,8 @@ pub(crate) fn set_provider_secret(
                     label, error
                 )
             })?;
+
+        let _vault_lock = crate::protected_store::lock(std::path::Path::new(""))?;
 
         entry.set_password(trimmed_value).map_err(|error| {
             format!(
@@ -362,6 +342,7 @@ pub(crate) fn import_current_codex_account_profile(
         let service = crate::provider_secret_service("codex", &secret_key);
         let entry = crate::open_provider_secret_entry(crate::provider_secret_entry_spec(&service))
             .map_err(|error| format!("Could not access the system credential vault: {}", error))?;
+        let _vault_lock = crate::protected_store::lock(std::path::Path::new(""))?;
         entry
             .set_password(&resolved.auth_json)
             .map_err(|error| format!("Could not save imported Codex profile auth: {}", error))?;

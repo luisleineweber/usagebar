@@ -13,6 +13,7 @@ mod codex_account_store;
 mod credential_commands;
 mod credential_support;
 mod dev_data_migration;
+mod file_lock;
 #[cfg(not(test))]
 mod global_shortcut;
 #[cfg(not(test))]
@@ -24,6 +25,7 @@ mod plugin_engine;
 #[cfg(not(test))]
 mod probe_commands;
 mod probe_coordinator;
+mod protected_store;
 mod provider_account_store;
 #[cfg(target_os = "windows")]
 mod provider_secret_store;

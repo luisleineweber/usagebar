@@ -603,8 +603,17 @@
       if (resp.status === 400 || resp.status === 401) {
         let errorCode = null
         const body = ctx.util.tryParseJson(resp.bodyText)
+        const knownCodes = [
+          "invalid_grant",
+          "invalid_request",
+          "invalid_client",
+          "unauthorized_client",
+          "unsupported_grant_type",
+          "invalid_scope",
+        ]
         if (body) errorCode = body.error || body.error_description
-        ctx.host.log.error("refresh failed: status=" + resp.status + " error=" + String(errorCode))
+        const loggedCode = knownCodes.includes(errorCode) ? errorCode : "unknown"
+        ctx.host.log.error("refresh failed: status=" + resp.status + " error=" + loggedCode)
         if (errorCode === "invalid_grant") {
           throw "Session expired. Run `claude` to log in again."
         }
@@ -1142,6 +1151,12 @@
 
     if (ctx.util.isAuthStatus(resp.status)) {
       ctx.host.log.error("usage returned auth error after all retries: status=" + resp.status)
+      if (
+        creds.source === "managed-profile" &&
+        creds.fullData.usagebarCredentialOwner !== "usagebar"
+      ) {
+        throw "Imported Claude login expired. Run Claude Code, then Re-import this Claude account in Settings."
+      }
       throw "Token expired. Run `claude` to log in again."
     }
 

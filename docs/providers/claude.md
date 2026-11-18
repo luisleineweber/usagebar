@@ -142,10 +142,11 @@ Direct refresh requires a separate UsageBar-owned managed credential document wi
 `usagebarCredentialOwner: "usagebar"`. Missing or unknown ownership stays with Claude Code. Do not add
 this field to a copy of a Claude Code login. This change adds no separate login flow or user setting.
 For explicitly owned documents, refresh runs five minutes before expiry or after an auth response.
-The host serializes refresh across runtimes and UsageBar processes. It preserves the full credential
-document and stores rotated tokens before returning them. A write failure is visible. The host retains
-the new document and lock in memory, and retries storage before another refresh. Keep UsageBar open
-until storage succeeds; pending memory cannot survive process exit.
+The host serializes each refresh chain across runtimes and UsageBar processes. It preserves the full
+credential document in protected recovery storage before it replaces the main credential. A write
+failure is visible. A later runtime or process replays recovery before it sends another refresh
+request. Deleted or replaced accounts are never restored by recovery. Other provider writes use the
+same store lock, and unrelated refresh chains remain available.
 
 ```
 POST https://platform.claude.com/v1/oauth/token

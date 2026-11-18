@@ -1474,7 +1474,6 @@ fn inject_provider_secrets<'js>(
     )?;
 
     let pid = plugin_id.to_string();
-    #[cfg(target_os = "windows")]
     let data_dir = _app_data_dir.to_path_buf();
     provider_secrets_obj.set(
         "write",
@@ -1496,37 +1495,9 @@ fn inject_provider_secrets<'js>(
                     ));
                 }
 
-                #[cfg(target_os = "windows")]
-                provider_secret_store::save_provider_secret(
-                    &data_dir,
-                    &pid,
-                    trimmed_key,
-                    trimmed_value,
-                )
-                .map_err(|error| {
-                    Exception::throw_message(
-                        &ctx_inner,
-                        &format!("provider secret store write failed: {}", error),
-                    )
-                })?;
-
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let service = provider_secret_service(&pid, trimmed_key);
-                    let entry = open_provider_secret_entry(provider_secret_entry_spec(&service))
-                        .map_err(|error| {
-                            Exception::throw_message(
-                                &ctx_inner,
-                                &format!("credential store unavailable: {}", error),
-                            )
-                        })?;
-                    entry.set_password(trimmed_value).map_err(|error| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("credential write failed: {}", error),
-                        )
-                    })?;
-                }
+                crate::protected_store::save(&data_dir, &pid, trimmed_key, trimmed_value).map_err(
+                    |_| Exception::throw_message(&ctx_inner, "provider secret store write failed"),
+                )?;
 
                 Ok(())
             },

@@ -1,6 +1,6 @@
 //! Host binding for Claude refresh. The core owns locks and pending credentials.
 use super::HttpRespParams;
-use super::claude_refresh::{Coordinator, SAVE_ERROR, Target};
+use super::claude_refresh::{Coordinator, CredentialStore, Target};
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
@@ -34,7 +34,7 @@ pub(super) fn inject<'js>(
     };
     let home = dirs::home_dir()
         .ok_or_else(|| Exception::throw_message(ctx, "Home directory is unavailable"))?;
-    let lock_path = home.join(".usagebar").join("claude-refresh.lock");
+    let lock_path = home.join(".usagebar").join("claude-refresh-locks");
     static COORDINATOR: OnceLock<Arc<Coordinator>> = OnceLock::new();
     let coordinator = Arc::clone(COORDINATOR.get_or_init(|| Arc::new(Coordinator::default())));
     inject_transaction(
@@ -51,15 +51,13 @@ pub(super) fn inject<'js>(
 fn inject_transaction<'js>(
     ctx: &rquickjs::Ctx<'js>,
     secrets: &rquickjs::Object<'js>,
-    target: Target,
+    target: impl CredentialStore + 'js,
     allowed_domains: &[String],
     lock_path: std::path::PathBuf,
     coordinator: Arc<Coordinator>,
     send: impl Fn(&RefreshOptions, &str) -> Result<HttpRespParams, String> + 'js,
 ) -> rquickjs::Result<()> {
     use rquickjs::{Exception, Function};
-    let read: Function = secrets.get("read")?;
-    let write: Function = secrets.get("write")?;
     let domains = allowed_domains.to_vec();
     secrets.set(
         "refreshClaudeCredentials",
@@ -78,26 +76,9 @@ fn inject_transaction<'js>(
                 let outcome = coordinator
                     .refresh(
                         &lock_path,
-                        target.clone(),
+                        &target,
                         &options.expected_access_token,
-                        || {
-                            read.call((target.secret_key.clone(),)).map_err(|_| {
-                                "Could not read managed Claude credentials".to_string()
-                            })
-                        },
                         |token| send(&options, token),
-                        |value| {
-                            write
-                                .call::<_, ()>((target.secret_key.clone(), value.to_string()))
-                                .map_err(|_| SAVE_ERROR.to_string())?;
-                            let stored: String = read
-                                .call((target.secret_key.clone(),))
-                                .map_err(|_| SAVE_ERROR.to_string())?;
-                            if stored != value {
-                                return Err(SAVE_ERROR.to_string());
-                            }
-                            Ok(())
-                        },
                     )
                     .map_err(|error| Exception::throw_message(&ctx, &error))?;
                 serde_json::to_string(&outcome).map_err(|_| {

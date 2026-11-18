@@ -307,18 +307,22 @@ The host binds the secret key to the captured instance. JavaScript cannot supply
 The credential document must have `usagebarCredentialOwner: "usagebar"`. Imported Claude Code
 credentials retain Claude Code ownership. The endpoint must pass the plugin HTTP domain allowlist.
 
-The host reloads the document under a process mutex and a user-wide OS file lock. It sends the refresh
-request, retains the full updated document before storage, and verifies the write with a fresh read.
-It returns stored credentials, or a non-success/malformed HTTP response for the existing plugin handling.
-A transport failure returns both fields as null and logs an error.
+The host reloads the document under an OS lock for the credential chain. The lock file name is a
+SHA-256 fingerprint; it contains no token. Unrelated chains can refresh independently.
+The host sends the refresh request and writes a protected recovery record before it replaces the
+main credential. Compare, replace and recovery cleanup share the same cross-process store lock as
+settings, account deletion and all other provider-secret writes. A replacement or deletion cancels
+replay instead of restoring an old profile.
 
-A failed write throws. The host keeps the rotated document and OS lock in memory across JavaScript
-runtimes. The next call for that profile retries storage without another refresh. A different profile
-cannot receive the pending document. Other refresh callers receive a busy error until storage succeeds.
-A changed profile document is never overwritten. Pending memory does not survive process exit or a crash.
-Do not close UsageBar after a storage error until the write succeeds.
+A failed main write throws a visible save error. A later runtime or process replays the protected
+record before it sends another refresh request. On Windows the recovery record is a separate DPAPI
+file. Other platforms use a separate system-vault entry. If even recovery storage fails, the host
+retains the document and that chain's lock in memory; unrelated chains remain available. A crash
+before any protected recovery write succeeds cannot preserve an unstored response.
 
-The host does not log the options, request body, credential document, or response body.
+It returns stored credentials, or a non-success/malformed HTTP response for existing plugin handling.
+A transport failure returns both fields as null and logs a fixed error.
+The host does not log options, request bodies, credential documents, or response bodies.
 
 ## SQLite
 

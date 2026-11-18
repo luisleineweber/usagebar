@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
+import { ownCredentials } from "./test-helpers.js"
 
 const document = (owner) => ({
   usagebarCredentialOwner: owner,
@@ -113,4 +114,49 @@ describe("Claude refresh ownership", () => {
     expect(() => loaded.probe(ctx)).toThrow("Could not save refreshed Claude credentials")
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
+})
+
+it("asks to re-import an expired managed Claude Code login", async () => {
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
+  ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(document("claude-code")))
+  ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "{}" })
+  const loaded = await plugin()
+  expect(() => loaded.probe(ctx)).toThrow("Re-import this Claude account in Settings")
+  expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
+})
+
+it.each([
+  "invalid_grant",
+  "synthetic-private-server-text",
+  { detail: "synthetic-private-server-text" },
+])("does not log server text in refresh errors: %j", async (error) => {
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify(document("usagebar")))
+  ownCredentials(ctx)
+  ctx.host.http.request.mockReturnValue({
+    status: 400,
+    bodyText: JSON.stringify({ error, error_description: "synthetic-private-description" }),
+  })
+  const loaded = await plugin()
+  expect(() => loaded.probe(ctx)).toThrow()
+  const messages = JSON.stringify(ctx.host.log.error.mock.calls)
+  expect(messages).not.toContain("synthetic-private")
+  expect(messages).not.toContain("[object Object]")
+})
+
+it("keeps legacy invalid_grant classification while filtering log values", async () => {
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify(document("usagebar")))
+  ownCredentials(ctx)
+  ctx.host.http.request.mockReturnValue({
+    status: 400,
+    bodyText: JSON.stringify({ error_description: "invalid_grant" }),
+  })
+  const loaded = await plugin()
+  expect(() => loaded.probe(ctx)).toThrow("Session expired")
+  expect(ctx.host.log.error).toHaveBeenCalledWith("refresh failed: status=400 error=invalid_grant")
 })

@@ -242,9 +242,11 @@ type PluginOutput = {
 
 ## Claude credential refresh ownership
 
-The probe coordinator combines work for one captured provider instance. It is not a cross-process
-credential lock. Each probe has a new JavaScript runtime. Claude Code credential documents and managed
-imports remain read-only during probes. Explicitly UsageBar-owned managed refresh uses the host
-transaction in `plugin_engine/claude_refresh.rs` and its host binding. A user-wide OS file lock covers
-separate UsageBar processes. The host retains a rotated document and its lock until a verified store
-write succeeds. The captured instance controls the destination; a pending document cannot cross profiles.
+The probe coordinator combines work for one provider instance. It does not lock other processes.
+Claude Code documents and managed imports remain read-only during probes. Explicitly UsageBar-owned
+refresh uses the host transaction in `plugin_engine/claude_refresh.rs` and its native store binding.
+A user-wide OS lock covers each credential chain. A protected recovery record precedes replacement
+of the main credential and is replayed after a restart. On Windows this record uses a separate DPAPI
+file so an unreadable main store cannot prevent recording a rotation. All provider-store mutations
+share a second OS lock. Compare-and-replace, account removal and other provider writes use that lock.
+A captured instance controls the destination; recovery cannot cross profiles or restore a removed one.
