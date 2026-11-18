@@ -1,107 +1,36 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { makeCtx } from "../test-helpers.js"
+import { describe, expect, it } from "vitest"
+import {
+  EVENTS_PATH,
+  PAGE_SIZE,
+  event,
+  eventsPage,
+  hasTotalUsage,
+  loadPlugin,
+  localNoon,
+  localTime,
+  now,
+  setup,
+  uniqueEvents,
+  useUsageEventTestEnvironment,
+} from "./usage-events-fixtures.js"
 
-const EVENTS_PATH = "/api/dashboard/get-filtered-usage-events"
-const PAGE_SIZE = 500
-const NOW = new Date(2026, 10, 17, 15, 30)
-
-const loadPlugin = async () => {
-  await import("./plugin.js")
-  return globalThis.__openusage_plugin
-}
-
-function makeJwt(payload) {
-  const jwtPayload = Buffer.from(JSON.stringify(payload), "utf8")
-    .toString("base64")
-    .replace(/=+$/g, "")
-  return `a.${jwtPayload}.c`
-}
-
-function localNoon(day) {
-  return new Date(2026, 10, day, 12).getTime()
-}
-
+// November days in Europe/Berlin use +01:00.
 function dayPeriod(day) {
+  const pad = (value) => String(value).padStart(2, "0")
   return {
-    periodStart: new Date(2026, 10, day).toISOString(),
-    periodEnd: new Date(2026, 10, day + 1).toISOString(),
+    periodStart: `2026-11-${pad(day)}T00:00:00+01:00`,
+    periodEnd: `2026-11-${pad(day + 1)}T00:00:00+01:00`,
   }
 }
 
-function event(overrides = {}) {
-  const { tokenUsage, ...rest } = overrides
-  return {
-    timestamp: String(localNoon(16)),
-    model: "claude-4.5-sonnet",
-    kind: "USAGE_EVENT_KIND_INCLUDED_IN_PRO",
-    chargedCents: 4,
-    tokenUsage: {
-      inputTokens: 100,
-      outputTokens: 50,
-      cacheWriteTokens: 10,
-      cacheReadTokens: 5,
-      totalCents: 25,
-      ...tokenUsage,
-    },
-    ...rest,
-  }
-}
-
-function uniqueEvents(count, startIndex = 0) {
-  return Array.from({ length: count }, (_, index) =>
-    event({ timestamp: String(localNoon(16) + startIndex + index) })
-  )
-}
-
-function eventsPage(events, total) {
-  const body = { usageEventsDisplay: events }
-  if (total !== undefined) body.totalUsageEventsCount = total
-  return { status: 200, bodyText: JSON.stringify(body) }
-}
-
-function setup(respondToEvents) {
-  const ctx = makeCtx()
-  const token = makeJwt({ sub: "auth0|user_abc123", exp: Math.floor(NOW.getTime() / 1000) + 3600 })
-  ctx.host.sqlite.query.mockImplementation((db, sql) =>
-    String(sql).includes("cursorAuth/accessToken") ? JSON.stringify([{ value: token }]) : "[]"
-  )
-  const eventRequests = []
-  ctx.host.http.request.mockImplementation((opts) => {
-    const url = String(opts.url)
-    if (url.includes(EVENTS_PATH)) {
-      const body = JSON.parse(opts.bodyText)
-      eventRequests.push({ opts, body })
-      return respondToEvents(body.page, body)
-    }
-    if (url.includes("GetCurrentPeriodUsage")) {
-      return {
-        status: 200,
-        bodyText: JSON.stringify({
-          enabled: true,
-          planUsage: { totalSpend: 1200, limit: 2400 },
-          billingCycleEnd: NOW.getTime() + 86400000,
-        }),
-      }
-    }
-    if (url.includes("GetPlanInfo")) {
-      return { status: 200, bodyText: JSON.stringify({ planInfo: { planName: "pro" } }) }
-    }
-    return { status: 404, bodyText: "{}" }
-  })
-  return { ctx, eventRequests }
+async function probeHistory(respond) {
+  const { ctx } = setup(respond)
+  const plugin = await loadPlugin()
+  return { ctx, result: plugin.probe(ctx) }
 }
 
 describe("cursor usage event history", () => {
-  beforeEach(() => {
-    delete globalThis.__openusage_plugin
-    vi.resetModules()
-    vi.useFakeTimers({ toFake: ["Date"] })
-    vi.setSystemTime(NOW)
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  useUsageEventTestEnvironment()
 
   it("requests whole local days with the session cookie and CSRF origin", async () => {
     const { ctx, eventRequests } = setup(() => eventsPage([], 0))
@@ -115,11 +44,12 @@ describe("cursor usage event history", () => {
     expect(opts.url).toBe("https://cursor.com" + EVENTS_PATH)
     expect(opts.headers.Origin).toBe("https://cursor.com")
     expect(opts.headers.Cookie).toMatch(/^WorkosCursorSessionToken=user_abc123%3A%3A/)
+    expect(opts.timeoutMs).toBe(15000)
     expect(body).toEqual({
       page: 1,
       pageSize: PAGE_SIZE,
-      startDate: String(new Date(2026, 9, 19).getTime()),
-      endDate: String(NOW.getTime()),
+      startDate: String(localTime(10, 19, 0)),
+      endDate: String(now().getTime()),
     })
   })
 
@@ -139,12 +69,9 @@ describe("cursor usage event history", () => {
       }),
       event({ timestamp: String(localNoon(16)), chargedCents: 0, tokenUsage: { totalCents: 0 } }),
     ]
-    const { ctx } = setup(() => eventsPage(events, events.length))
-    const plugin = await loadPlugin()
+    const { result } = await probeHistory(() => eventsPage(events, events.length))
 
-    const result = plugin.probe(ctx)
-
-    expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+    expect(hasTotalUsage(result)).toBe(true)
     expect(result.history).toEqual({
       version: 1,
       source: "cursor-usage-events",
@@ -190,6 +117,26 @@ describe("cursor usage event history", () => {
     })
   })
 
+  it("labels days with the local offset, including the daylight saving change", async () => {
+    const events = [
+      event({ timestamp: String(localTime(10, 25, 1, 30)) }),
+      event({ timestamp: String(localTime(10, 25, 23, 30)) }),
+      event({ timestamp: String(localTime(10, 26, 0, 30)) }),
+    ]
+    const { result } = await probeHistory(() => eventsPage(events, 3))
+
+    expect(
+      result.history.entries.map(({ periodStart, periodEnd, requests }) => ({
+        periodStart,
+        periodEnd,
+        requests,
+      }))
+    ).toEqual([
+      { periodStart: "2026-10-25T00:00:00+02:00", periodEnd: "2026-10-26T00:00:00+01:00", requests: 2 },
+      { periodStart: "2026-10-26T00:00:00+01:00", periodEnd: "2026-10-27T00:00:00+01:00", requests: 1 },
+    ])
+  })
+
   it("follows full pages until a short page arrives", async () => {
     const pages = [uniqueEvents(PAGE_SIZE), uniqueEvents(PAGE_SIZE, PAGE_SIZE), uniqueEvents(3, 1000)]
     const { ctx, eventRequests } = setup((page) => eventsPage(pages[page - 1], 1003))
@@ -215,35 +162,47 @@ describe("cursor usage event history", () => {
     expect(result.history.entries[0].requests).toBe(PAGE_SIZE)
   })
 
-  it("removes rows repeated at a page boundary only as far as the reported total proves", async () => {
+  it("removes rows repeated at a page boundary when the total proves exactly that overlap", async () => {
     const first = uniqueEvents(PAGE_SIZE)
-    // Page 2 repeats the last two rows of page 1, then continues.
     const second = [...first.slice(-2), ...uniqueEvents(3, PAGE_SIZE)]
-    const { ctx } = setup((page) => eventsPage(page === 1 ? first : second, PAGE_SIZE + 3))
-    const plugin = await loadPlugin()
-
-    const result = plugin.probe(ctx)
+    const { result } = await probeHistory((page) =>
+      eventsPage(page === 1 ? first : second, PAGE_SIZE + 3)
+    )
 
     expect(result.history.entries[0].requests).toBe(PAGE_SIZE + 3)
+  })
+
+  it("omits history when the total proves fewer repeats than the boundary overlap", async () => {
+    // Page 1 ends [A, B] and page 2 starts [A, B], but only one row is extra.
+    // Which row repeats is unknown, and a guess would move usage between models.
+    const rowA = event({ timestamp: String(localNoon(16) + 900), model: "gpt-5" })
+    const rowB = event({ timestamp: String(localNoon(16) + 901), model: "claude-4.5-sonnet" })
+    const first = [...uniqueEvents(PAGE_SIZE - 2), rowA, rowB]
+    const second = [rowA, rowB, ...uniqueEvents(2, PAGE_SIZE)]
+    const { ctx, result } = await probeHistory((page) =>
+      eventsPage(page === 1 ? first : second, PAGE_SIZE + 3)
+    )
+
+    expect(result).not.toHaveProperty("history")
+    expect(hasTotalUsage(result)).toBe(true)
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      expect.stringContaining("page overlap does not match total: 1 extra rows, 2 repeated")
+    )
   })
 
   it("keeps a boundary repeat when the reported total counts it as a real event", async () => {
     const first = uniqueEvents(PAGE_SIZE)
     const second = [first[PAGE_SIZE - 1], ...uniqueEvents(2, PAGE_SIZE)]
-    const { ctx } = setup((page) => eventsPage(page === 1 ? first : second, PAGE_SIZE + 3))
-    const plugin = await loadPlugin()
-
-    const result = plugin.probe(ctx)
+    const { result } = await probeHistory((page) =>
+      eventsPage(page === 1 ? first : second, PAGE_SIZE + 3)
+    )
 
     expect(result.history.entries[0].requests).toBe(PAGE_SIZE + 3)
   })
 
   it("keeps identical legitimate events on the same page", async () => {
     const twin = event({ timestamp: String(localNoon(16)) })
-    const { ctx } = setup(() => eventsPage([twin, { ...twin }, { ...twin }], 3))
-    const plugin = await loadPlugin()
-
-    const result = plugin.probe(ctx)
+    const { result } = await probeHistory(() => eventsPage([twin, { ...twin }, { ...twin }], 3))
 
     expect(result.history.entries).toEqual([
       expect.objectContaining({ requests: 3, costUsd: 0.75, chargedCostUsd: 0.12 }),
@@ -252,11 +211,9 @@ describe("cursor usage event history", () => {
 
   it("does not remove repeats when the response has no total count", async () => {
     const first = uniqueEvents(PAGE_SIZE)
-    const second = [first[PAGE_SIZE - 1]]
-    const { ctx } = setup((page) => eventsPage(page === 1 ? first : second))
-    const plugin = await loadPlugin()
-
-    const result = plugin.probe(ctx)
+    const { result } = await probeHistory((page) =>
+      eventsPage(page === 1 ? first : [first[PAGE_SIZE - 1]])
+    )
 
     expect(result.history.entries[0].requests).toBe(PAGE_SIZE + 1)
   })
@@ -265,24 +222,20 @@ describe("cursor usage event history", () => {
     const { chargedCents: _omitted, ...withoutCharged } = event({
       timestamp: String(localNoon(16) + 1),
     })
-    const { ctx } = setup(() => eventsPage([event(), withoutCharged], 2))
-    const plugin = await loadPlugin()
+    const { result } = await probeHistory(() => eventsPage([event(), withoutCharged], 2))
 
-    const [entry] = plugin.probe(ctx).history.entries
-
+    const [entry] = result.history.entries
     expect(entry.requests).toBe(2)
     expect(entry.costUsd).toBe(0.5)
     expect(entry).not.toHaveProperty("chargedCostUsd")
   })
 
   it("leaves list-price cost unknown and never substitutes charged cost", async () => {
-    const { ctx } = setup(() =>
+    const { result } = await probeHistory(() =>
       eventsPage([event({ tokenUsage: { totalCents: undefined }, chargedCents: 9 })], 1)
     )
-    const plugin = await loadPlugin()
 
-    const [entry] = plugin.probe(ctx).history.entries
-
+    const [entry] = result.history.entries
     expect(entry).not.toHaveProperty("costUsd")
     expect(entry.chargedCostUsd).toBe(0.09)
   })
@@ -290,7 +243,7 @@ describe("cursor usage event history", () => {
   it("keeps token metrics unknown when a token field or token usage is missing", async () => {
     const withoutTokenUsage = event({ timestamp: String(localNoon(16)), model: "gpt-5" })
     delete withoutTokenUsage.tokenUsage
-    const { ctx } = setup(() =>
+    const { result } = await probeHistory(() =>
       eventsPage(
         [
           event({ tokenUsage: { cacheWriteTokens: undefined } }),
@@ -300,10 +253,8 @@ describe("cursor usage event history", () => {
         3
       )
     )
-    const plugin = await loadPlugin()
 
-    const [claude, gpt] = plugin.probe(ctx).history.entries
-
+    const [claude, gpt] = result.history.entries
     expect(claude).toEqual({
       ...dayPeriod(16),
       model: "claude-4.5-sonnet",
@@ -313,35 +264,21 @@ describe("cursor usage event history", () => {
       costUsd: 0.5,
       chargedCostUsd: 0.08,
     })
-    expect(gpt).toEqual({
-      ...dayPeriod(16),
-      model: "gpt-5",
-      requests: 1,
-      chargedCostUsd: 0.04,
-    })
+    expect(gpt).toEqual({ ...dayPeriod(16), model: "gpt-5", requests: 1, chargedCostUsd: 0.04 })
   })
 
-  it("keeps events without a model as an unlabelled entry and skips events without a timestamp", async () => {
-    const { ctx } = setup(() =>
-      eventsPage([event({ model: "" }), event({ timestamp: "0" }), event({ timestamp: undefined })], 3)
-    )
-    const plugin = await loadPlugin()
+  it("keeps events without a model as an unlabelled entry", async () => {
+    const { result } = await probeHistory(() => eventsPage([event({ model: "" })], 1))
 
-    const entries = plugin.probe(ctx).history.entries
-
-    expect(entries).toHaveLength(1)
-    expect(entries[0]).not.toHaveProperty("model")
-    expect(entries[0].requests).toBe(1)
-    expect(ctx.host.log.warn).toHaveBeenCalledWith(
-      "usage events: skipped 2 events without a valid timestamp"
-    )
+    expect(result.history.entries).toHaveLength(1)
+    expect(result.history.entries[0]).not.toHaveProperty("model")
+    expect(result.history.entries[0].requests).toBe(1)
   })
 
   it("reports a confirmed empty window as empty history", async () => {
-    const { ctx } = setup(() => ({ status: 200, bodyText: "{}" }))
-    const plugin = await loadPlugin()
+    const { result } = await probeHistory(() => ({ status: 200, bodyText: "{}" }))
 
-    expect(plugin.probe(ctx).history.entries).toEqual([])
+    expect(result.history.entries).toEqual([])
   })
 
   it.each([
@@ -360,7 +297,8 @@ describe("cursor usage event history", () => {
     ["fewer events than the reported total", () => eventsPage(uniqueEvents(2), 5)],
     [
       "a total that changes between pages",
-      (page) => eventsPage(page === 1 ? uniqueEvents(PAGE_SIZE) : uniqueEvents(1, PAGE_SIZE), page === 1 ? 501 : 502),
+      (page) =>
+        eventsPage(page === 1 ? uniqueEvents(PAGE_SIZE) : uniqueEvents(1, PAGE_SIZE), page === 1 ? 501 : 502),
     ],
     [
       "more raw rows than the total without a boundary repeat",
@@ -368,14 +306,16 @@ describe("cursor usage event history", () => {
         eventsPage(page === 1 ? uniqueEvents(PAGE_SIZE) : uniqueEvents(2, PAGE_SIZE), PAGE_SIZE + 1),
     ],
     ["full pages up to the page limit", (page) => eventsPage(uniqueEvents(PAGE_SIZE, page * PAGE_SIZE))],
+    ["only events without a timestamp", () => eventsPage([event({ timestamp: undefined }), event({ timestamp: "0" })], 2)],
+    ["one event without a timestamp", () => eventsPage([event(), event({ timestamp: undefined })], 2)],
+    ["an event before the requested window", () => eventsPage([event({ timestamp: String(localTime(10, 18, 23)) })], 1)],
+    ["an event after the requested window", () => eventsPage([event({ timestamp: String(now().getTime() + 60000) })], 1)],
+    ["a timestamp outside the JavaScript date range", () => eventsPage([event({ timestamp: "9000000000000000" })], 1)],
   ])("omits history and keeps the summary for %s", async (_name, respond) => {
-    const { ctx } = setup(respond)
-    const plugin = await loadPlugin()
-
-    const result = plugin.probe(ctx)
+    const { ctx, result } = await probeHistory(respond)
 
     expect(result).not.toHaveProperty("history")
-    expect(result.lines.find((line) => line.label === "Total usage")).toBeTruthy()
+    expect(hasTotalUsage(result)).toBe(true)
     expect(ctx.host.log.warn).toHaveBeenCalledWith(
       expect.stringMatching(/^usage events unavailable \(.+\); history omitted$/)
     )

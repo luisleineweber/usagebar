@@ -25,7 +25,9 @@
 
 ### Usage history
 
-The plugin also returns daily, per-model usage history for the last 30 local days (today included). It comes from `POST https://cursor.com/api/dashboard/get-filtered-usage-events`. History is extra data: when the event fetch fails, the plugin keeps the summary lines, omits `history`, and logs a warning.
+The plugin also returns daily, per-model usage history for the last 30 local days (today included). It comes from `POST https://cursor.com/api/dashboard/get-filtered-usage-events`. History is extra data: when the event fetch fails, the plugin keeps the summary lines, omits `history`, and logs a warning. When a successful output has no `history`, the host keeps the last valid history as retained data. So the plugin omits history for every doubtful result instead of returning partial history.
+
+Each entry covers one local calendar day. `periodStart` and `periodEnd` are RFC 3339 values with the local UTC offset, for example `2026-10-25T00:00:00+02:00` to `2026-10-26T00:00:00+01:00` in Europe/Berlin. The date part is the local date, so day groups in the local HTTP API and CLI show the correct day.
 
 | History field | Source field | Meaning |
 |---|---|---|
@@ -40,7 +42,8 @@ The plugin also returns daily, per-model usage history for the last 30 local day
 
 Rules:
 
-- Events are grouped by local calendar day and `model`. An event without a model goes into a bucket without a model label. An event without a valid `timestamp` cannot go into a day, so the plugin skips it and logs the count.
+- Events are grouped by local calendar day and `model`. An event without a model goes into a bucket without a model label.
+- Every event must have a `timestamp` inside the requested window. When one event does not, day totals would be too low, so history is omitted.
 - A bucket metric is set only when every event in the bucket reports a valid, non-negative value. Otherwise the metric stays unknown (omitted). A missing `chargedCents` is never treated as zero.
 - `costUsd` and `chargedCostUsd` are never added together, and one is never used in place of the other.
 
@@ -49,7 +52,15 @@ Rules:
 - Paging stops at an empty page or a page shorter than the page size. A full page at the 40-page limit makes the window incomplete, so history is omitted.
 - An empty object `{}` means a confirmed empty window. Any other response without `usageEventsDisplay` (for example an error envelope) is a failure.
 - When `totalUsageEventsCount` changes between pages, or fewer events arrive than it reports, history is omitted.
-- The endpoint has no stable event ID, and two real events can be identical. The plugin removes repeated rows only when the raw row count is higher than `totalUsageEventsCount`. It removes only that excess, and only rows that repeat at the boundary between two adjacent pages. When the excess cannot be matched that way, history is omitted. When the response has no total, no rows are removed.
+- The endpoint has no stable event ID, and two real events can be identical. The reported total proves how many rows repeat, but not which rows. The plugin removes rows only when the raw row count is higher than `totalUsageEventsCount` and the repeats at page boundaries explain that excess exactly, with one possible overlap per boundary. In every other case history is omitted, because a guess could drop the wrong row and move usage to the wrong model. When the response has no total, no rows are removed.
+
+**Time budget.** The host stops a probe after 30 seconds and discards its result. History paging must end 20 seconds after the probe starts. Each page uses the smaller of 15 seconds and the remaining budget as its timeout. The plugin does not start a page with less than 3 seconds left. When the budget runs out, the plugin returns the summary and omits history.
+
+**Refresh schedule.** History changes slowly, so the plugin fetches it at most every 30 minutes. Between fetches it omits `history`, and the host shows the last valid history. The next fetch time is stored with the Cursor user ID in `usage-history-schedule.json` in the plugin data directory. A different signed-in user, or a stored time more than one day ahead, starts a fetch at once.
+
+- After HTTP 429 the next fetch waits for `Retry-After` (delay seconds or an HTTP date), at least 5 minutes and at most 1 day. Without a usable header, it waits 30 minutes.
+- When the time budget or the page limit runs out, the next fetch waits 30 minutes, because the same window would fail again.
+- After other failures the next probe tries again.
 
 **Enterprise flow** remains request-based via the REST `/api/usage` endpoint -- unchanged.
 

@@ -2266,11 +2266,14 @@ mod tests {
 
     #[test]
     fn redact_body_redacts_cursor_usage_event_owners() {
-        let body = r#"{"usageEventsDisplay":[{"owningUser":"user_1234567890abcdef","owningTeam":"team_1234567890abcdef","model":"gpt-5"}]}"#;
+        let body = r#"{"usageEventsDisplay":[{"owningUser":"user_1234567890abcdef","owningTeam" : "team_1234567890abcdef","model":"gpt-5"},{"owningUser" :12345678901234,"owningTeam":987654,"model":"gpt-5"}],"userId" : "user_abcdefghijklmnop"}"#;
         let redacted = redact_body(body);
 
         assert!(!redacted.contains("user_1234567890abcdef"));
         assert!(!redacted.contains("team_1234567890abcdef"));
+        assert!(!redacted.contains("12345678901234"));
+        assert!(!redacted.contains("987654"));
+        assert!(!redacted.contains("user_abcdefghijklmnop"));
         assert!(redacted.contains("\"model\":\"gpt-5\""));
     }
 

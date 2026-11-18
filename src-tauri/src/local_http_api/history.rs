@@ -362,6 +362,34 @@ mod tests {
     }
 
     #[test]
+    fn day_groups_use_the_local_date_of_offset_periods() {
+        let mut snapshot = snapshot();
+        let history = snapshot.history.as_mut().unwrap();
+        // Europe/Berlin: 2026-10-25 is the day the clock moves from +02:00 to +01:00.
+        history.entries = vec![
+            UsageHistoryEntry {
+                period_start: "2026-10-25T00:00:00+02:00".to_string(),
+                period_end: "2026-10-26T00:00:00+01:00".to_string(),
+                ..entry("2026-10-25", Some("gpt-5"), None)
+            },
+            UsageHistoryEntry {
+                period_start: "2026-10-26T00:00:00+01:00".to_string(),
+                period_end: "2026-10-27T00:00:00+01:00".to_string(),
+                ..entry("2026-10-26", Some("gpt-5"), None)
+            },
+        ];
+
+        let query = parse_history_query(Some("groupBy=day")).unwrap();
+        let response = build_history_response(vec![snapshot], &query);
+        let keys: Vec<&str> = response
+            .groups
+            .iter()
+            .map(|group| group.key.as_str())
+            .collect();
+        assert_eq!(keys, vec!["2026-10-25", "2026-10-26"]);
+    }
+
+    #[test]
     fn response_serializes_missing_totals_as_null() {
         let mut snapshot = snapshot();
         snapshot.history.as_mut().unwrap().entries[0].cost_usd = None;
