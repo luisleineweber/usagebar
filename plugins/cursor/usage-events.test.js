@@ -209,13 +209,50 @@ describe("cursor usage event history", () => {
     ])
   })
 
-  it("does not remove repeats when the response has no total count", async () => {
-    const first = uniqueEvents(PAGE_SIZE)
+  it("joins pages without a total count when no rows repeat at the boundary", async () => {
     const { result } = await probeHistory((page) =>
+      eventsPage(page === 1 ? uniqueEvents(PAGE_SIZE) : uniqueEvents(2, PAGE_SIZE))
+    )
+
+    expect(result.history.entries[0].requests).toBe(PAGE_SIZE + 2)
+  })
+
+  it("omits history when pages overlap at a boundary and no total resolves it", async () => {
+    const first = uniqueEvents(PAGE_SIZE)
+    const { ctx, result } = await probeHistory((page) =>
       eventsPage(page === 1 ? first : [first[PAGE_SIZE - 1]])
     )
 
-    expect(result.history.entries[0].requests).toBe(PAGE_SIZE + 1)
+    expect(result).not.toHaveProperty("history")
+    expect(hasTotalUsage(result)).toBe(true)
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "usage events unavailable (pages overlap at page 2 without a total); history omitted"
+    )
+  })
+
+  it("treats an empty object after a full page as the last page", async () => {
+    const { result } = await probeHistory((page) =>
+      page === 1 ? eventsPage(uniqueEvents(PAGE_SIZE), PAGE_SIZE) : { status: 200, bodyText: "{}" }
+    )
+
+    expect(result.history.entries[0].requests).toBe(PAGE_SIZE)
+  })
+
+  it("checks rows against the earlier total when an empty object ends paging", async () => {
+    const { ctx, result } = await probeHistory((page) =>
+      page === 1 ? eventsPage(uniqueEvents(PAGE_SIZE), PAGE_SIZE + 3) : { status: 200, bodyText: "{}" }
+    )
+
+    expect(result).not.toHaveProperty("history")
+    expect(ctx.host.log.warn).toHaveBeenCalledWith(
+      "usage events unavailable (incomplete pages: expected 503, received 500); history omitted"
+    )
+  })
+
+  it("reports the Cursor user ID as the account key for the host to hash", async () => {
+    const { result } = await probeHistory(() => eventsPage([event()], 1))
+
+    expect(result.accountKey).toBe("user_abc123")
   })
 
   it("leaves charged cost unknown when any event in the bucket omits chargedCents", async () => {

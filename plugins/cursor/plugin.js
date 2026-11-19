@@ -576,9 +576,11 @@
       return eventsFailure("invalid JSON")
     }
     var keys = Object.keys(body)
-    // An empty query returns an empty object. Any other shape must carry the event list,
-    // so an error envelope cannot pass as confirmed empty usage.
-    if (keys.length === 0) return { ok: true, total: 0, events: [] }
+    // An empty object is an empty page that reports no total: an empty query, or a page
+    // after the last event. The caller checks the rows against any earlier total.
+    // Any other shape must carry the event list, so an error envelope cannot pass as
+    // confirmed empty usage.
+    if (keys.length === 0) return { ok: true, total: null, events: [] }
 
     var total = null
     if (Object.prototype.hasOwnProperty.call(body, "totalUsageEventsCount")) {
@@ -751,6 +753,14 @@
     // A full last page at the cap does not prove that no more events exist.
     if (!completed) return eventsFailure("page limit reached", USAGE_HISTORY_REFRESH_MS)
     if (expectedTotal === null) {
+      // Without a total, a row repeated at a page boundary cannot be told apart from
+      // identical real events, so any boundary overlap omits history.
+      var keys = pages.map(function (p) { return p.map(stableStringify) })
+      for (var index = 1; index < keys.length; index++) {
+        if (boundaryOverlaps(keys[index - 1], keys[index]).length > 0) {
+          return eventsFailure("pages overlap at page " + (index + 1) + " without a total")
+        }
+      }
       return { ok: true, events: pages.reduce(function (all, p) { return all.concat(p) }, []) }
     }
     return reconcilePages(pages, expectedTotal)
@@ -952,8 +962,7 @@
     )
   }
 
-  function refreshUsageEventHistory(ctx, accessToken, probeStartedAtMs) {
-    var session = buildSessionToken(ctx, accessToken)
+  function refreshUsageEventHistory(ctx, session, probeStartedAtMs) {
     if (!session) {
       ctx.host.log.warn("usage events: cannot build session token; history omitted")
       return undefined
@@ -985,7 +994,10 @@
     const probeStartedAtMs = Date.now()
     const state = { accessToken: null }
     const result = probeSummary(ctx, state)
-    const history = refreshUsageEventHistory(ctx, state.accessToken, probeStartedAtMs)
+    const session = buildSessionToken(ctx, state.accessToken)
+    // The host hashes this identifier and keeps retained history only for the same account.
+    if (session) result.accountKey = session.userId
+    const history = refreshUsageEventHistory(ctx, session, probeStartedAtMs)
     if (history) result.history = history
     return result
   }

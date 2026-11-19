@@ -150,6 +150,10 @@ pub struct PluginOutput {
     pub freshness: Option<DataFreshnessGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_detection: Option<Vec<SetupDetection>>,
+    /// SHA-256 digest of the account identifier that the plugin reported.
+    /// Cached data is reused only for the same account key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -674,6 +678,7 @@ fn run_probe_unstamped(
         };
         let history = parse_history(&result);
         let details = parse_details(&result, &plugin.manifest.detail);
+        let account_key = parse_account_key(&result, &plugin_id);
 
         let error = lines.iter().find_map(|line| match line {
             MetricLine::Badge { label, text, .. } if label == "Error" => Some(ProbeError {
@@ -695,6 +700,7 @@ fn run_probe_unstamped(
             history,
             freshness: None,
             setup_detection,
+            account_key,
         }
     })
 }
@@ -1051,6 +1057,23 @@ fn parse_history(result: &Object<'_>) -> Option<UsageHistory> {
         time_zone,
         entries: parsed_entries,
     })
+}
+
+fn parse_account_key(result: &Object<'_>, provider_id: &str) -> Option<String> {
+    match optional_non_empty_string(result, "accountKey") {
+        Ok(Some(raw)) => {
+            let key = crate::plugin_engine::account_key::hash_account_key(provider_id, &raw);
+            if key.is_none() {
+                log::warn!("plugin accountKey is longer than 512 bytes; omitting account key");
+            }
+            key
+        }
+        Ok(None) => None,
+        Err(message) => {
+            log::warn!("{}; omitting account key", message);
+            None
+        }
+    }
 }
 
 fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> {
@@ -1524,6 +1547,7 @@ fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput 
         history: None,
         freshness: None,
         setup_detection: None,
+        account_key: None,
     }
 }
 
@@ -2240,6 +2264,49 @@ mod tests {
         let json: JsonValue = serde_json::to_value(output).expect("serialize");
         assert_eq!(json["history"]["entries"][0]["chargedCostUsd"], 0.4);
         assert!(json["history"]["entries"][1].get("costUsd").is_none());
+    }
+
+    #[test]
+    fn run_probe_hashes_the_reported_account_key() {
+        let mut plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return {
+                        accountKey: " user_abc123 ",
+                        lines: [{ type: "text", label: "Status", value: "ok" }]
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("account-key"), "0.0.0", None);
+        let key = output.account_key.clone().expect("account key");
+        assert_eq!(
+            Some(key.clone()),
+            crate::plugin_engine::account_key::hash_account_key(&plugin.manifest.id, "user_abc123")
+        );
+        let json = serde_json::to_string(&output).expect("serialize");
+        assert!(json.contains(&format!(r#""accountKey":"{key}""#)));
+        assert!(!json.contains("user_abc123"));
+
+        for invalid in [
+            "accountKey: \"\"",
+            "accountKey: 42",
+            "accountKey: \"x\".repeat(600)",
+        ] {
+            plugin.entry_script = format!(
+                r#"globalThis.__openusage_plugin = {{
+                    probe() {{
+                        return {{ {invalid}, lines: [{{ type: "text", label: "Status", value: "ok" }}] }};
+                    }}
+                }};"#
+            );
+            let output = run_probe(&plugin, &temp_app_dir("invalid-account-key"), "0.0.0", None);
+            assert_eq!(output.account_key, None, "{invalid}");
+            assert_eq!(output.lines.len(), 1, "{invalid}");
+        }
     }
 
     #[test]

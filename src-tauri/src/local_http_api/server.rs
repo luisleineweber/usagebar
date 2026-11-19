@@ -419,6 +419,7 @@ mod tests {
             lines: vec![],
             history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
+            account_key: None,
             freshness: None,
         }
     }

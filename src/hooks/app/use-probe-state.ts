@@ -5,6 +5,17 @@ import type { PluginState } from "@/hooks/app/types"
 
 const MAX_HISTORY_POINTS_PER_PROVIDER = 240
 
+// Usage history belongs to one account. Keep it only while the account key is unchanged.
+function retainedUsageHistory(
+  existing: PluginState | undefined,
+  output: PluginOutput
+): PluginOutput["history"] {
+  for (const source of [existing?.data, existing?.lastSettledData]) {
+    if (source?.history && source.accountKey === output.accountKey) return source.history
+  }
+  return undefined
+}
+
 function appendUsageHistory(
   history: ProviderUsageHistory | undefined,
   output: PluginOutput,
@@ -173,10 +184,7 @@ export function useProbeState({ onProbeResult, providerInstanceRefs = {} }: UseP
         const capturedAt = Date.now()
         const settledOutput =
           !errorMessage && !output.history
-            ? {
-                ...output,
-                history: existing?.data?.history ?? existing?.lastSettledData?.history,
-              }
+            ? { ...output, history: retainedUsageHistory(existing, output) }
             : output
         return {
           ...prev,

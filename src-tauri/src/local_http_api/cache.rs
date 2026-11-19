@@ -24,6 +24,9 @@ pub struct CachedPluginSnapshot {
     pub fetched_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub freshness: Option<DataFreshnessGroups>,
+    /// Hashed account key of the output that produced this snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,8 +143,11 @@ fn retain_cached_history(
             .as_ref()
             .map(provider_instance_key)
             .unwrap_or_else(|| output.provider_id.clone());
+        // History belongs to one account. A different, new, or missing account key
+        // means the cached history can belong to someone else, so it is dropped.
         output.history = snapshots
             .get(&key)
+            .filter(|snapshot| snapshot.account_key == output.account_key)
             .and_then(|snapshot| snapshot.history.clone());
     }
 }
@@ -187,7 +193,7 @@ fn build_freshness(
         retained_marker(
             previous,
             previous_freshness.and_then(|freshness| freshness.history.as_ref()),
-            previous_history.is_some(),
+            history.is_some(),
         )
     };
     let cost_freshness = if history.is_some_and(history_has_cost) {
@@ -243,6 +249,7 @@ pub fn cache_successful_output(output: &mut PluginOutput) {
         history: output.history.clone(),
         fetched_at,
         freshness: Some(freshness),
+        account_key: output.account_key.clone(),
     };
 
     state.snapshots.insert(key, snapshot);
@@ -423,6 +430,7 @@ mod tests {
             lines: vec![],
             history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
+            account_key: None,
             freshness: None,
         }
     }
@@ -468,6 +476,7 @@ mod tests {
             history: None,
             freshness: None,
             setup_detection: None,
+            account_key: None,
         };
 
         retain_cached_history(&mut output, &snapshots);
@@ -475,6 +484,91 @@ mod tests {
         let history = output.history.expect("cached history should be retained");
         assert_eq!(history.source, "ccusage");
         assert_eq!(history.entries.len(), 1);
+    }
+
+    #[test]
+    fn retained_history_requires_the_same_account_key() {
+        fn output_for(account_key: Option<&str>) -> PluginOutput {
+            PluginOutput {
+                provider_id: "cursor".to_string(),
+                instance_ref: None,
+                display_name: "Cursor".to_string(),
+                plan: Some("Pro".to_string()),
+                lines: vec![],
+                details: None,
+                icon_url: "cursor.svg".to_string(),
+                error: None,
+                history: None,
+                freshness: None,
+                setup_detection: None,
+                account_key: account_key.map(str::to_string),
+            }
+        }
+        let mut previous = make_snapshot("cursor", "Cursor");
+        previous.history = Some(make_history());
+        previous.account_key = Some("account-a".to_string());
+        previous.freshness = Some(DataFreshnessGroups {
+            quota: None,
+            cost: None,
+            history: Some(DataFreshness::fresh("2026-03-26T07:00:00Z")),
+        });
+        let snapshots = HashMap::from([("cursor".to_string(), previous.clone())]);
+
+        let mut same_account = output_for(Some("account-a"));
+        retain_cached_history(&mut same_account, &snapshots);
+        assert!(same_account.history.is_some());
+
+        // Account B signs in while its own history fetch is deferred or rate limited.
+        for account_key in [Some("account-b"), None] {
+            let mut other_account = output_for(account_key);
+            retain_cached_history(&mut other_account, &snapshots);
+            assert!(other_account.history.is_none(), "{account_key:?}");
+            let freshness = build_freshness(
+                &other_account,
+                Some(&previous),
+                false,
+                "2026-03-26T08:15:30Z",
+            );
+            assert!(freshness.history.is_none(), "{account_key:?}");
+            assert!(freshness.cost.is_none(), "{account_key:?}");
+        }
+
+        // A snapshot from before account keys existed cannot prove the account.
+        previous.account_key = None;
+        let legacy = HashMap::from([("cursor".to_string(), previous)]);
+        let mut keyed = output_for(Some("account-a"));
+        retain_cached_history(&mut keyed, &legacy);
+        assert!(keyed.history.is_none());
+    }
+
+    #[test]
+    fn cached_snapshot_stores_the_output_account_key() {
+        let dir = temp_dir("account-key");
+        std::fs::create_dir_all(&dir).unwrap();
+        init(&dir, vec!["cursor".to_string()]);
+        let mut output = PluginOutput {
+            provider_id: "cursor".to_string(),
+            instance_ref: None,
+            display_name: "Cursor".to_string(),
+            plan: None,
+            lines: vec![],
+            details: None,
+            icon_url: "cursor.svg".to_string(),
+            error: None,
+            history: Some(make_history()),
+            freshness: None,
+            setup_detection: None,
+            account_key: Some("account-a".to_string()),
+        };
+
+        cache_successful_output(&mut output);
+
+        let snapshots = read_cache(&dir).unwrap();
+        assert_eq!(
+            snapshots["cursor"].account_key.as_deref(),
+            Some("account-a")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -513,6 +607,7 @@ mod tests {
             history: None,
             freshness: None,
             setup_detection: None,
+            account_key: None,
         };
 
         retain_cached_history(&mut output, &snapshots);
@@ -557,6 +652,7 @@ mod tests {
             history: None,
             freshness: None,
             setup_detection: None,
+            account_key: None,
         };
         let snapshots = HashMap::from([(previous.provider_id.clone(), previous.clone())]);
         retain_cached_history(&mut output, &snapshots);
@@ -683,6 +779,7 @@ mod tests {
             }],
             history: None,
             fetched_at: "2026-03-26T08:00:00Z".to_string(),
+            account_key: None,
             freshness: None,
         };
 
@@ -733,6 +830,7 @@ mod tests {
             ],
             history: None,
             fetched_at: "2026-03-26T08:00:00Z".to_string(),
+            account_key: None,
             freshness: None,
         };
 

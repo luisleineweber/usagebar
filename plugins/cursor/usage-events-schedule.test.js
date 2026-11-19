@@ -92,8 +92,9 @@ describe("cursor usage event history budget and schedule", () => {
 
     advance(5 * MINUTE_MS)
     const deferred = plugin.probe(ctx)
-    // The host keeps the last history when the output has none.
+    // The host keeps the last history for the same account key when the output has none.
     expect(deferred).not.toHaveProperty("history")
+    expect(deferred.accountKey).toBe(USER_ID)
     expect(hasTotalUsage(deferred)).toBe(true)
     expect(eventRequests).toHaveLength(1)
 
@@ -119,6 +120,7 @@ describe("cursor usage event history budget and schedule", () => {
 
     const limited = plugin.probe(ctx)
     expect(limited).not.toHaveProperty("history")
+    expect(limited.accountKey).toBe(USER_ID)
     expect(hasTotalUsage(limited)).toBe(true)
     expect(readSchedule(ctx).nextFetchAtMs).toBe(Date.now() + delayMs)
 

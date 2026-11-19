@@ -145,6 +145,8 @@ export type PluginOutput = {
     message: string
   }
   history?: UsageHistory
+  /** Host-hashed account identifier. Retained data is reused only for the same key. */
+  accountKey?: string
   freshness?: DataFreshnessGroups
   setupDetection?: SetupDetection[]
 }

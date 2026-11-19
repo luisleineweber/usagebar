@@ -379,6 +379,18 @@ If a plugin defines `detectSetup(ctx)`, UsageBar calls it before `probe(ctx)`. T
 
 Any token refresh logic (e.g., OAuth refresh) must run inside `probe(ctx)` at those times.
 
+### Account key and retained history
+
+When a successful probe result has no `history`, the host and the frontend keep the last valid history. A plugin that can change accounts without a provider instance (for example, the user signs in to another account in the provider app) must return `accountKey`, a stable identifier of the signed-in account:
+
+```js
+return { plan: plan, lines: lines, accountKey: userId }
+```
+
+- The runtime replaces the value at once with a SHA-256 digest that is scoped to the provider. The raw value never reaches the cache, the frontend, the local HTTP API, or the logs. Use an identifier, never a token or a secret.
+- Retained history is reused only when the account key of the new result is the same as the key of the cached result. A different key, or a key on one side only, drops the retained history.
+- The value must be a non-empty string of at most 512 bytes. Other values are ignored with a warning.
+
 ## Line Builders
 
 Helper functions for creating output lines. All builders use an options object pattern.

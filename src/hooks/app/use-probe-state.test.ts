@@ -144,6 +144,45 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.codex.lastSettledData?.history).toEqual(history)
   })
 
+  it("drops retained usage history when the account key changes", () => {
+    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
+    const history = {
+      version: 1 as const,
+      source: "cursor-usage-events",
+      timeZone: "system-local",
+      entries: [
+        {
+          periodStart: "2026-07-29T00:00:00+02:00",
+          periodEnd: "2026-07-30T00:00:00+02:00",
+          requests: 3,
+        },
+      ],
+    }
+    const probe = (accountKey: string | undefined, probeHistory?: typeof history) =>
+      act(() => {
+        result.current.handleProbeResult({
+          providerId: "cursor",
+          displayName: "Cursor",
+          iconUrl: "/cursor.svg",
+          lines: [{ type: "progress", label: "Total usage", used: 8, limit: 100, format: "percent" }],
+          accountKey,
+          history: probeHistory,
+        })
+      })
+
+    probe("account-a", history)
+    probe("account-a")
+    expect(result.current.pluginStates.cursor.data?.history).toEqual(history)
+
+    // Account B signs in while its own history fetch is deferred.
+    probe("account-b")
+    expect(result.current.pluginStates.cursor.data?.history).toBeUndefined()
+    expect(result.current.pluginStates.cursor.lastSettledData?.history).toBeUndefined()
+
+    probe(undefined)
+    expect(result.current.pluginStates.cursor.data?.history).toBeUndefined()
+  })
+
   it("does not add unknown progress values to local quota history", () => {
     const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
 

@@ -326,6 +326,7 @@ mod tests {
                 ],
             }),
             fetched_at: "2026-07-10T12:00:00Z".to_string(),
+            account_key: None,
             freshness: None,
         }
     }
