@@ -389,3 +389,32 @@ it.each(["string", "race"])("blocks expired tokens during a refresh hold (%s)", 
   expect(ctx.host.http.request).not.toHaveBeenCalled()
   vi.restoreAllMocks()
 })
+
+it.each(["web-", "refresh-", "WEB-", "REFRESH-"])(
+  "keeps usage instance %sdefault separate from default endpoint holds",
+  async (prefix) => {
+    const ctx = makeCtx()
+    const credentials = JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "test",
+        refreshToken: "refresh",
+        expiresAt: prefix.toLowerCase() === "refresh-" ? 1 : Date.now() + 3600000,
+      },
+    })
+    if (prefix.toLowerCase() === "refresh-")
+      ctx.host.keychain.readGenericPassword.mockReturnValue(credentials)
+    else ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-test")
+    ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+    vi.resetModules()
+    await import("./plugin.js")
+    expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
+    ctx.instanceRef = { providerId: "claude", instanceId: prefix + "default" }
+    ctx.host.providerSecrets.read.mockReturnValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: "managed", expiresAt: Date.now() + 3600000 } })
+    )
+    ctx.host.http.request.mockClear()
+    ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
+    expect(() => globalThis.__openusage_plugin.probe(ctx)).not.toThrow()
+    expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+  }
+)

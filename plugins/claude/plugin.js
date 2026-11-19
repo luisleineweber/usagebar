@@ -21,13 +21,11 @@
     if (!Object.prototype.hasOwnProperty.call(prefixes, endpoint)) {
       throw new Error("Unknown Claude rate-limit endpoint: " + endpoint)
     }
-    return (
-      ctx.app.pluginDataDir +
-      "/" +
-      prefixes[endpoint] +
-      encodeURIComponent(ctx.instanceRef?.instanceId || "default") +
-      ".json"
-    )
+    let instanceId = encodeURIComponent(ctx.instanceRef?.instanceId || "default")
+    if (endpoint === "usage" && /^(web-|refresh-)/i.test(instanceId)) {
+      instanceId = "%" + instanceId.charCodeAt(0).toString(16) + instanceId.slice(1)
+    }
+    return ctx.app.pluginDataDir + "/" + prefixes[endpoint] + instanceId + ".json"
   }
 
   function readRateLimitRetryAt(ctx, endpoint = "usage") {
