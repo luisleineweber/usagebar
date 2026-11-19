@@ -12,18 +12,24 @@
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
-  function rateLimitPath(ctx, channel = "") {
-    return (
-      ctx.app.pluginDataDir +
-      "/rate-limit-" +
-      channel +
-      encodeURIComponent(ctx.instanceRef?.instanceId || "default") +
-      ".json"
-    )
+  function rateLimitPath(ctx, endpoint = "usage") {
+    const prefixes = {
+      usage: "rate-limit-",
+      refresh: "rate-limit-refresh-",
+      "web-": "rate-limit-web-",
+    }
+    if (!Object.prototype.hasOwnProperty.call(prefixes, endpoint)) {
+      throw new Error("Unknown Claude rate-limit endpoint: " + endpoint)
+    }
+    let instanceId = encodeURIComponent(ctx.instanceRef?.instanceId || "default")
+    if (endpoint === "usage" && /^(web-|refresh-)/i.test(instanceId)) {
+      instanceId = "%" + instanceId.charCodeAt(0).toString(16) + instanceId.slice(1)
+    }
+    return ctx.app.pluginDataDir + "/" + prefixes[endpoint] + instanceId + ".json"
   }
 
-  function readRateLimitRetryAt(ctx, channel = "") {
-    const path = rateLimitPath(ctx, channel)
+  function readRateLimitRetryAt(ctx, endpoint = "usage") {
+    const path = rateLimitPath(ctx, endpoint)
     if (!ctx.host.fs.exists(path)) return null
     const state = JSON.parse(ctx.host.fs.readText(path))
     return Date.now() < state.retryAt ? state.retryAt : null
@@ -35,12 +41,12 @@
     )
   }
 
-  function checkRateLimit(ctx, channel = "") {
-    const retryAt = readRateLimitRetryAt(ctx, channel)
+  function checkRateLimit(ctx, endpoint = "usage") {
+    const retryAt = readRateLimitRetryAt(ctx, endpoint)
     if (retryAt !== null) throw rateLimitMessage(retryAt)
   }
 
-  function checkRateLimitResponse(ctx, response, channel = "") {
+  function checkRateLimitResponse(ctx, response, endpoint = "usage") {
     if (response.status !== 429) return response
     const headers = response.headers || {}
     const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
@@ -48,12 +54,12 @@
     const now = Date.now()
     const retryAt = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value)
     ctx.host.fs.writeText(
-      rateLimitPath(ctx, channel),
+      rateLimitPath(ctx, endpoint),
       JSON.stringify({
         retryAt: Math.max(now + REFRESH_BUFFER_MS, Number.isFinite(retryAt) ? retryAt : 0),
       })
     )
-    checkRateLimit(ctx, channel)
+    checkRateLimit(ctx, endpoint)
     return response
   }
 
@@ -559,6 +565,12 @@
     })
   }
 
+  function isTokenExpired(oauth) {
+    if (oauth?.expiresAt === null || oauth?.expiresAt === undefined) return true
+    const expiresAt = Number(oauth.expiresAt)
+    return !Number.isFinite(expiresAt) || Date.now() >= expiresAt
+  }
+
   function refreshToken(ctx, creds) {
     const { oauth, source, fullData } = creds
     if (!oauth.refreshToken) {
@@ -566,6 +578,11 @@
       return null
     }
 
+    const retryAt = readRateLimitRetryAt(ctx, "refresh")
+    if (retryAt !== null) {
+      if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
+      return null
+    }
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
     try {
@@ -582,7 +599,8 @@
             scope: oauthConfig.scopes,
           }),
           timeoutMs: 15000,
-        })
+        }),
+        "refresh"
       )
 
       if (resp.status === 400 || resp.status === 401) {
@@ -1053,14 +1071,22 @@
   }
 
   function probe(ctx) {
-    // The shared web cookie has no verified user binding to the selected OAuth token.
-    // Keep OAuth backoff visible instead of substituting another account's usage.
-    checkRateLimit(ctx)
-    return probeWithCredentials(ctx)
+    const activeRetryAt = readRateLimitRetryAt(ctx)
+    if (activeRetryAt !== null) throw rateLimitMessage(activeRetryAt)
+    try {
+      return probeWithCredentials(ctx)
+    } catch (e) {
+      const retryAt = readRateLimitRetryAt(ctx) ?? readRateLimitRetryAt(ctx, "refresh")
+      if (retryAt === null) throw e
+      throw rateLimitMessage(retryAt)
+    }
   }
 
   function probeWithCredentials(ctx) {
     const creds = loadCredentials(ctx)
+    if (!creds?.oauth?.accessToken?.trim() || isTokenExpired(creds?.oauth)) {
+      checkRateLimit(ctx, "refresh")
+    }
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const webResult = buildClaudeWebResult(ctx)
       if (webResult) {
