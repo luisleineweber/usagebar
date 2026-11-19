@@ -164,6 +164,34 @@ pub fn delete_profile(
     Ok(Some(removed))
 }
 
+/// Shared by the Tauri delete command and native regression tests.
+pub(crate) fn delete_profile_with_credentials(
+    app_data_dir: &Path,
+    provider_id: &str,
+    profile_id: &str,
+) -> Result<Option<ProviderAccountProfile>, String> {
+    if !list_profiles(app_data_dir, provider_id)?
+        .iter()
+        .any(|profile| profile.profile_id == profile_id)
+    {
+        return Ok(None);
+    }
+    // Keep the profile selectable for retry until credential removal succeeds.
+    let secret_key = format!("account:{}:authJson", profile_id);
+    crate::protected_store::delete(app_data_dir, provider_id, &secret_key).map_err(|error| {
+        format!(
+            "Could not remove imported {} profile auth: {}",
+            provider_id, error
+        )
+    })?;
+    #[cfg(target_os = "windows")]
+    {
+        let service = crate::provider_secret_service(provider_id, &secret_key);
+        crate::delete_provider_secret_service(&service)?;
+    }
+    delete_profile(app_data_dir, provider_id, profile_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

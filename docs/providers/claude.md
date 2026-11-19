@@ -132,6 +132,8 @@ The profile UUID also scopes cached snapshots, local history, quota notification
 
 ### Token Refresh
 
+Direct UsageBar-owned refresh and recovery are Windows-only in this build. Linux and macOS reject before any direct refresh request. The refresh endpoint must use HTTPS.
+
 Claude Code owns credentials from its keychain and local files. UsageBar reads these documents and
 reloads the same source when usage rejects an old access token. It does not refresh or write them.
 Importing a managed profile preserves that ownership. Imports do not create an independent refresh
@@ -145,8 +147,7 @@ For explicitly owned documents, refresh runs five minutes before expiry or after
 The host serializes each refresh chain across runtimes and UsageBar processes. It preserves the full
 credential document in protected recovery storage before it replaces the main credential. A write
 failure is visible. A later runtime or process replays recovery before it sends another refresh
-request. Deleted or replaced accounts are never restored by recovery. Other provider writes use the
-same store lock, and unrelated refresh chains remain available.
+request. If recovery storage fails, the host still attempts a verified main-store write. It reports unsaved credentials only if both writes fail. Successful credential removal or replacement cancels pending state. A failed credential deletion keeps the profile available for retry. Other provider writes use the same store lock, and unrelated refresh chains remain available.
 
 ```
 POST https://platform.claude.com/v1/oauth/token

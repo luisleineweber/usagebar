@@ -67,6 +67,14 @@ fn inject_transaction<'js>(
                 let options: RefreshOptions = serde_json::from_str(&json).map_err(|_| {
                     Exception::throw_message(&ctx, "Invalid Claude refresh options")
                 })?;
+                if !reqwest::Url::parse(&options.refresh_url)
+                    .is_ok_and(|url| url.scheme() == "https")
+                {
+                    return Err(Exception::throw_message(
+                        &ctx,
+                        "Claude refresh endpoint must use HTTPS",
+                    ));
+                }
                 if !super::is_url_allowed_by_domains(&options.refresh_url, &domains) {
                     return Err(Exception::throw_message(
                         &ctx,

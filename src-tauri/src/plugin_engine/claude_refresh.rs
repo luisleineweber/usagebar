@@ -1,15 +1,16 @@
 //! Claude refresh transactions. Credential values never enter logs or lock paths.
 use super::HttpRespParams;
-use crate::protected_store::{Applied, Recovery};
+use crate::protected_store::{
+    Applied, PendingRotation, PendingRotations, Recovery, pending_rotations,
+};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 pub(super) const SAVE_ERROR: &str = "Could not save refreshed Claude credentials. Recovery will run before another refresh. Retry the probe.";
-pub(super) const BUSY: &str = "Claude credential refresh is busy. Try again.";
+pub(super) const BUSY: &str = crate::protected_store::REFRESH_BUSY;
+pub(super) const UNSAVED_ERROR: &str = "Refreshed Claude credentials are unsaved. Recovery and main storage both failed. Keep UsageBar open and retry.";
 const REPLACED: &str = "The managed Claude account was replaced or removed. Select or re-import the account in Settings.";
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -19,12 +20,17 @@ pub(super) struct Target {
 }
 pub(super) trait CredentialStore {
     fn target(&self) -> &Target;
+    fn supports_refresh(&self) -> bool;
     fn read(&self) -> Result<Option<String>, String>;
     fn recovery(&self) -> Result<Option<Recovery>, String>;
     fn stage(&self, record: &Recovery) -> Result<Applied, String>;
     fn commit(&self, record: &Recovery) -> Result<Applied, String>;
+    fn commit_direct(&self, record: &Recovery) -> Result<Applied, String>;
 }
 impl CredentialStore for Target {
+    fn supports_refresh(&self) -> bool {
+        cfg!(target_os = "windows")
+    }
     fn target(&self) -> &Target {
         self
     }
@@ -48,14 +54,21 @@ impl CredentialStore for Target {
             store.commit(&self.secret_key, record)
         })
     }
+    fn commit_direct(&self, record: &Recovery) -> Result<Applied, String> {
+        crate::protected_store::transaction(&self.data_dir, |store| {
+            store.commit_direct(&self.secret_key, record)
+        })
+    }
 }
-struct Pending {
-    record: Recovery,
-    lock: File,
-}
-#[derive(Default)]
 pub(super) struct Coordinator {
-    pending: Mutex<HashMap<Target, Pending>>,
+    pending: &'static PendingRotations,
+}
+impl Default for Coordinator {
+    fn default() -> Self {
+        Self {
+            pending: pending_rotations(),
+        }
+    }
 }
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,30 +93,64 @@ impl Coordinator {
         record: Recovery,
         lock: File,
     ) -> Result<Outcome, String> {
-        match store.stage(&record) {
-            Ok(Applied::Replaced) => return Err(REPLACED.into()),
-            Ok(Applied::Saved) => {}
-            Err(_) => {
-                // If even recovery storage failed, retain both tokens and this chain's
-                // lock in the host. Unrelated chains remain usable.
+        let target = store.target();
+        // Register before I/O, so a successful replace/delete can cancel even
+        // an active persistence attempt without waiting for another old probe.
+        self.pending.begin(
+            &target.data_dir,
+            &target.secret_key,
+            PendingRotation {
+                record: record.clone(),
+                lock,
+            },
+        )?;
+        let recovery_written = match store.stage(&record) {
+            Ok(Applied::Saved) => true,
+            Ok(Applied::Replaced) => {
                 self.pending
-                    .lock()
-                    .map_err(|_| BUSY)?
-                    .insert(store.target().clone(), Pending { record, lock });
-                return Err(SAVE_ERROR.into());
+                    .finish(&target.data_dir, &target.secret_key, &record)?;
+                return Err(REPLACED.into());
+            }
+            Err(_) => false,
+        };
+        let result = if recovery_written {
+            store.commit(&record)
+        } else {
+            log::warn!("Claude recovery write failed; attempting a verified main-store write");
+            store.commit_direct(&record)
+        };
+        match result {
+            Ok(Applied::Saved) => {
+                self.pending
+                    .finish(&target.data_dir, &target.secret_key, &record)?;
+                Ok(Outcome {
+                    credentials: Some(record.updated),
+                    response: None,
+                })
+            }
+            Ok(Applied::Replaced) => {
+                self.pending
+                    .finish(&target.data_dir, &target.secret_key, &record)?;
+                Err(REPLACED.into())
+            }
+            Err(_) if recovery_written => {
+                self.pending
+                    .finish(&target.data_dir, &target.secret_key, &record)?;
+                Err(SAVE_ERROR.into())
+            }
+            Err(_) => {
+                if self
+                    .pending
+                    .retryable(&target.data_dir, &target.secret_key, &record)?
+                {
+                    Err(UNSAVED_ERROR.into())
+                } else {
+                    Err(REPLACED.into())
+                }
             }
         }
-        // The record is now protected and durable. A crash or failed main write is
-        // replayable; the chain lock no longer needs to live beyond this call.
-        let _lock = lock;
-        match store.commit(&record).map_err(|_| SAVE_ERROR)? {
-            Applied::Replaced => Err(REPLACED.into()),
-            Applied::Saved => Ok(Outcome {
-                credentials: Some(record.updated),
-                response: None,
-            }),
-        }
     }
+
     pub(super) fn refresh(
         &self,
         directory: &Path,
@@ -111,11 +158,11 @@ impl Coordinator {
         expected_access: &str,
         request: impl FnOnce(&str) -> Result<HttpRespParams, String>,
     ) -> Result<Outcome, String> {
-        let memory = self
-            .pending
-            .lock()
-            .map_err(|_| BUSY)?
-            .remove(store.target());
+        if !store.supports_refresh() {
+            return Err(crate::protected_store::UNSUPPORTED_RECOVERY.into());
+        }
+        let target = store.target();
+        let memory = self.pending.take(&target.data_dir, &target.secret_key)?;
         if let Some(pending) = memory {
             return self.persist(store, pending.record, pending.lock);
         }
@@ -227,3 +274,7 @@ impl Coordinator {
 #[cfg(test)]
 #[path = "claude_refresh_tests.rs"]
 pub(super) mod tests;
+
+#[cfg(all(test, target_os = "windows"))]
+#[path = "claude_refresh_native_tests.rs"]
+mod native_tests;

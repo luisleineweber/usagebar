@@ -13,10 +13,13 @@ pub(crate) enum Applied {
     Replaced,
 }
 
-#[cfg(not(target_os = "windows"))]
-fn recovery_key(key: &str) -> String {
-    format!("refresh-recovery:{key}")
-}
+pub(crate) const REFRESH_BUSY: &str = "Claude credential refresh is busy. Try again.";
+pub(crate) const UNSUPPORTED_RECOVERY: &str =
+    "Direct Claude refresh and recovery are supported only on Windows.";
+
+#[path = "pending_refresh.rs"]
+mod pending_refresh;
+pub(crate) use pending_refresh::{PendingRotation, PendingRotations, pending_rotations};
 
 pub(crate) fn lock(data_dir: &Path) -> Result<std::fs::File, String> {
     #[cfg(target_os = "windows")]
@@ -98,25 +101,22 @@ impl Store<'_> {
     }
     pub(crate) fn recovery(&self, key: &str) -> Result<Option<Recovery>, String> {
         #[cfg(target_os = "windows")]
-        let text = {
+        {
             let bytes = match std::fs::read(self.recovery_path(key)) {
                 Ok(bytes) => bytes,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
                 Err(_) => return Err("Could not read protected Claude recovery".into()),
             };
             let bytes = crate::provider_secret_store::windows::unprotect_bytes(&bytes)?;
-            Some(
-                String::from_utf8(bytes)
-                    .map_err(|_| "Invalid protected Claude recovery encoding")?,
-            )
-        };
-        #[cfg(not(target_os = "windows"))]
-        let text = self.read("claude", &recovery_key(key))?;
-        text.map(|text| {
-            serde_json::from_str(&text)
+            serde_json::from_slice(&bytes)
+                .map(Some)
                 .map_err(|_| "Invalid protected Claude recovery record".into())
-        })
-        .transpose()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = key;
+            Err(UNSUPPORTED_RECOVERY.into())
+        }
     }
     #[cfg(target_os = "windows")]
     fn recovery_path(&self, key: &str) -> std::path::PathBuf {
@@ -126,10 +126,10 @@ impl Store<'_> {
             .join(format!("{:x}.bin", Sha256::digest(key.as_bytes())))
     }
     fn write_recovery(&self, key: &str, record: &Recovery) -> Result<(), String> {
-        let text =
-            serde_json::to_string(record).map_err(|_| "Could not encode Claude recovery record")?;
         #[cfg(target_os = "windows")]
         {
+            let text = serde_json::to_string(record)
+                .map_err(|_| "Could not encode Claude recovery record")?;
             let path = self.recovery_path(key);
             std::fs::create_dir_all(path.parent().ok_or("Invalid Claude recovery path")?)
                 .map_err(|_| "Could not create Claude recovery directory")?;
@@ -140,7 +140,8 @@ impl Store<'_> {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            self.write("claude", &recovery_key(key), &text)
+            let _ = (key, record);
+            Err(UNSUPPORTED_RECOVERY.into())
         }
     }
     fn clear_recovery(&self, provider: &str, key: &str) -> Result<(), String> {
@@ -157,15 +158,22 @@ impl Store<'_> {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            self.remove(provider, &recovery_key(key))
+            let _ = key;
+            Ok(())
         }
     }
     pub(crate) fn save(&self, provider: &str, key: &str, value: &str) -> Result<(), String> {
         self.write(provider, key, value)?;
+        if provider == "claude" {
+            pending_rotations().discard(self.data_dir, key)?;
+        }
         self.clear_recovery(provider, key)
     }
     pub(crate) fn delete(&self, provider: &str, key: &str) -> Result<(), String> {
         self.remove(provider, key)?;
+        if provider == "claude" {
+            pending_rotations().discard(self.data_dir, key)?;
+        }
         self.clear_recovery(provider, key)
     }
     fn matches(&self, key: &str, record: &Recovery) -> Result<bool, String> {
@@ -188,15 +196,27 @@ impl Store<'_> {
         if self.recovery(key)?.as_ref() != Some(record) {
             return Ok(Applied::Replaced);
         }
+        let result = self.replace_verified(key, record)?;
+        self.clear_recovery("claude", key)?;
+        Ok(result)
+    }
+    // Used only when recovery storage failed. This still compares and verifies
+    // under the same store lock; missing or replaced credentials are not restored.
+    pub(crate) fn commit_direct(&self, key: &str, record: &Recovery) -> Result<Applied, String> {
+        let result = self.replace_verified(key, record)?;
+        if result == Applied::Saved && self.clear_recovery("claude", key).is_err() {
+            log::warn!("Claude recovery cleanup failed after a verified main-store write");
+        }
+        Ok(result)
+    }
+    fn replace_verified(&self, key: &str, record: &Recovery) -> Result<Applied, String> {
         if !self.matches(key, record)? {
-            self.clear_recovery("claude", key)?;
             return Ok(Applied::Replaced);
         }
         self.write("claude", key, &record.updated)?;
         if self.read("claude", key)?.as_deref() != Some(&record.updated) {
             return Err("Could not verify refreshed Claude credentials".into());
         }
-        self.clear_recovery("claude", key)?;
         Ok(Applied::Saved)
     }
 }

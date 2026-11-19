@@ -10,6 +10,7 @@ pub(crate) struct TestStore {
     target: Target,
     pub(crate) fail_stage: Arc<AtomicBool>,
     pub(crate) fail_commit: Arc<AtomicBool>,
+    supported: bool,
 }
 #[derive(Serialize, Deserialize)]
 struct State {
@@ -37,6 +38,7 @@ impl TestStore {
             },
             fail_stage: Arc::new(AtomicBool::new(false)),
             fail_commit: Arc::new(AtomicBool::new(false)),
+            supported: true,
         }
     }
     fn update<T>(
@@ -73,6 +75,9 @@ impl TestStore {
     }
 }
 impl CredentialStore for TestStore {
+    fn supports_refresh(&self) -> bool {
+        self.supported
+    }
     fn target(&self) -> &Target {
         &self.target
     }
@@ -109,18 +114,31 @@ impl CredentialStore for TestStore {
             Ok(Applied::Saved)
         })
     }
+    fn commit_direct(&self, record: &Recovery) -> Result<Applied, String> {
+        if self.fail_commit.load(Ordering::SeqCst) {
+            return Err("fixture main write failed".into());
+        }
+        self.update(|state| {
+            if !Self::matches(state, record) {
+                return Ok(Applied::Replaced);
+            }
+            state.current = Some(record.updated.clone());
+            state.recovery = None;
+            Ok(Applied::Saved)
+        })
+    }
 }
-fn document(token: &str) -> String {
+pub(super) fn document(token: &str) -> String {
     serde_json::json!({ "usagebarCredentialOwner": "usagebar", "claudeAiOauth": { "accessToken": "old", "refreshToken": token, "expiresAt": 1, "extra": true }, "unrelated": { "keep": true } }).to_string()
 }
-fn response() -> HttpRespParams {
+pub(super) fn response() -> HttpRespParams {
     HttpRespParams {
         status: 200,
         headers: Default::default(),
         body_text: r#"{"access_token":"new","refresh_token":"rotated","expires_in":3600}"#.into(),
     }
 }
-fn locks() -> PathBuf {
+pub(super) fn locks() -> PathBuf {
     std::env::temp_dir().join(format!("usagebar-chain-locks-{}", uuid::Uuid::new_v4()))
 }
 
@@ -231,21 +249,23 @@ fn failed_recovery_write_retains_memory_until_replaced_or_removed() {
         let coordinator = Coordinator::default();
         let store = TestStore::new();
         store.fail_stage.store(true, Ordering::SeqCst);
+        store.fail_commit.store(true, Ordering::SeqCst);
         assert_eq!(
             coordinator
                 .refresh(&dir, &store, "old", |_| Ok(response()))
                 .err()
                 .unwrap(),
-            SAVE_ERROR
+            UNSAVED_ERROR
         );
         assert_eq!(
             Coordinator::default()
                 .refresh(&dir, &store, "old", |_| panic!())
                 .err()
                 .unwrap(),
-            BUSY
+            UNSAVED_ERROR
         );
         store.fail_stage.store(false, Ordering::SeqCst);
+        store.fail_commit.store(false, Ordering::SeqCst);
         store.replace(if removed {
             None
         } else {
@@ -258,7 +278,11 @@ fn failed_recovery_write_retains_memory_until_replaced_or_removed() {
                 .unwrap()
                 .contains("replaced or removed")
         );
-        assert!(coordinator.pending.lock().unwrap().is_empty());
+        assert!(
+            !coordinator
+                .pending
+                .contains(&store.target.data_dir, &store.target.secret_key)
+        );
         let original_chain = TestStore::new();
         Coordinator::default()
             .refresh(&dir, &original_chain, "old", |_| Ok(response()))
@@ -330,4 +354,37 @@ fn overlapping_process_cannot_rotate_the_same_chain() {
             Ok(response())
         })
         .unwrap();
+}
+
+#[test]
+fn unsupported_recovery_is_rejected_before_storage_or_network() {
+    let mut store = TestStore::new();
+    store.supported = false;
+    let result = Coordinator::default().refresh(&locks(), &store, "old", |_| {
+        panic!("unsupported refresh sent a request")
+    });
+    assert_eq!(
+        result.err().unwrap(),
+        crate::protected_store::UNSUPPORTED_RECOVERY
+    );
+}
+
+#[cfg(not(target_os = "windows"))]
+#[test]
+fn native_non_windows_refresh_is_explicitly_unsupported() {
+    let target = Target {
+        data_dir: locks(),
+        secret_key: "account:fixture:authJson".into(),
+    };
+    let result = Coordinator::default().refresh(&locks(), &target, "old", |_| {
+        panic!("unsupported refresh sent a request")
+    });
+    assert_eq!(
+        result.err().unwrap(),
+        crate::protected_store::UNSUPPORTED_RECOVERY
+    );
+    assert!(
+        !target.data_dir.exists(),
+        "unsupported refresh must not touch storage"
+    );
 }

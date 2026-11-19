@@ -35,3 +35,26 @@ fn native_recovery_outlives_javascript_and_coordinator() {
     }
     assert_eq!(requests.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn http_is_rejected_before_any_request() {
+    let runtime = Runtime::new().unwrap();
+    let context = Context::full(&runtime).unwrap();
+    let requests = Arc::new(AtomicUsize::new(0));
+    context.with(|ctx| {
+        let store = TestStore::new();
+        let dir = store.target().data_dir.join("locks");
+        let secrets = Object::new(ctx.clone()).unwrap();
+        let counter = Arc::clone(&requests);
+        inject_transaction(&ctx, &secrets, store, &["platform.claude.com".into()], dir, Arc::new(Coordinator::default()), move |_, _| {
+            counter.fetch_add(1, Ordering::SeqCst);
+            Ok(HttpRespParams { status: 200, headers: Default::default(), body_text: r#"{"access_token":"new"}"#.into() })
+        }).unwrap();
+        let refresh: Function = secrets.get("refreshClaudeCredentials").unwrap();
+        let options = serde_json::json!({ "refreshUrl": "http://platform.claude.com/v1/oauth/token", "clientId": "test", "scopes": "test", "expectedAccessToken": "old" }).to_string();
+        let result = refresh.call::<_, String>((options,));
+        if result.is_err() { let _ = ctx.catch(); }
+        assert!(result.is_err(), "plain HTTP must be rejected");
+    });
+    assert_eq!(requests.load(Ordering::SeqCst), 0);
+}

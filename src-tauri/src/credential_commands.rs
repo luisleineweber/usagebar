@@ -56,27 +56,6 @@ fn save_managed_profile_secret(
     })
 }
 
-fn delete_managed_profile_secret(
-    app_data_dir: &std::path::Path,
-    provider_id: &str,
-    profile_id: &str,
-) -> Result<(), String> {
-    let secret_key = managed_profile_secret_key(profile_id);
-    crate::protected_store::delete(app_data_dir, provider_id, &secret_key).map_err(|error| {
-        format!(
-            "Could not remove imported {} profile auth: {}",
-            provider_id, error
-        )
-    })?;
-    #[cfg(target_os = "windows")]
-    {
-        // Remove legacy vault entries after the protected file transaction.
-        let service = crate::provider_secret_service(provider_id, &secret_key);
-        crate::delete_provider_secret_service(&service)?;
-    }
-    Ok(())
-}
-
 #[tauri::command]
 pub(crate) async fn list_browser_import_sources(
     app_handle: tauri::AppHandle,
@@ -504,9 +483,5 @@ pub(crate) fn delete_provider_account_profile(
         .path()
         .app_data_dir()
         .map_err(|error| format!("Could not access the app data directory: {}", error))?;
-    let removed = provider_account_store::delete_profile(&app_data_dir, &provider_id, profile_id)?;
-    if removed.is_some() {
-        delete_managed_profile_secret(&app_data_dir, &provider_id, profile_id)?;
-    }
-    Ok(removed)
+    provider_account_store::delete_profile_with_credentials(&app_data_dir, &provider_id, profile_id)
 }
