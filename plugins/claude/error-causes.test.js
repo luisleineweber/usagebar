@@ -409,3 +409,26 @@ it("logs fixed labels instead of raw provider error values", async () => {
   expect(logged).toContain("usage returned 403: error.type=other")
   expect(logged.join("\n")).not.toContain("injected")
 })
+
+it("keeps the refresh hold visible when usage rejects a valid token during the hold", async () => {
+  const ctx = makeCtx()
+  const holdPath = ctx.app.pluginDataDir + "/rate-limit-refresh-default.json"
+  const retryAt = Date.now() + 600_000
+  ctx.host.fs.writeText(holdPath, JSON.stringify({ retryAt }))
+  ctx.host.fs.writeText(
+    "~/.claude/.credentials.json",
+    JSON.stringify({
+      claudeAiOauth: {
+        accessToken: "token",
+        refreshToken: "refresh",
+        expiresAt: Date.now() + 60_000,
+      },
+    })
+  )
+  const calls = routeRequests(ctx, { usage: EXPIRED_ACCESS, refresh: USAGE_OK })
+
+  expect(await probe(ctx)).toThrow(
+    "Usage request failed (HTTP 429). Try again after " + new Date(retryAt).toISOString() + "."
+  )
+  expect(calls).toEqual({ usage: 1, refresh: 0 })
+})

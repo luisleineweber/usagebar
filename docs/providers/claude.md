@@ -111,7 +111,7 @@ When configured, UsageBar calls:
 - `GET https://claude.ai/api/organizations/{org_id}/usage`
 - Best-effort `GET https://claude.ai/api/organizations/{org_id}/overage_spend_limit`
 
-This mirrors CodexBar's web/API probing in a Windows-friendly manual-cookie form. Local OAuth credentials are still preferred; the web fallback is only used when OAuth credentials are unavailable.
+This mirrors CodexBar's web/API probing in a Windows-friendly manual-cookie form. Local OAuth credentials are still preferred; the web fallback is used only when OAuth credentials are unavailable and no managed profile is selected. It is disabled during OAuth backoff. Organization names do not identify subscription plans. The web result leaves the plan unknown. Required web requests report transport, HTTP, and invalid-response errors. The organizations response must be an array. Usage and overage responses must be non-array objects. An invalid required response throws an error; an invalid optional overage response is ignored. The overage request remains best effort, except for authentication and rate-limit errors.
 
 ### Optional Microsoft Edge import
 
@@ -182,9 +182,13 @@ A failed or rejected refresh does not stop the probe while the current access to
 
 ### HTTP 429 handling
 
-OAuth usage and token refresh responses save a per-profile retry deadline in plugin data. All probe entry points check it before network requests, including startup and manual refresh. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. A token refresh 429 stops the probe before usage requests. Each probe attempts token refresh at most once.
+OAuth usage and token refresh responses save separate per-profile retry deadlines in plugin data. Usage holds survive token rotation and credential replacement. Token identity does not prove an account change. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token refresh at most once.
 
-During an OAuth retry deadline, the probe uses the Claude web session (`cookieHeader`) when one is configured and no managed account profile is selected. The web usage endpoint reports the same quota windows and has a separate rate limit. The web session is provider-wide and can belong to another account, so a selected managed profile keeps the HTTP 429 error and does not read it. Without a web session, with an expired web session (HTTP 401 or 403), or when the web request fails, the probe keeps the HTTP 429 error.
+A usage hold returns HTTP 429. A refresh hold returns HTTP 429 when the access token is expired or missing. A valid access token can still return OAuth usage during a refresh hold. Both OAuth holds block shared web cookie reads and web requests. An organization can contain multiple users, so an organization match does not prove the same account owns both sessions. UsageBar has no verified user identity binding between the selected OAuth token and the shared web session. It does not join metadata from `~/.claude.json` to a token from another record. Managed profiles never read shared cookies.
+
+The earlier test records with `oauthAccount` embedded beside `claudeAiOauth` were synthetic, not evidence of a real credential format. The authentication documentation does not establish that format or a cross-session user binding. See [Claude Code authentication](https://code.claude.com/docs/en/authentication). No embedded identity or `organizationId` alias is used to authorize web fallback.
+
+Web HTTP 429 responses save a separate per-instance retry deadline. The same Retry-After rules apply. Probes do not repeat web requests before that deadline, when the web path is used without OAuth credentials. OAuth backoff blocks the web path entirely.
 
 The tray retains successful data within the current session. It does not load the separate usage API disk cache on startup. A first-probe error therefore shows an error card, even if the usage API has an older snapshot. A 429 does not remove session data.
 
