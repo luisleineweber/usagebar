@@ -12,17 +12,18 @@
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
-  function rateLimitPath(ctx) {
+  function rateLimitPath(ctx, channel = "") {
     return (
       ctx.app.pluginDataDir +
       "/rate-limit-" +
+      channel +
       encodeURIComponent(ctx.instanceRef?.instanceId || "default") +
       ".json"
     )
   }
 
-  function readRateLimitRetryAt(ctx) {
-    const path = rateLimitPath(ctx)
+  function readRateLimitRetryAt(ctx, channel = "") {
+    const path = rateLimitPath(ctx, channel)
     if (!ctx.host.fs.exists(path)) return null
     const state = JSON.parse(ctx.host.fs.readText(path))
     return Date.now() < state.retryAt ? state.retryAt : null
@@ -34,33 +35,12 @@
     )
   }
 
-  function checkRateLimit(ctx) {
-    const retryAt = readRateLimitRetryAt(ctx)
+  function checkRateLimit(ctx, channel = "") {
+    const retryAt = readRateLimitRetryAt(ctx, channel)
     if (retryAt !== null) throw rateLimitMessage(retryAt)
   }
 
-  // The OAuth usage endpoint has its own rate limit. The claude.ai web usage endpoint reports
-  // the same quota windows, so a configured web session can answer while OAuth backs off.
-  // A managed profile must never read the provider-wide web session: it may belong to another
-  // account. An expired web session is not usable either, so the 429 error stays visible.
-  function probeDuringRateLimit(ctx, retryAt) {
-    if (readManagedProfileId(ctx)) throw rateLimitMessage(retryAt)
-    let webResult
-    try {
-      webResult = buildClaudeWebResult(ctx)
-    } catch (e) {
-      if (e !== WEB_SESSION_EXPIRED_MESSAGE) throw e
-      ctx.host.log.warn("OAuth usage is rate limited and the Claude web session is expired")
-      throw rateLimitMessage(retryAt)
-    }
-    if (webResult) {
-      ctx.host.log.info("OAuth usage is rate limited; using Claude web session")
-      return webResult
-    }
-    throw rateLimitMessage(retryAt)
-  }
-
-  function checkRateLimitResponse(ctx, response) {
+  function checkRateLimitResponse(ctx, response, channel = "") {
     if (response.status !== 429) return response
     const headers = response.headers || {}
     const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
@@ -68,12 +48,12 @@
     const now = Date.now()
     const retryAt = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value)
     ctx.host.fs.writeText(
-      rateLimitPath(ctx),
+      rateLimitPath(ctx, channel),
       JSON.stringify({
         retryAt: Math.max(now + REFRESH_BUFFER_MS, Number.isFinite(retryAt) ? retryAt : 0),
       })
     )
-    checkRateLimit(ctx)
+    checkRateLimit(ctx, channel)
     return response
   }
 
@@ -239,7 +219,7 @@
     return null
   }
 
-  function requestClaudeWebJson(ctx, sessionKey, path, description) {
+  function requestClaudeWebJson(ctx, sessionKey, path, description, optional = false) {
     let response
     try {
       response = ctx.util.request({
@@ -254,17 +234,26 @@
       })
     } catch (e) {
       ctx.host.log.warn("claude web " + description + " request failed: " + String(e))
-      return null
+      if (optional) return null
+      throw "Claude web " + description + " request failed. Check your connection."
     }
+    if (response.status === 429) checkRateLimitResponse(ctx, response, "web-")
     if (ctx.util.isAuthStatus(response.status)) {
       throw WEB_SESSION_EXPIRED_MESSAGE
     }
     if (response.status < 200 || response.status >= 300) {
       ctx.host.log.warn("claude web " + description + " returned HTTP " + String(response.status))
-      return null
+      if (optional) return null
+      throw "Claude web " + description + " request failed (HTTP " + response.status + ")."
     }
     const parsed = ctx.util.tryParseJson(response.bodyText)
-    return parsed && typeof parsed === "object" ? parsed : null
+    const isValidResponse =
+      path === "/organizations"
+        ? Array.isArray(parsed)
+        : parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    if (isValidResponse) return parsed
+    if (optional) return null
+    throw "Claude web " + description + " response invalid."
   }
 
   function selectWebOrganization(orgs) {
@@ -961,6 +950,8 @@
   }
 
   function buildClaudeWebResult(ctx) {
+    if (readManagedProfileId(ctx)) return null
+    checkRateLimit(ctx, "web-")
     const cookieHeader = loadStoredCookieHeader(ctx)
     if (!cookieHeader) return null
     const sessionKey = sessionKeyFromCookieHeader(cookieHeader)
@@ -1027,7 +1018,8 @@
       ctx,
       sessionKey,
       "/organizations/" + encodeURIComponent(org.uuid) + "/overage_spend_limit",
-      "overage"
+      "overage",
+      true
     )
     if (overage && overage.is_enabled === true) {
       const used = Number(overage.used_credits)
@@ -1052,7 +1044,7 @@
     if (lines.length === 0) {
       lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     }
-    const plan = readNonEmptyString(org.name)
+    const plan = null
     return {
       plan: plan,
       lines: lines,
@@ -1061,15 +1053,10 @@
   }
 
   function probe(ctx) {
-    const activeRetryAt = readRateLimitRetryAt(ctx)
-    if (activeRetryAt !== null) return probeDuringRateLimit(ctx, activeRetryAt)
-    try {
-      return probeWithCredentials(ctx)
-    } catch (e) {
-      const retryAt = readRateLimitRetryAt(ctx)
-      if (retryAt === null) throw e
-      return probeDuringRateLimit(ctx, retryAt)
-    }
+    // The shared web cookie has no verified user binding to the selected OAuth token.
+    // Keep OAuth backoff visible instead of substituting another account's usage.
+    checkRateLimit(ctx)
+    return probeWithCredentials(ctx)
   }
 
   function probeWithCredentials(ctx) {
