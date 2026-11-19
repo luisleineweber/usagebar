@@ -212,6 +212,75 @@ it("reports a rejected sign-in without claiming expiry when a refreshed token is
   expect(calls).toEqual({ usage: 2, refresh: 1 })
 })
 
+it("does not treat a 401 that mentions expiry without confirming it as an expired sign-in", async () => {
+  const ctx = makeClaudeCtx({ refreshToken: null })
+  routeRequests(ctx, {
+    usage: {
+      status: 401,
+      bodyText: JSON.stringify({
+        type: "error",
+        error: { type: "authentication_error", message: "Token revoked, not expired." },
+      }),
+    },
+    refresh: USAGE_OK,
+  })
+
+  expect(await probe(ctx)).toThrow("Invalid token: Claude rejected the sign-in (HTTP 401).")
+})
+
+it("reports an expired sign-in for Anthropic's OAuth token expiry message", async () => {
+  const ctx = makeClaudeCtx({ refreshToken: null })
+  routeRequests(ctx, {
+    usage: {
+      status: 401,
+      bodyText: JSON.stringify({
+        type: "error",
+        error: {
+          type: "authentication_error",
+          message:
+            "OAuth token has expired. Please obtain a new token or refresh your existing token.",
+        },
+      }),
+    },
+    refresh: USAGE_OK,
+  })
+
+  expect(await probe(ctx)).toThrow("Token expired. Run `claude` to log in again.")
+})
+
+it("clears the saved expiry when a refreshed token has no lifetime", async () => {
+  const credPath = "~/.claude/.credentials.json"
+  const ctx = makeCtx()
+  ctx.host.fs.writeText(
+    credPath,
+    JSON.stringify({
+      claudeAiOauth: { accessToken: "token", refreshToken: "refresh", expiresAt: Date.now() - 1 },
+    })
+  )
+  const usageTokens = []
+  let refreshes = 0
+  ctx.host.http.request.mockImplementation((opts) => {
+    if (String(opts.url).includes("/v1/oauth/token")) {
+      refreshes += 1
+      return refreshes === 1
+        ? { status: 200, bodyText: JSON.stringify({ access_token: "token2" }) }
+        : { status: 400, bodyText: JSON.stringify({ error: "invalid_request" }) }
+    }
+    usageTokens.push(opts.headers.Authorization)
+    return USAGE_OK
+  })
+
+  const run = await probe(ctx)
+  expect(run).not.toThrow()
+  const saved = JSON.parse(ctx.host.fs.readText(credPath)).claudeAiOauth
+  expect(saved).toMatchObject({ accessToken: "token2", expiresAt: null })
+
+  // The second probe reads the saved credentials. The rejected refresh must not count the
+  // refreshed token as expired, so usage is still tried with it.
+  expect(run).not.toThrow()
+  expect(usageTokens).toEqual(["Bearer token2", "Bearer token2"])
+})
+
 it("reports an expired sign-in when the token expiry has passed and no refresh token exists", async () => {
   const ctx = makeClaudeCtx({ expiresAt: Date.now() - 1, refreshToken: null })
   routeRequests(ctx, { usage: { status: 401, bodyText: "" }, refresh: USAGE_OK })
@@ -266,6 +335,30 @@ it("reports a configuration error for a refresh URL outside the plugin domains",
   expect(run).toThrow("Claude OAuth config invalid: refreshUrl must use https on")
   expect(run).not.toThrow("Check your connection")
   expect(calls).toEqual({ usage: 0, refresh: 0 })
+})
+
+it.each(["0", "65536", "99999"])(
+  "reports a configuration error for refresh URL port %s on an allowed domain",
+  async (port) => {
+    const ctx = makeClaudeCtx({ expiresAt: Date.now() - 1 })
+    withOAuthConfig(ctx, "https://platform.claude.com:" + port + "/v1/oauth/token")
+    const calls = routeRequests(ctx, { usage: USAGE_OK, refresh: USAGE_OK })
+
+    expect(await probe(ctx)).toThrow("Claude OAuth config invalid: refreshUrl must use https on")
+    expect(calls).toEqual({ usage: 0, refresh: 0 })
+  }
+)
+
+it("accepts a valid explicit port on an allowed refresh domain", async () => {
+  const ctx = makeClaudeCtx({ expiresAt: Date.now() - 1 })
+  withOAuthConfig(ctx, "https://platform.claude.com:443/v1/oauth/token")
+  const calls = routeRequests(ctx, {
+    usage: USAGE_OK,
+    refresh: { status: 200, bodyText: JSON.stringify({ access_token: "token2" }) },
+  })
+
+  expect(await probe(ctx)).not.toThrow()
+  expect(calls).toEqual({ usage: 1, refresh: 1 })
 })
 
 it("accepts a custom refresh URL on each domain the plugin manifest allows", async () => {

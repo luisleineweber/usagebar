@@ -30,6 +30,9 @@
     "api_error",
     "overloaded_error",
   ]
+  // Anthropic's affirmative expiry text for an OAuth access token. Other 401 text, such as a
+  // revocation that mentions expiry, does not confirm expiry.
+  const OAUTH_TOKEN_EXPIRED_MESSAGE = /^OAuth token has expired\./
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
@@ -597,8 +600,11 @@
   }
 
   function isAllowedRefreshUrl(url) {
-    const match = /^https:\/\/([^/?#@:]+)(?::\d+)?(?:[/?#]|$)/i.exec(String(url))
-    return Boolean(match) && ALLOWED_REFRESH_DOMAINS.indexOf(match[1].toLowerCase()) !== -1
+    const match = /^https:\/\/([^/?#@:]+)(?::(\d{1,5}))?(?:[/?#]|$)/i.exec(String(url))
+    if (!match || ALLOWED_REFRESH_DOMAINS.indexOf(match[1].toLowerCase()) === -1) return false
+    if (match[2] === undefined) return true
+    const port = Number(match[2])
+    return port >= 1 && port <= 65535
   }
 
   // Refresh outcomes: "refreshed", "unavailable" (no refresh token), "failed" (temporary
@@ -686,9 +692,12 @@
 
     oauth.accessToken = newAccessToken
     if (body.refresh_token) oauth.refreshToken = body.refresh_token
+    // The old expiry belongs to the old token. Without a usable lifetime the new expiry is unknown.
     const expiresAt =
-      typeof body.expires_in === "number" ? Date.now() + body.expires_in * 1000 : null
-    if (expiresAt !== null) oauth.expiresAt = expiresAt
+      Number.isFinite(body.expires_in) && body.expires_in > 0
+        ? Date.now() + body.expires_in * 1000
+        : null
+    oauth.expiresAt = expiresAt
 
     fullData.claudeAiOauth = oauth
     saveCredentials(ctx, source, fullData, creds.secretKey)
@@ -739,7 +748,8 @@
   function usageUnauthorizedMessage(ctx, resp, expiredLocally) {
     const { type, message } = readApiError(ctx, resp)
     ctx.host.log.error("usage returned 401: error.type=" + logLabel(type, API_ERROR_TYPES))
-    const expiredRemotely = type === "authentication_error" && /expired/i.test(message)
+    const expiredRemotely =
+      type === "authentication_error" && OAUTH_TOKEN_EXPIRED_MESSAGE.test(message)
     if (expiredLocally || expiredRemotely) return "Token expired. Run `claude` to log in again."
     return "Invalid token: Claude rejected the sign-in (HTTP 401). Run `claude` to log in again."
   }
