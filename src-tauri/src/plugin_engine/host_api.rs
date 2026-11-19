@@ -1624,6 +1624,10 @@ fn iso_now() -> String {
         })
 }
 
+#[cfg(test)]
+#[path = "sqlite_tests.rs"]
+mod sqlite_tests;
+
 fn expand_path(path: &str) -> String {
     if path == "~" {
         if let Some(home) = dirs::home_dir() {
