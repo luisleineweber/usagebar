@@ -61,15 +61,20 @@ fn center_distance(a: &PhysicalRect, b: &PhysicalRect) -> i64 {
     dx.saturating_mul(dx).saturating_add(dy.saturating_mul(dy))
 }
 
-/// The monitor the panel belongs to: the one it overlaps most, or, when a
-/// display change left it on no monitor, the one whose work area is nearest.
+/// The monitor a panel at `origin` belongs to: the one that would hold the
+/// largest share of it, or, when a display change left it on no monitor, the
+/// one whose work area is nearest.
+///
+/// The panel's physical size differs per monitor scale, so the comparison uses
+/// the overlapped share of the panel, not the overlapped pixels. Otherwise a
+/// high-DPI neighbor would win only because the panel would be larger there.
 fn choose_monitor(
     monitors: &[MonitorArea],
     origin: (i32, i32),
     logical_width: f64,
     logical_height: f64,
 ) -> Option<MonitorArea> {
-    monitors.iter().copied().max_by_key(|monitor| {
+    let candidate = |monitor: &MonitorArea| {
         let (width, height) =
             physical_panel_size(logical_width, logical_height, monitor.scale_factor);
         let panel = PhysicalRect {
@@ -78,9 +83,26 @@ fn choose_monitor(
             width,
             height,
         };
+        let overlap = i128::from(overlap_area(&monitor.work_area, &panel));
+        let area = i128::from(width) * i128::from(height);
+        (overlap, area, center_distance(&monitor.work_area, &panel))
+    };
+    monitors.iter().copied().max_by(|a, b| {
+        let (overlap_a, area_a, distance_a) = candidate(a);
+        let (overlap_b, area_b, distance_b) = candidate(b);
+        (overlap_a * area_b)
+            .cmp(&(overlap_b * area_a))
+            .then_with(|| distance_b.cmp(&distance_a))
+    })
+}
+
+/// The monitor a window with these actual physical bounds is on: the one it
+/// overlaps most, or the nearest one.
+fn monitor_for_rect(monitors: &[MonitorArea], rect: &PhysicalRect) -> Option<MonitorArea> {
+    monitors.iter().copied().max_by_key(|monitor| {
         (
-            overlap_area(&monitor.work_area, &panel),
-            std::cmp::Reverse(center_distance(&monitor.work_area, &panel)),
+            overlap_area(&monitor.work_area, rect),
+            std::cmp::Reverse(center_distance(&monitor.work_area, rect)),
         )
     })
 }
@@ -180,20 +202,22 @@ fn adjacent_monitor(
         .map(|(_, _, monitor)| monitor)
 }
 
-/// Where the panel goes after a keyboard nudge of `logical_delta` from
-/// `current_origin`.
+/// Where the panel goes after a keyboard nudge of `logical_delta` from its
+/// actual physical window bounds `current_bounds`.
 ///
 /// The panel moves within its work area and stops at the edge. A further
 /// nudge into that edge moves it fully onto the adjacent work area in that
 /// direction, if there is one. A diagonal delta uses its larger axis.
 pub(crate) fn resolve_nudged_bounds(
-    current_origin: (i32, i32),
+    current_bounds: PhysicalRect,
     logical_delta: (f64, f64),
     logical_width: f64,
     logical_height: f64,
     monitors: &[MonitorArea],
 ) -> Option<PhysicalRect> {
-    let current = choose_monitor(monitors, current_origin, logical_width, logical_height)?;
+    // The real window rect decides the monitor, not a size it would have elsewhere.
+    let current = monitor_for_rect(monitors, &current_bounds)?;
+    let current_origin = (current_bounds.x, current_bounds.y);
     let here = bounds_on(current, current_origin, logical_width, logical_height);
     let requested = nudged_origin(current_origin, logical_delta, current.scale_factor);
     let moved = bounds_on(current, requested, logical_width, logical_height);
@@ -380,12 +404,24 @@ mod tests {
     fn nudge_moves_within_the_work_area_and_stops_at_the_edge() {
         let monitors = side_by_side();
         assert_eq!(
-            resolve_nudged_bounds((1400, 200), (10.0, 0.0), 400.0, 500.0, &monitors),
+            resolve_nudged_bounds(
+                rect(1400, 200, 400, 500),
+                (10.0, 0.0),
+                400.0,
+                500.0,
+                &monitors
+            ),
             Some(rect(1410, 200, 400, 500))
         );
         // A step past the edge stops at the edge first; it does not jump.
         assert_eq!(
-            resolve_nudged_bounds((1500, 200), (50.0, 0.0), 400.0, 500.0, &monitors),
+            resolve_nudged_bounds(
+                rect(1500, 200, 400, 500),
+                (50.0, 0.0),
+                400.0,
+                500.0,
+                &monitors
+            ),
             Some(rect(1512, 200, 400, 500))
         );
     }
@@ -393,11 +429,23 @@ mod tests {
     #[test]
     fn nudge_at_the_edge_crosses_onto_the_adjacent_monitor_and_back() {
         let monitors = side_by_side();
-        let right = resolve_nudged_bounds((1512, 200), (10.0, 0.0), 400.0, 500.0, &monitors);
+        let right = resolve_nudged_bounds(
+            rect(1512, 200, 400, 500),
+            (10.0, 0.0),
+            400.0,
+            500.0,
+            &monitors,
+        );
         // Fully on the 150% monitor: 12 px inset, 600x750 size.
         assert_eq!(right, Some(rect(1932, 200, 600, 750)));
 
-        let back = resolve_nudged_bounds((1932, 200), (-10.0, 0.0), 400.0, 500.0, &monitors);
+        let back = resolve_nudged_bounds(
+            rect(1932, 200, 600, 750),
+            (-10.0, 0.0),
+            400.0,
+            500.0,
+            &monitors,
+        );
         assert_eq!(back, Some(rect(1512, 200, 400, 500)));
     }
 
@@ -408,7 +456,13 @@ mod tests {
             monitor(-2560, -200, 2560, 1380, 1.5),
         ];
         assert_eq!(
-            resolve_nudged_bounds((8, 300), (-10.0, 0.0), 400.0, 500.0, &monitors),
+            resolve_nudged_bounds(
+                rect(8, 300, 400, 500),
+                (-10.0, 0.0),
+                400.0,
+                500.0,
+                &monitors
+            ),
             Some(rect(-612, 300, 600, 750))
         );
     }
@@ -416,7 +470,13 @@ mod tests {
     #[test]
     fn nudge_up_crosses_onto_a_monitor_above() {
         assert_eq!(
-            resolve_nudged_bounds((100, 8), (0.0, -10.0), 400.0, 500.0, &mixed_layout()),
+            resolve_nudged_bounds(
+                rect(100, 8, 400, 500),
+                (0.0, -10.0),
+                400.0,
+                500.0,
+                &mixed_layout()
+            ),
             Some(rect(100, -683, 500, 625))
         );
     }
@@ -425,7 +485,13 @@ mod tests {
     fn nudge_at_an_outer_edge_without_a_neighbor_stays_put() {
         let monitors = side_by_side();
         assert_eq!(
-            resolve_nudged_bounds((8, 200), (-10.0, 0.0), 400.0, 500.0, &monitors),
+            resolve_nudged_bounds(
+                rect(8, 200, 400, 500),
+                (-10.0, 0.0),
+                400.0,
+                500.0,
+                &monitors
+            ),
             Some(rect(8, 200, 400, 500))
         );
         // The right monitor does not span this far down, so it is no neighbor.
@@ -434,8 +500,58 @@ mod tests {
             monitor(1920, 0, 1920, 300, 1.0),
         ];
         assert_eq!(
-            resolve_nudged_bounds((1512, 532), (10.0, 0.0), 400.0, 500.0, &short_right),
+            resolve_nudged_bounds(
+                rect(1512, 532, 400, 500),
+                (10.0, 0.0),
+                400.0,
+                500.0,
+                &short_right
+            ),
             Some(rect(1512, 532, 400, 500))
+        );
+    }
+
+    /// Primary at 100% and a 250% monitor directly to its right.
+    fn primary_and_high_dpi_right() -> Vec<MonitorArea> {
+        vec![
+            monitor(0, 0, 1920, 1040, 1.0),
+            monitor(1920, 0, 3840, 2100, 2.5),
+        ]
+    }
+
+    #[test]
+    fn origin_at_the_edge_next_to_a_high_dpi_monitor_stays_on_its_monitor() {
+        // At 250% the panel would be 1000x1250 and overlap more pixels of the
+        // right monitor, but it lies fully on the primary at its real size.
+        assert_eq!(
+            resolve_floating_bounds((1512, 200), 400.0, 500.0, &primary_and_high_dpi_right()),
+            Some(rect(1512, 200, 400, 500))
+        );
+    }
+
+    #[test]
+    fn nudge_left_from_the_edge_next_to_a_high_dpi_monitor_moves_left() {
+        let monitors = primary_and_high_dpi_right();
+        assert_eq!(
+            resolve_nudged_bounds(
+                rect(1512, 200, 400, 500),
+                (-10.0, 0.0),
+                400.0,
+                500.0,
+                &monitors
+            ),
+            Some(rect(1502, 200, 400, 500))
+        );
+        // Right from the same spot crosses onto the 250% monitor.
+        assert_eq!(
+            resolve_nudged_bounds(
+                rect(1512, 200, 400, 500),
+                (10.0, 0.0),
+                400.0,
+                500.0,
+                &monitors
+            ),
+            Some(rect(1940, 200, 1000, 1250))
         );
     }
 

@@ -285,8 +285,15 @@ pub(crate) fn nudge(
     let delta = validate_nudge(dx, dy)?;
     let window = main_window(app_handle)?;
     let position = window.outer_position().map_err(|error| error.to_string())?;
+    let size = window.outer_size().map_err(|error| error.to_string())?;
+    let current = PhysicalRect {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+    };
     place_and_remember(app_handle, |width, height, monitors| {
-        resolve_nudged_bounds((position.x, position.y), delta, width, height, monitors)
+        resolve_nudged_bounds(current, delta, width, height, monitors)
     })?;
     Ok(placement_view())
 }
