@@ -25,7 +25,9 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Audit JavaScript dependencies
-        run: bun audit --audit-level=low
+        # GitHub withdrew this advisory on 2026-11-18: https://github.com/advisories/GHSA-fc5q-39xc-vjpf
+        # The npm audit feed still reports it. Remove this ignore when the feed drops the advisory.
+        run: bun audit --audit-level=low --ignore=GHSA-fc5q-39xc-vjpf
 
       - name: Run cargo audit
         if: always()

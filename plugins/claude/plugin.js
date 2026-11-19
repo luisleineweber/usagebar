@@ -13,7 +13,11 @@
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
   function rateLimitPath(ctx, endpoint = "usage") {
-    const prefixes = { usage: "rate-limit-", refresh: "rate-limit-refresh-" }
+    const prefixes = {
+      usage: "rate-limit-",
+      refresh: "rate-limit-refresh-",
+      "web-": "rate-limit-web-",
+    }
     if (!Object.prototype.hasOwnProperty.call(prefixes, endpoint)) {
       throw new Error("Unknown Claude rate-limit endpoint: " + endpoint)
     }
@@ -223,7 +227,7 @@
     return null
   }
 
-  function requestClaudeWebJson(ctx, sessionKey, path, description) {
+  function requestClaudeWebJson(ctx, sessionKey, path, description, optional = false) {
     let response
     try {
       response = ctx.util.request({
@@ -238,17 +242,26 @@
       })
     } catch (e) {
       ctx.host.log.warn("claude web " + description + " request failed: " + String(e))
-      return null
+      if (optional) return null
+      throw "Claude web " + description + " request failed. Check your connection."
     }
+    if (response.status === 429) checkRateLimitResponse(ctx, response, "web-")
     if (ctx.util.isAuthStatus(response.status)) {
       throw WEB_SESSION_EXPIRED_MESSAGE
     }
     if (response.status < 200 || response.status >= 300) {
       ctx.host.log.warn("claude web " + description + " returned HTTP " + String(response.status))
-      return null
+      if (optional) return null
+      throw "Claude web " + description + " request failed (HTTP " + response.status + ")."
     }
     const parsed = ctx.util.tryParseJson(response.bodyText)
-    return parsed && typeof parsed === "object" ? parsed : null
+    const isValidResponse =
+      path === "/organizations"
+        ? Array.isArray(parsed)
+        : parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    if (isValidResponse) return parsed
+    if (optional) return null
+    throw "Claude web " + description + " response invalid."
   }
 
   function selectWebOrganization(orgs) {
@@ -957,6 +970,8 @@
   }
 
   function buildClaudeWebResult(ctx) {
+    if (readManagedProfileId(ctx)) return null
+    checkRateLimit(ctx, "web-")
     const cookieHeader = loadStoredCookieHeader(ctx)
     if (!cookieHeader) return null
     const sessionKey = sessionKeyFromCookieHeader(cookieHeader)
@@ -1023,7 +1038,8 @@
       ctx,
       sessionKey,
       "/organizations/" + encodeURIComponent(org.uuid) + "/overage_spend_limit",
-      "overage"
+      "overage",
+      true
     )
     if (overage && overage.is_enabled === true) {
       const used = Number(overage.used_credits)
@@ -1048,7 +1064,7 @@
     if (lines.length === 0) {
       lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     }
-    const plan = readNonEmptyString(org.name)
+    const plan = null
     return {
       plan: plan,
       lines: lines,
