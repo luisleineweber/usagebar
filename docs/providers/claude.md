@@ -111,7 +111,7 @@ When configured, UsageBar calls:
 - `GET https://claude.ai/api/organizations/{org_id}/usage`
 - Best-effort `GET https://claude.ai/api/organizations/{org_id}/overage_spend_limit`
 
-This mirrors CodexBar's web/API probing in a Windows-friendly manual-cookie form. Local OAuth credentials are still preferred; the web fallback is only used when OAuth credentials are unavailable.
+This mirrors CodexBar's web/API probing in a Windows-friendly manual-cookie form. Local OAuth credentials are still preferred; the web fallback is used only when OAuth credentials are unavailable and no managed profile is selected. It is disabled during OAuth backoff. Organization names do not identify subscription plans. The web result leaves the plan unknown. Required web requests report transport, HTTP, and invalid-response errors. The organizations response must be an array. Usage and overage responses must be non-array objects. An invalid required response throws an error; an invalid optional overage response is ignored. The overage request remains best effort, except for authentication and rate-limit errors.
 
 ### Optional Microsoft Edge import
 
@@ -158,10 +158,35 @@ Content-Type: application/json
 
 ### HTTP 429 handling
 
-OAuth usage and token refresh responses save a per-profile retry deadline in plugin data. All probe entry points check it before network requests, including startup and manual refresh. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. A token refresh 429 stops the probe before usage requests. Each probe attempts token refresh at most once.
+OAuth usage and token refresh responses save separate per-profile retry deadlines. Usage holds survive token rotation and credential replacement. Token identity does not prove an account change. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token refresh at most once.
 
-During an OAuth retry deadline, the probe uses the Claude web session (`cookieHeader`) when one is configured and no managed account profile is selected. The web usage endpoint reports the same quota windows and has a separate rate limit. The web session is provider-wide and can belong to another account, so a selected managed profile keeps the HTTP 429 error and does not read it. Without a web session, with an expired web session (HTTP 401 or 403), or when the web request fails, the probe keeps the HTTP 429 error.
+A usage hold returns HTTP 429. A refresh hold returns HTTP 429 when the access token is expired or missing. A valid access token can still return OAuth usage during a refresh hold. Both OAuth holds block shared web cookie reads and web requests. An organization can contain multiple users, so an organization match does not prove the same account owns both sessions. UsageBar has no verified user identity binding between the selected OAuth token and the shared web session. It does not join metadata from `~/.claude.json` to a token from another record. Managed profiles never read shared cookies.
+
+The earlier test records with `oauthAccount` embedded beside `claudeAiOauth` were synthetic, not evidence of a real credential format. The authentication documentation does not establish that format or a cross-session user binding. See [Claude Code authentication](https://code.claude.com/docs/en/authentication). No embedded identity or `organizationId` alias is used to authorize web fallback.
+
+Web HTTP 429 responses save a separate per-instance retry deadline. The same Retry-After rules apply. Probes do not repeat web requests before that deadline, when the web path is used without OAuth credentials. OAuth backoff blocks the web path entirely.
 
 The tray retains successful data within the current session. It does not load the separate usage API disk cache on startup. A first-probe error therefore shows an error card, even if the usage API has an older snapshot. A 429 does not remove session data.
 
-Separate installed and dev instances have separate data directories. Each instance must run this change to enforce its own backoff.
+#### Wait time
+
+Each hold (usage, refresh, and web) counts its own consecutive HTTP 429 responses. The wait is the longer of two values:
+
+- The backoff: 5 minutes for the first 429, then 10, 20, and at most 30 minutes.
+- The Retry-After value, capped at 60 minutes.
+
+Only a successful response of the same kind resets the count: OAuth usage for the usage hold, a token refresh for the refresh hold, and web usage for the web hold. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer. A success clears only a hold that was recorded before its request started, so a late success cannot clear a newer hold.
+
+#### Sharing between installed and dev builds
+
+The default Claude Code login is machine-wide, so installed and dev builds share its usage and refresh holds. They store them in `{parent of appDataDir}/com.sunstory.usagebar.shared/plugins_data/claude/`. A hold that one build records therefore blocks the other build at startup and on manual refresh.
+
+Managed profiles and the web cookie are stored in the secret store of one build, so their holds stay in that build's plugin data directory.
+
+No credential record carries a verified account identity, and usage holds survive token rotation and credential replacement. If you switch the default Claude Code login during a hold, the new login keeps the hold until its stored end. That end is at most 60 minutes after the hold was recorded.
+
+#### Hold records
+
+A hold record stores `retryAt`, `streak`, and `recordedAt`. It contains no tokens and no account data. Every change reads, decides, and writes the record as one step through `host.fs.compareAndSwapText`, which holds a cross-process file lock. Two builds therefore cannot shorten or clear a hold that the other build has just written.
+
+UsageBar logs and discards a record that is not valid JSON, is not an object, has non-finite times, or ends more than 60 minutes after `recordedAt`. If the system clock moves back during a hold, the remaining wait restarts once from the new time. It does not grow by the size of the clock change.

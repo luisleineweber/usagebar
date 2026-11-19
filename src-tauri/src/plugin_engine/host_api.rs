@@ -471,13 +471,21 @@ fn inject_fs<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
     )?;
 
     fs_obj.set(
-        "writeTextAtomic",
+        "compareAndSwapText",
         Function::new(
             ctx.clone(),
-            move |ctx_inner: Ctx<'_>, path: String, content: String| -> rquickjs::Result<()> {
+            move |ctx_inner: Ctx<'_>,
+                  path: String,
+                  expected: Option<String>,
+                  next: String|
+                  -> rquickjs::Result<bool> {
                 let expanded = expand_path(&path);
-                crate::atomic_file::write(Path::new(&expanded), content.as_bytes())
-                    .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))
+                crate::plugin_engine::text_cas::compare_and_swap(
+                    Path::new(&expanded),
+                    expected.as_deref(),
+                    &next,
+                )
+                .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))
             },
         )?,
     )?;
@@ -1676,6 +1684,10 @@ fn iso_now() -> String {
         })
 }
 
+#[cfg(test)]
+#[path = "sqlite_tests.rs"]
+mod sqlite_tests;
+
 fn expand_path(path: &str) -> String {
     if path == "~" {
         if let Some(home) = dirs::home_dir() {
@@ -1925,7 +1937,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_plugin_data_dir_is_common_to_app_builds_and_written_atomically() {
+    fn shared_plugin_data_dir_is_common_to_app_builds_and_swapped_by_text() {
         let root = std::env::temp_dir().join(format!("usagebar-shared-{}", uuid::Uuid::new_v4()));
         let rt = Runtime::new().expect("runtime");
         let capabilities = HostCapabilities {
@@ -1970,18 +1982,22 @@ mod tests {
                 &capabilities,
             )
             .expect("inject host api");
-            ctx.eval::<(), _>(
-                r#"const c = __openusage_ctx;
-                   c.host.fs.writeTextAtomic(c.app.sharedPluginDataDir + "/state.json", "{}");
-                   c.host.fs.writeTextAtomic(c.app.sharedPluginDataDir + "/state.json", "[1]");"#,
-            )
-            .expect("atomic writes");
+            let swaps: Vec<bool> = ctx
+                .eval(
+                    r#"const c = __openusage_ctx;
+                   const path = c.app.sharedPluginDataDir + "/state.json";
+                   [c.host.fs.compareAndSwapText(path, null, "{}"),
+                    c.host.fs.compareAndSwapText(path, null, "[0]"),
+                    c.host.fs.compareAndSwapText(path, "[2]", "[0]"),
+                    c.host.fs.compareAndSwapText(path, "{}", "[1]")]"#,
+                )
+                .expect("compare and swap");
+            assert_eq!(swaps, vec![true, false, false, true]);
         });
         assert_eq!(
             std::fs::read_to_string(expected.join("state.json")).expect("state"),
             "[1]"
         );
-        assert_eq!(std::fs::read_dir(&expected).expect("dir").count(), 1);
         std::fs::remove_dir_all(&root).expect("cleanup");
     }
 

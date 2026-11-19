@@ -34,6 +34,7 @@ pub mod probe_error;
 pub(crate) mod redaction;
 pub mod runtime;
 pub(crate) mod setup_detection;
+mod text_cas;
 
 use manifest::LoadedPlugin;
 use std::path::{Path, PathBuf};

@@ -12,75 +12,97 @@
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
+  const RATE_LIMIT_PREFIXES = {
+    usage: "rate-limit-",
+    refresh: "rate-limit-refresh-",
+    "web-": "rate-limit-web-",
+  }
   const RATE_LIMIT_BASE_WAIT_MS = 5 * 60 * 1000
   const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000
   const RATE_LIMIT_MAX_WAIT_MS = 60 * 60 * 1000
+  const RATE_LIMIT_MAX_STREAK = 1000
+  const RATE_LIMIT_WRITE_ATTEMPTS = 5
 
-  // A managed profile lives in this app's secret store, so its ID only identifies an account
-  // inside this app data dir. The default account is the machine-wide Claude Code login, so all
-  // UsageBar builds of this user (installed and dev) share one hold for it.
-  function rateLimitPath(ctx) {
-    const profileId = readManagedProfileId(ctx)
-    if (profileId) {
-      return ctx.app.pluginDataDir + "/rate-limit-" + encodeURIComponent(profileId) + ".json"
+  // The default Claude Code login is machine-wide, so its usage and refresh holds are shared by
+  // all UsageBar builds of this user. Managed profiles and the web cookie live in one build's
+  // secret store, so their holds stay in that build's plugin data dir.
+  function rateLimitPath(ctx, endpoint = "usage") {
+    if (!Object.prototype.hasOwnProperty.call(RATE_LIMIT_PREFIXES, endpoint)) {
+      throw new Error("Unknown Claude rate-limit endpoint: " + endpoint)
     }
-    if (!ctx.app.sharedPluginDataDir) throw "Claude rate-limit state is unavailable."
-    return ctx.app.sharedPluginDataDir + "/rate-limit-default.json"
-  }
-
-  // { retryAt, streak, recordedAt }: streak counts consecutive 429s and resets only on a
-  // successful usage response; recordedAt lets an older in-flight success keep a newer hold.
-  function readRateLimitState(ctx) {
-    const path = rateLimitPath(ctx)
-    if (!ctx.host.fs.exists(path)) return null
-    const state = JSON.parse(ctx.host.fs.readText(path))
-    return {
-      retryAt: Number(state.retryAt) || 0,
-      streak: Number.isInteger(state.streak) && state.streak >= 0 ? state.streak : 1,
-      recordedAt: Number(state.recordedAt) || 0,
+    let instanceId = encodeURIComponent(ctx.instanceRef?.instanceId || "default")
+    if (endpoint === "usage" && /^(web-|refresh-)/i.test(instanceId)) {
+      instanceId = "%" + instanceId.charCodeAt(0).toString(16) + instanceId.slice(1)
     }
-  }
-
-  function writeRateLimitState(ctx, state) {
-    ctx.host.fs.writeTextAtomic(rateLimitPath(ctx), JSON.stringify(state))
-  }
-
-  // A skewed or edited timestamp cannot hold requests longer than the longest real wait.
-  function activeRetryAt(state, now) {
-    if (!state || now >= state.retryAt) return null
-    return Math.min(state.retryAt, now + RATE_LIMIT_MAX_WAIT_MS)
-  }
-
-  function readRateLimitRetryAt(ctx) {
-    return activeRetryAt(readRateLimitState(ctx), Date.now())
-  }
-
-  function recordRateLimit(ctx, retryAfterMs) {
-    const now = Date.now()
-    const state = readRateLimitState(ctx)
-    const retryAfterAt = now + Math.min(retryAfterMs, RATE_LIMIT_MAX_WAIT_MS)
-    const active = activeRetryAt(state, now)
-    if (active !== null) {
-      // A request that was in flight when the hold started does not count as a new 429.
-      if (retryAfterAt > active) writeRateLimitState(ctx, { ...state, retryAt: retryAfterAt })
-      return
+    const shared = endpoint !== "web-" && readManagedProfileId(ctx) === null
+    if (shared && !ctx.app.sharedPluginDataDir) {
+      throw "Claude rate-limit state is unavailable."
     }
-    const streak = (state ? state.streak : 0) + 1
-    const backoff = Math.min(
-      RATE_LIMIT_BASE_WAIT_MS * 2 ** Math.min(streak - 1, 10),
-      RATE_LIMIT_MAX_BACKOFF_MS
-    )
-    writeRateLimitState(ctx, {
-      retryAt: Math.max(now + backoff, retryAfterAt),
-      streak,
-      recordedAt: now,
-    })
+    const dir = shared ? ctx.app.sharedPluginDataDir : ctx.app.pluginDataDir
+    return dir + "/" + RATE_LIMIT_PREFIXES[endpoint] + instanceId + ".json"
   }
 
-  function clearRateLimitAfterSuccess(ctx, requestStartedAt) {
-    const state = readRateLimitState(ctx)
-    if (!state || state.streak === 0 || state.recordedAt >= requestStartedAt) return
-    writeRateLimitState(ctx, { retryAt: 0, streak: 0, recordedAt: Date.now() })
+  // A hold is { retryAt, streak, recordedAt }. streak counts consecutive 429s and resets only
+  // after a success. recordedAt fixes the cap and lets an older in-flight success keep a newer
+  // hold. A cleared hold has retryAt 0 and streak 0.
+  function parseHold(text) {
+    let value
+    try {
+      value = JSON.parse(text)
+    } catch {
+      return null
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null
+    const { retryAt, streak, recordedAt } = value
+    if (!Number.isFinite(retryAt) || !Number.isFinite(recordedAt) || recordedAt < 0) return null
+    if (!Number.isInteger(streak) || streak < 0 || streak > RATE_LIMIT_MAX_STREAK) return null
+    if (retryAt === 0) return { retryAt, streak, recordedAt }
+    if (retryAt < recordedAt || retryAt > recordedAt + RATE_LIMIT_MAX_WAIT_MS) return null
+    return { retryAt, streak, recordedAt }
+  }
+
+  // Returns the stored hold and, when the record must be repaired, the record to store instead.
+  function readStoredHold(ctx, text, now) {
+    if (text === null) return { hold: null }
+    const hold = parseHold(text)
+    if (!hold) {
+      ctx.host.log.warn("discarding invalid Claude rate-limit record")
+      return { hold: null, repair: { retryAt: 0, streak: 0, recordedAt: now } }
+    }
+    if (hold.retryAt > now && now < hold.recordedAt) {
+      // The clock moved back. Restart the remaining wait once from now, so the hold cannot
+      // grow by the size of the clock change.
+      ctx.host.log.warn("clock moved back during a Claude rate-limit hold")
+      const rebased = {
+        retryAt: now + (hold.retryAt - hold.recordedAt),
+        streak: hold.streak,
+        recordedAt: now,
+      }
+      return { hold: rebased, repair: rebased }
+    }
+    return { hold }
+  }
+
+  // Read, decide, and write as one step across processes. compareAndSwapText replaces the
+  // record only if it still has the text this decision was based on.
+  function updateHold(ctx, endpoint, decide) {
+    const path = rateLimitPath(ctx, endpoint)
+    for (let attempt = 0; attempt < RATE_LIMIT_WRITE_ATTEMPTS; attempt++) {
+      const now = Date.now()
+      const text = ctx.host.fs.exists(path) ? ctx.host.fs.readText(path) : null
+      const { hold, repair } = readStoredHold(ctx, text, now)
+      const decided = decide(hold, now)
+      const next = decided === undefined ? repair : decided
+      if (next === undefined) return hold
+      if (ctx.host.fs.compareAndSwapText(path, text, JSON.stringify(next))) return next
+    }
+    ctx.host.log.error("Claude rate-limit record kept changing during " + endpoint + " update")
+    throw "Claude rate-limit state is busy. Try again."
+  }
+
+  function readRateLimitRetryAt(ctx, endpoint = "usage") {
+    const hold = updateHold(ctx, endpoint, () => undefined)
+    return hold && Date.now() < hold.retryAt ? hold.retryAt : null
   }
 
   function rateLimitMessage(retryAt) {
@@ -89,30 +111,9 @@
     )
   }
 
-  function checkRateLimit(ctx) {
-    const retryAt = readRateLimitRetryAt(ctx)
+  function checkRateLimit(ctx, endpoint = "usage") {
+    const retryAt = readRateLimitRetryAt(ctx, endpoint)
     if (retryAt !== null) throw rateLimitMessage(retryAt)
-  }
-
-  // The OAuth usage endpoint has its own rate limit. The claude.ai web usage endpoint reports
-  // the same quota windows, so a configured web session can answer while OAuth backs off.
-  // A managed profile must never read the provider-wide web session: it may belong to another
-  // account. An expired web session is not usable either, so the 429 error stays visible.
-  function probeDuringRateLimit(ctx, retryAt) {
-    if (readManagedProfileId(ctx)) throw rateLimitMessage(retryAt)
-    let webResult
-    try {
-      webResult = buildClaudeWebResult(ctx)
-    } catch (e) {
-      if (e !== WEB_SESSION_EXPIRED_MESSAGE) throw e
-      ctx.host.log.warn("OAuth usage is rate limited and the Claude web session is expired")
-      throw rateLimitMessage(retryAt)
-    }
-    if (webResult) {
-      ctx.host.log.info("OAuth usage is rate limited; using Claude web session")
-      return webResult
-    }
-    throw rateLimitMessage(retryAt)
   }
 
   function retryAfterMs(response, now) {
@@ -120,13 +121,40 @@
     const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
     const value = key ? String(headers[key]).trim() : ""
     const retryAt = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value)
-    return Number.isFinite(retryAt) ? Math.max(0, retryAt - now) : 0
+    if (!Number.isFinite(retryAt)) return 0
+    return Math.min(Math.max(0, retryAt - now), RATE_LIMIT_MAX_WAIT_MS)
   }
 
-  function checkRateLimitResponse(ctx, response) {
+  function recordRateLimit(ctx, endpoint, response) {
+    updateHold(ctx, endpoint, (hold, now) => {
+      const retryAfter = retryAfterMs(response, now)
+      if (hold && now < hold.retryAt) {
+        // A request that was in flight when the hold started is not a new 429. It can only
+        // make the hold longer.
+        if (now + retryAfter <= hold.retryAt) return undefined
+        return { retryAt: now + retryAfter, streak: hold.streak, recordedAt: now }
+      }
+      const streak = Math.min((hold ? hold.streak : 0) + 1, RATE_LIMIT_MAX_STREAK)
+      const backoff = Math.min(
+        RATE_LIMIT_BASE_WAIT_MS * 2 ** Math.min(streak - 1, 10),
+        RATE_LIMIT_MAX_BACKOFF_MS
+      )
+      return { retryAt: now + Math.max(backoff, retryAfter), streak, recordedAt: now }
+    })
+  }
+
+  function clearRateLimitAfterSuccess(ctx, endpoint, requestStartedAt) {
+    updateHold(ctx, endpoint, (hold, now) =>
+      hold && hold.streak > 0 && hold.recordedAt < requestStartedAt
+        ? { retryAt: 0, streak: 0, recordedAt: now }
+        : undefined
+    )
+  }
+
+  function checkRateLimitResponse(ctx, response, endpoint = "usage") {
     if (response.status !== 429) return response
-    recordRateLimit(ctx, retryAfterMs(response, Date.now()))
-    checkRateLimit(ctx)
+    recordRateLimit(ctx, endpoint, response)
+    checkRateLimit(ctx, endpoint)
     return response
   }
 
@@ -292,7 +320,8 @@
     return null
   }
 
-  function requestClaudeWebJson(ctx, sessionKey, path, description) {
+  function requestClaudeWebJson(ctx, sessionKey, path, description, optional = false) {
+    const requestStartedAt = Date.now()
     let response
     try {
       response = ctx.util.request({
@@ -307,17 +336,29 @@
       })
     } catch (e) {
       ctx.host.log.warn("claude web " + description + " request failed: " + String(e))
-      return null
+      if (optional) return null
+      throw "Claude web " + description + " request failed. Check your connection."
     }
+    if (response.status === 429) checkRateLimitResponse(ctx, response, "web-")
     if (ctx.util.isAuthStatus(response.status)) {
       throw WEB_SESSION_EXPIRED_MESSAGE
     }
     if (response.status < 200 || response.status >= 300) {
       ctx.host.log.warn("claude web " + description + " returned HTTP " + String(response.status))
-      return null
+      if (optional) return null
+      throw "Claude web " + description + " request failed (HTTP " + response.status + ")."
     }
     const parsed = ctx.util.tryParseJson(response.bodyText)
-    return parsed && typeof parsed === "object" ? parsed : null
+    const isValidResponse =
+      path === "/organizations"
+        ? Array.isArray(parsed)
+        : parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    if (isValidResponse) {
+      if (description === "usage") clearRateLimitAfterSuccess(ctx, "web-", requestStartedAt)
+      return parsed
+    }
+    if (optional) return null
+    throw "Claude web " + description + " response invalid."
   }
 
   function selectWebOrganization(orgs) {
@@ -623,6 +664,12 @@
     })
   }
 
+  function isTokenExpired(oauth) {
+    if (oauth?.expiresAt === null || oauth?.expiresAt === undefined) return true
+    const expiresAt = Number(oauth.expiresAt)
+    return !Number.isFinite(expiresAt) || Date.now() >= expiresAt
+  }
+
   function refreshToken(ctx, creds) {
     const { oauth, source, fullData } = creds
     if (!oauth.refreshToken) {
@@ -630,8 +677,14 @@
       return null
     }
 
+    const retryAt = readRateLimitRetryAt(ctx, "refresh")
+    if (retryAt !== null) {
+      if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
+      return null
+    }
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
+    const requestStartedAt = Date.now()
     try {
       const resp = checkRateLimitResponse(
         ctx,
@@ -646,7 +699,8 @@
             scope: oauthConfig.scopes,
           }),
           timeoutMs: 15000,
-        })
+        }),
+        "refresh"
       )
 
       if (resp.status === 400 || resp.status === 401) {
@@ -663,6 +717,7 @@
         ctx.host.log.warn("refresh returned unexpected status: " + resp.status)
         return null
       }
+      clearRateLimitAfterSuccess(ctx, "refresh", requestStartedAt)
 
       const body = ctx.util.tryParseJson(resp.bodyText)
       if (!body) {
@@ -715,7 +770,7 @@
       })
     )
     if (response.status >= 200 && response.status < 300) {
-      clearRateLimitAfterSuccess(ctx, requestStartedAt)
+      clearRateLimitAfterSuccess(ctx, "usage", requestStartedAt)
     }
     return response
   }
@@ -1019,6 +1074,8 @@
   }
 
   function buildClaudeWebResult(ctx) {
+    if (readManagedProfileId(ctx)) return null
+    checkRateLimit(ctx, "web-")
     const cookieHeader = loadStoredCookieHeader(ctx)
     if (!cookieHeader) return null
     const sessionKey = sessionKeyFromCookieHeader(cookieHeader)
@@ -1085,7 +1142,8 @@
       ctx,
       sessionKey,
       "/organizations/" + encodeURIComponent(org.uuid) + "/overage_spend_limit",
-      "overage"
+      "overage",
+      true
     )
     if (overage && overage.is_enabled === true) {
       const used = Number(overage.used_credits)
@@ -1110,7 +1168,7 @@
     if (lines.length === 0) {
       lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     }
-    const plan = readNonEmptyString(org.name)
+    const plan = null
     return {
       plan: plan,
       lines: lines,
@@ -1120,18 +1178,21 @@
 
   function probe(ctx) {
     const activeRetryAt = readRateLimitRetryAt(ctx)
-    if (activeRetryAt !== null) return probeDuringRateLimit(ctx, activeRetryAt)
+    if (activeRetryAt !== null) throw rateLimitMessage(activeRetryAt)
     try {
       return probeWithCredentials(ctx)
     } catch (e) {
-      const retryAt = readRateLimitRetryAt(ctx)
+      const retryAt = readRateLimitRetryAt(ctx) ?? readRateLimitRetryAt(ctx, "refresh")
       if (retryAt === null) throw e
-      return probeDuringRateLimit(ctx, retryAt)
+      throw rateLimitMessage(retryAt)
     }
   }
 
   function probeWithCredentials(ctx) {
     const creds = loadCredentials(ctx)
+    if (!creds?.oauth?.accessToken?.trim() || isTokenExpired(creds?.oauth)) {
+      checkRateLimit(ctx, "refresh")
+    }
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const webResult = buildClaudeWebResult(ctx)
       if (webResult) {
