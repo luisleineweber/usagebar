@@ -11,13 +11,14 @@
 
 - Added the optional Claude weekly Fable metric. The bar is omitted when the usage window is missing or invalid.
 - Removed the Claude Designs and Daily Routines bars.
-- During Claude OAuth rate-limit backoff, UsageBar keeps the HTTP 429 error, reads no shared web cookie, and makes no web requests. An organization match does not prove the same user. The web session is used only when OAuth credentials are unavailable and no managed profile is selected.
-- Added a separate retry deadline for Claude web HTTP 429 responses.
+- Claude OAuth usage and refresh holds never read the shared web cookie or make web requests. A usage hold keeps HTTP 429 visible. A refresh hold skips token refresh; a valid access token can still request OAuth usage, while expired or missing tokens keep HTTP 429 visible. The web session is used only when OAuth credentials are unavailable, no OAuth hold blocks it, and no managed profile is selected.
+- Kept OAuth usage, token refresh, and web HTTP 429 retry deadlines separate. Usage holds survive token rotation and credential replacement.
+- Escaped Claude organization IDs in web usage and overage request paths.
 - Stopped using the Claude organization name as the subscription plan. The plan remains unknown (`null`).
 
 ### Notes
 
-- Merge [PR #30](https://github.com/luisleineweber/usagebar/pull/30) and [PR #33](https://github.com/luisleineweber/usagebar/pull/33) first, then rebuild and test the combined candidate before tagging. Integration and combined tests are not complete. The separate OAuth usage and refresh retry holds depend on PR #33 being merged.
+- PRs #30 and #33 are included from main. The remaining v0.2.1 change set is not yet decided. Rebuild and test the combined final candidate before tagging; final integration and combined tests remain open.
 - Installer, update, SQLite, and identity checks must run against the combined final candidate before release.
 - Windows installers remain unsigned until the project gets an Authenticode certificate. Windows can show `Unknown publisher` or SmartScreen warnings. Stable releases use signed Tauri updater metadata.
 

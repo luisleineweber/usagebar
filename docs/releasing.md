@@ -110,10 +110,10 @@ Use the release gate above for the final local artifact or GitHub release candid
 - Install, launch, CLI, and uninstall checks in a disposable Windows test environment.
 - Signed in-app update from the actual published v0.2.0 build to the exact final candidate, with settings and provider data preserved.
 - SQLite runtime checks for provider reads and usage history, including existing data, after the rusqlite upgrade.
-- Claude checks after the separate worktree changes are combined: OAuth backoff keeps HTTP 429 without reading the shared web cookie; ordinary web access still works when OAuth is unavailable; web HTTP 429 uses a separate retry deadline; the subscription plan remains unknown (`null`) instead of using the organization name. Include managed profile selection and credential source isolation checks.
+- Claude checks on the combined final candidate: usage holds keep HTTP 429 visible; refresh holds skip token refresh but allow OAuth usage with a valid access token; expired or missing tokens keep a refresh hold visible as HTTP 429. Both OAuth holds block shared web cookie reads and web requests. Check separate usage, refresh, and web deadlines, managed profile selection, credential source isolation, escaped organization IDs, and an unknown (`null`) web subscription plan.
 - Required CI and dependency audits on the combined final source.
 
-The release notes describe the intended combined behavior. The release and Claude changes remain in separate worktrees. Integration and combined tests are not complete.
+PRs #30 and #33 are included from main. The remaining v0.2.1 change set is not yet decided. Final integration and combined tests remain open. Rebuild the combined final candidate and check its release notes before tagging.
 
 Metadata preparation does not complete these checks. Do not install or uninstall apps, or change user data, as part of metadata preparation.
 
