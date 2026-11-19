@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
 import { ownCredentials } from "./test-helpers.js"
 
@@ -19,6 +19,8 @@ function usage(ctx) {
     bodyText: JSON.stringify({ five_hour: { utilization: 0 } }),
   })
 }
+
+afterEach(() => vi.useRealTimers())
 
 describe("Claude refresh ownership", () => {
   beforeEach(() => {
@@ -160,3 +162,65 @@ it("keeps legacy invalid_grant classification while filtering log values", async
   expect(() => loaded.probe(ctx)).toThrow("Session expired")
   expect(ctx.host.log.error).toHaveBeenCalledWith("refresh failed: status=400 error=invalid_grant")
 })
+
+it.each([1, 120000])(
+  "routes native refresh 429 to the refresh hold with token lifetime %s",
+  async (lifetime) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-11-03T13:15:00Z"))
+    vi.resetModules()
+    const ctx = makeCtx()
+    ctx.instanceRef = { providerId: "claude", instanceId: "owned" }
+    const full = document("usagebar")
+    full.claudeAiOauth.expiresAt = lifetime === 1 ? 1 : Date.now() + lifetime
+    ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(full))
+    ctx.host.providerSecrets.refreshClaudeCredentials = vi.fn(() =>
+      JSON.stringify({
+        credentials: null,
+        response: { status: 429, headers: { "Retry-After": "600" }, bodyText: "{}" },
+      })
+    )
+    const loaded = await plugin()
+    expect(() => loaded.probe(ctx)).toThrow("HTTP 429")
+    expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-owned.json")).toBe(false)
+    expect(
+      JSON.parse(ctx.host.fs.readText(ctx.app.pluginDataDir + "/rate-limit-refresh-owned.json"))
+    ).toEqual({ retryAt: Date.now() + 600000 })
+    vi.resetModules()
+    vi.advanceTimersByTime(5000)
+    usage(ctx)
+    const next = await plugin()
+    if (lifetime === 1) expect(() => next.probe(ctx)).toThrow("HTTP 429")
+    else expect(next.probe(ctx).lines.find((line) => line.label === "Session").used).toBe(0)
+    expect(ctx.host.providerSecrets.refreshClaudeCredentials).toHaveBeenCalledOnce()
+    expect(ctx.host.http.request).toHaveBeenCalledTimes(lifetime === 1 ? 0 : 1)
+    expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
+  }
+)
+
+it.each([
+  "Could not save refreshed Claude credentials. Recovery will run before another refresh. Retry the probe.",
+  "Refreshed Claude credentials are unsaved. Recovery and main storage both failed. Keep UsageBar open and retry.",
+])(
+  "keeps the native save error when a refresh hold arrives during the transaction: %s",
+  async (message) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-11-03T13:15:00Z"))
+    vi.resetModules()
+    const ctx = makeCtx()
+    ctx.instanceRef = { providerId: "claude", instanceId: "owned" }
+    ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(document("usagebar")))
+    ctx.host.providerSecrets.refreshClaudeCredentials = vi.fn(() => {
+      ctx.host.fs.writeText(
+        ctx.app.pluginDataDir + "/rate-limit-refresh-owned.json",
+        JSON.stringify({ retryAt: Date.now() + 600000 })
+      )
+      throw message
+    })
+    const loaded = await plugin()
+    expect(() => loaded.probe(ctx)).toThrow(message)
+    expect(ctx.host.providerSecrets.refreshClaudeCredentials).toHaveBeenCalledOnce()
+    expect(ctx.host.http.request).not.toHaveBeenCalled()
+    expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
+  }
+)

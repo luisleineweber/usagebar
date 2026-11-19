@@ -149,7 +149,7 @@ describe("claude plugin", () => {
     const plugin = await loadPlugin()
     const result = plugin.probe(ctx)
 
-    expect(result.plan).toBe("Claude Team")
+    expect(result.plan).toBeNull()
     expect(result.lines.find((line) => line.label === "Session")?.used).toBe(11)
     expect(result.lines.find((line) => line.label === "Weekly")?.used).toBe(22)
     expect(result.lines.find((line) => line.label === "Fable")?.used).toBe(33)

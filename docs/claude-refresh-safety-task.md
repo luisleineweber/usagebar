@@ -59,3 +59,14 @@ and unsaved errors use fixed text. Tests use only synthetic credentials in owned
 - The non-Windows native rejection test is present for Linux CI. It cannot run on this Windows host.
 - Local Rust checks excluded the generated release sidecar with TAURI_CONFIG, as in round 1.
 - No request or response fields changed. S6 files remain unchanged. No merge was performed.
+
+## Main integration after round 2
+
+- Merged origin/main at 0ab6769e after #30 and #33 merged. This uses a merge commit and a normal push. No history rewrite or PR merge is part of this work.
+- Git reported one conflict: plugins/claude/plugin.js, in refreshToken. The resolution keeps the native refresh transaction and routes its HTTP 429 response to #33's refresh hold.
+- Removed the broad probe catch. Rate-limit checks still report their own HTTP 429 errors. A hold that arrives during a refresh cannot replace a credential-save or unsaved error.
+- Kept #30's no-web-fallback policy during OAuth holds and its managed-account boundary. S6 ownership and import behavior remain unchanged.
+- Incoming direct-refresh tests now use explicitly UsageBar-owned managed fixtures. Local Claude Code credentials still do not rotate.
+- Four new regression cases failed before the fix: refresh versus usage hold routing for expired and valid tokens, and visible main-save and unsaved errors when a hold arrives during the transaction.
+- No request or response fields were added. The existing access-token, refresh-token and expectedAccessToken redaction fields remain in place.
+- Integration validation passed: bun run check, 127 Claude tests, 221 Rust library tests (one live Edge test ignored), frontend build and plugin bundling. All seven Claude source and bundle files match byte for byte. Rust checks used the same generated-sidecar exclusion. The full frontend suite was not repeated.
