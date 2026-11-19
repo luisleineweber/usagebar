@@ -6,6 +6,7 @@ import { ReportPricingEditor, loadModelPriceOverrides } from "@/components/repor
 import type { PluginOutput } from "@/lib/plugin-types"
 import {
   filterUsageHistory,
+  entryReports,
   entryTotalTokens,
   hasUsageHistory,
   summarizeUsageHistory,
@@ -52,6 +53,23 @@ function metricValue(
   if (metric === "cost") return reportEntryCost(record, overrides)
   if (metric === "requests") return record.requests ?? null
   return entryTotalTokens(record)
+}
+
+/**
+ * Sums a metric over the records that report it. Cost skips "usage" rows, so a price
+ * override never adds estimated cost on top of a provider's separate cost row.
+ */
+function sumRecords(
+  records: readonly UsageHistoryRecord[],
+  metric: ReportMetric,
+  overrides: ModelPriceOverrides
+): number | null {
+  const kind = metric === "cost" ? "cost" : "usage"
+  return sumKnown(
+    records
+      .filter((record) => entryReports(record, kind))
+      .map((record) => metricValue(record, metric, overrides))
+  )
 }
 
 function formatCompact(value: number | null): string {
@@ -115,9 +133,9 @@ function dailySeries(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([day, dayRecords]) => ({
       day,
-      value: sumKnown(dayRecords.map((record) => metricValue(record, metric, overrides))),
-      tokens: sumKnown(dayRecords.map(entryTotalTokens)),
-      cost: sumKnown(dayRecords.map((record) => reportEntryCost(record, overrides))),
+      value: sumRecords(dayRecords, metric, overrides),
+      tokens: sumRecords(dayRecords, "tokens", overrides),
+      cost: sumRecords(dayRecords, "cost", overrides),
     }))
 }
 
@@ -269,13 +287,16 @@ function ProjectBreakdown({
   metric: ReportMetric
   overrides: ModelPriceOverrides
 }) {
-  const values = new Map<string, (number | null)[]>()
+  const recordsByProject = new Map<string, UsageHistoryRecord[]>()
   for (const record of records) {
     const project = record.project?.trim() || "Unspecified project"
-    values.set(project, [...(values.get(project) ?? []), metricValue(record, metric, overrides)])
+    recordsByProject.set(project, [...(recordsByProject.get(project) ?? []), record])
   }
-  const rows = [...values.entries()]
-    .map(([project, projectValues]) => [project, sumKnown(projectValues)] as const)
+  const rows = [...recordsByProject.entries()]
+    .map(
+      ([project, projectRecords]) =>
+        [project, sumRecords(projectRecords, metric, overrides)] as const
+    )
     .sort((left, right) => {
       if (left[1] === null) return right[1] === null ? 0 : 1
       if (right[1] === null) return -1
@@ -418,7 +439,7 @@ export function UsageReport({
   }, [hasRequestData, metric])
   const selectedValue =
     metric === "cost"
-      ? sumKnown(records.map((record) => reportEntryCost(record, priceOverrides)))
+      ? sumRecords(records, "cost", priceOverrides)
       : metric === "requests"
         ? summary.totals.requests
         : summary.totals.totalTokens
@@ -580,10 +601,7 @@ export function UsageReport({
         <div className="mt-2 grid grid-cols-3 divide-x divide-border text-center text-xs">
           <div className="px-1">
             <strong className="block tabular-nums">
-              {formatMetric(
-                sumKnown(records.map((record) => reportEntryCost(record, priceOverrides))),
-                "cost"
-              )}
+              {formatMetric(sumRecords(records, "cost", priceOverrides), "cost")}
             </strong>
             <span className="text-muted-foreground">Cost</span>
           </div>

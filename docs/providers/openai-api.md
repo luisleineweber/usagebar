@@ -20,5 +20,6 @@ The OpenAI API provider reads organization-level API spend and completions usage
 ## Notes
 
 - Usage history starts at the earlier of the 30-day window start and the first UTC day of the current month. This keeps month-to-date history complete on the 31st. The displayed lines keep their own windows.
+- History has one `scope: "cost"` row per UTC day and one `scope: "usage"` row per model and day, because the costs endpoint has no model split. Model price overrides do not change OpenAI cost, because the costs endpoint already reports it.
 - This provider does not read ChatGPT/Codex subscription quota. Use the `Codex` provider for ChatGPT/Codex subscription usage.
 - Only aggregate usage/cost data is exposed in UsageBar and the local HTTP API. API keys are not returned by plugin output.

@@ -1,4 +1,9 @@
-import type { PluginOutput, ProviderInstanceRef, UsageHistoryEntry } from "@/lib/plugin-types"
+import type {
+  PluginOutput,
+  ProviderInstanceRef,
+  UsageHistoryEntry,
+  UsageHistoryEntryScope,
+} from "@/lib/plugin-types"
 
 /**
  * Rolling periods (`7d`, `30d`) include today and the days before it.
@@ -47,8 +52,6 @@ export type UsageHistoryTopModel = {
 
 export type UsageHistorySummary = {
   period: UsageHistoryPeriod
-  startMs: number
-  endMs: number
   entryCount: number
   totals: UsageHistoryTotals
   topModel: UsageHistoryTopModel | null
@@ -86,6 +89,11 @@ export function entryTotalTokens(entry: UsageHistoryEntry): number | null {
     requiredTokenValues.reduce<number>((total, value) => total + (value ?? 0), 0) +
     (reasoningTokens ?? 0)
   )
+}
+
+/** False when the row's scope says it does not report metrics of this kind. */
+export function entryReports(entry: UsageHistoryEntry, kind: UsageHistoryEntryScope): boolean {
+  return entry.scope === undefined || entry.scope === kind
 }
 
 function selected(value: string | undefined, allowed: ReadonlySet<string> | null): boolean {
@@ -246,13 +254,19 @@ export function filterUsageHistory(
   return records
 }
 
+/**
+ * Sums a metric over the rows that report it. Null when no row reports it, or when a
+ * reporting row omits the value.
+ */
 function sumMetric(
   entries: readonly UsageHistoryEntry[],
+  kind: UsageHistoryEntryScope,
   getValue: (entry: UsageHistoryEntry) => number | undefined | null
 ): number | null {
-  if (entries.length === 0) return null
+  const reporting = entries.filter((entry) => entryReports(entry, kind))
+  if (reporting.length === 0) return null
   let total = 0
-  for (const entry of entries) {
+  for (const entry of reporting) {
     const value = finiteOrNull(getValue(entry) ?? undefined)
     if (value === null) return null
     total += value
@@ -273,9 +287,9 @@ function getTopModel(records: readonly UsageHistoryRecord[]): UsageHistoryTopMod
     [...byModel.entries()]
       .map(([model, modelRecords]) => ({
         model,
-        costUsd: sumMetric(modelRecords, (record) => record.costUsd),
-        requests: sumMetric(modelRecords, (record) => record.requests),
-        totalTokens: sumMetric(modelRecords, entryTotalTokens),
+        costUsd: sumMetric(modelRecords, "cost", (record) => record.costUsd),
+        requests: sumMetric(modelRecords, "usage", (record) => record.requests),
+        totalTokens: sumMetric(modelRecords, "usage", entryTotalTokens),
       }))
       .sort((a, b) => {
         const costOrder = compareKnownDescending(a.costUsd, b.costUsd)
@@ -298,27 +312,22 @@ export function summarizeUsageHistory(
   outputs: readonly Pick<PluginOutput, "providerId" | "history">[],
   query: UsageHistoryQuery
 ): UsageHistorySummary {
+  // Windows resolve per source time zone in filterUsageHistory, so one summary-wide
+  // start and end would disagree with UTC sources.
   const records = filterUsageHistory(outputs, query)
-  const { startMs, endMs } = getUsageHistoryWindow(
-    query.period,
-    query.nowMs,
-    query.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC"
-  )
 
   return {
     period: query.period,
-    startMs,
-    endMs,
     entryCount: records.length,
     totals: {
-      costUsd: sumMetric(records, (record) => record.costUsd),
-      requests: sumMetric(records, (record) => record.requests),
-      inputTokens: sumMetric(records, (record) => record.inputTokens),
-      outputTokens: sumMetric(records, (record) => record.outputTokens),
-      cacheReadTokens: sumMetric(records, (record) => record.cacheReadTokens),
-      cacheCreationTokens: sumMetric(records, (record) => record.cacheCreationTokens),
-      reasoningTokens: sumMetric(records, (record) => record.reasoningTokens),
-      totalTokens: sumMetric(records, entryTotalTokens),
+      costUsd: sumMetric(records, "cost", (record) => record.costUsd),
+      requests: sumMetric(records, "usage", (record) => record.requests),
+      inputTokens: sumMetric(records, "usage", (record) => record.inputTokens),
+      outputTokens: sumMetric(records, "usage", (record) => record.outputTokens),
+      cacheReadTokens: sumMetric(records, "usage", (record) => record.cacheReadTokens),
+      cacheCreationTokens: sumMetric(records, "usage", (record) => record.cacheCreationTokens),
+      reasoningTokens: sumMetric(records, "usage", (record) => record.reasoningTokens),
+      totalTokens: sumMetric(records, "usage", entryTotalTokens),
     },
     topModel: getTopModel(records),
   }

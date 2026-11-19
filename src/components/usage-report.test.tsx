@@ -199,6 +199,36 @@ describe("UsageReport", () => {
     expect(headline()).toHaveTextContent(/2[,.]50/)
   })
 
+  it("totals separate cost and usage rows for every period", async () => {
+    const user = userEvent.setup()
+    const data = output()
+    const day = (date: string) => ({
+      periodStart: `${date}T00:00:00.000Z`,
+      periodEnd: new Date(Date.parse(`${date}T00:00:00.000Z`) + 86_400_000).toISOString(),
+    })
+    data.history!.entries = [
+      { ...day("2026-07-01"), scope: "cost", costUsd: 100 },
+      { ...day("2026-07-01"), scope: "usage", model: "gpt-old", totalTokens: 1000, requests: 3 },
+      { ...day("2026-07-31"), scope: "cost", costUsd: 5 },
+      { ...day("2026-07-31"), scope: "usage", model: "gpt-5", totalTokens: 15, requests: 1 },
+    ]
+    render(<UsageReport outputs={[data]} nowMs={Date.UTC(2026, 6, 31, 12)} />)
+    const region = screen.getByRole("region", { name: "Usage history" })
+    const headline = () => region.querySelector("strong")
+
+    expect(headline()).toHaveTextContent(/5[,.]00/)
+    await user.click(screen.getByRole("button", { name: "This month" }))
+    expect(headline()).toHaveTextContent(/105[,.]00/)
+    const requestLabels = screen.getAllByText("Requests")
+    expect(requestLabels[requestLabels.length - 1].previousElementSibling).toHaveTextContent("4")
+
+    await user.click(screen.getByRole("button", { name: "Tokens" }))
+    expect(headline()).toHaveTextContent(/^1[,.]?015$|^1K$/)
+
+    await user.click(screen.getByRole("button", { name: "This week" }))
+    expect(headline()).toHaveTextContent("15")
+  })
+
   it("offers filter values from month-to-date history older than 30 days", async () => {
     const user = userEvent.setup()
     const data = output()

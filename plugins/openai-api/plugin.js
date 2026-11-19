@@ -174,6 +174,8 @@
     }
   }
 
+  // The costs endpoint has no model split, so cost and usage arrive as separate rows.
+  // The scope tells the report which metrics each row reports.
   function buildUsageHistory(costPayload, usagePayload) {
     const entries = []
     const costBuckets = readBuckets(costPayload)
@@ -185,7 +187,7 @@
       if (results.length === 0) continue
       let costUsd = 0
       for (let j = 0; j < results.length; j += 1) costUsd += readCostAmount(results[j])
-      entries.push({ ...period, costUsd })
+      entries.push({ ...period, scope: "cost", costUsd })
     }
 
     const usageBuckets = readBuckets(usagePayload)
@@ -201,6 +203,7 @@
         if (totalTokens === 0 && row.requests === 0) continue
         entries.push({
           ...period,
+          scope: "usage",
           model: row.model,
           inputTokens: row.inputTokens,
           outputTokens: row.outputTokens,

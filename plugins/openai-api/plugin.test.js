@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
-import { filterUsageHistory } from "../../src/lib/usage-history"
+import { summarizeUsageHistory } from "../../src/lib/usage-history"
 
 const loadPlugin = async () => {
   await import("./plugin.js")
@@ -143,10 +143,12 @@ describe("openai-api plugin", () => {
       expect.arrayContaining([
         expect.objectContaining({
           periodStart: "2026-03-06T00:00:00.000Z",
+          scope: "cost",
           costUsd: 1.25,
         }),
         expect.objectContaining({
           periodStart: "2026-03-06T00:00:00.000Z",
+          scope: "usage",
           model: "gpt-5-mini",
           inputTokens: 1000000,
           outputTokens: 500000,
@@ -202,12 +204,11 @@ describe("openai-api plugin", () => {
 
     const outputs = [{ providerId: "openai-api", history: result.history }]
     const nowMs = Date.parse(ctx.nowIso)
-    const spend = (period) =>
-      filterUsageHistory(outputs, { period, nowMs, timeZone: "UTC" })
-        .filter((record) => record.costUsd !== undefined)
-        .reduce((total, record) => total + record.costUsd, 0)
-    expect(spend("monthToDate")).toBe(105)
-    expect(spend("30d")).toBe(5)
+    const totals = (period) =>
+      summarizeUsageHistory(outputs, { period, nowMs, timeZone: "UTC" }).totals
+    expect(totals("monthToDate")).toMatchObject({ costUsd: 105, totalTokens: 1015 })
+    expect(totals("30d")).toMatchObject({ costUsd: 5, totalTokens: 15 })
+    expect(totals("weekToDate")).toMatchObject({ costUsd: 5, totalTokens: 15 })
   })
 
   it("keeps the 30-day request window when it already covers the month start", async () => {

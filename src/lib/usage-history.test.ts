@@ -190,7 +190,6 @@ describe("usage history calendar-to-date windows", () => {
       timeZone: "UTC",
     })
     expect(month.entryCount).toBe(1)
-    expect(month.startMs).toBe(Date.UTC(2026, 6, 1))
   })
 })
 
@@ -352,6 +351,99 @@ describe("summarizeUsageHistory", () => {
       reasoningTokens: null,
       totalTokens: null,
     })
+  })
+
+  it("sums scoped cost and usage rows over the rows that report each metric", () => {
+    const summary = summarizeUsageHistory(
+      [
+        output("openai-api", [
+          {
+            periodStart: "2026-07-10T00:00:00.000Z",
+            periodEnd: "2026-07-11T00:00:00.000Z",
+            scope: "cost",
+            costUsd: 3,
+          },
+          {
+            periodStart: "2026-07-09T00:00:00.000Z",
+            periodEnd: "2026-07-10T00:00:00.000Z",
+            scope: "cost",
+            costUsd: 0,
+          },
+          {
+            periodStart: "2026-07-10T00:00:00.000Z",
+            periodEnd: "2026-07-11T00:00:00.000Z",
+            scope: "usage",
+            model: "gpt-5",
+            inputTokens: 60,
+            outputTokens: 40,
+            totalTokens: 100,
+            requests: 2,
+          },
+          {
+            periodStart: "2026-07-10T00:00:00.000Z",
+            periodEnd: "2026-07-11T00:00:00.000Z",
+            scope: "usage",
+            model: "gpt-4.1",
+            inputTokens: 5,
+            outputTokens: 5,
+            totalTokens: 10,
+            requests: 1,
+          },
+        ]),
+      ],
+      { period: "7d", nowMs: NOW_MS }
+    )
+
+    expect(summary.totals).toMatchObject({
+      costUsd: 3,
+      requests: 3,
+      inputTokens: 65,
+      outputTokens: 45,
+      totalTokens: 110,
+      cacheReadTokens: null,
+    })
+    expect(summary.topModel).toEqual({
+      model: "gpt-5",
+      costUsd: null,
+      requests: 2,
+      totalTokens: 100,
+    })
+  })
+
+  it("keeps a scoped metric unknown when no row reports it or a reporting row omits it", () => {
+    const costOnly = summarizeUsageHistory(
+      [
+        output("openai-api", [
+          {
+            ...historyEntry(),
+            scope: "cost",
+            model: undefined,
+            requests: undefined,
+            inputTokens: undefined,
+            outputTokens: undefined,
+            reasoningTokens: undefined,
+            totalTokens: undefined,
+          },
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    expect(costOnly.totals.costUsd).toBe(1)
+    expect(costOnly.totals.totalTokens).toBeNull()
+    expect(costOnly.totals.requests).toBeNull()
+
+    const partialUsage = summarizeUsageHistory(
+      [
+        output("openai-api", [
+          { ...historyEntry(), scope: "usage", costUsd: undefined },
+          { ...historyEntry(), scope: "usage", costUsd: undefined, requests: undefined },
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    expect(partialUsage.totals.totalTokens).toBe(200)
+    expect(partialUsage.totals.requests).toBeNull()
+    expect(partialUsage.totals.costUsd).toBeNull()
   })
 
   it("selects the top model by cost, then tokens and requests", () => {
