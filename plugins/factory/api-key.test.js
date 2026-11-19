@@ -54,13 +54,17 @@ function allLogText(ctx) {
     .join("\n")
 }
 
-function thrownMessage(fn) {
+function thrown(fn) {
   try {
     fn()
   } catch (e) {
-    return String(e)
+    return e
   }
   throw new Error("expected probe to throw")
+}
+
+function thrownMessage(fn) {
+  return String(thrown(fn))
 }
 
 describe("factory API key source", () => {
@@ -134,42 +138,54 @@ describe("factory API key source", () => {
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
-  it("surfaces a credential vault failure instead of falling back to the local login", async () => {
-    const ctx = makeCtx()
-    writeLocalSession(ctx)
-    ctx.host.providerSecrets.read.mockImplementation(() => {
-      throw new Error("provider secret store read failed: access denied")
-    })
+  it.each([
+    ["provider secret store read failed: access denied", "credentialUnreadable"],
+    ["credential read failed: invalid data", "credentialUnreadable"],
+    ["credential store unavailable: no backend", "credentialUnavailable"],
+  ])(
+    "surfaces a vault failure (%s) as %s instead of falling back to the local login",
+    async (hostError, category) => {
+      const ctx = makeCtx()
+      writeLocalSession(ctx)
+      ctx.host.providerSecrets.read.mockImplementation(() => {
+        throw new Error(hostError)
+      })
 
-    const plugin = await loadPlugin()
-    const message = thrownMessage(() => plugin.probe(ctx))
-    expect(message).toContain("Could not read the stored Factory API key")
-    expect(message).toContain("access denied")
-    expect(ctx.host.http.request).not.toHaveBeenCalled()
-  })
+      const plugin = await loadPlugin()
+      const error = thrown(() => plugin.probe(ctx))
+      expect(error.message).toContain("Could not read the stored Factory API key")
+      expect(error.message).toContain(hostError)
+      expect(error.category).toBe(category)
+      expect(ctx.host.http.request).not.toHaveBeenCalled()
+    }
+  )
 
   it("rejects a stored key with inner whitespace before sending a request", async () => {
     const ctx = makeCtx()
     storeApiKey(ctx, "fk-abc\r\nX-Injected: 1")
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Stored Factory API key is malformed")
+    const error = thrown(() => plugin.probe(ctx))
+    expect(error.message).toContain("Stored Factory API key is malformed")
+    expect(error.category).toBe("credentialInvalid")
     expect(ctx.host.http.request).not.toHaveBeenCalled()
   })
 
-  it("maps 401 to a rejected key without refresh or session fallback", async () => {
+  it("maps 401 to an invalid credential without refresh or session fallback", async () => {
     const ctx = makeCtx()
     writeLocalSession(ctx)
     storeApiKey(ctx, API_KEY)
     ctx.host.http.request.mockReturnValue({ status: 401, headers: {}, bodyText: "{}" })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Factory API key was rejected (HTTP 401)")
+    const error = thrown(() => plugin.probe(ctx))
+    expect(error.message).toContain("Factory API key was rejected (HTTP 401)")
+    expect(error.category).toBe("credentialInvalid")
     expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
     expect(ctx.host.fs.writeText).toHaveBeenCalledTimes(1) // only the test session setup
   })
 
-  it("maps 403 to a key without access to subscription usage", async () => {
+  it("maps 403 to an invalid credential without access to subscription usage", async () => {
     const ctx = makeCtx()
     storeApiKey(ctx, API_KEY)
     ctx.host.http.request.mockReturnValue({
@@ -179,8 +195,40 @@ describe("factory API key source", () => {
     })
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("cannot read subscription usage (HTTP 403)")
+    const error = thrown(() => plugin.probe(ctx))
+    expect(error.message).toContain("cannot read subscription usage (HTTP 403)")
+    expect(error.category).toBe("credentialInvalid")
     expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps a network failure out of the credential categories and masks the key in its log", async () => {
+    const ctx = makeCtx()
+    storeApiKey(ctx, API_KEY)
+    ctx.host.http.request.mockImplementation(() => {
+      throw new Error(`connect failed for Bearer ${API_KEY}`)
+    })
+
+    const plugin = await loadPlugin()
+    const error = thrown(() => plugin.probe(ctx))
+    expect(String(error)).toContain("Usage request failed. Check your connection.")
+    expect(error.category).toBeUndefined()
+    expect(allLogText(ctx)).toContain("connect failed for Bearer [REDACTED]")
+    expect(allLogText(ctx)).not.toContain(API_KEY)
+  })
+
+  it("returns to the local droid login after the key is removed", async () => {
+    const ctx = makeCtx()
+    writeLocalSession(ctx)
+    storeApiKey(ctx, API_KEY)
+    ctx.host.http.request.mockReturnValue(usageResponse(USAGE))
+    const plugin = await loadPlugin()
+
+    plugin.probe(ctx)
+    expect(ctx.host.http.request.mock.calls[0][0].headers.Authorization).toBe(`Bearer ${API_KEY}`)
+
+    missingSecret(ctx) // Settings > Clear secret
+    plugin.probe(ctx)
+    expect(ctx.host.http.request.mock.calls[1][0].headers.Authorization).toMatch(/^Bearer eyJ/)
   })
 
   it.each([
@@ -240,7 +288,55 @@ describe("factory API key source", () => {
     )
 
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Usage response missing token counts")
+    const error = thrown(() => plugin.probe(ctx))
+    expect(error.message).toContain("Usage response missing token counts")
+    expect(error.category).toBe("providerResponse")
+  })
+
+  it.each([
+    ["an array body", "[]"],
+    ["a string body", JSON.stringify("ok")],
+    ["an array usage", JSON.stringify({ usage: [] })],
+    ["a string usage", JSON.stringify({ usage: "unavailable" })],
+    ["a string bucket", JSON.stringify({ usage: { ...USAGE, standard: "n/a" } })],
+    ["an array bucket", JSON.stringify({ usage: { ...USAGE, premium: [] } })],
+    [
+      "a string allowance",
+      JSON.stringify({
+        usage: { ...USAGE, standard: { orgTotalTokensUsed: 1, totalAllowance: "20000" } },
+      }),
+    ],
+    [
+      "a negative allowance",
+      JSON.stringify({
+        usage: { ...USAGE, standard: { orgTotalTokensUsed: 1, totalAllowance: -5 } },
+      }),
+    ],
+    [
+      "a bucket without an allowance",
+      JSON.stringify({ usage: { ...USAGE, premium: { orgTotalTokensUsed: 1 } } }),
+    ],
+  ])("rejects %s instead of showing No usage data", async (_name, bodyText) => {
+    const ctx = makeCtx()
+    storeApiKey(ctx, API_KEY)
+    ctx.host.http.request.mockReturnValue({ status: 200, headers: {}, bodyText })
+
+    const plugin = await loadPlugin()
+    const error = thrown(() => plugin.probe(ctx))
+    expect(error.message).toMatch(/^Usage response (invalid|missing)/)
+    expect(error.category).toBe("providerResponse")
+  })
+
+  it("keeps an explicit zero allowance as a bucket without quota", async () => {
+    const ctx = makeCtx()
+    storeApiKey(ctx, API_KEY)
+    ctx.host.http.request.mockReturnValue(
+      usageResponse({ ...USAGE, premium: { orgTotalTokensUsed: 0, totalAllowance: 0 } })
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    expect(result.lines.map((line) => line.label)).toEqual(["Standard"])
   })
 
   it("shows no quota when the key's account returns no allowances", async () => {

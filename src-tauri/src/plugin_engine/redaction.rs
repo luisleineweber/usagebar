@@ -131,6 +131,67 @@ pub(crate) fn redact_body(body: &str) -> String {
     result
 }
 
+const CREDENTIAL_HEADER_MARKERS: [&str; 7] = [
+    "auth", "cookie", "key", "password", "secret", "session", "token",
+];
+/// Shorter values are too likely to match ordinary response text.
+const MIN_ECHOED_CREDENTIAL_LEN: usize = 8;
+
+/// Credential values a plugin sent in request headers. A provider can echo a submitted
+/// credential in an error body, and the pattern redactor cannot know every credential format.
+pub(crate) fn request_credential_values(
+    headers: Option<&std::collections::HashMap<String, String>>,
+) -> Vec<String> {
+    let mut values: Vec<String> = Vec::new();
+    for (name, value) in headers.into_iter().flatten() {
+        let name = name.to_ascii_lowercase();
+        if !CREDENTIAL_HEADER_MARKERS
+            .iter()
+            .any(|marker| name.contains(marker))
+        {
+            continue;
+        }
+        let value = value.trim();
+        values.push(value.to_string());
+        // "Bearer <token>" and "Basic <token>": the token alone can be echoed.
+        if let Some((_, token)) = value.split_once(' ') {
+            values.push(token.trim().to_string());
+        }
+        if name == "cookie" {
+            for pair in value.split(';') {
+                if let Some((_, cookie_value)) = pair.split_once('=') {
+                    values.push(cookie_value.trim().to_string());
+                }
+            }
+        }
+    }
+    values.retain(|value| value.chars().count() >= MIN_ECHOED_CREDENTIAL_LEN);
+    // Longest first, so a full header value is masked before its token part.
+    values.sort_by_key(|value| std::cmp::Reverse(value.len()));
+    values.dedup();
+    values
+}
+
+/// Response body preview for the HTTP log. Echoed request credentials are masked before
+/// pattern redaction, and both run before truncation so values are caught while intact.
+pub(crate) fn http_body_log_preview(body: &str, credential_values: &[String]) -> String {
+    let mut masked = body.to_string();
+    for value in credential_values {
+        masked = masked.replace(value.as_str(), "[REDACTED]");
+    }
+    let redacted = redact_body(&masked);
+    if redacted.len() <= 500 {
+        return redacted;
+    }
+    // UTF-8 safe truncation: keep characters that start before byte 500.
+    let truncated: String = redacted
+        .char_indices()
+        .take_while(|(i, _)| *i < 500)
+        .map(|(_, c)| c)
+        .collect();
+    format!("{}... ({} bytes total)", truncated, body.len())
+}
+
 /// Lightweight redaction for plugin log messages (JWT + API key patterns only).
 pub(crate) fn redact_log_message(msg: &str) -> String {
     let mut result = msg.to_string();

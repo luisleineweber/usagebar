@@ -61,21 +61,32 @@ Returns token usage for the current billing period. UsageBar sends the same requ
 
 UsageBar does not infer a Factory subscription name from token allowances. The endpoint currently exposes usage buckets, not a stable public plan contract, so the provider renders `Standard` and optional `Premium` usage lines without a plan badge.
 
-UsageBar renders token progress only when Factory returns a positive `totalAllowance`. If all returned allowances are zero or absent, it shows `No usage data` instead of creating a fake zero-limit progress bar.
+UsageBar renders token progress only when Factory returns a positive `totalAllowance`. An absent `standard` or `premium` bucket, or an explicit `totalAllowance` of `0`, means the plan has no quota for that bucket. If no bucket has a positive allowance, UsageBar shows `No usage data` instead of creating a fake zero-limit progress bar.
 
-Progress uses `orgTotalTokensUsed`, so the bar shows the organization total for the billing period, not only the tokens of the key owner. When a bucket has a positive allowance but `orgTotalTokensUsed` is missing, not a number, or negative, the probe fails with `Usage response missing token counts`. UsageBar does not show such a bucket as zero usage.
+Progress uses `orgTotalTokensUsed`, so the bar shows the organization total for the billing period, not only the tokens of the key owner.
+
+UsageBar never turns a malformed response into usage data. The probe fails with the `providerResponse` category when:
+
+- the body is not a JSON object, or `usage` is missing or not an object (for example an array)
+- a present bucket is not an object
+- `totalAllowance` in a present bucket is missing, not a number (for example the string `"20000"`), or negative
+- a bucket with a positive allowance has a missing, non-numeric, or negative `orgTotalTokensUsed` (`Usage response missing token counts`)
 
 ### Error mapping
 
-| Response | Result |
-|---|---|
-| 401 with a stored API key | `Factory API key was rejected (HTTP 401)`. No refresh and no fallback to the local droid login. |
-| 403 with a stored API key | `Factory API key cannot read subscription usage (HTTP 403)`. The key has no access to this organization usage. |
-| 401/403 with the local droid login | One WorkOS refresh and retry, then `Token expired`. |
-| 429 | `Factory rate limit reached (HTTP 429)` |
-| Other non-2xx | `Usage request failed (HTTP <status>)` |
-| Invalid JSON | `Usage response invalid` |
-| Missing `usage` object | `Usage response missing data` |
+| Response | Result | Category |
+|---|---|---|
+| 401 with a stored API key | `Factory API key was rejected (HTTP 401)`. No refresh and no fallback to the local droid login. | `credentialInvalid` |
+| 403 with a stored API key | `Factory API key cannot read subscription usage (HTTP 403)`. The key has no access to this organization usage. | `credentialInvalid` |
+| Stored key with inner whitespace or control characters | `Stored Factory API key is malformed`. No request is sent. | `credentialInvalid` |
+| Credential vault cannot be opened | `Could not read the stored Factory API key ...` | `credentialUnavailable` |
+| Credential vault read fails | `Could not read the stored Factory API key ...` | `credentialUnreadable` |
+| 401/403 with the local droid login | One WorkOS refresh and retry, then `Token expired`. | `credentialExpired` |
+| 429 | `Factory rate limit reached (HTTP 429)` | `unknown` |
+| Other non-2xx or network failure | `Usage request failed ...` | `unknown` |
+| Malformed body (see above) | `Usage response invalid ...` or `Usage response missing ...` | `providerResponse` |
+
+Settings shows Factory as signed out after a credential category, even while an API key is stored, so the user can replace or remove the key.
 
 The `GET /api/billing/limits` endpoint (5-hour, weekly, and monthly token-rate windows) is not used yet.
 
@@ -83,12 +94,14 @@ The `GET /api/billing/limits` endpoint (5-hour, weekly, and monthly token-rate w
 
 ### Source precedence
 
-1. **Stored Factory API key.** Save it in Settings > Factory > API key. UsageBar stores it as the provider secret `apiKey` in the app credential vault (Windows-protected local store on Windows, system credential vault on macOS/Linux). When a key is saved, UsageBar sends only that key as `Authorization: Bearer <api_key>` to `api.factory.ai`. It does not read the local droid auth files or keychain.
+1. **Stored Factory API key (Windows app only).** Save it in Settings > Factory > API key. The field masks the key on screen. UsageBar stores it as the provider secret `apiKey` in the Windows-protected local secret store. When a key is saved, UsageBar sends only that key as `Authorization: Bearer <api_key>` to `api.factory.ai`. It does not read the local droid auth files or keychain.
 2. **Local droid login.** Used only when no API key is saved. Remove the key in Settings to return to this source.
 
 The API key source is strict. A rejected key or a credential vault read failure is shown as an error. UsageBar does not silently switch to the local droid login, because that login can belong to another account or organization.
 
-UsageBar trims surrounding whitespace from the stored key and rejects a key with inner whitespace or control characters before it sends a request. The key never appears in plugin logs or error messages. Host redaction masks `fk-` values in logged response bodies and log messages, and the `Authorization` header is redacted by name.
+UsageBar trims surrounding whitespace from the stored key and rejects a key with inner whitespace or control characters before it sends a request. The key never appears in plugin logs or error messages. The host masks the values of credential request headers in its logged response preview, so an error body that echoes the submitted key does not put it in the log, whatever the key format. Pattern redaction also masks `fk-` values in logged bodies and log messages.
+
+On macOS and Linux, Settings does not offer the API key field. The `keyring` dependency has no native backend there in this build, so a saved key could not be read back. Those platforms use the local droid login only.
 
 Use this source for a machine without a local droid login, such as a machine where only the API key from Factory settings is available. UsageBar does not read `FACTORY_API_KEY` from the environment or `~/.factory/.env`.
 

@@ -170,6 +170,24 @@
     return null
   }
 
+  // The host reads `category` from a thrown object, so the UI can tell credential
+  // failures from provider or network failures.
+  function probeError(message, category) {
+    const error = new Error(message)
+    error.category = category
+    return error
+  }
+
+  function vaultErrorCategory(message) {
+    return message.toLowerCase().indexOf("credential store unavailable") !== -1
+      ? "credentialUnavailable"
+      : "credentialUnreadable"
+  }
+
+  function withoutSecret(text, secret) {
+    return String(text).split(secret).join("[REDACTED]")
+  }
+
   // A bearer token must not contain whitespace or control characters.
   function isHeaderSafeToken(value) {
     for (let i = 0; i < value.length; i += 1) {
@@ -190,13 +208,14 @@
     try {
       value = secrets.read(API_KEY_SECRET)
     } catch (e) {
-      const message = String(e || "").trim()
+      const message = String((e && e.message) || e || "").trim()
       if (message.toLowerCase().indexOf("provider secret not found") !== -1) return null
       ctx.host.log.error("api key read failed: " + message)
-      throw (
+      throw probeError(
         "Could not read the stored Factory API key from the credential vault: " +
-        message +
-        ". Save it again in Setup, or remove it to use the local droid login."
+          message +
+          ". Save it again in Setup, or remove it to use the local droid login.",
+        vaultErrorCategory(message)
       )
     }
 
@@ -204,7 +223,10 @@
     const apiKey = value.trim()
     if (!isHeaderSafeToken(apiKey)) {
       ctx.host.log.error("stored api key contains whitespace or control characters")
-      throw "Stored Factory API key is malformed. Save it again in Setup."
+      throw probeError(
+        "Stored Factory API key is malformed. Save it again in Setup.",
+        "credentialInvalid"
+      )
     }
     return apiKey
   }
@@ -362,18 +384,24 @@
     try {
       resp = fetchUsage(ctx, apiKey)
     } catch (e) {
-      ctx.host.log.error("usage request exception: " + String(e))
+      ctx.host.log.error("usage request exception: " + withoutSecret(e, apiKey))
       throw "Usage request failed. Check your connection."
     }
 
     // An explicit API key is strict: no refresh and no fallback to the local droid login.
     if (resp.status === 401) {
       ctx.host.log.error("usage rejected stored api key: status=401")
-      throw "Factory API key was rejected (HTTP 401). Replace it in Setup, or remove it to use the local droid login."
+      throw probeError(
+        "Factory API key was rejected (HTTP 401). Replace it in Setup, or remove it to use the local droid login.",
+        "credentialInvalid"
+      )
     }
     if (resp.status === 403) {
       ctx.host.log.error("usage denied for stored api key: status=403")
-      throw "Factory API key cannot read subscription usage (HTTP 403). Use a key with access to this organization, or remove it to use the local droid login."
+      throw probeError(
+        "Factory API key cannot read subscription usage (HTTP 403). Use a key with access to this organization, or remove it to use the local droid login.",
+        "credentialInvalid"
+      )
     }
     return mapUsageResponse(ctx, resp)
   }
@@ -440,16 +468,48 @@
     return mapUsageResponse(ctx, resp)
   }
 
+  function isPlainObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+  }
+
+  function isTokenCount(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
+  }
+
+  function invalidResponse(ctx, logMessage, message) {
+    ctx.host.log.error(logMessage)
+    return probeError(message, "providerResponse")
+  }
+
   function tokenProgressLine(ctx, label, bucket, resetsAt, periodDurationMs) {
-    if (!bucket || typeof bucket !== "object") return null
+    // An absent bucket means the plan does not include it.
+    if (bucket === undefined || bucket === null) return null
+    if (!isPlainObject(bucket)) {
+      throw invalidResponse(
+        ctx,
+        "usage " + label + " bucket is not an object",
+        "Usage response invalid: the " + label + " bucket is malformed. Try again later."
+      )
+    }
+
     const limit = bucket.totalAllowance
-    // A missing or zero allowance means the plan has no quota for this bucket.
-    if (typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) return null
+    if (!isTokenCount(limit)) {
+      throw invalidResponse(
+        ctx,
+        "usage " + label + " bucket has no valid totalAllowance",
+        "Usage response invalid: the " + label + " allowance is not a token count. Try again later."
+      )
+    }
+    // An explicit zero allowance means the plan has no quota for this bucket.
+    if (limit === 0) return null
 
     const used = bucket.orgTotalTokensUsed
-    if (typeof used !== "number" || !Number.isFinite(used) || used < 0) {
-      ctx.host.log.error("usage " + label + " allowance has no valid orgTotalTokensUsed")
-      throw "Usage response missing token counts. Try again later."
+    if (!isTokenCount(used)) {
+      throw invalidResponse(
+        ctx,
+        "usage " + label + " allowance has no valid orgTotalTokensUsed",
+        "Usage response missing token counts. Try again later."
+      )
     }
 
     return ctx.line.progress({
@@ -476,13 +536,21 @@
     ctx.host.log.info("usage fetch succeeded")
 
     const data = ctx.util.tryParseJson(resp.bodyText)
-    if (data === null) {
-      throw "Usage response invalid. Try again later."
+    if (!isPlainObject(data)) {
+      throw invalidResponse(
+        ctx,
+        "usage body is not a JSON object",
+        "Usage response invalid. Try again later."
+      )
     }
 
     const usage = data.usage
-    if (!usage || typeof usage !== "object") {
-      throw "Usage response missing data. Try again later."
+    if (!isPlainObject(usage)) {
+      throw invalidResponse(
+        ctx,
+        "usage response has no usage object",
+        "Usage response missing data. Try again later."
+      )
     }
 
     // Calculate reset time and period from usage dates

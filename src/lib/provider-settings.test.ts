@@ -103,12 +103,24 @@ describe("getProviderSettingsDefinition", () => {
     expect(getProviderSettingsDefinition("mistral").secretField?.key).toBe("adminApiKey")
   })
 
-  it("offers an optional Factory API key that signs in through the app vault", () => {
-    const def = getProviderSettingsDefinition("factory")
+  it("offers an optional, masked Factory API key in the Windows app", () => {
+    const def = getProviderSettingsDefinition("factory", true)
     expect(def.mode).toBe("editable")
     expect(def.secretField?.key).toBe("apiKey")
+    expect(def.secretField?.masked).toBe(true)
     expect(def.secretFieldRole).toBeUndefined()
     expect(def.sourceOptions).toBeUndefined()
+  })
+
+  it("offers only the local droid login for Factory outside the Windows app", () => {
+    const def = getProviderSettingsDefinition("factory", false)
+    expect(def.mode).toBe("detected")
+    expect(def.secretField).toBeUndefined()
+    expect(def.connectHint).toContain("only in the Windows app")
+  })
+
+  it("keeps Cookie header fields multi-line", () => {
+    expect(getProviderSettingsDefinition("ollama").secretField?.masked).toBeUndefined()
   })
 
   it("defines both Alibaba credential fields", () => {

@@ -187,6 +187,7 @@ host.http.request({
 
 - **No redirects**: The HTTP client does not follow redirects (policy: none)
 - **Throws on network errors**: Connection failures, DNS errors, and timeouts throw
+- **Logged response preview**: The host logs the first 500 bytes of each response body. Values of credential request headers (for example `Authorization`, `Cookie`, or `X-Api-Key`) are masked in that preview, so a provider that echoes a submitted key does not put it in the log. Known secret patterns are redacted as well.
 - **Capability-gated domains**: HTTP requests are limited to exact hosts or `*.example.com` wildcard hosts from `capabilities.httpDomains`. Empty or omitted domains block all plugin HTTP requests.
 
 ### Example: GET request
