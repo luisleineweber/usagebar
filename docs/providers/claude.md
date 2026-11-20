@@ -175,7 +175,7 @@ Each hold (usage, refresh, and web) counts its own consecutive HTTP 429 response
 - The backoff: 5 minutes for the first 429, then 10, 20, and at most 30 minutes.
 - The Retry-After value, capped at 60 minutes.
 
-Only a successful response of the same kind resets the count: OAuth usage for the usage hold, a token refresh for the refresh hold, and web usage for the web hold. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer. A success clears only a hold that was recorded before its request started, so a late success cannot clear a newer hold.
+Only a success of the same kind resets the count: OAuth usage for the usage hold, a token refresh for the refresh hold, and a web probe whose requests all return without HTTP 429 (including the overage request) for the web hold. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer. A success resets the count only if the hold record is still exactly the record read before the request. A newer record, from this or another build, is kept, even if the clock changed.
 
 #### Sharing between installed and dev builds
 
@@ -189,4 +189,4 @@ No credential record carries a verified account identity, and usage holds surviv
 
 A hold record stores `retryAt`, `streak`, and `recordedAt`. It contains no tokens and no account data. Every change reads, decides, and writes the record as one step through `host.fs.compareAndSwapText`, which holds a cross-process file lock. Two builds therefore cannot shorten or clear a hold that the other build has just written.
 
-UsageBar logs and discards a record that is not valid JSON, is not an object, has non-finite times, or ends more than 60 minutes after `recordedAt`. If the system clock moves back during a hold, the remaining wait restarts once from the new time. It does not grow by the size of the clock change.
+UsageBar logs and discards a record that is not valid JSON, is not an object, has non-finite times, or ends more than 60 minutes after `recordedAt`. If the system clock moves back during a hold, the remaining wait restarts once from the new time. It does not grow by the size of the clock change. Each update reads the record before it reads the clock, so a record that another build has just written is not mistaken for a clock change.

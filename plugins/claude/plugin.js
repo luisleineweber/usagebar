@@ -43,8 +43,7 @@
   }
 
   // A hold is { retryAt, streak, recordedAt }. streak counts consecutive 429s and resets only
-  // after a success. recordedAt fixes the cap and lets an older in-flight success keep a newer
-  // hold. A cleared hold has retryAt 0 and streak 0.
+  // after a success. recordedAt fixes the cap. A cleared hold has retryAt 0 and streak 0.
   function parseHold(text) {
     let value
     try {
@@ -83,13 +82,19 @@
     return { hold }
   }
 
+  function readHoldText(ctx, path) {
+    return ctx.host.fs.exists(path) ? ctx.host.fs.readText(path) : null
+  }
+
   // Read, decide, and write as one step across processes. compareAndSwapText replaces the
   // record only if it still has the text this decision was based on.
   function updateHold(ctx, endpoint, decide) {
     const path = rateLimitPath(ctx, endpoint)
     for (let attempt = 0; attempt < RATE_LIMIT_WRITE_ATTEMPTS; attempt++) {
+      // Read before sampling the clock: a record another build writes after this sample
+      // would otherwise look like it came from the future and trigger a clock rebase.
+      const text = readHoldText(ctx, path)
       const now = Date.now()
-      const text = ctx.host.fs.exists(path) ? ctx.host.fs.readText(path) : null
       const { hold, repair } = readStoredHold(ctx, text, now)
       const decided = decide(hold, now)
       const next = decided === undefined ? repair : decided
@@ -143,12 +148,22 @@
     })
   }
 
-  function clearRateLimitAfterSuccess(ctx, endpoint, requestStartedAt) {
-    updateHold(ctx, endpoint, (hold, now) =>
-      hold && hold.streak > 0 && hold.recordedAt < requestStartedAt
-        ? { retryAt: 0, streak: 0, recordedAt: now }
-        : undefined
-    )
+  // The record text read before a request, used as the version that a success may clear.
+  function observeHold(ctx, endpoint) {
+    return readHoldText(ctx, rateLimitPath(ctx, endpoint))
+  }
+
+  // A success resets the count only if the record is still exactly the one observed before
+  // the request. Any newer record, from this or another build, wins and is kept.
+  function clearRateLimitAfterSuccess(ctx, endpoint, observedText) {
+    if (observedText === null) return
+    const observed = parseHold(observedText)
+    if (!observed || observed.streak === 0) return
+    const cleared = JSON.stringify({ retryAt: 0, streak: 0, recordedAt: Date.now() })
+    const path = rateLimitPath(ctx, endpoint)
+    if (!ctx.host.fs.compareAndSwapText(path, observedText, cleared)) {
+      ctx.host.log.info("kept a Claude " + endpoint + " hold that changed during the request")
+    }
   }
 
   function checkRateLimitResponse(ctx, response, endpoint = "usage") {
@@ -321,7 +336,6 @@
   }
 
   function requestClaudeWebJson(ctx, sessionKey, path, description, optional = false) {
-    const requestStartedAt = Date.now()
     let response
     try {
       response = ctx.util.request({
@@ -353,10 +367,7 @@
       path === "/organizations"
         ? Array.isArray(parsed)
         : parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    if (isValidResponse) {
-      if (description === "usage") clearRateLimitAfterSuccess(ctx, "web-", requestStartedAt)
-      return parsed
-    }
+    if (isValidResponse) return parsed
     if (optional) return null
     throw "Claude web " + description + " response invalid."
   }
@@ -684,7 +695,7 @@
     }
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
-    const requestStartedAt = Date.now()
+    const observedRefreshHold = observeHold(ctx, "refresh")
     try {
       const resp = checkRateLimitResponse(
         ctx,
@@ -717,7 +728,7 @@
         ctx.host.log.warn("refresh returned unexpected status: " + resp.status)
         return null
       }
-      clearRateLimitAfterSuccess(ctx, "refresh", requestStartedAt)
+      clearRateLimitAfterSuccess(ctx, "refresh", observedRefreshHold)
 
       const body = ctx.util.tryParseJson(resp.bodyText)
       if (!body) {
@@ -753,7 +764,7 @@
   }
 
   function fetchUsage(ctx, accessToken) {
-    const requestStartedAt = Date.now()
+    const observedUsageHold = observeHold(ctx, "usage")
     const response = checkRateLimitResponse(
       ctx,
       ctx.util.request({
@@ -770,7 +781,7 @@
       })
     )
     if (response.status >= 200 && response.status < 300) {
-      clearRateLimitAfterSuccess(ctx, "usage", requestStartedAt)
+      clearRateLimitAfterSuccess(ctx, "usage", observedUsageHold)
     }
     return response
   }
@@ -1076,6 +1087,7 @@
   function buildClaudeWebResult(ctx) {
     if (readManagedProfileId(ctx)) return null
     checkRateLimit(ctx, "web-")
+    const observedWebHold = observeHold(ctx, "web-")
     const cookieHeader = loadStoredCookieHeader(ctx)
     if (!cookieHeader) return null
     const sessionKey = sessionKeyFromCookieHeader(cookieHeader)
@@ -1145,6 +1157,8 @@
       "overage",
       true
     )
+    // Every web request of this probe returned without HTTP 429.
+    clearRateLimitAfterSuccess(ctx, "web-", observedWebHold)
     if (overage && overage.is_enabled === true) {
       const used = Number(overage.used_credits)
       const limit = Number(overage.monthly_credit_limit)

@@ -261,3 +261,55 @@ it("shows an error when the hold record keeps changing", () => {
   expect(() => probe(ctx)).toThrow("Claude rate-limit state is busy. Try again.")
   expect(ctx.host.log.error).toHaveBeenCalled()
 })
+
+it("does not shorten a hold another build writes after this build samples the clock", () => {
+  const ctx = defaultAccountCtx()
+  const other = otherAppInstance(ctx)
+  const exists = ctx.host.fs.exists
+  let interleaved = false
+  ctx.host.fs.exists = (path) => {
+    if (!interleaved && path === usageHoldPath(ctx)) {
+      interleaved = true
+      vi.advanceTimersByTime(MINUTE)
+      expect(() => probe(other)).toThrow(after(5 * MINUTE))
+    }
+    return exists(path)
+  }
+
+  // The other build recorded its hold one minute later, so it ends six minutes after START.
+  expect(() => probe(ctx)).toThrow(
+    "Try again after " + new Date(START + 6 * MINUTE).toISOString()
+  )
+  expect(interleaved).toBe(true)
+  expect(ctx.host.http.request).not.toHaveBeenCalled()
+})
+
+it("keeps a hold recorded during a request even when the clock moved back", () => {
+  const ctx = defaultAccountCtx()
+  expectWait(ctx, 5 * MINUTE)
+  vi.advanceTimersByTime(20 * MINUTE)
+  const other = otherAppInstance(ctx)
+  ctx.host.http.request.mockImplementationOnce(() => {
+    vi.setSystemTime(new Date(Date.now() - 10 * MINUTE))
+    expect(() => probe(other)).toThrow(after(10 * MINUTE))
+    return { status: 200, bodyText: "{}" }
+  })
+
+  expect(() => probe(ctx)).not.toThrow()
+  expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
+})
+
+it("keeps the web count when only the overage request is rate limited", () => {
+  const ctx = makeCtx()
+  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
+  ctx.host.http.request.mockImplementation(({ url }) => {
+    if (url.endsWith("/overage_spend_limit")) return { status: 429, bodyText: "" }
+    if (url.endsWith("/organizations")) {
+      return { status: 200, bodyText: JSON.stringify([{ uuid: "org-1", capabilities: ["chat"] }]) }
+    }
+    return { status: 200, bodyText: JSON.stringify({ five_hour: { utilization: 42 } }) }
+  })
+
+  expectWait(ctx, 5 * MINUTE)
+  expectWait(ctx, 10 * MINUTE)
+})
