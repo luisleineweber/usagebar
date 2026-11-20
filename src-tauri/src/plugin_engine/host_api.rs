@@ -17,6 +17,10 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
+/// Sibling of every build's app data dir (installed and dev), so plugins can coordinate state
+/// that belongs to machine-wide accounts across all UsageBar builds of this user.
+const SHARED_DATA_DIR_NAME: &str = "com.sunstory.usagebar.shared";
+
 #[cfg(not(test))]
 type HostAppHandle = tauri::AppHandle;
 #[cfg(test)]
@@ -293,6 +297,31 @@ pub(crate) fn inject_host_api_with_instance_and_cache<'js>(
         "pluginDataDir",
         plugin_data_dir.to_string_lossy().to_string(),
     )?;
+    if capabilities.fs {
+        match app_data_dir.parent() {
+            Some(parent) => {
+                let shared_dir = parent
+                    .join(SHARED_DATA_DIR_NAME)
+                    .join("plugins_data")
+                    .join(plugin_id);
+                if let Err(err) = std::fs::create_dir_all(&shared_dir) {
+                    log::warn!(
+                        "[plugin:{}] failed to create shared plugin data dir: {}",
+                        plugin_id,
+                        err
+                    );
+                }
+                app_obj.set(
+                    "sharedPluginDataDir",
+                    shared_dir.to_string_lossy().to_string(),
+                )?;
+            }
+            None => log::warn!(
+                "[plugin:{}] app data dir has no parent; shared plugin data dir unavailable",
+                plugin_id
+            ),
+        }
+    }
     probe_ctx.set("app", app_obj)?;
 
     let host = Object::new(ctx.clone())?;
@@ -437,6 +466,26 @@ fn inject_fs<'js>(ctx: &Ctx<'js>, host: &Object<'js>) -> rquickjs::Result<()> {
                 let expanded = expand_path(&path);
                 std::fs::write(&expanded, &content)
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))
+            },
+        )?,
+    )?;
+
+    fs_obj.set(
+        "compareAndSwapText",
+        Function::new(
+            ctx.clone(),
+            move |ctx_inner: Ctx<'_>,
+                  path: String,
+                  expected: Option<String>,
+                  next: String|
+                  -> rquickjs::Result<bool> {
+                let expanded = expand_path(&path);
+                crate::plugin_engine::text_cas::compare_and_swap(
+                    Path::new(&expanded),
+                    expected.as_deref(),
+                    &next,
+                )
+                .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))
             },
         )?,
     )?;
@@ -1885,6 +1934,71 @@ mod tests {
             "https://api.example.com/v1/usage",
             &[]
         ));
+    }
+
+    #[test]
+    fn shared_plugin_data_dir_is_common_to_app_builds_and_swapped_by_text() {
+        let root = std::env::temp_dir().join(format!("usagebar-shared-{}", uuid::Uuid::new_v4()));
+        let rt = Runtime::new().expect("runtime");
+        let capabilities = HostCapabilities {
+            fs: true,
+            ..HostCapabilities::default()
+        };
+        let mut shared_dirs = Vec::new();
+        for build in ["com.sunstory.usagebar", "com.sunstory.usagebar.dev"] {
+            let ctx = Context::full(&rt).expect("context");
+            ctx.with(|ctx| {
+                inject_host_api(
+                    &ctx,
+                    "claude",
+                    &root.join(build),
+                    "0.0.0",
+                    None,
+                    &capabilities,
+                )
+                .expect("inject host api");
+                let dir: String = ctx
+                    .eval("__openusage_ctx.app.sharedPluginDataDir")
+                    .expect("shared dir");
+                shared_dirs.push(dir);
+            });
+        }
+        let expected = root
+            .join(SHARED_DATA_DIR_NAME)
+            .join("plugins_data")
+            .join("claude");
+        assert_eq!(shared_dirs[0], expected.to_string_lossy());
+        assert_eq!(shared_dirs[0], shared_dirs[1]);
+        assert!(expected.is_dir());
+
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            inject_host_api(
+                &ctx,
+                "claude",
+                &root.join("app"),
+                "0.0.0",
+                None,
+                &capabilities,
+            )
+            .expect("inject host api");
+            let swaps: Vec<bool> = ctx
+                .eval(
+                    r#"const c = __openusage_ctx;
+                   const path = c.app.sharedPluginDataDir + "/state.json";
+                   [c.host.fs.compareAndSwapText(path, null, "{}"),
+                    c.host.fs.compareAndSwapText(path, null, "[0]"),
+                    c.host.fs.compareAndSwapText(path, "[2]", "[0]"),
+                    c.host.fs.compareAndSwapText(path, "{}", "[1]")]"#,
+                )
+                .expect("compare and swap");
+            assert_eq!(swaps, vec![true, false, false, true]);
+        });
+        assert_eq!(
+            std::fs::read_to_string(expected.join("state.json")).expect("state"),
+            "[1]"
+        );
+        std::fs::remove_dir_all(&root).expect("cleanup");
     }
 
     #[test]

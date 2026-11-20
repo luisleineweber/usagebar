@@ -12,6 +12,7 @@ type ProbeContext = {
     platform: string // OS platform (e.g., "macos")
     appDataDir: string // App data directory
     pluginDataDir: string // Plugin-specific data dir (auto-created)
+    sharedPluginDataDir?: string // Plugin data dir shared by all UsageBar builds (fs capability)
   }
   host: HostApi
 }
@@ -31,8 +32,11 @@ Application metadata:
 | `platform`      | OS platform (e.g., `"macos"`, `"windows"`, `"linux"`)   |
 | `appDataDir`    | App's data directory path                               |
 | `pluginDataDir` | Plugin-specific data directory (auto-created on demand) |
+| `sharedPluginDataDir` | Plugin data directory shared by installed and dev builds (requires `fs`) |
 
 The `pluginDataDir` is unique per plugin (`{appDataDir}/plugins_data/{pluginId}/`) and is automatically created when the plugin runs. Use it to store config files, cached data, or state.
+
+The `sharedPluginDataDir` is `{parent of appDataDir}/com.sunstory.usagebar.shared/plugins_data/{pluginId}/`. Installed and dev builds of the same OS user see the same directory. Use it only for small non-secret coordination state that is keyed by a machine-wide identity, such as a rate-limit hold for a login that every build reads from the same place. Never key it by IDs that exist only in one build's settings or secret store, and never store tokens there. Change it with `compareAndSwapText`, so two builds cannot overwrite each other's decision and a concurrent reader never sees a partial file.
 
 ## Logging
 
@@ -58,6 +62,7 @@ ctx.host.log.error("API request failed: " + error.message)
 host.fs.exists(path: string): boolean
 host.fs.readText(path: string): string   // Throws on error
 host.fs.writeText(path: string, content: string): void  // Throws on error
+host.fs.compareAndSwapText(path: string, expected: string | null, next: string): boolean  // Throws on error
 host.fs.listDir(path: string): string[]  // Throws if directory cannot be opened; per-entry errors are silently skipped
 ```
 
@@ -79,6 +84,10 @@ try {
   throw "Failed to read settings. Check your config."
 }
 ```
+
+### Compare and swap
+
+`compareAndSwapText` replaces the file with `next` only when its current text equals `expected`. Pass `null` as `expected` when the file must not exist yet. It returns `false` and leaves the file unchanged when the text differs. A cross-process lock on the sibling `<name>.lock` file serializes the read, compare, and write, and the replacement is atomic. Use it in a loop: read the file, decide the next text, call `compareAndSwapText`, and read again when it returns `false`. Stop with a visible error after a few attempts.
 
 ### Directory Listing
 

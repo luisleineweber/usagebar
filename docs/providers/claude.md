@@ -158,7 +158,7 @@ Content-Type: application/json
 
 ### HTTP 429 handling
 
-OAuth usage and token refresh responses save separate per-profile retry deadlines in plugin data. Usage holds survive token rotation and credential replacement. Token identity does not prove an account change. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token refresh at most once.
+OAuth usage and token refresh responses save separate per-profile retry deadlines. Usage holds survive token rotation and credential replacement. Token identity does not prove an account change. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token refresh at most once.
 
 A usage hold returns HTTP 429. A refresh hold returns HTTP 429 when the access token is expired or missing. A valid access token can still return OAuth usage during a refresh hold. Both OAuth holds block shared web cookie reads and web requests. An organization can contain multiple users, so an organization match does not prove the same account owns both sessions. UsageBar has no verified user identity binding between the selected OAuth token and the shared web session. It does not join metadata from `~/.claude.json` to a token from another record. Managed profiles never read shared cookies.
 
@@ -168,4 +168,25 @@ Web HTTP 429 responses save a separate per-instance retry deadline. The same Ret
 
 The tray retains successful data within the current session. It does not load the separate usage API disk cache on startup. A first-probe error therefore shows an error card, even if the usage API has an older snapshot. A 429 does not remove session data.
 
-Separate installed and dev instances have separate data directories. Each instance must run this change to enforce its own backoff.
+#### Wait time
+
+Each hold (usage, refresh, and web) counts its own consecutive HTTP 429 responses. The wait is the longer of two values:
+
+- The backoff: 5 minutes for the first 429, then 10, 20, and at most 30 minutes.
+- The Retry-After value, capped at 60 minutes.
+
+Only a success of the same kind resets the count: OAuth usage for the usage hold, a token refresh for the refresh hold, and a web probe whose requests all return without HTTP 429 (including the overage request) for the web hold. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer. A success resets the count only if the hold record is still exactly the record read before the request. A newer record, from this or another build, is kept, even if the clock changed.
+
+#### Sharing between installed and dev builds
+
+The default Claude Code login is machine-wide, so installed and dev builds share its usage and refresh holds. They store them in `{parent of appDataDir}/com.sunstory.usagebar.shared/plugins_data/claude/`. A hold that one build records therefore blocks the other build at startup and on manual refresh.
+
+Managed profiles and the web cookie are stored in the secret store of one build, so their holds stay in that build's plugin data directory.
+
+No credential record carries a verified account identity, and usage holds survive token rotation and credential replacement. If you switch the default Claude Code login during a hold, the new login keeps the hold until its stored end. That end is at most 60 minutes after the hold was recorded.
+
+#### Hold records
+
+A hold record stores `retryAt`, `streak`, and `recordedAt`. It contains no tokens and no account data. Every change reads, decides, and writes the record as one step through `host.fs.compareAndSwapText`, which holds a cross-process file lock. Two builds therefore cannot shorten or clear a hold that the other build has just written.
+
+UsageBar logs and discards a record that is not valid JSON, is not an object, has non-finite times, or ends more than 60 minutes after `recordedAt`. If the system clock moves back during a hold, the remaining wait restarts once from the new time. It does not grow by the size of the clock change. Each update reads the record before it reads the clock, so a record that another build has just written is not mistaken for a clock change.
