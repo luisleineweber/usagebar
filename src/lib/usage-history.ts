@@ -76,6 +76,37 @@ export function entryTotalTokens(entry: UsageHistoryEntry): number | null {
   )
 }
 
+/** Sum authoritative period totals once, without attributing them to a model. */
+export function sumHistoryTokens(records: readonly UsageHistoryRecord[]): number | null {
+  if (!records.length) return null
+  const periodTotals = new Map<string, number>()
+  let total = 0
+  for (const record of records) {
+    if (record.periodTotalTokens !== undefined) {
+      const periodTotal = finiteOrNull(record.periodTotalTokens)
+      if (periodTotal === null) return null
+      const key = JSON.stringify([
+        record.providerId,
+        record.instanceRef,
+        record.source,
+        record.periodStart,
+        record.periodEnd,
+        record.project,
+        record.account,
+      ])
+      const previous = periodTotals.get(key)
+      if (previous !== undefined && previous !== periodTotal) return null
+      periodTotals.set(key, periodTotal)
+    } else {
+      const value = entryTotalTokens(record)
+      if (value === null) return null
+      total += value
+    }
+  }
+  for (const value of periodTotals.values()) total += value
+  return total
+}
+
 function selected(value: string | undefined, allowed: ReadonlySet<string> | null): boolean {
   if (!allowed) return true
   return value !== undefined && allowed.has(value)
@@ -212,6 +243,7 @@ export function filterUsageHistory(
 
       records.push({
         ...entry,
+        periodTotalTokens: models || projects ? undefined : entry.periodTotalTokens,
         providerId: output.providerId,
         instanceRef: output.instanceRef,
         source: output.history.source,
@@ -295,7 +327,7 @@ export function summarizeUsageHistory(
       cacheReadTokens: sumMetric(records, (record) => record.cacheReadTokens),
       cacheCreationTokens: sumMetric(records, (record) => record.cacheCreationTokens),
       reasoningTokens: sumMetric(records, (record) => record.reasoningTokens),
-      totalTokens: sumMetric(records, entryTotalTokens),
+      totalTokens: sumHistoryTokens(records),
     },
     topModel: getTopModel(records),
   }

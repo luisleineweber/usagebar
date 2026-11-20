@@ -2406,7 +2406,7 @@ mod tests {
             ..Default::default()
         };
         let expected_ccusage_package = ccusage_package_spec();
-        assert_eq!(expected_ccusage_package, "ccusage@20.0.19");
+        assert_eq!(expected_ccusage_package, "ccusage@20.0.49");
         let expected_npm_exec_package = format!("--package={expected_ccusage_package}");
         #[cfg(target_os = "windows")]
         let expected_bunx = vec![
@@ -2554,7 +2554,7 @@ mod tests {
             claude_path: None,
             ..Default::default()
         };
-        let expected_claude_package = ccusage_legacy_package_spec(CcusageProvider::Claude);
+        let expected_claude_package = ccusage_legacy_package_spec();
         let expected_npm_exec_package = format!("--package={expected_claude_package}");
         #[cfg(target_os = "windows")]
         let expected_bunx = vec![
@@ -3297,7 +3297,7 @@ Saved lockfile
                 &path,
                 "@echo off\r\n\
                  echo %* > \"%~dp0args.txt\"\r\n\
-                 echo %* | findstr /C:\"20.0.19\" > nul\r\n\
+                 echo %* | findstr /C:\"20.0.49\" > nul\r\n\
                  if %ERRORLEVEL% EQU 0 exit /b 1\r\n\
                  echo {\"daily\":[]}\r\n\
                  exit /b 0\r\n",
@@ -3315,7 +3315,7 @@ Saved lockfile
             let mut file = std::fs::File::create(&path).expect("create runner");
             writeln!(
                 file,
-                "#!/bin/sh\nprintf '%s' \"$*\" > \"$(dirname \"$0\")/args.txt\"\ncase \"$*\" in *20.0.19*) exit 1 ;; esac\nprintf '{{\"daily\":[]}}\\n'\n"
+                "#!/bin/sh\nprintf '%s' \"$*\" > \"$(dirname \"$0\")/args.txt\"\ncase \"$*\" in *20.0.49*) exit 1 ;; esac\nprintf '{{\"daily\":[]}}\\n'\n"
             )
             .expect("write runner");
             let mut perms = std::fs::metadata(&path).expect("metadata").permissions();
@@ -3325,6 +3325,13 @@ Saved lockfile
         };
 
         let opts = CcusageQueryOpts::default();
+        let codex_result = run_ccusage_with_runner_list(
+            &[(CcusageRunnerKind::Npx, runner.to_string_lossy().to_string())],
+            &opts,
+            CcusageProvider::Codex,
+            "codex",
+        );
+        assert_eq!(codex_result, (false, None));
         let result = run_ccusage_with_runner_list(
             &[(CcusageRunnerKind::Npx, runner.to_string_lossy().to_string())],
             &opts,
@@ -3356,7 +3363,7 @@ Saved lockfile
             let first = test_dir.join("first.cmd");
             std::fs::write(
                 &first,
-                "@echo off\r\necho %* | findstr /C:\"ccusage@20.0.19\" > nul\r\nif %ERRORLEVEL% EQU 0 exit /b 1\r\necho {\"daily\":[{\"date\":\"legacy\"}]}\r\n",
+                "@echo off\r\necho %* | findstr /C:\"ccusage@20.0.49\" > nul\r\nif %ERRORLEVEL% EQU 0 exit /b 1\r\necho {\"daily\":[{\"date\":\"legacy\"}]}\r\n",
             )
             .expect("write first runner");
             let second = test_dir.join("second.cmd");
@@ -3374,7 +3381,7 @@ Saved lockfile
             let first = test_dir.join("first.sh");
             std::fs::write(
                 &first,
-                "#!/bin/sh\ncase \"$*\" in *ccusage@20.0.19*) exit 1 ;; esac\nprintf '{\"daily\":[{\"date\":\"legacy\"}]}\\n'\n",
+                "#!/bin/sh\ncase \"$*\" in *ccusage@20.0.49*) exit 1 ;; esac\nprintf '{\"daily\":[{\"date\":\"legacy\"}]}\\n'\n",
             )
             .expect("write first runner");
             let second = test_dir.join("second.sh");

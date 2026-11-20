@@ -170,6 +170,7 @@ export type UsageHistoryEntry = {
   cacheCreationTokens?: number
   reasoningTokens?: number
   totalTokens?: number
+  periodTotalTokens?: number
 }
 
 export type UsageHistory = {

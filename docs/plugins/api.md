@@ -560,14 +560,15 @@ Returns a status envelope:
 
 ### Behavior
 
-- **Runtime runners**: Executes pinned `ccusage@20.0.19` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
+- **Runtime runners**: Executes pinned `ccusage@20.0.49` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
 - **Windows launchers**: Resolves `.exe`, `.cmd`, and `.bat` package-manager launchers from the user's npm application-data directory and `PATH`; a globally installed ccusage version is not used
 - **Cold starts**: Gives each pinned package-runner attempt up to 30 seconds so an initial registry/cache fill is not discarded by the normal warm-start budget
 - **Provider-aware**: Resolves provider from `opts.provider` or the plugin id, including aliases such as `factory` → `droid` and `opencode-go` → `opencode`
 - **Focused commands**: Uses `ccusage <source> daily`; it intentionally does not use `ccusage daily` because that aggregates all detected agents
-- **Legacy fallback**: If `ccusage@20.0.19` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude or `@ccusage/codex@18.0.11` for Codex
+- **Legacy fallback**: If `ccusage@20.0.49` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude. Codex has no legacy fallback because it can undercount spawned subagent usage
 - **No provider API calls**: Usage is computed from local JSONL session files; the host does not call Claude/Codex (or other provider) APIs, but package runners may contact a package registry to download the `ccusage` CLI if it is not already available locally
 - **Graceful degradation**: returns `no_runner` when no runner exists, `runner_failed` when execution fails
+- **Codex limitation**: Independent spawned rollouts with identical usage can be merged and undercounted. See [ccusage issue #2184](https://github.com/ccusage/ccusage/issues/2184).
 - **Pricing**: Uses ccusage's built-in LiteLLM pricing data
 
 ### DailyUsage
@@ -625,3 +626,5 @@ if (result.status === "ok") {
 ## See Also
 
 - [Plugin Schema](./schema.md) - Plugin structure, manifest format, and output schema
+
+History model rows may include `periodTotalTokens` when the provider supplies an authoritative total for the full period. Repeat the same value on all model rows for that period. Use it once for an unfiltered period total; model-filtered totals use the model rows.

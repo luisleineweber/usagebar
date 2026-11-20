@@ -207,7 +207,7 @@ pub(crate) fn history(
         if entries.is_empty() {
             continue;
         }
-        let provider_totals = totals_for(&entries);
+        let provider_totals = totals_for(&entries, true);
         totals.add(&provider_totals);
         providers.push(HistoryProvider {
             provider_id: snapshot.provider_id.clone(),
@@ -268,7 +268,10 @@ pub(crate) fn history(
             section.push_str(" -> ");
             section.push_str(&entry.period_end);
             section.push_str(" | ");
-            section.push_str(&history_metrics(&totals_for(std::slice::from_ref(entry))));
+            section.push_str(&history_metrics(&totals_for(
+                std::slice::from_ref(entry),
+                false,
+            )));
             if let Some(model) = entry.model.as_deref() {
                 section.push_str(" | ");
                 section.push_str(model);
@@ -289,11 +292,15 @@ fn entry_is_in_window(entry: &UsageHistoryEntry, from: OffsetDateTime, to: Offse
     end > from && start <= to
 }
 
-fn totals_for(entries: &[UsageHistoryEntry]) -> UsageHistoryTotals {
+fn totals_for(entries: &[UsageHistoryEntry], use_period_totals: bool) -> UsageHistoryTotals {
     let mut totals = UsageHistoryTotals::default();
     for entry in entries {
         totals.add_entry(entry);
     }
+    totals.set_total_tokens(crate::plugin_engine::runtime::history_total_tokens(
+        entries.iter().map(|entry| ("", entry)),
+        use_period_totals,
+    ));
     totals
 }
 
@@ -477,6 +484,7 @@ mod tests {
                     cache_creation_tokens: None,
                     reasoning_tokens: None,
                     total_tokens: Some(15.0),
+                    period_total_tokens: None,
                 }],
             }),
             fetched_at: "2026-07-10T12:00:00Z".to_string(),
