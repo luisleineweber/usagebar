@@ -70,3 +70,12 @@ and unsaved errors use fixed text. Tests use only synthetic credentials in owned
 - Four new regression cases failed before the fix: refresh versus usage hold routing for expired and valid tokens, and visible main-save and unsaved errors when a hold arrives during the transaction.
 - No request or response fields were added. The existing access-token, refresh-token and expectedAccessToken redaction fields remain in place.
 - Integration validation passed: bun run check, 127 Claude tests, 221 Rust library tests (one live Edge test ignored), frontend build and plugin bundling. All seven Claude source and bundle files match byte for byte. Rust checks used the same generated-sidecar exclusion. The full frontend suite was not repeated.
+
+## Final review correction
+
+- Merged origin/main at daef9df6 without conflicts. The main changes prepare release metadata; they do not change this task's ownership policy.
+- S7: Usage could reject a token with HTTP 401 or 403 before its recorded expiry during a refresh hold. The probe then asked the user to log in again. The final auth-error branch now checks the refresh hold first and reports HTTP 429 with its retry time.
+- Both new regression cases failed with the login error before the one-line fix. Save and unsaved errors still exit earlier and remain visible. OAuth holds still block shared web fallback.
+- S6 remains unchanged. Claude Code imports lose automatic refresh and must be re-imported after expiry. The PR body states this behavior and the pending product decision.
+- No request or response fields were added. Existing host redaction fields remain sufficient. Tests use only synthetic credentials.
+- Validation passed: bun run check; 129 Claude tests with --maxWorkers=1 --no-file-parallelism; 221 Rust library tests, with one live Edge test ignored. The first parallel Claude run timed out during worker startup. Plugin bundling passed, and all seven Claude source/bundle files match byte for byte. Rust checks used the same generated-sidecar exclusion. The full frontend suite and frontend build were not repeated for this one-line correction.

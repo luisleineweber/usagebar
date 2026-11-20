@@ -224,3 +224,30 @@ it.each([
     expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
   }
 )
+
+it.each([401, 403])(
+  "keeps the refresh hold when usage returns HTTP %s before recorded expiry",
+  async (status) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-11-03T13:15:00Z"))
+    vi.resetModules()
+    const ctx = makeCtx()
+    ctx.instanceRef = { providerId: "claude", instanceId: "owned" }
+    const full = document("usagebar")
+    full.claudeAiOauth.expiresAt = Date.now() + 3600000
+    ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(full))
+    ctx.host.providerSecrets.refreshClaudeCredentials = vi.fn()
+    ctx.host.fs.writeText(
+      ctx.app.pluginDataDir + "/rate-limit-refresh-owned.json",
+      JSON.stringify({ retryAt: Date.now() + 600000 })
+    )
+    ctx.host.http.request.mockReturnValue({ status, bodyText: "{}" })
+    const loaded = await plugin()
+    expect(() => loaded.probe(ctx)).toThrow(
+      "Usage request failed (HTTP 429). Try again after 2026-11-03T13:25:00.000Z."
+    )
+    expect(ctx.host.http.request).toHaveBeenCalledOnce()
+    expect(ctx.host.providerSecrets.refreshClaudeCredentials).not.toHaveBeenCalled()
+    expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
+  }
+)

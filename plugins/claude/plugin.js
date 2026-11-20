@@ -1156,6 +1156,7 @@
     }
 
     if (ctx.util.isAuthStatus(resp.status)) {
+      checkRateLimit(ctx, "refresh")
       ctx.host.log.error("usage returned auth error after all retries: status=" + resp.status)
       if (
         creds.source === "managed-profile" &&
