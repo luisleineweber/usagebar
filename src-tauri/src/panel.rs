@@ -2,9 +2,10 @@ use std::sync::{Mutex, OnceLock};
 
 #[cfg(target_os = "windows")]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, PhysicalSize, Position, Size, WebviewWindow,
-};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, Position, Size, WebviewWindow};
+
+use crate::panel_anchor_monitor::{anchor_monitor, cursor_anchor, taskbar_anchor};
+use crate::panel_floating_geometry::PhysicalRect;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos,
@@ -235,12 +236,14 @@ fn logical_window_size(window: &WebviewWindow) -> (f64, f64) {
 fn apply_window_height(window: &WebviewWindow, logical_height: f64) {
     let rounded_height = logical_height.round().max(1.0);
     let (logical_width, _) = logical_window_size(window);
+    let scale_factor = window.scale_factor().ok().unwrap_or(1.0);
     apply_window_bounds(
         window,
         0.0,
         0.0,
         logical_width,
         rounded_height,
+        scale_factor,
         false,
         false,
     );
@@ -314,16 +317,47 @@ fn apply_window_bounds_windows(
     status != 0
 }
 
+/// Move and size the panel to physical `bounds`. The position is left alone
+/// while the user drags the panel.
+pub(crate) fn apply_physical_bounds(window: &WebviewWindow, bounds: PhysicalRect) {
+    let bounds = PhysicalWindowBounds {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+    };
+    let apply_position = !crate::panel_floating::user_move_in_progress();
+
+    #[cfg(target_os = "windows")]
+    if apply_window_bounds_windows(window, bounds, apply_position) {
+        return;
+    }
+
+    if apply_position {
+        let _ = window.set_position(Position::Physical(PhysicalPosition::new(
+            bounds.x, bounds.y,
+        )));
+    }
+    let _ = window.set_size(Size::Physical(PhysicalSize::new(
+        bounds.width,
+        bounds.height,
+    )));
+}
+
+/// Apply logical bounds that were computed in the logical space of the
+/// destination monitor. `scale_factor` must be that monitor's scale, not the
+/// scale of the monitor the window is on now.
+#[allow(clippy::too_many_arguments)]
 fn apply_window_bounds(
     window: &WebviewWindow,
     logical_x: f64,
     logical_y: f64,
     logical_width: f64,
     logical_height: f64,
+    scale_factor: f64,
     apply_position: bool,
     pin_bottom_edge: bool,
 ) {
-    let scale_factor = window.scale_factor().ok().unwrap_or(1.0);
     let bounds = physical_window_bounds(
         logical_x,
         logical_y,
@@ -332,6 +366,34 @@ fn apply_window_bounds(
         scale_factor,
         pin_bottom_edge,
     );
+    apply_anchored_bounds(
+        window,
+        bounds,
+        logical_width,
+        logical_height,
+        apply_position,
+    );
+}
+
+/// Apply physical bounds of an anchored panel, unless the panel floats or the
+/// user drags it.
+fn apply_anchored_bounds(
+    window: &WebviewWindow,
+    bounds: PhysicalWindowBounds,
+    logical_width: f64,
+    logical_height: f64,
+    apply_position: bool,
+) {
+    // A floating panel keeps the user's spot instead of the tray anchor.
+    if let Some(bounds) =
+        crate::panel_floating::floating_bounds(window, logical_width, logical_height)
+    {
+        apply_physical_bounds(window, bounds);
+        return;
+    }
+
+    // Never pull the panel back to the tray while the user drags it.
+    let apply_position = apply_position && !crate::panel_floating::user_move_in_progress();
 
     #[cfg(target_os = "windows")]
     if apply_window_bounds_windows(window, bounds, apply_position) {
@@ -339,8 +401,8 @@ fn apply_window_bounds(
     }
 
     if apply_position {
-        let _ = window.set_position(Position::Logical(LogicalPosition::new(
-            logical_x, logical_y,
+        let _ = window.set_position(Position::Physical(PhysicalPosition::new(
+            bounds.x, bounds.y,
         )));
     }
 
@@ -380,7 +442,10 @@ fn position_panel_at_taskbar(app_handle: &tauri::AppHandle, window: &WebviewWind
     let Some(monitor) = monitor else {
         return;
     };
+    position_panel_at_taskbar_on(window, &monitor);
+}
 
+fn position_panel_at_taskbar_on(window: &WebviewWindow, monitor: &tauri::Monitor) {
     let scale_factor = monitor.scale_factor();
     let work_area = monitor.work_area();
     let work_area_rect = LogicalRect {
@@ -395,11 +460,13 @@ fn position_panel_at_taskbar(app_handle: &tauri::AppHandle, window: &WebviewWind
 
     // Keep the bottom edge anchored while the WebView reports its final content
     // height after the window becomes visible.
-    let anchor_position = Position::Logical(LogicalPosition::new(
-        work_area_rect.x + work_area_rect.width - 24.0,
-        work_area_rect.y + work_area_rect.height,
-    ));
-    let anchor_size = Size::Logical(LogicalSize::new(24.0, 24.0));
+    let (anchor_position, anchor_size) = taskbar_anchor(
+        (
+            f64::from(work_area.position.x) + f64::from(work_area.size.width),
+            f64::from(work_area.position.y) + f64::from(work_area.size.height),
+        ),
+        scale_factor,
+    );
     save_tray_anchor(
         &anchor_position,
         &anchor_size,
@@ -408,7 +475,7 @@ fn position_panel_at_taskbar(app_handle: &tauri::AppHandle, window: &WebviewWind
         )),
     );
 
-    apply_window_bounds(window, x, y, window_w, window_h, true, false);
+    apply_window_bounds(window, x, y, window_w, window_h, scale_factor, true, false);
 }
 
 fn compute_panel_placement(
@@ -456,6 +523,36 @@ fn compute_panel_placement(
     }
 }
 
+/// The physical bounds of an anchored panel, computed in the logical space of
+/// the destination monitor and converted with that monitor's scale. The scale
+/// of the monitor the window is on now plays no part.
+fn anchored_window_bounds(
+    icon_rect: LogicalRect,
+    window_w: f64,
+    window_h: f64,
+    work_area: LogicalRect,
+    vertical_anchor: Option<&VerticalAnchor>,
+    destination_scale: f64,
+) -> (PhysicalWindowBounds, VerticalAnchor) {
+    let placement = compute_panel_placement(
+        icon_rect,
+        window_w,
+        window_h,
+        work_area,
+        Some(window_h),
+        vertical_anchor,
+    );
+    let bounds = physical_window_bounds(
+        placement.x,
+        placement.y,
+        window_w,
+        window_h,
+        destination_scale,
+        matches!(placement.vertical_anchor, VerticalAnchor::Bottom(_)),
+    );
+    (bounds, placement.vertical_anchor)
+}
+
 fn resolved_panel_height(measured_window_h: f64, panel_height_override: Option<f64>) -> f64 {
     panel_height_override
         .filter(|height| height.is_finite() && *height > 0.0)
@@ -473,14 +570,7 @@ fn position_panel_from_anchor(
     let window = app_handle
         .get_webview_window("main")
         .expect("main window should exist");
-    let monitor = match window.current_monitor() {
-        Ok(Some(monitor)) => monitor,
-        Ok(None) => match window.primary_monitor() {
-            Ok(Some(monitor)) => monitor,
-            _ => return None,
-        },
-        Err(_) => return None,
-    };
+    let monitor = anchor_monitor(&window, icon_position, icon_size)?;
 
     let scale_factor = monitor.scale_factor();
     let (icon_x, icon_y) = logical_point(icon_position, scale_factor);
@@ -511,7 +601,7 @@ fn position_panel_from_anchor(
         None
     };
 
-    let placement = compute_panel_placement(
+    let (bounds, vertical_anchor) = anchored_window_bounds(
         LogicalRect {
             x: icon_x,
             y: icon_y,
@@ -519,22 +609,13 @@ fn position_panel_from_anchor(
             height: icon_h,
         },
         window_w,
-        measured_window_h,
-        work_area_rect,
-        Some(target_window_h),
-        taskbar_anchor.as_ref().or(stored_vertical_anchor),
-    );
-
-    apply_window_bounds(
-        &window,
-        placement.x,
-        placement.y,
-        window_w,
         target_window_h,
-        true,
-        matches!(placement.vertical_anchor, VerticalAnchor::Bottom(_)),
+        work_area_rect,
+        taskbar_anchor.as_ref().or(stored_vertical_anchor),
+        scale_factor,
     );
-    Some(placement.vertical_anchor)
+    apply_anchored_bounds(&window, bounds, window_w, target_window_h, true);
+    Some(vertical_anchor)
 }
 
 fn position_panel_near_cursor(app_handle: &AppHandle) -> Option<VerticalAnchor> {
@@ -544,12 +625,9 @@ fn position_panel_near_cursor(app_handle: &AppHandle) -> Option<VerticalAnchor> 
         .ok()
         .flatten()
         .or_else(|| app_handle.primary_monitor().ok().flatten())?;
-    let scale_factor = monitor.scale_factor();
-    let cursor_x = cursor.x / scale_factor;
-    let cursor_y = cursor.y / scale_factor;
-
-    let anchor_size = Size::Logical(LogicalSize::new(24.0, 24.0));
-    let anchor_position = Position::Logical(LogicalPosition::new(cursor_x - 12.0, cursor_y - 12.0));
+    // Physical, so the anchor's monitor is unambiguous with mixed DPI.
+    let (anchor_position, anchor_size) =
+        cursor_anchor((cursor.x, cursor.y), monitor.scale_factor());
     let vertical_anchor = position_panel_from_anchor(
         app_handle,
         &anchor_position,
@@ -570,6 +648,22 @@ pub fn position_panel_at_tray_icon(
     let vertical_anchor =
         position_panel_from_anchor(app_handle, &icon_position, &icon_size, None, None, true);
     save_tray_anchor(&icon_position, &icon_size, vertical_anchor);
+}
+
+/// Place the panel back at its tray anchor, or at the taskbar corner of the
+/// primary monitor (where Windows shows the tray) when no anchor is known yet.
+pub(crate) fn reanchor_panel(app_handle: &AppHandle) {
+    if stored_tray_anchor().is_some() {
+        reposition_panel(app_handle, stored_panel_height());
+        return;
+    }
+    let Some(window) = get_or_init_panel!(app_handle) else {
+        return;
+    };
+    match app_handle.primary_monitor() {
+        Ok(Some(monitor)) => position_panel_at_taskbar_on(&window, &monitor),
+        _ => position_panel_at_taskbar(app_handle, &window),
+    }
 }
 
 pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f64>) {
@@ -594,9 +688,81 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
 #[cfg(test)]
 mod tests {
     use super::{
-        LogicalRect, PhysicalWindowBounds, VerticalAnchor, compute_panel_placement,
-        physical_window_bounds, preferred_tray_vertical_anchor, taskbar_panel_position,
+        LogicalRect, PhysicalWindowBounds, VerticalAnchor, anchored_window_bounds,
+        compute_panel_placement, physical_window_bounds, preferred_tray_vertical_anchor,
+        taskbar_panel_position,
     };
+
+    /// Regression: the tray is on a 100% monitor while the panel is still on a
+    /// 150% monitor. The bounds must use the tray monitor's scale; the old code
+    /// used the window's current 1.5 and placed the panel at (2268, 798).
+    #[test]
+    fn anchored_bounds_use_the_destination_monitor_scale() {
+        let (bounds, _) = anchored_window_bounds(
+            LogicalRect {
+                x: 1780.0,
+                y: 1040.0,
+                width: 40.0,
+                height: 40.0,
+            },
+            400.0,
+            500.0,
+            LogicalRect {
+                x: 0.0,
+                y: 0.0,
+                width: 1920.0,
+                height: 1040.0,
+            },
+            Some(&VerticalAnchor::Bottom(1032.0)),
+            1.0,
+        );
+        assert_eq!(
+            bounds,
+            PhysicalWindowBounds {
+                x: 1512,
+                y: 532,
+                width: 400,
+                height: 500,
+            }
+        );
+    }
+
+    /// Movable off: a cursor anchor on a 150% monitor right of a 100% primary
+    /// lands on the 150% monitor, at its scale.
+    #[test]
+    fn cursor_anchor_on_a_high_dpi_monitor_lands_on_that_monitor() {
+        // Cursor at physical (2400, 600) on a 150% monitor at x 1920..5760.
+        // In that monitor's logical space it is (1600, 400); the anchor rect
+        // is 24x24 logical around it.
+        let (bounds, _) = anchored_window_bounds(
+            LogicalRect {
+                x: 1588.0,
+                y: 388.0,
+                width: 24.0,
+                height: 24.0,
+            },
+            400.0,
+            500.0,
+            LogicalRect {
+                x: 1280.0,
+                y: 0.0,
+                width: 2560.0,
+                height: 1400.0,
+            },
+            None,
+            1.5,
+        );
+        assert_eq!(
+            bounds,
+            PhysicalWindowBounds {
+                x: 2100,
+                y: 630,
+                width: 600,
+                height: 750,
+            }
+        );
+        assert!(bounds.x >= 1920, "the panel stays on the 150% monitor");
+    }
 
     #[test]
     fn cursor_style_anchor_stays_within_work_area() {

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { MouseEvent } from "react"
 import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -10,9 +10,13 @@ const {
   invokeMock,
   openSettingsWindowMock,
   panelFooterMock,
+  panelPlacementState,
   scrollRef,
   sideNavMock,
 } = vi.hoisted(() => ({
+    panelPlacementState: {
+      current: null as { movable: boolean; floating: boolean } | null,
+    },
     scrollRef: { current: null as HTMLDivElement | null },
     appContentMock: vi.fn(),
     invokeMock: vi.fn(),
@@ -43,6 +47,12 @@ vi.mock("@/hooks/app/use-panel", () => ({
     panelHeightPx: 500,
     maxPanelHeightPx: 600,
     isPanelResizing: false,
+  }),
+}))
+vi.mock("@/hooks/app/use-panel-placement", () => ({
+  usePanelPlacement: () => ({
+    placement: panelPlacementState.current,
+    updateMovable: vi.fn(),
   }),
 }))
 vi.mock("@/components/side-nav", () => ({
@@ -135,6 +145,19 @@ describe("AppShell", () => {
     useAppUiStore.getState().setActiveView("codex")
     invokeMock.mockResolvedValue(undefined)
     openSettingsWindowMock.mockResolvedValue(undefined)
+  })
+
+  it("shows the move strip only when the panel is movable", () => {
+    panelPlacementState.current = null
+    renderShell()
+    expect(screen.queryByRole("button", { name: "Move panel" })).toBeNull()
+    cleanup()
+
+    panelPlacementState.current = { movable: true, floating: true }
+    renderShell()
+    expect(screen.getByRole("button", { name: "Move panel" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Return to tray" })).toBeInTheDocument()
+    panelPlacementState.current = null
   })
 
   it("renders panel dimensions and passes the oldest successful update to the footer", () => {
