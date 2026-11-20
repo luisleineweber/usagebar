@@ -107,12 +107,14 @@ pub(crate) fn cursor_anchor(cursor: (f64, f64), scale_factor: f64) -> (Position,
     synthetic_anchor((cursor.0 - half, cursor.1 - half), scale_factor)
 }
 
-/// A physical anchor rect whose top-right corner is the physical bottom-right
-/// corner of a work area.
+/// A physical anchor rect whose bottom-right corner is the physical
+/// bottom-right corner of a work area. The rect lies inside the work area, so
+/// its center selects that monitor even when another monitor sits directly
+/// below.
 pub(crate) fn taskbar_anchor(work_area_corner: (f64, f64), scale_factor: f64) -> (Position, Size) {
     let side = SYNTHETIC_ANCHOR_LOGICAL * scale_factor;
     synthetic_anchor(
-        (work_area_corner.0 - side, work_area_corner.1),
+        (work_area_corner.0 - side, work_area_corner.1 - side),
         scale_factor,
     )
 }
@@ -226,7 +228,7 @@ mod tests {
         let (position, size) = taskbar_anchor((5760.0, 2088.0), 1.5);
         assert_eq!(
             position,
-            Position::Physical(PhysicalPosition::new(5724, 2088))
+            Position::Physical(PhysicalPosition::new(5724, 2052))
         );
         assert_eq!(size, Size::Physical(PhysicalSize::new(36, 36)));
         assert_eq!(
@@ -234,6 +236,33 @@ mod tests {
                 &primary_and_high_dpi_right(),
                 anchor_point(&position, &size)
             ),
+            Some(1)
+        );
+    }
+
+    /// Regression: the work area ends at the monitor's bottom edge and a second
+    /// monitor sits directly below. A rect below the corner had its center on
+    /// the lower monitor, so the next resize moved the panel there.
+    #[test]
+    fn taskbar_anchor_stays_on_its_monitor_with_a_monitor_directly_below() {
+        let stacked = vec![
+            monitor(0, 0, 1920, 1080, 1.0),
+            monitor(0, 1080, 1920, 1080, 1.25),
+        ];
+        let (position, size) = taskbar_anchor((1920.0, 1080.0), 1.0);
+        assert_eq!(
+            position,
+            Position::Physical(PhysicalPosition::new(1896, 1056))
+        );
+        assert_eq!(
+            anchor_monitor_index(&stacked, anchor_point(&position, &size)),
+            Some(0)
+        );
+
+        // The same on the lower monitor at 125%: its work area ends at (1920, 2160).
+        let (position, size) = taskbar_anchor((1920.0, 2160.0), 1.25);
+        assert_eq!(
+            anchor_monitor_index(&stacked, anchor_point(&position, &size)),
             Some(1)
         );
     }

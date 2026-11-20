@@ -326,7 +326,7 @@ pub(crate) fn apply_physical_bounds(window: &WebviewWindow, bounds: PhysicalRect
         width: bounds.width,
         height: bounds.height,
     };
-    let apply_position = !crate::panel_move_tracking::user_move_in_progress();
+    let apply_position = !crate::panel_floating::user_move_in_progress();
 
     #[cfg(target_os = "windows")]
     if apply_window_bounds_windows(window, bounds, apply_position) {
@@ -393,7 +393,7 @@ fn apply_anchored_bounds(
     }
 
     // Never pull the panel back to the tray while the user drags it.
-    let apply_position = apply_position && !crate::panel_move_tracking::user_move_in_progress();
+    let apply_position = apply_position && !crate::panel_floating::user_move_in_progress();
 
     #[cfg(target_os = "windows")]
     if apply_window_bounds_windows(window, bounds, apply_position) {

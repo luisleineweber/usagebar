@@ -22,6 +22,7 @@ mod panel;
 mod panel_anchor_monitor;
 mod panel_floating;
 mod panel_floating_geometry;
+#[cfg(target_os = "windows")]
 mod panel_move_tracking;
 mod panel_placement_store;
 mod plugin_commands;

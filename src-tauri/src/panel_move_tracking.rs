@@ -1,4 +1,6 @@
-//! Native signals for the movable tray panel.
+//! Native signals for the movable tray panel. Windows only: `lib.rs` compiles
+//! this module only for Windows, and other platforms do not offer the movable
+//! panel.
 //!
 //! Windows runs a modal move loop (`WM_ENTERSIZEMOVE` .. `WM_EXITSIZEMOVE`)
 //! only for user moves, never for `SetWindowPos`. A subclass on the panel
