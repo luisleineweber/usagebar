@@ -132,7 +132,22 @@ The profile UUID also scopes cached snapshots, local history, quota notification
 
 ### Token Refresh
 
-Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively on 401/403.
+Direct UsageBar-owned refresh and recovery are Windows-only in this build. Linux and macOS reject before any direct refresh request. The refresh endpoint must use HTTPS.
+
+Claude Code owns credentials from its keychain and local files. UsageBar reads these documents and
+reloads the same source when usage rejects an old access token. It does not refresh or write them.
+Importing a managed profile preserves that ownership. Imports do not create an independent refresh
+chain. When an imported access token expires, run Claude Code and re-import that account. A selected
+managed profile never reads another local login as a fallback.
+
+Direct refresh requires a separate UsageBar-owned managed credential document with
+`usagebarCredentialOwner: "usagebar"`. Missing or unknown ownership stays with Claude Code. Do not add
+this field to a copy of a Claude Code login. This change adds no separate login flow or user setting.
+For explicitly owned documents, refresh runs five minutes before expiry or after an auth response.
+The host serializes each refresh chain across runtimes and UsageBar processes. It preserves the full
+credential document in protected recovery storage before it replaces the main credential. A write
+failure is visible. A later runtime or process replays recovery before it sends another refresh
+request. If recovery storage fails, the host still attempts a verified main-store write. It reports unsaved credentials only if both writes fail. Successful credential removal or replacement cancels pending state. A failed credential deletion keeps the profile available for retry. Other provider writes use the same store lock, and unrelated refresh chains remain available.
 
 ```
 POST https://platform.claude.com/v1/oauth/token
@@ -158,9 +173,9 @@ Content-Type: application/json
 
 ### HTTP 429 handling
 
-OAuth usage and token refresh responses save separate per-profile retry deadlines in plugin data. Usage holds survive token rotation and credential replacement. Token identity does not prove an account change. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token refresh at most once.
+OAuth usage and token refresh responses save separate per-profile retry deadlines in plugin data. Usage holds survive token rotation and credential replacement. Token identity does not prove an account change. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. The minimum delay is five minutes. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token refresh at most once. Native refresh responses use the same refresh hold. Credential-save and unsaved errors remain visible if a hold changes during the transaction.
 
-A usage hold returns HTTP 429. A refresh hold returns HTTP 429 when the access token is expired or missing. A valid access token can still return OAuth usage during a refresh hold. Both OAuth holds block shared web cookie reads and web requests. An organization can contain multiple users, so an organization match does not prove the same account owns both sessions. UsageBar has no verified user identity binding between the selected OAuth token and the shared web session. It does not join metadata from `~/.claude.json` to a token from another record. Managed profiles never read shared cookies.
+A usage hold returns HTTP 429. A refresh hold returns HTTP 429 when the access token is expired or missing, or when OAuth usage rejects it with HTTP 401 or 403 before its recorded expiry. A valid access token can still return OAuth usage during a refresh hold. Both OAuth holds block shared web cookie reads and web requests. An organization can contain multiple users, so an organization match does not prove the same account owns both sessions. UsageBar has no verified user identity binding between the selected OAuth token and the shared web session. It does not join metadata from `~/.claude.json` to a token from another record. Managed profiles never read shared cookies.
 
 The earlier test records with `oauthAccount` embedded beside `claudeAiOauth` were synthetic, not evidence of a real credential format. The authentication documentation does not establish that format or a cross-session user binding. See [Claude Code authentication](https://code.claude.com/docs/en/authentication). No embedded identity or `organizationId` alias is used to authorize web fallback.
 

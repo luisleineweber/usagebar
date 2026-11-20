@@ -86,6 +86,8 @@ pub(super) fn provider_secret_legacy_services(provider_id: &str, secret_key: &st
 }
 
 pub(super) fn delete_provider_secret_service(service: &str) -> Result<(), String> {
+    #[cfg(not(target_os = "windows"))]
+    let _vault_lock = crate::protected_store::lock(std::path::Path::new(""))?;
     let specs = [
         provider_secret_entry_spec(service),
         #[cfg(target_os = "windows")]

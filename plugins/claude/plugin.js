@@ -532,31 +532,6 @@
     }
   }
 
-  function saveCredentials(ctx, source, fullData, secretKey) {
-    // MUST use minified JSON - macOS `security -w` hex-encodes values with newlines,
-    // which Claude Code can't read back, causing it to invalidate the session.
-    const text = JSON.stringify(fullData)
-    if (source === "managed-profile") {
-      try {
-        ctx.host.providerSecrets.write(secretKey, text)
-      } catch (e) {
-        ctx.host.log.error("Failed to write managed Claude credentials: " + String(e))
-      }
-    } else if (source === "file") {
-      try {
-        ctx.host.fs.writeText(CRED_FILE, text)
-      } catch (e) {
-        ctx.host.log.error("Failed to write Claude credentials file: " + String(e))
-      }
-    } else if (source === "keychain") {
-      try {
-        ctx.host.keychain.writeGenericPassword(KEYCHAIN_SERVICE, text)
-      } catch (e) {
-        ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
-      }
-    }
-  }
-
   function needsRefresh(ctx, oauth, nowMs) {
     return ctx.util.needsRefreshByExpiry({
       nowMs,
@@ -572,42 +547,79 @@
   }
 
   function refreshToken(ctx, creds) {
-    const { oauth, source, fullData } = creds
-    if (!oauth.refreshToken) {
+    // Imported copies retain Claude Code's refresh ownership. Only an explicitly
+    // app-owned managed document can rotate here; local credentials stay read-only.
+    if (
+      creds.source !== "managed-profile" ||
+      creds.fullData.usagebarCredentialOwner !== "usagebar"
+    ) {
+      ctx.host.log.info("Claude Code owns credential refresh; reloading the current access token")
+      const current = loadCredentials(ctx)
+      if (
+        current?.source === creds.source &&
+        current.oauth?.accessToken &&
+        current.oauth.accessToken !== creds.oauth.accessToken
+      ) {
+        creds.fullData = current.fullData
+        creds.oauth = current.oauth
+        return current.oauth.accessToken
+      }
+      return null
+    }
+    if (!creds.oauth.refreshToken) {
       ctx.host.log.warn("refresh skipped: no refresh token")
       return null
     }
 
     const retryAt = readRateLimitRetryAt(ctx, "refresh")
     if (retryAt !== null) {
-      if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
+      if (isTokenExpired(creds.oauth)) throw rateLimitMessage(retryAt)
       return null
     }
     const oauthConfig = getOAuthConfig(ctx)
     ctx.host.log.info("attempting token refresh")
+    let result
     try {
-      const resp = checkRateLimitResponse(
-        ctx,
-        ctx.util.request({
-          method: "POST",
-          url: oauthConfig.refreshUrl,
-          headers: { "Content-Type": "application/json" },
-          bodyText: JSON.stringify({
-            grant_type: "refresh_token",
-            refresh_token: oauth.refreshToken,
-            client_id: oauthConfig.clientId,
-            scope: oauthConfig.scopes,
-          }),
-          timeoutMs: 15000,
-        }),
-        "refresh"
+      result = JSON.parse(
+        ctx.host.providerSecrets.refreshClaudeCredentials(
+          JSON.stringify({
+            refreshUrl: oauthConfig.refreshUrl,
+            clientId: oauthConfig.clientId,
+            scopes: oauthConfig.scopes,
+            expectedAccessToken: creds.oauth.accessToken || "",
+          })
+        )
       )
-
+    } catch (e) {
+      // Storage/lock errors must reach the probe. Do not use the old token after
+      // rotation, and do not expose host exception details that may contain secrets.
+      throw "Claude credential refresh failed. " + String(e)
+    }
+    if (result.credentials) {
+      creds.fullData = JSON.parse(result.credentials)
+      creds.oauth = creds.fullData.claudeAiOauth
+      return creds.oauth.accessToken
+    }
+    if (!result.response) {
+      ctx.host.log.error("refresh connection failed")
+      return null
+    }
+    try {
+      const resp = checkRateLimitResponse(ctx, result.response, "refresh")
       if (resp.status === 400 || resp.status === 401) {
         let errorCode = null
         const body = ctx.util.tryParseJson(resp.bodyText)
+        const knownCodes = [
+          "invalid_grant",
+          "invalid_request",
+          "invalid_client",
+          "unauthorized_client",
+          "unsupported_grant_type",
+          "invalid_scope",
+        ]
         if (body) errorCode = body.error || body.error_description
-        ctx.host.log.error("refresh failed: status=" + resp.status + " error=" + String(errorCode))
+        const loggedCode = knownCodes.includes(errorCode) ? errorCode : "unknown"
+        ctx.host.log.error("refresh failed: status=" + resp.status + " error=" + loggedCode)
         if (errorCode === "invalid_grant") {
           throw "Session expired. Run `claude` to log in again."
         }
@@ -629,21 +641,9 @@
         return null
       }
 
-      // Update oauth credentials
-      oauth.accessToken = newAccessToken
-      if (body.refresh_token) oauth.refreshToken = body.refresh_token
-      if (typeof body.expires_in === "number") {
-        oauth.expiresAt = Date.now() + body.expires_in * 1000
-      }
-
-      // Persist updated credentials
-      fullData.claudeAiOauth = oauth
-      saveCredentials(ctx, source, fullData, creds.secretKey)
-
-      ctx.host.log.info(
-        "refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s"
-      )
-      return newAccessToken
+      // Successful token responses are stored by the host before it returns.
+      // A 2xx response without credentials is malformed and cannot replace them.
+      return null
     } catch (e) {
       if (typeof e === "string") throw e
       ctx.host.log.error("refresh exception: " + String(e))
@@ -1073,13 +1073,7 @@
   function probe(ctx) {
     const activeRetryAt = readRateLimitRetryAt(ctx)
     if (activeRetryAt !== null) throw rateLimitMessage(activeRetryAt)
-    try {
-      return probeWithCredentials(ctx)
-    } catch (e) {
-      const retryAt = readRateLimitRetryAt(ctx) ?? readRateLimitRetryAt(ctx, "refresh")
-      if (retryAt === null) throw e
-      throw rateLimitMessage(retryAt)
-    }
+    return probeWithCredentials(ctx)
   }
 
   function probeWithCredentials(ctx) {
@@ -1162,7 +1156,14 @@
     }
 
     if (ctx.util.isAuthStatus(resp.status)) {
+      checkRateLimit(ctx, "refresh")
       ctx.host.log.error("usage returned auth error after all retries: status=" + resp.status)
+      if (
+        creds.source === "managed-profile" &&
+        creds.fullData.usagebarCredentialOwner !== "usagebar"
+      ) {
+        throw "Imported Claude login expired. Run Claude Code, then Re-import this Claude account in Settings."
+      }
       throw "Token expired. Run `claude` to log in again."
     }
 

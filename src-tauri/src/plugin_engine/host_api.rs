@@ -1,3 +1,7 @@
+#[path = "claude_refresh.rs"]
+mod claude_refresh;
+#[path = "claude_refresh_host.rs"]
+mod claude_refresh_host;
 use crate::plugin_engine::browser_bridge;
 use crate::plugin_engine::env::*;
 use crate::plugin_engine::manifest::HostCapabilities;
@@ -268,7 +272,7 @@ pub(crate) fn inject_host_api_with_instance_and_cache<'js>(
 
     probe_ctx.set("nowIso", iso_now())?;
 
-    if let Some(instance_ref) = instance_ref {
+    if let Some(instance_ref) = instance_ref.clone() {
         let instance_obj = Object::new(ctx.clone())?;
         instance_obj.set("providerId", instance_ref.provider_id)?;
         if let Some(instance_id) = instance_ref.instance_id {
@@ -323,6 +327,21 @@ pub(crate) fn inject_host_api_with_instance_and_cache<'js>(
     }
     if capabilities.provider_secrets {
         inject_provider_secrets(ctx, &host, plugin_id, app_data_dir)?;
+        if plugin_id == "claude" && capabilities.http {
+            if let Some(instance) = instance_ref
+                .as_ref()
+                .filter(|instance| instance.provider_id == "claude")
+            {
+                let secrets: Object = host.get("providerSecrets")?;
+                claude_refresh_host::inject(
+                    ctx,
+                    &secrets,
+                    app_data_dir,
+                    instance,
+                    &capabilities.http_domains,
+                )?;
+            }
+        }
     }
     if capabilities.sqlite_read || capabilities.sqlite_write {
         inject_sqlite(ctx, &host, capabilities.sqlite_write)?;
@@ -1455,7 +1474,6 @@ fn inject_provider_secrets<'js>(
     )?;
 
     let pid = plugin_id.to_string();
-    #[cfg(target_os = "windows")]
     let data_dir = _app_data_dir.to_path_buf();
     provider_secrets_obj.set(
         "write",
@@ -1477,37 +1495,9 @@ fn inject_provider_secrets<'js>(
                     ));
                 }
 
-                #[cfg(target_os = "windows")]
-                provider_secret_store::save_provider_secret(
-                    &data_dir,
-                    &pid,
-                    trimmed_key,
-                    trimmed_value,
-                )
-                .map_err(|error| {
-                    Exception::throw_message(
-                        &ctx_inner,
-                        &format!("provider secret store write failed: {}", error),
-                    )
-                })?;
-
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let service = provider_secret_service(&pid, trimmed_key);
-                    let entry = open_provider_secret_entry(provider_secret_entry_spec(&service))
-                        .map_err(|error| {
-                            Exception::throw_message(
-                                &ctx_inner,
-                                &format!("credential store unavailable: {}", error),
-                            )
-                        })?;
-                    entry.set_password(trimmed_value).map_err(|error| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("credential write failed: {}", error),
-                        )
-                    })?;
-                }
+                crate::protected_store::save(&data_dir, &pid, trimmed_key, trimmed_value).map_err(
+                    |_| Exception::throw_message(&ctx_inner, "provider secret store write failed"),
+                )?;
 
                 Ok(())
             },
