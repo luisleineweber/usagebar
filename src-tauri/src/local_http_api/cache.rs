@@ -24,6 +24,9 @@ pub struct CachedPluginSnapshot {
     pub fetched_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub freshness: Option<DataFreshnessGroups>,
+    /// Hashed account key of the output that produced this snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -142,12 +145,27 @@ fn retain_cached_history(
             .unwrap_or_else(|| output.provider_id.clone());
         output.history = snapshots
             .get(&key)
+            .filter(|snapshot| history_matches_account(snapshot.account_key.as_deref(), output))
             .and_then(|snapshot| snapshot.history.clone());
     }
 }
 
+/// Cached history belongs to one account. An account-scoped plugin needs a present,
+/// matching key, because two missing keys do not prove the same account. Other
+/// plugins need an equal key, which is usually no key on both sides.
+fn history_matches_account(cached_key: Option<&str>, output: &PluginOutput) -> bool {
+    let output_key = output.account_key.as_deref();
+    if output.account_scoped {
+        return cached_key.is_some() && cached_key == output_key;
+    }
+    cached_key == output_key
+}
+
 fn history_has_cost(history: &UsageHistory) -> bool {
-    history.entries.iter().any(|entry| entry.cost_usd.is_some())
+    history
+        .entries
+        .iter()
+        .any(|entry| entry.cost_usd.is_some() || entry.charged_cost_usd.is_some())
 }
 
 fn retained_marker(
@@ -184,7 +202,7 @@ fn build_freshness(
         retained_marker(
             previous,
             previous_freshness.and_then(|freshness| freshness.history.as_ref()),
-            previous_history.is_some(),
+            history.is_some(),
         )
     };
     let cost_freshness = if history.is_some_and(history_has_cost) {
@@ -219,6 +237,10 @@ pub fn cache_successful_output(output: &mut PluginOutput) {
         .unwrap_or_default();
 
     let mut state = cache_state().lock().expect("cache state poisoned");
+    cache_output_in_state(&mut state, output, fetched_at);
+}
+
+fn cache_output_in_state(state: &mut CacheState, output: &mut PluginOutput, fetched_at: String) {
     let key = output
         .instance_ref
         .as_ref()
@@ -240,6 +262,7 @@ pub fn cache_successful_output(output: &mut PluginOutput) {
         history: output.history.clone(),
         fetched_at,
         freshness: Some(freshness),
+        account_key: output.account_key.clone(),
     };
 
     state.snapshots.insert(key, snapshot);
@@ -420,6 +443,7 @@ mod tests {
             lines: vec![],
             history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
+            account_key: None,
             freshness: None,
         }
     }
@@ -436,6 +460,7 @@ mod tests {
                 project: None,
                 account: None,
                 cost_usd: None,
+                charged_cost_usd: None,
                 requests: None,
                 input_tokens: None,
                 output_tokens: None,
@@ -464,6 +489,8 @@ mod tests {
             history: None,
             freshness: None,
             setup_detection: None,
+            account_key: None,
+            account_scoped: false,
         };
 
         retain_cached_history(&mut output, &snapshots);
@@ -471,6 +498,113 @@ mod tests {
         let history = output.history.expect("cached history should be retained");
         assert_eq!(history.source, "ccusage");
         assert_eq!(history.entries.len(), 1);
+    }
+
+    fn cursor_output(account_key: Option<&str>) -> PluginOutput {
+        PluginOutput {
+            provider_id: "cursor".to_string(),
+            instance_ref: None,
+            display_name: "Cursor".to_string(),
+            plan: Some("Pro".to_string()),
+            lines: vec![],
+            details: None,
+            icon_url: "cursor.svg".to_string(),
+            error: None,
+            history: None,
+            freshness: None,
+            setup_detection: None,
+            account_key: account_key.map(str::to_string),
+            account_scoped: true,
+        }
+    }
+
+    #[test]
+    fn account_scoped_history_needs_a_present_matching_account_key() {
+        let mut previous = make_snapshot("cursor", "Cursor");
+        previous.history = Some(make_history());
+        previous.account_key = Some("account-a".to_string());
+        previous.freshness = Some(DataFreshnessGroups {
+            quota: None,
+            cost: None,
+            history: Some(DataFreshness::fresh("2026-03-26T07:00:00Z")),
+        });
+        let snapshots = HashMap::from([("cursor".to_string(), previous.clone())]);
+
+        let mut same_account = cursor_output(Some("account-a"));
+        retain_cached_history(&mut same_account, &snapshots);
+        assert!(same_account.history.is_some());
+
+        // Account B signs in while its own history fetch is deferred or rate limited.
+        let mut other_account = cursor_output(Some("account-b"));
+        retain_cached_history(&mut other_account, &snapshots);
+        assert!(other_account.history.is_none());
+        let freshness = build_freshness(
+            &other_account,
+            Some(&previous),
+            false,
+            "2026-03-26T08:15:30Z",
+        );
+        assert!(freshness.history.is_none());
+        assert!(freshness.cost.is_none());
+
+        let mut unknown_account = cursor_output(None);
+        retain_cached_history(&mut unknown_account, &snapshots);
+        assert!(unknown_account.history.is_none());
+
+        // A snapshot from a build without account keys cannot prove the account,
+        // also when the new output has no key either.
+        previous.account_key = None;
+        let legacy = HashMap::from([("cursor".to_string(), previous)]);
+        let mut keyed = cursor_output(Some("account-a"));
+        retain_cached_history(&mut keyed, &legacy);
+        assert!(keyed.history.is_none());
+        let mut keyless = cursor_output(None);
+        retain_cached_history(&mut keyless, &legacy);
+        assert!(keyless.history.is_none());
+    }
+
+    #[test]
+    fn history_of_plugins_without_account_scope_needs_an_equal_account_key() {
+        let mut previous = make_snapshot("codex", "Codex");
+        previous.history = Some(make_history());
+        let snapshots = HashMap::from([("codex".to_string(), previous)]);
+        let output = |account_key: Option<&str>| PluginOutput {
+            provider_id: "codex".to_string(),
+            account_scoped: false,
+            ..cursor_output(account_key)
+        };
+
+        let mut keyless = output(None);
+        retain_cached_history(&mut keyless, &snapshots);
+        assert!(keyless.history.is_some());
+
+        let mut keyed = output(Some("account-a"));
+        retain_cached_history(&mut keyed, &snapshots);
+        assert!(keyed.history.is_none());
+    }
+
+    #[test]
+    fn cached_snapshot_stores_the_output_account_key() {
+        let dir = temp_dir("account-key");
+        std::fs::create_dir_all(&dir).unwrap();
+        // Test-local state: the global cache state is shared with other tests.
+        let mut state = CacheState {
+            snapshots: HashMap::new(),
+            app_data_dir: dir.clone(),
+            known_plugin_ids: vec!["cursor".to_string()],
+        };
+        let mut output = PluginOutput {
+            history: Some(make_history()),
+            ..cursor_output(Some("account-a"))
+        };
+
+        cache_output_in_state(&mut state, &mut output, "2026-03-26T08:15:30Z".to_string());
+
+        let expected = Some("account-a");
+        assert_eq!(state.snapshots["cursor"].account_key.as_deref(), expected);
+        let snapshots = read_cache(&dir).unwrap();
+        assert_eq!(snapshots["cursor"].account_key.as_deref(), expected);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -509,6 +643,8 @@ mod tests {
             history: None,
             freshness: None,
             setup_detection: None,
+            account_key: None,
+            account_scoped: false,
         };
 
         retain_cached_history(&mut output, &snapshots);
@@ -553,6 +689,8 @@ mod tests {
             history: None,
             freshness: None,
             setup_detection: None,
+            account_key: None,
+            account_scoped: false,
         };
         let snapshots = HashMap::from([(previous.provider_id.clone(), previous.clone())]);
         retain_cached_history(&mut output, &snapshots);
@@ -679,6 +817,7 @@ mod tests {
             }],
             history: None,
             fetched_at: "2026-03-26T08:00:00Z".to_string(),
+            account_key: None,
             freshness: None,
         };
 
@@ -729,6 +868,7 @@ mod tests {
             ],
             history: None,
             fetched_at: "2026-03-26T08:00:00Z".to_string(),
+            account_key: None,
             freshness: None,
         };
 

@@ -150,6 +150,13 @@ pub struct PluginOutput {
     pub freshness: Option<DataFreshnessGroups>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub setup_detection: Option<Vec<SetupDetection>>,
+    /// SHA-256 digest of the account identifier that the plugin reported.
+    /// Cached data is reused only for the same account key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_key: Option<String>,
+    /// Copied from the manifest. When true, retained data needs a present, matching account key.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub account_scoped: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -172,8 +179,12 @@ pub struct UsageHistoryEntry {
     pub project: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account: Option<String>,
+    /// Token cost at the model vendor's list price (API rate).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost_usd: Option<f64>,
+    /// Amount the provider charged or deducted from the plan. Never derived from `cost_usd`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub charged_cost_usd: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requests: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -194,6 +205,7 @@ pub struct UsageHistoryEntry {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct UsageHistoryTotals {
     pub(crate) cost_usd: Option<f64>,
+    pub(crate) charged_cost_usd: Option<f64>,
     pub(crate) requests: Option<f64>,
     pub(crate) input_tokens: Option<f64>,
     pub(crate) output_tokens: Option<f64>,
@@ -205,6 +217,8 @@ pub(crate) struct UsageHistoryTotals {
     initialized: bool,
     #[serde(skip)]
     cost_complete: bool,
+    #[serde(skip)]
+    charged_cost_complete: bool,
     #[serde(skip)]
     requests_complete: bool,
     #[serde(skip)]
@@ -226,6 +240,7 @@ impl UsageHistoryTotals {
         if !self.initialized {
             self.initialized = true;
             self.cost_complete = true;
+            self.charged_cost_complete = true;
             self.requests_complete = true;
             self.input_complete = true;
             self.output_complete = true;
@@ -236,6 +251,11 @@ impl UsageHistoryTotals {
         }
 
         add_metric(&mut self.cost_usd, &mut self.cost_complete, entry.cost_usd);
+        add_metric(
+            &mut self.charged_cost_usd,
+            &mut self.charged_cost_complete,
+            entry.charged_cost_usd,
+        );
         add_metric(
             &mut self.requests,
             &mut self.requests_complete,
@@ -287,6 +307,12 @@ impl UsageHistoryTotals {
             &mut self.cost_complete,
             other.cost_usd,
             other.cost_complete,
+        );
+        add_totals(
+            &mut self.charged_cost_usd,
+            &mut self.charged_cost_complete,
+            other.charged_cost_usd,
+            other.charged_cost_complete,
         );
         add_totals(
             &mut self.requests,
@@ -655,6 +681,13 @@ fn run_probe_unstamped(
         };
         let history = parse_history(&result);
         let details = parse_details(&result, &plugin.manifest.detail);
+        let account_key = parse_account_key(&result, &plugin_id);
+        if plugin.manifest.account_scoped && account_key.is_none() {
+            log::warn!(
+                "account-scoped plugin {} returned no accountKey; retained history is not reused",
+                plugin_id
+            );
+        }
 
         let error = lines.iter().find_map(|line| match line {
             MetricLine::Badge { label, text, .. } if label == "Error" => Some(ProbeError {
@@ -676,6 +709,8 @@ fn run_probe_unstamped(
             history,
             freshness: None,
             setup_detection,
+            account_key,
+            account_scoped: plugin.manifest.account_scoped,
         }
     })
 }
@@ -1034,6 +1069,23 @@ fn parse_history(result: &Object<'_>) -> Option<UsageHistory> {
     })
 }
 
+fn parse_account_key(result: &Object<'_>, provider_id: &str) -> Option<String> {
+    match optional_non_empty_string(result, "accountKey") {
+        Ok(Some(raw)) => {
+            let key = crate::plugin_engine::account_key::hash_account_key(provider_id, &raw);
+            if key.is_none() {
+                log::warn!("plugin accountKey is longer than 512 bytes; omitting account key");
+            }
+            key
+        }
+        Ok(None) => None,
+        Err(message) => {
+            log::warn!("{}; omitting account key", message);
+            None
+        }
+    }
+}
+
 fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> {
     let period_start = required_non_empty_string(entry, "periodStart")?;
     let period_end = required_non_empty_string(entry, "periodEnd")?;
@@ -1047,6 +1099,7 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
     let project = optional_non_empty_string(entry, "project")?;
     let account = optional_non_empty_string(entry, "account")?;
     let cost_usd = optional_non_negative_number(entry, "costUsd")?;
+    let charged_cost_usd = optional_non_negative_number(entry, "chargedCostUsd")?;
     let requests = optional_non_negative_number(entry, "requests")?;
     let input_tokens = optional_non_negative_number(entry, "inputTokens")?;
     let output_tokens = optional_non_negative_number(entry, "outputTokens")?;
@@ -1056,6 +1109,7 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
     let total_tokens = optional_non_negative_number(entry, "totalTokens")?;
 
     if cost_usd.is_none()
+        && charged_cost_usd.is_none()
         && requests.is_none()
         && input_tokens.is_none()
         && output_tokens.is_none()
@@ -1074,6 +1128,7 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
         project,
         account,
         cost_usd,
+        charged_cost_usd,
         requests,
         input_tokens,
         output_tokens,
@@ -1502,6 +1557,8 @@ fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput 
         history: None,
         freshness: None,
         setup_detection: None,
+        account_key: None,
+        account_scoped: plugin.manifest.account_scoped,
     }
 }
 
@@ -1592,6 +1649,7 @@ mod tests {
                 platform_support: PlatformSupport::default(),
                 capabilities: HostCapabilities::default(),
                 source_provenance: None,
+                account_scoped: false,
             },
             plugin_dir: PathBuf::from("."),
             entry_script: entry_script.to_string(),
@@ -2161,6 +2219,114 @@ mod tests {
         let history = output.history.expect("valid envelope should remain");
         assert_eq!(history.entries.len(), 1);
         assert_eq!(history.entries[0].total_tokens, Some(42.0));
+    }
+
+    #[test]
+    fn run_probe_keeps_charged_cost_apart_from_list_price_cost() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return {
+                        lines: [{ type: "text", label: "Today", value: "ok" }],
+                        history: {
+                            version: 1,
+                            source: "cursor-usage-events",
+                            timeZone: "UTC",
+                            entries: [
+                                {
+                                    periodStart: "2026-07-10T00:00:00Z",
+                                    periodEnd: "2026-07-11T00:00:00Z",
+                                    costUsd: 2.5,
+                                    chargedCostUsd: 0.4
+                                },
+                                {
+                                    periodStart: "2026-07-10T00:00:00Z",
+                                    periodEnd: "2026-07-11T00:00:00Z",
+                                    chargedCostUsd: 0
+                                },
+                                {
+                                    periodStart: "2026-07-10T00:00:00Z",
+                                    periodEnd: "2026-07-11T00:00:00Z",
+                                    chargedCostUsd: -1
+                                }
+                            ]
+                        }
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("charged-cost"), "0.0.0", None);
+        let history = output.history.as_ref().expect("history");
+        assert_eq!(history.entries.len(), 2);
+        assert_eq!(history.entries[0].cost_usd, Some(2.5));
+        assert_eq!(history.entries[0].charged_cost_usd, Some(0.4));
+        assert_eq!(history.entries[1].cost_usd, None);
+        assert_eq!(history.entries[1].charged_cost_usd, Some(0.0));
+
+        let mut totals = UsageHistoryTotals::default();
+        for entry in &history.entries {
+            totals.add_entry(entry);
+        }
+        assert_eq!(totals.charged_cost_usd, Some(0.4));
+        assert_eq!(totals.cost_usd, None);
+
+        let json: JsonValue = serde_json::to_value(output).expect("serialize");
+        assert_eq!(json["history"]["entries"][0]["chargedCostUsd"], 0.4);
+        assert!(json["history"]["entries"][1].get("costUsd").is_none());
+    }
+
+    #[test]
+    fn run_probe_hashes_the_reported_account_key() {
+        let mut plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    return {
+                        accountKey: " user_abc123 ",
+                        lines: [{ type: "text", label: "Status", value: "ok" }]
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("account-key"), "0.0.0", None);
+        let key = output.account_key.clone().expect("account key");
+        assert_eq!(
+            Some(key.clone()),
+            crate::plugin_engine::account_key::hash_account_key(&plugin.manifest.id, "user_abc123")
+        );
+        let json = serde_json::to_string(&output).expect("serialize");
+        assert!(json.contains(&format!(r#""accountKey":"{key}""#)));
+        assert!(!json.contains("user_abc123"));
+        assert!(!output.account_scoped);
+        assert!(!json.contains("accountScoped"));
+
+        plugin.manifest.account_scoped = true;
+        let scoped = run_probe(&plugin, &temp_app_dir("account-scoped"), "0.0.0", None);
+        assert!(scoped.account_scoped);
+        let json = serde_json::to_string(&scoped).expect("serialize");
+        assert!(json.contains(r#""accountScoped":true"#));
+
+        for invalid in [
+            "accountKey: \"\"",
+            "accountKey: 42",
+            "accountKey: \"x\".repeat(600)",
+        ] {
+            plugin.entry_script = format!(
+                r#"globalThis.__openusage_plugin = {{
+                    probe() {{
+                        return {{ {invalid}, lines: [{{ type: "text", label: "Status", value: "ok" }}] }};
+                    }}
+                }};"#
+            );
+            let output = run_probe(&plugin, &temp_app_dir("invalid-account-key"), "0.0.0", None);
+            assert_eq!(output.account_key, None, "{invalid}");
+            assert_eq!(output.lines.len(), 1, "{invalid}");
+        }
     }
 
     #[test]

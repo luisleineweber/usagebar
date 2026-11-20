@@ -314,6 +314,7 @@ mod tests {
             },
             capabilities: HostCapabilities::default(),
             source_provenance: None,
+            account_scoped: false,
         }
     }
 
