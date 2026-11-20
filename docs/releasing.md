@@ -15,6 +15,7 @@ The published v0.2.0 base is commit `75697e838a2df805fa565d512f4325e4a39c84b6`. 
 Before cutting a tag:
 
 ```bash
+bun run bundle:plugins
 bun run release:check -- --release-tag v0.2.1 --require-clean
 ```
 
@@ -69,10 +70,7 @@ Create a version-specific installer smoke-test record for the combined final v0.
 
 The publish workflow lives in [.github/workflows/publish.yml](../.github/workflows/publish.yml).
 
-You can publish in two ways:
-
-1. Push the verified final commit explicitly to the remote release tag: `git push origin <final-sha>:refs/tags/v0.2.1`. Replace `<final-sha>` with the full verified final commit SHA. Never push the local `v0.2.1` tag.
-2. Trigger `Publish` manually with `workflow_dispatch`, set `release_tag` to `v0.2.1`, and set `ref` to the full verified final commit SHA.
+Push the verified final commit explicitly to the remote release tag: `git push origin <final-sha>:refs/tags/v0.2.1`. Replace `<final-sha>` with the full verified final commit SHA. Never push the local `v0.2.1` tag.
 
 Verify the remote tag target with `git ls-remote --tags origin v0.2.1`. It must match the verified final commit SHA. If the remote tag already points elsewhere, stop and resolve the conflict before publishing. Do not force-push a release tag.
 
@@ -135,7 +133,7 @@ Provider-specific local files such as CLI auth, IDE SQLite databases, browser co
 
 1. Update version metadata in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and the UsageBar package entry in `src-tauri/Cargo.lock`
 2. Add or refresh the matching `CHANGELOG.md` section
-3. Run `bun run release:check -- --release-tag vX.Y.Z --require-clean`
+3. Run `bun run bundle:plugins`, then `bun run release:check -- --release-tag vX.Y.Z --require-clean`
 4. Run `bun run build:release -- --bundles nsis`
-5. Push the verified final commit explicitly to the remote tag, or trigger the publish workflow with that commit as `ref`, as described above; verify the remote tag target
+5. Push the verified final commit explicitly to the remote tag as described above; verify the remote tag target
 6. Confirm the GitHub release has the expected assets
