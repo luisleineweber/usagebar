@@ -102,13 +102,16 @@
     return parsed
   }
 
+  // A missing metric is unknown, not zero. Fail the probe instead of reporting a known total.
   function readCostAmount(result) {
-    if (!result || typeof result !== "object") return 0
     const amount =
-      result.amount && typeof result.amount === "object"
-        ? readNumber(result.amount.value)
-        : readNumber(result.amount)
-    return amount === null ? 0 : amount
+      result && typeof result === "object"
+        ? result.amount && typeof result.amount === "object"
+          ? readNumber(result.amount.value)
+          : readNumber(result.amount)
+        : null
+    if (amount === null) throw "OpenAI cost response has a row without an amount."
+    return amount
   }
 
   function readBuckets(payload) {
@@ -130,10 +133,16 @@
   }
 
   function readUsageResult(result) {
-    if (!result || typeof result !== "object") return null
-    const inputTokens = readNumber(result.input_tokens) || 0
-    const outputTokens = readNumber(result.output_tokens) || 0
-    const requests = readNumber(result.num_model_requests) || readNumber(result.requests) || 0
+    if (!result || typeof result !== "object") {
+      throw "OpenAI usage response has a row that is not an object."
+    }
+    const inputTokens = readNumber(result.input_tokens)
+    const outputTokens = readNumber(result.output_tokens)
+    const modelRequests = readNumber(result.num_model_requests)
+    const requests = modelRequests === null ? readNumber(result.requests) : modelRequests
+    if (inputTokens === null || outputTokens === null || requests === null) {
+      throw "OpenAI usage response has a row without input tokens, output tokens, or requests."
+    }
     const model = readString(result.model) || "unknown"
     return { model, inputTokens, outputTokens, requests }
   }
@@ -148,7 +157,6 @@
       const results = Array.isArray(buckets[i].results) ? buckets[i].results : []
       for (let j = 0; j < results.length; j += 1) {
         const row = readUsageResult(results[j])
-        if (!row) continue
         totals.inputTokens += row.inputTokens
         totals.outputTokens += row.outputTokens
         totals.requests += row.requests
@@ -198,7 +206,6 @@
       const results = Array.isArray(bucket.results) ? bucket.results : []
       for (let j = 0; j < results.length; j += 1) {
         const row = readUsageResult(results[j])
-        if (!row) continue
         const totalTokens = row.inputTokens + row.outputTokens
         if (totalTokens === 0 && row.requests === 0) continue
         entries.push({
