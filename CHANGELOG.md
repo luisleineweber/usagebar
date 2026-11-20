@@ -13,7 +13,6 @@
 - Removed the Claude Designs and Daily Routines bars.
 - Claude OAuth usage and refresh holds never read the shared web cookie or make web requests. A usage hold keeps HTTP 429 visible. A refresh hold skips token refresh; a valid access token can still request OAuth usage, while expired or missing tokens keep HTTP 429 visible. The web session is used only when OAuth credentials are unavailable, no OAuth hold blocks it, and no managed profile is selected.
 - Kept OAuth usage, token refresh, and web HTTP 429 retry deadlines separate. Usage holds survive token rotation and credential replacement.
-- Escaped Claude organization IDs in web usage and overage request paths.
 - Stopped using the Claude organization name as the subscription plan. The plan remains unknown (`null`).
 
 ### Notes
