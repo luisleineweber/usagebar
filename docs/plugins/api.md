@@ -381,14 +381,15 @@ Any token refresh logic (e.g., OAuth refresh) must run inside `probe(ctx)` at th
 
 ### Account key and retained history
 
-When a successful probe result has no `history`, the host and the frontend keep the last valid history. A plugin that can change accounts without a provider instance (for example, the user signs in to another account in the provider app) must return `accountKey`, a stable identifier of the signed-in account:
+When a successful probe result has no `history`, the host and the frontend keep the last valid history. A plugin that can change accounts without a provider instance (for example, the user signs in to another account in the provider app) must set `"accountScoped": true` in `plugin.json` and return `accountKey`, a stable identifier of the signed-in account:
 
 ```js
 return { plan: plan, lines: lines, accountKey: userId }
 ```
 
 - The runtime replaces the value at once with a SHA-256 digest that is scoped to the provider. The raw value never reaches the cache, the frontend, the local HTTP API, or the logs. Use an identifier, never a token or a secret.
-- Retained history is reused only when the account key of the new result is the same as the key of the cached result. A different key, or a key on one side only, drops the retained history.
+- For an account-scoped plugin, retained history is reused only when both the new result and the cached result have an account key and the keys are the same. Two missing keys do not prove the same account, so a result without a key never reuses history. The runtime logs a warning when an account-scoped plugin returns no key.
+- For other plugins, retained history is reused when the keys are equal, which is usually no key on both sides.
 - The value must be a non-empty string of at most 512 bytes. Other values are ignored with a warning.
 
 ## Line Builders

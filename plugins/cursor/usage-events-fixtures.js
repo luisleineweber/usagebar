@@ -85,22 +85,27 @@ export function eventsPage(events, total) {
   return { status: 200, headers: {}, bodyText: JSON.stringify(body) }
 }
 
-export function setup(respondToEvents) {
-  const ctx = makeCtx()
+// Makes the Cursor app state hold an access token for this user.
+export function signInAs(ctx, userId) {
   const token = makeJwt({
-    sub: "auth0|" + USER_ID,
+    sub: "auth0|" + userId,
     exp: Math.floor(Date.now() / 1000) + 24 * 3600,
   })
   ctx.host.sqlite.query.mockImplementation((db, sql) =>
     String(sql).includes("cursorAuth/accessToken") ? JSON.stringify([{ value: token }]) : "[]"
   )
+}
+
+export function setup(respondToEvents) {
+  const ctx = makeCtx()
+  signInAs(ctx, USER_ID)
   const eventRequests = []
   ctx.host.http.request.mockImplementation((opts) => {
     const url = String(opts.url)
     if (url.includes(EVENTS_PATH)) {
       const body = JSON.parse(opts.bodyText)
       eventRequests.push({ opts, body })
-      return respondToEvents(body.page, body)
+      return respondToEvents(body.page, body, opts)
     }
     if (url.includes("GetCurrentPeriodUsage")) {
       return {

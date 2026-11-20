@@ -254,6 +254,10 @@ pub struct PluginManifest {
     pub platform_support: PlatformSupport,
     pub capabilities: HostCapabilities,
     pub source_provenance: Option<SourceProvenance>,
+    /// The plugin reports `accountKey`. Retained data is reused only for a present,
+    /// matching account key.
+    #[serde(default)]
+    pub account_scoped: bool,
 }
 
 #[derive(Debug, Clone)]

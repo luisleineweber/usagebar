@@ -166,6 +166,7 @@ describe("useProbeState", () => {
           iconUrl: "/cursor.svg",
           lines: [{ type: "progress", label: "Total usage", used: 8, limit: 100, format: "percent" }],
           accountKey,
+          accountScoped: true,
           history: probeHistory,
         })
       })
@@ -180,6 +181,38 @@ describe("useProbeState", () => {
     expect(result.current.pluginStates.cursor.lastSettledData?.history).toBeUndefined()
 
     probe(undefined)
+    expect(result.current.pluginStates.cursor.data?.history).toBeUndefined()
+  })
+
+  it("does not reuse keyless history for a keyless account-scoped result", () => {
+    const { result } = renderHook(() => useProbeState({ onProbeResult: vi.fn() }))
+    const history = {
+      version: 1 as const,
+      source: "cursor-usage-events",
+      timeZone: "system-local",
+      entries: [
+        {
+          periodStart: "2026-07-29T00:00:00+02:00",
+          periodEnd: "2026-07-30T00:00:00+02:00",
+          requests: 3,
+        },
+      ],
+    }
+    const probe = (accountScoped: boolean, probeHistory?: typeof history) =>
+      act(() => {
+        result.current.handleProbeResult({
+          providerId: "cursor",
+          displayName: "Cursor",
+          iconUrl: "/cursor.svg",
+          lines: [{ type: "progress", label: "Total usage", used: 8, limit: 100, format: "percent" }],
+          accountScoped,
+          history: probeHistory,
+        })
+      })
+
+    // An older build stored history without an account key.
+    probe(false, history)
+    probe(true)
     expect(result.current.pluginStates.cursor.data?.history).toBeUndefined()
   })
 

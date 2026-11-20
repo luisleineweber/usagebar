@@ -969,6 +969,13 @@
     }
     var nowMs = Date.now()
     var schedule = readHistorySchedule(ctx)
+    if (schedule && schedule.userId !== session.userId) {
+      // Another account signed in. The host drops the retained history of the earlier
+      // account, so its deferral is no longer valid: a later sign-in must fetch again,
+      // also when this account's request fails without a deferral.
+      writeHistorySchedule(ctx, session.userId, nowMs)
+      schedule = null
+    }
     if (isHistoryFetchDeferred(schedule, session.userId, nowMs)) {
       ctx.host.log.info(
         "usage events: next history fetch at " + new Date(schedule.nextFetchAtMs).toISOString() +

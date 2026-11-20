@@ -5,13 +5,21 @@ import type { PluginState } from "@/hooks/app/types"
 
 const MAX_HISTORY_POINTS_PER_PROVIDER = 240
 
-// Usage history belongs to one account. Keep it only while the account key is unchanged.
+// Usage history belongs to one account. An account-scoped provider needs a present,
+// matching key, because two missing keys do not prove the same account.
+function historyMatchesAccount(source: PluginOutput, output: PluginOutput): boolean {
+  if (output.accountScoped) {
+    return source.accountKey !== undefined && source.accountKey === output.accountKey
+  }
+  return source.accountKey === output.accountKey
+}
+
 function retainedUsageHistory(
   existing: PluginState | undefined,
   output: PluginOutput
 ): PluginOutput["history"] {
   for (const source of [existing?.data, existing?.lastSettledData]) {
-    if (source?.history && source.accountKey === output.accountKey) return source.history
+    if (source?.history && historyMatchesAccount(source, output)) return source.history
   }
   return undefined
 }

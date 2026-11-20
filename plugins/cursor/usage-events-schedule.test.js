@@ -8,6 +8,7 @@ import {
   hasTotalUsage,
   loadPlugin,
   setup,
+  signInAs,
   uniqueEvents,
   useUsageEventTestEnvironment,
 } from "./usage-events-fixtures.js"
@@ -157,6 +158,31 @@ describe("cursor usage event history budget and schedule", () => {
     advance(MINUTE_MS)
     expect(plugin.probe(ctx).history.entries).toHaveLength(1)
     expect(eventRequests).toHaveLength(2)
+  })
+
+  it("lets an account fetch again after another account signed in and failed", async () => {
+    const { ctx, eventRequests } = setup((_page, body, opts) =>
+      String(opts.headers.Cookie).includes("user_other")
+        ? { status: 500, bodyText: "{}" }
+        : eventsPage([event()], 1)
+    )
+    const plugin = await loadPlugin()
+
+    expect(plugin.probe(ctx).history.entries).toHaveLength(1)
+
+    // Account B signs in. Its history request fails without a deferral.
+    signInAs(ctx, "user_other")
+    advance(MINUTE_MS)
+    const other = plugin.probe(ctx)
+    expect(other.accountKey).toBe("user_other")
+    expect(other).not.toHaveProperty("history")
+    // The host dropped A's retained history, so A's old deferral must not stay.
+    expect(readSchedule(ctx)).toEqual({ userId: "user_other", nextFetchAtMs: Date.now() })
+
+    signInAs(ctx, USER_ID)
+    advance(MINUTE_MS)
+    expect(plugin.probe(ctx).history.entries).toHaveLength(1)
+    expect(eventRequests).toHaveLength(3)
   })
 
   it.each([

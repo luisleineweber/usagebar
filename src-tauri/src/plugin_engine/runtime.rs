@@ -154,6 +154,9 @@ pub struct PluginOutput {
     /// Cached data is reused only for the same account key.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account_key: Option<String>,
+    /// Copied from the manifest. When true, retained data needs a present, matching account key.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub account_scoped: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -679,6 +682,12 @@ fn run_probe_unstamped(
         let history = parse_history(&result);
         let details = parse_details(&result, &plugin.manifest.detail);
         let account_key = parse_account_key(&result, &plugin_id);
+        if plugin.manifest.account_scoped && account_key.is_none() {
+            log::warn!(
+                "account-scoped plugin {} returned no accountKey; retained history is not reused",
+                plugin_id
+            );
+        }
 
         let error = lines.iter().find_map(|line| match line {
             MetricLine::Badge { label, text, .. } if label == "Error" => Some(ProbeError {
@@ -701,6 +710,7 @@ fn run_probe_unstamped(
             freshness: None,
             setup_detection,
             account_key,
+            account_scoped: plugin.manifest.account_scoped,
         }
     })
 }
@@ -1548,6 +1558,7 @@ fn probe_error_output(plugin: &LoadedPlugin, error: ProbeError) -> PluginOutput 
         freshness: None,
         setup_detection: None,
         account_key: None,
+        account_scoped: plugin.manifest.account_scoped,
     }
 }
 
@@ -1638,6 +1649,7 @@ mod tests {
                 platform_support: PlatformSupport::default(),
                 capabilities: HostCapabilities::default(),
                 source_provenance: None,
+                account_scoped: false,
             },
             plugin_dir: PathBuf::from("."),
             entry_script: entry_script.to_string(),
@@ -2290,6 +2302,14 @@ mod tests {
         let json = serde_json::to_string(&output).expect("serialize");
         assert!(json.contains(&format!(r#""accountKey":"{key}""#)));
         assert!(!json.contains("user_abc123"));
+        assert!(!output.account_scoped);
+        assert!(!json.contains("accountScoped"));
+
+        plugin.manifest.account_scoped = true;
+        let scoped = run_probe(&plugin, &temp_app_dir("account-scoped"), "0.0.0", None);
+        assert!(scoped.account_scoped);
+        let json = serde_json::to_string(&scoped).expect("serialize");
+        assert!(json.contains(r#""accountScoped":true"#));
 
         for invalid in [
             "accountKey: \"\"",

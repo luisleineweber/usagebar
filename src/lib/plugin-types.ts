@@ -147,6 +147,8 @@ export type PluginOutput = {
   history?: UsageHistory
   /** Host-hashed account identifier. Retained data is reused only for the same key. */
   accountKey?: string
+  /** From the manifest. Retained data then needs a present, matching `accountKey`. */
+  accountScoped?: boolean
   freshness?: DataFreshnessGroups
   setupDetection?: SetupDetection[]
 }
