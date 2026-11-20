@@ -7,6 +7,7 @@
   const WORKOS_AUTH_URL = "https://api.workos.com/user_management/authenticate"
   const USAGE_URL = "https://api.factory.ai/api/organization/subscription/usage"
   const TOKEN_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours before expiry
+  const API_KEY_SECRET = "apiKey"
 
   function decodeHexUtf8(hex) {
     try {
@@ -169,6 +170,67 @@
     return null
   }
 
+  // The host reads `category` from a thrown object, so the UI can tell credential
+  // failures from provider or network failures.
+  function probeError(message, category) {
+    const error = new Error(message)
+    error.category = category
+    return error
+  }
+
+  function vaultErrorCategory(message) {
+    return message.toLowerCase().indexOf("credential store unavailable") !== -1
+      ? "credentialUnavailable"
+      : "credentialUnreadable"
+  }
+
+  function withoutSecret(text, secret) {
+    return String(text).split(secret).join("[REDACTED]")
+  }
+
+  // A bearer token must not contain whitespace or control characters.
+  function isHeaderSafeToken(value) {
+    for (let i = 0; i < value.length; i += 1) {
+      const code = value.charCodeAt(i)
+      if (code <= 0x20 || code === 0x7f || /\s/.test(value[i])) return false
+    }
+    return true
+  }
+
+  // Returns the trimmed key, or null when no key is saved. Vault failures stay visible.
+  function loadStoredApiKey(ctx) {
+    const secrets = ctx.host.providerSecrets
+    if (!secrets || typeof secrets.read !== "function") {
+      throw "Provider secrets are unavailable in this build."
+    }
+
+    let value
+    try {
+      value = secrets.read(API_KEY_SECRET)
+    } catch (e) {
+      const message = String((e && e.message) || e || "").trim()
+      if (message.toLowerCase().indexOf("provider secret not found") !== -1) return null
+      ctx.host.log.error("api key read failed: " + message)
+      throw probeError(
+        "Could not read the stored Factory API key from the credential vault: " +
+          message +
+          ". Save it again in Setup, or remove it to use the local droid login.",
+        vaultErrorCategory(message)
+      )
+    }
+
+    if (typeof value !== "string" || !value.trim()) return null
+    const apiKey = value.trim()
+    if (!isHeaderSafeToken(apiKey)) {
+      ctx.host.log.error("stored api key contains whitespace or control characters")
+      throw probeError(
+        "Stored Factory API key is malformed. Save it again in Setup.",
+        "credentialInvalid"
+      )
+    }
+    return apiKey
+  }
+
   function loadAuth(ctx) {
     const fileAuth = loadAuthFromFiles(ctx)
     if (fileAuth) return fileAuth
@@ -316,11 +378,39 @@
     })
   }
 
-  function probe(ctx) {
+  function probeWithApiKey(ctx, apiKey) {
+    ctx.host.log.info("auth source: stored Factory API key")
+    let resp
+    try {
+      resp = fetchUsage(ctx, apiKey)
+    } catch (e) {
+      ctx.host.log.error("usage request exception: " + withoutSecret(e, apiKey))
+      throw "Usage request failed. Check your connection."
+    }
+
+    // An explicit API key is strict: no refresh and no fallback to the local droid login.
+    if (resp.status === 401) {
+      ctx.host.log.error("usage rejected stored api key: status=401")
+      throw probeError(
+        "Factory API key was rejected (HTTP 401). Replace it in Setup, or remove it to use the local droid login.",
+        "credentialInvalid"
+      )
+    }
+    if (resp.status === 403) {
+      ctx.host.log.error("usage denied for stored api key: status=403")
+      throw probeError(
+        "Factory API key cannot read subscription usage (HTTP 403). Use a key with access to this organization, or remove it to use the local droid login.",
+        "credentialInvalid"
+      )
+    }
+    return mapUsageResponse(ctx, resp)
+  }
+
+  function probeWithSession(ctx) {
     const authState = loadAuth(ctx)
     if (!authState) {
       ctx.host.log.error("probe failed: not logged in")
-      throw "Not logged in. No usable Droid session found. Run `droid` to authenticate, then refresh Factory."
+      throw "Not logged in. Save a Factory API key in Setup, or run `droid` to authenticate, then refresh Factory."
     }
 
     const auth = authState.auth
@@ -375,6 +465,69 @@
       throw "Token expired. Run `droid` to log in again."
     }
 
+    return mapUsageResponse(ctx, resp)
+  }
+
+  function isPlainObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+  }
+
+  function isTokenCount(value) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0
+  }
+
+  function invalidResponse(ctx, logMessage, message) {
+    ctx.host.log.error(logMessage)
+    return probeError(message, "providerResponse")
+  }
+
+  function tokenProgressLine(ctx, label, bucket, resetsAt, periodDurationMs) {
+    // An absent bucket means the plan does not include it.
+    if (bucket === undefined || bucket === null) return null
+    if (!isPlainObject(bucket)) {
+      throw invalidResponse(
+        ctx,
+        "usage " + label + " bucket is not an object",
+        "Usage response invalid: the " + label + " bucket is malformed. Try again later."
+      )
+    }
+
+    const limit = bucket.totalAllowance
+    if (!isTokenCount(limit)) {
+      throw invalidResponse(
+        ctx,
+        "usage " + label + " bucket has no valid totalAllowance",
+        "Usage response invalid: the " + label + " allowance is not a token count. Try again later."
+      )
+    }
+    // An explicit zero allowance means the plan has no quota for this bucket.
+    if (limit === 0) return null
+
+    const used = bucket.orgTotalTokensUsed
+    if (!isTokenCount(used)) {
+      throw invalidResponse(
+        ctx,
+        "usage " + label + " allowance has no valid orgTotalTokensUsed",
+        "Usage response missing token counts. Try again later."
+      )
+    }
+
+    return ctx.line.progress({
+      label: label,
+      used: used,
+      limit: limit,
+      format: { kind: "count", suffix: "tokens" },
+      resetsAt: resetsAt,
+      periodDurationMs: periodDurationMs,
+    })
+  }
+
+  function mapUsageResponse(ctx, resp) {
+    if (resp.status === 429) {
+      ctx.host.log.warn("usage rate limited: status=429")
+      throw "Factory rate limit reached (HTTP 429). Try again later."
+    }
+
     if (resp.status < 200 || resp.status >= 300) {
       ctx.host.log.error("usage returned error: status=" + resp.status)
       throw "Usage request failed (HTTP " + String(resp.status) + "). Try again later."
@@ -383,16 +536,22 @@
     ctx.host.log.info("usage fetch succeeded")
 
     const data = ctx.util.tryParseJson(resp.bodyText)
-    if (data === null) {
-      throw "Usage response invalid. Try again later."
+    if (!isPlainObject(data)) {
+      throw invalidResponse(
+        ctx,
+        "usage body is not a JSON object",
+        "Usage response invalid. Try again later."
+      )
     }
 
     const usage = data.usage
-    if (!usage) {
-      throw "Usage response missing data. Try again later."
+    if (!isPlainObject(usage)) {
+      throw invalidResponse(
+        ctx,
+        "usage response has no usage object",
+        "Usage response missing data. Try again later."
+      )
     }
-
-    const lines = []
 
     // Calculate reset time and period from usage dates
     const endDate = usage.endDate
@@ -401,45 +560,25 @@
     const periodDurationMs =
       typeof endDate === "number" && typeof startDate === "number" ? endDate - startDate : null
 
-    // Standard tokens (primary line)
-    const standard = usage.standard
-    if (standard && typeof standard.totalAllowance === "number" && standard.totalAllowance > 0) {
-      const used = standard.orgTotalTokensUsed || 0
-      const limit = standard.totalAllowance
-      lines.push(
-        ctx.line.progress({
-          label: "Standard",
-          used: used,
-          limit: limit,
-          format: { kind: "count", suffix: "tokens" },
-          resetsAt: resetsAt,
-          periodDurationMs: periodDurationMs,
-        })
-      )
-    }
-
-    // Premium tokens (detail line, only if plan includes premium)
-    const premium = usage.premium
-    if (premium && typeof premium.totalAllowance === "number" && premium.totalAllowance > 0) {
-      const used = premium.orgTotalTokensUsed || 0
-      const limit = premium.totalAllowance
-      lines.push(
-        ctx.line.progress({
-          label: "Premium",
-          used: used,
-          limit: limit,
-          format: { kind: "count", suffix: "tokens" },
-          resetsAt: resetsAt,
-          periodDurationMs: periodDurationMs,
-        })
-      )
-    }
+    const lines = []
+    const standard = tokenProgressLine(ctx, "Standard", usage.standard, resetsAt, periodDurationMs)
+    if (standard) lines.push(standard)
+    // Premium is a detail line and appears only when the plan includes premium tokens.
+    const premium = tokenProgressLine(ctx, "Premium", usage.premium, resetsAt, periodDurationMs)
+    if (premium) lines.push(premium)
 
     if (lines.length === 0) {
       lines.push(ctx.line.badge({ label: "Status", text: "No usage data", color: "#a3a3a3" }))
     }
 
     return { plan: null, lines: lines }
+  }
+
+  // Precedence: a saved API key is an explicit choice and wins over the local droid login.
+  function probe(ctx) {
+    const apiKey = loadStoredApiKey(ctx)
+    if (apiKey) return probeWithApiKey(ctx, apiKey)
+    return probeWithSession(ctx)
   }
 
   function addCcusageHistory(ctx, result) {

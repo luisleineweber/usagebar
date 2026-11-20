@@ -961,7 +961,7 @@ describe("factory plugin", () => {
           startDate: "n/a",
           endDate: "n/a",
           standard: {
-            // Missing orgTotalTokensUsed should fall back to 0
+            // A zero allowance means no quota, so the missing used count is not read.
             totalAllowance: 0,
           },
           premium: {

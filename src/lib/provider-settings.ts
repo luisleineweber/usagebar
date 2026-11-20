@@ -1,4 +1,5 @@
 import { LazyStore } from "@tauri-apps/plugin-store"
+import { isWindowsPlatform } from "@/lib/platform"
 
 export type ProviderSourceMode = "auto" | "manual"
 
@@ -66,6 +67,11 @@ export type ProviderSettingsDefinition = {
     label: string
     description: string
     placeholder: string
+    /**
+     * Single-line token, such as an API key: entry is masked on screen.
+     * Omit for multi-line values, such as a Cookie header.
+     */
+    masked?: boolean
   }
   additionalSecretField?: {
     key: string
@@ -249,14 +255,22 @@ const PROVIDER_SETTINGS_DEFINITIONS = {
     },
   },
   factory: {
-    mode: "detected",
+    mode: "editable",
     title: "Factory Setup",
     summary:
-      "Reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it automatically.",
+      "Uses a stored Factory API key when one is saved. Otherwise reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it automatically.",
     statusHint:
-      "Run `droid` so ~/.factory/auth.v2.file plus ~/.factory/auth.v2.key exists before launching UsageBar. Legacy auth.encrypted and auth.json still work.",
+      "A saved API key takes precedence over the local droid login. Remove the key to use ~/.factory/auth.v2.file plus ~/.factory/auth.v2.key again.",
     connectHint:
-      "Install the Factory CLI (`droid`), sign in, restart UsageBar if needed, then retry.",
+      "Save a Factory API key here, or install the Factory CLI (`droid`) and sign in, then retry.",
+    secretField: {
+      key: "apiKey",
+      label: "API key",
+      description:
+        "Optional. Paste a Factory API key for an account without a local droid login. UsageBar stores it in the app credential vault and sends it only to api.factory.ai. While a key is saved, UsageBar does not use the local droid login.",
+      placeholder: "fk-...",
+      masked: true,
+    },
   },
   gemini: {
     mode: "automatic",
@@ -811,7 +825,26 @@ export function hasProviderSettingsDefinition(providerId: string): boolean {
   return providerId in PROVIDER_SETTINGS_DEFINITIONS
 }
 
-export function getProviderSettingsDefinition(providerId: string): ProviderSettingsDefinition {
+/**
+ * Factory without the API key field. App secret storage works only through the
+ * Windows-protected store in this build: the keyring crate has no native macOS or Linux
+ * backend, so a saved key cannot be read back there.
+ */
+const FACTORY_LOCAL_LOGIN_DEFINITION: ProviderSettingsDefinition = {
+  mode: "detected",
+  title: "Factory Setup",
+  summary:
+    "Reads WorkOS-backed auth from the local droid auth store or keychain and refreshes it automatically.",
+  statusHint: "Run `droid` so ~/.factory/auth.v2.file plus ~/.factory/auth.v2.key exists.",
+  connectHint:
+    "Install the Factory CLI (`droid`), sign in, then retry. Factory API keys can be stored only in the Windows app.",
+}
+
+export function getProviderSettingsDefinition(
+  providerId: string,
+  windows: boolean = isWindowsPlatform()
+): ProviderSettingsDefinition {
+  if (providerId === "factory" && !windows) return FACTORY_LOCAL_LOGIN_DEFINITION
   return (
     PROVIDER_SETTINGS_DEFINITIONS[providerId as keyof typeof PROVIDER_SETTINGS_DEFINITIONS] ?? {
       mode: "automatic",
@@ -927,6 +960,8 @@ export function getProviderSourceLabel(
     return config?.secrets?.apiKey ? "Stored MiniMax API key" : "MiniMax API key/env"
   if (providerId === "amp")
     return config?.secrets?.apiKey ? "Stored Amp API key" : "Amp CLI credentials"
+  if (providerId === "factory")
+    return config?.secrets?.apiKey ? "Stored Factory API key" : "Local droid login"
   if (providerId === "copilot")
     return config?.workspaceId ? "GitHub auth + billing scope" : "GitHub auth"
   if (providerId === "claude")
