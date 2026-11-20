@@ -432,3 +432,58 @@ it("keeps the refresh hold visible when usage rejects a valid token during the h
   )
   expect(calls).toEqual({ usage: 1, refresh: 0 })
 })
+
+it.each([
+  ["a past timestamp string", () => String(Date.now() - 1000), "Token expired. Run `claude`"],
+  ["an invalid timestamp string", () => "soon", "Invalid token: Claude rejected the sign-in"],
+  ["an empty timestamp string", () => "", "Invalid token: Claude rejected the sign-in"],
+])("classifies a 401 for a saved expiresAt with %s", async (_label, expiresAt, message) => {
+  const ctx = makeClaudeCtx({ expiresAt: expiresAt(), refreshToken: null })
+  routeRequests(ctx, { usage: { status: 401, bodyText: "" }, refresh: USAGE_OK })
+
+  expect(await probe(ctx)).toThrow(message)
+})
+
+it.each([
+  ["an object", { toString: "invalid" }],
+  ["a string with a newline", "3600\ninjected"],
+  ["a negative number", -5],
+])(
+  "saves a refreshed token with unknown expiry when expires_in is %s",
+  async (_label, lifetime) => {
+    const credPath = "~/.claude/.credentials.json"
+    const ctx = makeCtx()
+    ctx.host.fs.writeText(
+      credPath,
+      JSON.stringify({
+        claudeAiOauth: { accessToken: "token", refreshToken: "refresh", expiresAt: Date.now() - 1 },
+      })
+    )
+    const calls = routeRequests(ctx, {
+      usage: USAGE_OK,
+      refresh: {
+        status: 200,
+        bodyText: JSON.stringify({ access_token: "token2", expires_in: lifetime }),
+      },
+    })
+
+    expect(await probe(ctx)).not.toThrow()
+    expect(calls).toEqual({ usage: 1, refresh: 1 })
+    expect(JSON.parse(ctx.host.fs.readText(credPath)).claudeAiOauth).toMatchObject({
+      accessToken: "token2",
+      expiresAt: null,
+    })
+    const logged = ctx.host.log.info.mock.calls.map(([line]) => line)
+    expect(logged).toContain("refresh succeeded, new token lifetime: unknown")
+    expect(logged.join("\n")).not.toContain("injected")
+  }
+)
+
+it("reports a configuration error when refreshUrl is not a string", async () => {
+  const ctx = makeClaudeCtx({ expiresAt: Date.now() - 1 })
+  withOAuthConfig(ctx, ["https://platform.claude.com/v1/oauth/token"])
+  const calls = routeRequests(ctx, { usage: USAGE_OK, refresh: USAGE_OK })
+
+  expect(await probe(ctx)).toThrow("Claude OAuth config invalid: refreshUrl must use https on")
+  expect(calls).toEqual({ usage: 0, refresh: 0 })
+})

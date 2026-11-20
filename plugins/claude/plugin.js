@@ -589,10 +589,25 @@
     })
   }
 
+  // One conversion for saved expiry times: a finite number or a non-empty numeric string in
+  // unix milliseconds. Any other value is unknown (null).
+  function parseExpiresAtMs(value) {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null
+    if (typeof value !== "string" || !value.trim()) return null
+    const expiresAt = Number(value)
+    return Number.isFinite(expiresAt) ? expiresAt : null
+  }
+
+  // Refresh holds treat an unknown expiry as expired.
   function isTokenExpired(oauth) {
-    if (oauth?.expiresAt === null || oauth?.expiresAt === undefined) return true
-    const expiresAt = Number(oauth.expiresAt)
-    return !Number.isFinite(expiresAt) || Date.now() >= expiresAt
+    const expiresAt = parseExpiresAtMs(oauth?.expiresAt)
+    return expiresAt === null || Date.now() >= expiresAt
+  }
+
+  // A usage HTTP 401 confirms expiry only for a known expiry time that has passed.
+  function isExpiryConfirmed(expiresAtValue) {
+    const expiresAt = parseExpiresAtMs(expiresAtValue)
+    return expiresAt !== null && Date.now() >= expiresAt
   }
 
   function logLabel(value, knownValues) {
@@ -601,7 +616,8 @@
   }
 
   function isAllowedRefreshUrl(url) {
-    const match = /^https:\/\/([^/?#@:]+)(?::(\d{1,5}))?(?:[/?#]|$)/i.exec(String(url))
+    if (typeof url !== "string") return false
+    const match = /^https:\/\/([^/?#@:]+)(?::(\d{1,5}))?(?:[/?#]|$)/i.exec(url)
     if (!match || ALLOWED_REFRESH_DOMAINS.indexOf(match[1].toLowerCase()) === -1) return false
     if (match[2] === undefined) return true
     const port = Number(match[2])
@@ -698,20 +714,22 @@
       }
     }
 
+    // Validate the lifetime before any other use. The old expiry belongs to the old token, so
+    // without a usable lifetime the new expiry is unknown.
+    const lifetimeSeconds =
+      Number.isFinite(body.expires_in) && body.expires_in > 0 ? body.expires_in : null
+    const expiresAt = lifetimeSeconds === null ? null : Date.now() + lifetimeSeconds * 1000
+
     oauth.accessToken = newAccessToken
     if (body.refresh_token) oauth.refreshToken = body.refresh_token
-    // The old expiry belongs to the old token. Without a usable lifetime the new expiry is unknown.
-    const expiresAt =
-      Number.isFinite(body.expires_in) && body.expires_in > 0
-        ? Date.now() + body.expires_in * 1000
-        : null
     oauth.expiresAt = expiresAt
 
     fullData.claudeAiOauth = oauth
     saveCredentials(ctx, source, fullData, creds.secretKey)
 
     ctx.host.log.info(
-      "refresh succeeded, new token expires in " + (body.expires_in || "unknown") + "s"
+      "refresh succeeded, new token lifetime: " +
+        (lifetimeSeconds === null ? "unknown" : String(lifetimeSeconds) + "s")
     )
     return { kind: "refreshed", accessToken: newAccessToken, expiresAt }
   }
@@ -1225,7 +1243,7 @@
     let refreshProblem = null
 
     function tokenExpired() {
-      return typeof tokenExpiresAt === "number" && tokenExpiresAt <= Date.now()
+      return isExpiryConfirmed(tokenExpiresAt)
     }
 
     // Each probe refreshes at most once. A failed or rejected refresh is kept while the current
