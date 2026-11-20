@@ -278,6 +278,28 @@ describe("openai-api plugin", () => {
     ])
   })
 
+  it("keeps an all-zero usage row so period totals are zero, not unknown", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-07-31T12:00:00.000Z"
+    setEnv(ctx, { OPENAI_ADMIN_API_KEY: "admin-key" })
+    mockPayloads(
+      ctx,
+      [{ amount: { value: 0, currency: "usd" } }],
+      [{ model: "gpt-5", input_tokens: 0, output_tokens: 0, num_model_requests: 0 }]
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const outputs = [{ providerId: "openai-api", history: result.history }]
+    const nowMs = Date.parse(ctx.nowIso)
+
+    for (const period of ["weekToDate", "monthToDate"]) {
+      expect(
+        summarizeUsageHistory(outputs, { period, nowMs, timeZone: "UTC" }).totals
+      ).toMatchObject({ costUsd: 0, totalTokens: 0, requests: 0 })
+    }
+  })
+
   it("keeps the 30-day request window when it already covers the month start", async () => {
     const ctx = makeCtx()
     ctx.nowIso = "2026-07-10T12:00:00.000Z"

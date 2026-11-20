@@ -207,7 +207,6 @@
       for (let j = 0; j < results.length; j += 1) {
         const row = readUsageResult(results[j])
         const totalTokens = row.inputTokens + row.outputTokens
-        if (totalTokens === 0 && row.requests === 0) continue
         entries.push({
           ...period,
           scope: "usage",
