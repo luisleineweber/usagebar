@@ -192,6 +192,20 @@ pub(crate) fn http_body_log_preview(body: &str, credential_values: &[String]) ->
     format!("{}... ({} bytes total)", truncated, body.len())
 }
 
+/// Log text for an HTTP response body. Text redaction cannot mask a short echoed
+/// credential, so a plugin can turn the preview off for a credential-bearing request.
+pub(crate) fn http_response_log_preview(
+    body: &str,
+    credential_values: &[String],
+    log_body: bool,
+) -> String {
+    if log_body {
+        http_body_log_preview(body, credential_values)
+    } else {
+        format!("[response body not logged, {} bytes]", body.len())
+    }
+}
+
 /// Lightweight redaction for plugin log messages (JWT + API key patterns only).
 pub(crate) fn redact_log_message(msg: &str) -> String {
     let mut result = msg.to_string();

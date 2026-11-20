@@ -3,6 +3,8 @@ import { makeCtx } from "../test-helpers.js"
 
 const USAGE_URL = "https://api.factory.ai/api/organization/subscription/usage?useCache=true"
 const API_KEY = "fk-test-0123456789abcdef"
+// Seven characters: shorter than the host's echoed-credential redaction minimum.
+const SHORT_KEY = "fk-a1b2"
 
 const loadPlugin = async () => {
   await import("./plugin.js")
@@ -201,19 +203,44 @@ describe("factory API key source", () => {
     expect(ctx.host.http.request).toHaveBeenCalledTimes(1)
   })
 
-  it("keeps a network failure out of the credential categories and masks the key in its log", async () => {
+  it("keeps a network failure out of the credential categories and logs only a fixed message", async () => {
     const ctx = makeCtx()
-    storeApiKey(ctx, API_KEY)
+    storeApiKey(ctx, SHORT_KEY)
     ctx.host.http.request.mockImplementation(() => {
-      throw new Error(`connect failed for Bearer ${API_KEY}`)
+      throw new Error(`connect failed for Bearer ${SHORT_KEY}`)
     })
 
     const plugin = await loadPlugin()
     const error = thrown(() => plugin.probe(ctx))
     expect(String(error)).toContain("Usage request failed. Check your connection.")
     expect(error.category).toBeUndefined()
-    expect(allLogText(ctx)).toContain("connect failed for Bearer [REDACTED]")
-    expect(allLogText(ctx)).not.toContain(API_KEY)
+    expect(allLogText(ctx)).toContain("usage request with stored api key failed before a response")
+    expect(allLogText(ctx)).not.toContain("connect failed")
+    expect(allLogText(ctx)).not.toContain(SHORT_KEY)
+  })
+
+  it("turns off the host response log for API key requests only", async () => {
+    const ctx = makeCtx()
+    writeLocalSession(ctx)
+    storeApiKey(ctx, SHORT_KEY)
+    ctx.host.http.request.mockReturnValue({
+      status: 401,
+      headers: {},
+      bodyText: JSON.stringify({ detail: `invalid key ${SHORT_KEY}` }),
+    })
+    const plugin = await loadPlugin()
+
+    const error = thrown(() => plugin.probe(ctx))
+    expect(error.category).toBe("credentialInvalid")
+    expect(String(error)).not.toContain(SHORT_KEY)
+    expect(ctx.host.http.request.mock.calls[0][0].logResponseBody).toBe(false)
+    expect(allLogText(ctx)).not.toContain(SHORT_KEY)
+
+    // The local droid login keeps the redacted response preview.
+    missingSecret(ctx)
+    ctx.host.http.request.mockReturnValue(usageResponse(USAGE))
+    plugin.probe(ctx)
+    expect(ctx.host.http.request.mock.calls[1][0].logResponseBody).toBe(true)
   })
 
   it("returns to the local droid login after the key is removed", async () => {
@@ -300,6 +327,8 @@ describe("factory API key source", () => {
     ["a string usage", JSON.stringify({ usage: "unavailable" })],
     ["a string bucket", JSON.stringify({ usage: { ...USAGE, standard: "n/a" } })],
     ["an array bucket", JSON.stringify({ usage: { ...USAGE, premium: [] } })],
+    ["a null standard bucket", JSON.stringify({ usage: { standard: null } })],
+    ["a null premium bucket", JSON.stringify({ usage: { ...USAGE, premium: null } })],
     [
       "a string allowance",
       JSON.stringify({

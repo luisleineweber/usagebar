@@ -184,10 +184,6 @@
       : "credentialUnreadable"
   }
 
-  function withoutSecret(text, secret) {
-    return String(text).split(secret).join("[REDACTED]")
-  }
-
   // A bearer token must not contain whitespace or control characters.
   function isHeaderSafeToken(value) {
     for (let i = 0; i < value.length; i += 1) {
@@ -363,7 +359,9 @@
     }
   }
 
-  function fetchUsage(ctx, accessToken) {
+  // logResponseBody: false keeps the response out of the host log. A provider can echo
+  // a submitted API key, and text redaction cannot mask a short key.
+  function fetchUsage(ctx, accessToken, logResponseBody) {
     const url = USAGE_URL + "?useCache=true"
     return ctx.util.request({
       method: "GET",
@@ -375,6 +373,7 @@
         "User-Agent": "OpenUsage",
       },
       timeoutMs: 10000,
+      logResponseBody: logResponseBody !== false,
     })
   }
 
@@ -382,9 +381,10 @@
     ctx.host.log.info("auth source: stored Factory API key")
     let resp
     try {
-      resp = fetchUsage(ctx, apiKey)
-    } catch (e) {
-      ctx.host.log.error("usage request exception: " + withoutSecret(e, apiKey))
+      resp = fetchUsage(ctx, apiKey, false)
+    } catch {
+      // The exception text is not logged: it can contain request details.
+      ctx.host.log.error("usage request with stored api key failed before a response")
       throw "Usage request failed. Check your connection."
     }
 
@@ -482,8 +482,9 @@
   }
 
   function tokenProgressLine(ctx, label, bucket, resetsAt, periodDurationMs) {
-    // An absent bucket means the plan does not include it.
-    if (bucket === undefined || bucket === null) return null
+    // Only an omitted bucket means the plan does not include it. JSON cannot carry
+    // `undefined`, so a present `null` bucket is malformed.
+    if (bucket === undefined) return null
     if (!isPlainObject(bucket)) {
       throw invalidResponse(
         ctx,

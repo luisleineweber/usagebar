@@ -61,14 +61,14 @@ Returns token usage for the current billing period. UsageBar sends the same requ
 
 UsageBar does not infer a Factory subscription name from token allowances. The endpoint currently exposes usage buckets, not a stable public plan contract, so the provider renders `Standard` and optional `Premium` usage lines without a plan badge.
 
-UsageBar renders token progress only when Factory returns a positive `totalAllowance`. An absent `standard` or `premium` bucket, or an explicit `totalAllowance` of `0`, means the plan has no quota for that bucket. If no bucket has a positive allowance, UsageBar shows `No usage data` instead of creating a fake zero-limit progress bar.
+UsageBar renders token progress only when Factory returns a positive `totalAllowance`. An omitted `standard` or `premium` bucket, or an explicit `totalAllowance` of `0`, means the plan has no quota for that bucket. A bucket that is present as `null` is malformed. If no bucket has a positive allowance, UsageBar shows `No usage data` instead of creating a fake zero-limit progress bar.
 
 Progress uses `orgTotalTokensUsed`, so the bar shows the organization total for the billing period, not only the tokens of the key owner.
 
 UsageBar never turns a malformed response into usage data. The probe fails with the `providerResponse` category when:
 
 - the body is not a JSON object, or `usage` is missing or not an object (for example an array)
-- a present bucket is not an object
+- a present bucket is not an object (including `null`)
 - `totalAllowance` in a present bucket is missing, not a number (for example the string `"20000"`), or negative
 - a bucket with a positive allowance has a missing, non-numeric, or negative `orgTotalTokensUsed` (`Usage response missing token counts`)
 
@@ -99,7 +99,7 @@ The `GET /api/billing/limits` endpoint (5-hour, weekly, and monthly token-rate w
 
 The API key source is strict. A rejected key or a credential vault read failure is shown as an error. UsageBar does not silently switch to the local droid login, because that login can belong to another account or organization.
 
-UsageBar trims surrounding whitespace from the stored key and rejects a key with inner whitespace or control characters before it sends a request. The key never appears in plugin logs or error messages. The host masks the values of credential request headers in its logged response preview, so an error body that echoes the submitted key does not put it in the log, whatever the key format. Pattern redaction also masks `fk-` values in logged bodies and log messages.
+UsageBar trims surrounding whitespace from the stored key and rejects a key with inner whitespace or control characters before it sends a request. The key never appears in plugin logs or error messages. API key requests set `logResponseBody: false`, so the host logs only the response size and never the body. A request exception is logged as a fixed message without its text. For other requests, the host masks the values of credential request headers in its logged response preview. Pattern redaction also masks `fk-` values in logged bodies and log messages.
 
 On macOS and Linux, Settings does not offer the API key field. The `keyring` dependency has no native backend there in this build, so a saved key could not be read back. Those platforms use the local droid login only.
 

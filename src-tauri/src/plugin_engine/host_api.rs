@@ -696,7 +696,11 @@ fn inject_http<'js>(
                     .text()
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))?;
 
-                let body_preview = http_body_log_preview(&body, &credential_values);
+                let body_preview = http_response_log_preview(
+                    &body,
+                    &credential_values,
+                    req.log_response_body.unwrap_or(true),
+                );
                 log::info!(
                     "[plugin:{}] HTTP {} {} -> {} | {}",
                     pid,
@@ -806,7 +810,8 @@ pub fn patch_http_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
                     headers: req.headers || null,
                     bodyText: req.bodyText || null,
                     timeoutMs: req.timeoutMs || 10000,
-                    dangerouslyIgnoreTls: req.dangerouslyIgnoreTls || false
+                    dangerouslyIgnoreTls: req.dangerouslyIgnoreTls || false,
+                    logResponseBody: req.logResponseBody !== false
                 });
                 var respJson = rawFn(json);
                 return JSON.parse(respJson);
@@ -1181,6 +1186,8 @@ struct HttpReqParams {
     body_text: Option<String>,
     timeout_ms: Option<u64>,
     dangerously_ignore_tls: Option<bool>,
+    /// False for requests whose response can echo a credential of any length.
+    log_response_body: Option<bool>,
 }
 
 #[derive(serde::Serialize)]
@@ -2201,6 +2208,67 @@ mod tests {
         assert!(redact_body(&body).contains("fk-1...ghij"));
         let msg = format!("usage request failed for {}", key);
         assert!(!redact_log_message(&msg).contains(key));
+    }
+
+    #[test]
+    fn http_response_log_preview_drops_the_body_when_the_request_turns_it_off() {
+        // A 7-character key is below the echoed-credential minimum, so text redaction
+        // keeps it. Only a suppressed preview keeps it out of the log.
+        let key = "fk-a1b2";
+        let values = request_credential_values(Some(&bearer_headers(key)));
+        let body = format!(r#"{{"detail": "invalid key {}"}}"#, key);
+        assert!(
+            http_response_log_preview(&body, &values, true).contains(key),
+            "precondition: text redaction alone does not mask a short key"
+        );
+
+        let preview = http_response_log_preview(&body, &values, false);
+        assert!(!preview.contains(key));
+        assert!(!preview.contains("invalid key"));
+        assert_eq!(
+            preview,
+            format!("[response body not logged, {} bytes]", body.len())
+        );
+    }
+
+    #[test]
+    fn http_wrapper_forwards_log_response_body_and_defaults_it_to_true() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>(
+                r#"
+                var __sent = [];
+                var __openusage_ctx = { host: { http: { _requestRaw: function(json) {
+                    __sent.push(JSON.parse(json));
+                    return JSON.stringify({ status: 200, headers: {}, bodyText: "" });
+                } } } };
+                "#,
+            )
+            .expect("fake host");
+            patch_http_wrapper(&ctx).expect("patch wrapper");
+            let sent: Vec<bool> = ctx
+                .eval(
+                    r#"
+                    __openusage_ctx.host.http.request({ url: "https://api.factory.ai", logResponseBody: false });
+                    __openusage_ctx.host.http.request({ url: "https://api.factory.ai" });
+                    __sent.map(function(req) { return req.logResponseBody; });
+                    "#,
+                )
+                .expect("requests");
+            assert_eq!(sent, vec![false, true]);
+        });
+    }
+
+    #[test]
+    fn http_request_params_read_the_log_response_body_option() {
+        let quiet: HttpReqParams =
+            serde_json::from_str(r#"{"url":"https://api.factory.ai","logResponseBody":false}"#)
+                .expect("request params");
+        assert_eq!(quiet.log_response_body, Some(false));
+        let default: HttpReqParams =
+            serde_json::from_str(r#"{"url":"https://api.factory.ai"}"#).expect("request params");
+        assert_eq!(default.log_response_body, None);
     }
 
     fn bearer_headers(token: &str) -> HashMap<String, String> {
