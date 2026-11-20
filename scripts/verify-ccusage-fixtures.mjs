@@ -47,6 +47,7 @@ function runFixture({
   relativeHome,
   expectedPath,
   expectedDay,
+  knownFailure,
   start = since,
   end = until,
 }) {
@@ -89,6 +90,12 @@ function runFixture({
     const day = actual.daily[0]
     if (actual.daily.length !== 1 || !day)
       throw new Error(`${provider} affected fixture has no daily row`)
+    if (knownFailure && Object.entries(knownFailure).every(([key, value]) => day[key] === value)) {
+      console.warn(
+        `${provider} known undercount with ccusage@${version}: https://github.com/ccusage/ccusage/issues/2184`
+      )
+      return
+    }
     for (const [key, value] of Object.entries(expectedDay)) {
       if (day[key] !== value)
         throw new Error(`${provider} affected fixture: ${key} expected ${value}, got ${day[key]}`)
@@ -114,11 +121,18 @@ try {
     relativeHome: "spawned-codex",
     start: "20261101",
     end: "20261101",
-    expectedDay: {
+    // Keep this reproduction until upstream fixes cross-rollout deduplication.
+    knownFailure: {
       inputTokens: 16000,
       cacheReadTokens: 4000,
       outputTokens: 200,
       totalTokens: 20200,
+    },
+    expectedDay: {
+      inputTokens: 32000,
+      cacheReadTokens: 8000,
+      outputTokens: 400,
+      totalTokens: 40400,
     },
   })
   runFixture({

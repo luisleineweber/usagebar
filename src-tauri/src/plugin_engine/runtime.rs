@@ -188,6 +188,8 @@ pub struct UsageHistoryEntry {
     pub reasoning_tokens: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_tokens: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub period_total_tokens: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -222,6 +224,11 @@ pub(crate) struct UsageHistoryTotals {
 }
 
 impl UsageHistoryTotals {
+    pub(crate) fn set_total_tokens(&mut self, value: Option<f64>) {
+        self.total_tokens = value;
+        self.total_complete = value.is_some();
+    }
+
     pub(crate) fn add_entry(&mut self, entry: &UsageHistoryEntry) {
         if !self.initialized {
             self.initialized = true;
@@ -357,6 +364,38 @@ fn add_totals(
         return;
     }
     *target = Some(target.unwrap_or_default() + other.unwrap_or_default());
+}
+
+pub(crate) fn history_total_tokens<'a>(
+    entries: impl IntoIterator<Item = (&'a str, &'a UsageHistoryEntry)>,
+    use_period_totals: bool,
+) -> Option<f64> {
+    let mut groups = std::collections::HashMap::new();
+    let mut sum = 0.0;
+    let mut found = false;
+    for (scope, entry) in entries {
+        found = true;
+        if let Some(value) = entry.period_total_tokens.filter(|_| use_period_totals) {
+            let key = (
+                scope,
+                &entry.period_start,
+                &entry.period_end,
+                &entry.project,
+                &entry.account,
+            );
+            if let Some(previous) = groups.insert(key, value) {
+                if previous != value {
+                    return None;
+                }
+            }
+        } else {
+            sum += entry_total_tokens(entry)?;
+        }
+    }
+    if !found {
+        return None;
+    }
+    Some(sum + groups.values().sum::<f64>())
 }
 
 fn entry_total_tokens(entry: &UsageHistoryEntry) -> Option<f64> {
@@ -1054,6 +1093,7 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
     let cache_creation_tokens = optional_non_negative_number(entry, "cacheCreationTokens")?;
     let reasoning_tokens = optional_non_negative_number(entry, "reasoningTokens")?;
     let total_tokens = optional_non_negative_number(entry, "totalTokens")?;
+    let period_total_tokens = optional_non_negative_number(entry, "periodTotalTokens")?;
 
     if cost_usd.is_none()
         && requests.is_none()
@@ -1081,6 +1121,7 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
         cache_creation_tokens,
         reasoning_tokens,
         total_tokens,
+        period_total_tokens,
     })
 }
 
@@ -1869,7 +1910,8 @@ mod tests {
                                 cacheReadTokens: 30,
                                 cacheCreationTokens: 10,
                                 reasoningTokens: 5,
-                                totalTokens: 160
+                                totalTokens: 160,
+                                periodTotalTokens: 174
                             }]
                         }
                     };
@@ -1886,6 +1928,7 @@ mod tests {
         assert_eq!(history.entries.len(), 1);
         assert_eq!(history.entries[0].model.as_deref(), Some("claude-sonnet-4"));
         assert_eq!(history.entries[0].total_tokens, Some(160.0));
+        assert_eq!(history.entries[0].period_total_tokens, Some(174.0));
 
         let json: JsonValue = serde_json::to_value(output).expect("serialize");
         assert_eq!(json["history"]["timeZone"], "Europe/Berlin");
@@ -1894,6 +1937,7 @@ mod tests {
             "2026-07-09T22:00:00Z"
         );
         assert_eq!(json["history"]["entries"][0]["costUsd"], 1.25);
+        assert_eq!(json["history"]["entries"][0]["periodTotalTokens"], 174.0);
         assert!(json["history"]["entries"][0].get("cost_usd").is_none());
     }
 

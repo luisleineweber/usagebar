@@ -7,6 +7,7 @@ import type { PluginOutput } from "@/lib/plugin-types"
 import {
   filterUsageHistory,
   entryTotalTokens,
+  sumHistoryTokens,
   hasUsageHistory,
   summarizeUsageHistory,
   type UsageHistoryPeriod,
@@ -111,8 +112,11 @@ function dailySeries(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([day, dayRecords]) => ({
       day,
-      value: sumKnown(dayRecords.map((record) => metricValue(record, metric, overrides))),
-      tokens: sumKnown(dayRecords.map(entryTotalTokens)),
+      value:
+        metric === "tokens"
+          ? sumHistoryTokens(dayRecords)
+          : sumKnown(dayRecords.map((record) => metricValue(record, metric, overrides))),
+      tokens: sumHistoryTokens(dayRecords),
       cost: sumKnown(dayRecords.map((record) => reportEntryCost(record, overrides))),
     }))
 }
@@ -265,13 +269,21 @@ function ProjectBreakdown({
   metric: ReportMetric
   overrides: ModelPriceOverrides
 }) {
-  const values = new Map<string, (number | null)[]>()
+  const values = new Map<string, UsageHistoryRecord[]>()
   for (const record of records) {
     const project = record.project?.trim() || "Unspecified project"
-    values.set(project, [...(values.get(project) ?? []), metricValue(record, metric, overrides)])
+    values.set(project, [...(values.get(project) ?? []), record])
   }
   const rows = [...values.entries()]
-    .map(([project, projectValues]) => [project, sumKnown(projectValues)] as const)
+    .map(
+      ([project, projectRecords]) =>
+        [
+          project,
+          metric === "tokens"
+            ? sumHistoryTokens(projectRecords)
+            : sumKnown(projectRecords.map((record) => metricValue(record, metric, overrides))),
+        ] as const
+    )
     .sort((left, right) => {
       if (left[1] === null) return right[1] === null ? 0 : 1
       if (right[1] === null) return -1
@@ -554,7 +566,9 @@ export function UsageReport({
             <UsageReportEmptyState
               message="No activity in this period"
               action={
-                period === "7d" ? { label: "View 30 days", onClick: () => setPeriod("30d") } : undefined
+                period === "7d"
+                  ? { label: "View 30 days", onClick: () => setPeriod("30d") }
+                  : undefined
               }
             />
           )

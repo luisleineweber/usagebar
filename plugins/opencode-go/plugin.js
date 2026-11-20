@@ -771,10 +771,7 @@
       var breakdowns = Array.isArray(daily[i].modelBreakdowns)
         ? daily[i].modelBreakdowns.filter((row) => row && typeof row === "object")
         : []
-      var rows =
-        breakdowns.length === 1 || (breakdowns.length > 1 && daily[i].totalTokens == null)
-          ? breakdowns
-          : [daily[i]]
+      var rows = breakdowns.length ? breakdowns : [daily[i]]
       for (var j = 0; j < rows.length; j += 1) {
         var row = rows[j] || {},
           entry = { periodStart: start.toISOString(), periodEnd: end.toISOString() },
@@ -790,6 +787,11 @@
               : row.totalTokens
           ),
           cost = historyMetric(row.cost != null ? row.cost : row.totalCost)
+        if (breakdowns.length > 1 && daily[i].totalTokens != null) {
+          var periodTotal = historyMetric(daily[i].totalTokens)
+          if (Number.isFinite(periodTotal) && periodTotal >= 0)
+            entry.periodTotalTokens = periodTotal
+        }
         if (model) entry.model = model
         if (Number.isFinite(input) && input >= 0) entry.inputTokens = input
         if (Number.isFinite(output) && output >= 0) entry.outputTokens = output

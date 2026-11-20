@@ -1,4 +1,4 @@
-import { entryTotalTokens } from "../../src/lib/usage-history"
+import { entryTotalTokens, summarizeUsageHistory } from "../../src/lib/usage-history"
 import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
@@ -748,17 +748,40 @@ describe("opencode-go plugin", () => {
             totalTokens: 174,
             totalCost: 0.03,
             modelBreakdowns: [
-              { modelName: "a", inputTokens: 100 },
-              { modelName: "b", inputTokens: 10 },
+              {
+                modelName: "a",
+                inputTokens: 100,
+                outputTokens: 20,
+                cacheReadTokens: 30,
+                cacheCreationTokens: 5,
+                cost: 0.02,
+              },
+              {
+                modelName: "b",
+                inputTokens: 10,
+                outputTokens: 2,
+                cacheReadTokens: 0,
+                cacheCreationTokens: 0,
+                cost: 0.01,
+              },
             ],
           },
         ],
       },
     })
     const result = (await loadPlugin()).probe(ctx)
-    expect(result.history.entries).toHaveLength(1)
-    expect(result.history.entries[0].model).toBeUndefined()
-    expect(entryTotalTokens(result.history.entries[0])).toBe(174)
+    expect(result.history.entries).toHaveLength(2)
+    const outputs = [{ providerId: "opencode-go", history: result.history }]
+    const options = { period: "30d", nowMs: Date.parse("2026-11-02T12:00:00Z"), timeZone: "UTC" }
+    expect(summarizeUsageHistory(outputs, options).totals.totalTokens).toBe(174)
+    expect(summarizeUsageHistory(outputs, { ...options, models: ["a"] }).totals).toMatchObject({
+      totalTokens: 155,
+      costUsd: 0.02,
+    })
+    expect(summarizeUsageHistory(outputs, { ...options, models: ["b"] }).totals).toMatchObject({
+      totalTokens: 12,
+      costUsd: 0.01,
+    })
   })
 
   it("keeps ccusage completed compaction cost and token components in history", async () => {
