@@ -293,6 +293,7 @@ mod tests {
     fn entry(day: &str, model: Option<&str>, project: Option<&str>) -> UsageHistoryEntry {
         UsageHistoryEntry {
             period_start: format!("{day}T00:00:00Z"),
+            scope: None,
             period_end: format!("{day}T23:59:59Z"),
             model: model.map(str::to_string),
             project: project.map(str::to_string),

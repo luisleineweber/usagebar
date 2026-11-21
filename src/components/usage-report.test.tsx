@@ -155,6 +155,106 @@ describe("UsageReport", () => {
     expect(screen.getByRole("group", { name: /Tokens trend/i })).toHaveTextContent("400")
   })
 
+  it("switches to week-to-date and month-to-date periods with explicit labels", async () => {
+    const user = userEvent.setup()
+    const data = output()
+    data.history!.entries = [
+      {
+        // Thursday 2026-07-02: this month, but before Monday 2026-07-06.
+        ...data.history!.entries[0],
+        periodStart: "2026-07-02T00:00:00.000Z",
+        periodEnd: "2026-07-03T00:00:00.000Z",
+      },
+      {
+        // Sunday 2026-06-28: last 30 days, but last month.
+        ...data.history!.entries[0],
+        model: "gpt-4o",
+        costUsd: 4,
+        periodStart: "2026-06-28T00:00:00.000Z",
+        periodEnd: "2026-06-29T00:00:00.000Z",
+      },
+      data.history!.entries[1],
+    ]
+    render(<UsageReport outputs={[data]} nowMs={NOW_MS} />)
+    const region = screen.getByRole("region", { name: "Usage history" })
+    const headline = () => region.querySelector("strong")
+
+    expect(headline()).toHaveTextContent(/7[,.]50/)
+    expect(region).toHaveTextContent("last 30 days")
+
+    await user.click(screen.getByRole("button", { name: "This week" }))
+    expect(screen.getByRole("button", { name: "This week" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    )
+    expect(region).toHaveTextContent("week to date, from Monday")
+    expect(headline()).toHaveTextContent(/2[,.]50/)
+
+    await user.click(screen.getByRole("button", { name: "This month" }))
+    expect(region).toHaveTextContent("month to date")
+    expect(headline()).toHaveTextContent(/3[,.]50/)
+
+    await user.click(screen.getByRole("button", { name: "7d" }))
+    expect(region).toHaveTextContent("last 7 days")
+    expect(headline()).toHaveTextContent(/2[,.]50/)
+  })
+
+  it("totals separate cost and usage rows for every period", async () => {
+    const user = userEvent.setup()
+    const data = output()
+    const day = (date: string) => ({
+      periodStart: `${date}T00:00:00.000Z`,
+      periodEnd: new Date(Date.parse(`${date}T00:00:00.000Z`) + 86_400_000).toISOString(),
+    })
+    data.history!.entries = [
+      { ...day("2026-07-01"), scope: "cost", costUsd: 100 },
+      { ...day("2026-07-01"), scope: "usage", model: "gpt-old", totalTokens: 1000, requests: 3 },
+      { ...day("2026-07-31"), scope: "cost", costUsd: 5 },
+      { ...day("2026-07-31"), scope: "usage", model: "gpt-5", totalTokens: 15, requests: 1 },
+    ]
+    render(<UsageReport outputs={[data]} nowMs={Date.UTC(2026, 6, 31, 12)} />)
+    const region = screen.getByRole("region", { name: "Usage history" })
+    const headline = () => region.querySelector("strong")
+
+    expect(headline()).toHaveTextContent(/5[,.]00/)
+    await user.click(screen.getByRole("button", { name: "This month" }))
+    expect(headline()).toHaveTextContent(/105[,.]00/)
+    const requestLabels = screen.getAllByText("Requests")
+    expect(requestLabels[requestLabels.length - 1].previousElementSibling).toHaveTextContent("4")
+
+    await user.click(screen.getByRole("button", { name: "Tokens" }))
+    expect(headline()).toHaveTextContent(/^1[,.]?015$|^1K$/)
+
+    await user.click(screen.getByRole("button", { name: "This week" }))
+    expect(headline()).toHaveTextContent("15")
+  })
+
+  it("offers filter values from month-to-date history older than 30 days", async () => {
+    const user = userEvent.setup()
+    const data = output()
+    data.history!.entries = [
+      {
+        ...data.history!.entries[0],
+        model: "gpt-4o",
+        periodStart: "2026-07-01T00:00:00.000Z",
+        periodEnd: "2026-07-02T00:00:00.000Z",
+      },
+      {
+        ...data.history!.entries[1],
+        periodStart: "2026-07-31T00:00:00.000Z",
+        periodEnd: "2026-08-01T00:00:00.000Z",
+      },
+    ]
+    render(<UsageReport outputs={[data]} nowMs={Date.UTC(2026, 6, 31, 12)} />)
+
+    await user.click(screen.getByRole("button", { name: "This month" }))
+
+    expect(screen.getByRole("combobox", { name: "Models" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("region", { name: "Usage history" }).querySelector("strong")
+    ).toHaveTextContent(/3[,.]50/)
+  })
+
   it("uses a daily activity summary instead of a single chart point", async () => {
     const user = userEvent.setup()
     const data = output()
