@@ -465,6 +465,7 @@ mod tests {
                 time_zone: "UTC".to_string(),
                 entries: vec![UsageHistoryEntry {
                     period_start: "2026-07-09T00:00:00Z".to_string(),
+                    scope: None,
                     period_end: "2026-07-10T00:00:00Z".to_string(),
                     model: Some("sonnet".to_string()),
                     project: None,

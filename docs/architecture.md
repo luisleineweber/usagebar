@@ -167,6 +167,22 @@ type PluginOutput = {
 | `"badge"` | Labelled pill badge | `label`, `text`, optional `color` |
 | `"progress"` | Bar with pace/reset logic | `label`, `used`, `limit`, `format`, `resetsAt?`, `periodDurationMs?` |
 
+### Usage history periods (`src/lib/usage-history.ts`)
+
+The history report resolves every period in the history source time zone, so local midnight stays correct across daylight-saving changes.
+
+| Period | UI label | Window |
+|---|---|---|
+| `7d`, `30d` | `7d`, `30d` | Rolling: today and the 6 or 29 calendar days before it, until now |
+| `weekToDate` | This week | From local midnight on Monday of the current week until now (ISO 8601 week start, as in Germany and most of Europe) |
+| `monthToDate` | This month | From local midnight on day 1 of the current month until now |
+
+The week start is fixed to Monday and does not follow the system locale, so every user sees the same range. A period with no entries reports `null` totals, not zero. History older than the cached entries is unknown and is not shown as zero.
+
+A provider that returns history must cover the last 31 calendar days (today and the 30 days before it), or at least from the earlier of its 30-day window start and day 1 of the current month. Otherwise month to date on the 31st misses day 1 and shows a total that is too low.
+
+A history entry may set `scope`. A `"cost"` entry carries only `costUsd`, and a `"usage"` entry carries only token and request metrics. Use it when a provider reports cost and usage in separate rows, such as OpenAI's costs and completions endpoints. Totals sum each metric over the entries that report it, and stay `null` when none do. An entry without `scope` reports every metric, so one missing value keeps that total `null`. The Rust host rejects a scoped entry that carries metrics outside its scope.
+
 ---
 
 ## How to add a new provider
