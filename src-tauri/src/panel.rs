@@ -11,11 +11,21 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos,
 };
 
+/// A rect the panel opens next to: the tray icon, the cursor, or a taskbar
+/// corner.
 #[derive(Clone, Debug, PartialEq)]
-struct TrayAnchor {
+struct PanelAnchor {
     icon_position: Position,
     icon_size: Size,
     vertical_anchor: Option<VerticalAnchor>,
+}
+
+/// Where a `PanelAnchor` came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AnchorSource {
+    TrayIcon,
+    Cursor,
+    Taskbar,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -26,8 +36,37 @@ enum VerticalAnchor {
 
 #[derive(Clone, Debug, Default)]
 struct PanelState {
-    tray_anchor: Option<TrayAnchor>,
+    /// The anchor the panel follows now, for reopen and content resizes.
+    placement_anchor: Option<PanelAnchor>,
+    /// The last real tray icon rect. Only a tray icon click sets it, so a
+    /// cursor or taskbar open never becomes the "Return to tray" target.
+    tray_icon_anchor: Option<PanelAnchor>,
     last_panel_height: Option<f64>,
+}
+
+/// Where "Return to tray" sends the panel.
+#[derive(Clone, Debug, PartialEq)]
+enum ReturnTarget {
+    TrayIcon(PanelAnchor),
+    /// No tray icon rect is known yet, for example after a shortcut open on a
+    /// fresh launch.
+    TaskbarFallback,
+}
+
+impl PanelState {
+    fn record_anchor(&mut self, source: AnchorSource, anchor: PanelAnchor) {
+        if source == AnchorSource::TrayIcon {
+            self.tray_icon_anchor = Some(anchor.clone());
+        }
+        self.placement_anchor = Some(anchor);
+    }
+
+    fn return_target(&self) -> ReturnTarget {
+        match &self.tray_icon_anchor {
+            Some(anchor) => ReturnTarget::TrayIcon(anchor.clone()),
+            None => ReturnTarget::TaskbarFallback,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -73,25 +112,36 @@ macro_rules! get_or_init_panel {
 
 pub(crate) use get_or_init_panel;
 
-fn save_tray_anchor(
+fn save_anchor(
+    source: AnchorSource,
     icon_position: &Position,
     icon_size: &Size,
     vertical_anchor: Option<VerticalAnchor>,
 ) {
     if let Ok(mut slot) = panel_state_slot().lock() {
-        slot.tray_anchor = Some(TrayAnchor {
-            icon_position: *icon_position,
-            icon_size: *icon_size,
-            vertical_anchor,
-        });
+        slot.record_anchor(
+            source,
+            PanelAnchor {
+                icon_position: *icon_position,
+                icon_size: *icon_size,
+                vertical_anchor,
+            },
+        );
     }
 }
 
-fn stored_tray_anchor() -> Option<TrayAnchor> {
+fn stored_placement_anchor() -> Option<PanelAnchor> {
     panel_state_slot()
         .lock()
         .ok()
-        .and_then(|slot| slot.tray_anchor.clone())
+        .and_then(|slot| slot.placement_anchor.clone())
+}
+
+fn stored_return_target() -> ReturnTarget {
+    panel_state_slot()
+        .lock()
+        .map(|slot| slot.return_target())
+        .unwrap_or(ReturnTarget::TaskbarFallback)
 }
 
 fn save_panel_height(panel_height_px: f64) {
@@ -118,7 +168,7 @@ pub fn sync_panel_geometry(panel_height_px: f64) {
 pub fn apply_panel_bounds(app_handle: &AppHandle, panel_height_px: f64) {
     save_panel_height(panel_height_px);
 
-    let Some(anchor) = stored_tray_anchor() else {
+    let Some(anchor) = stored_placement_anchor() else {
         if let Some(window) = get_or_init_panel!(app_handle) {
             apply_window_height(&window, panel_height_px);
         }
@@ -136,7 +186,7 @@ pub fn apply_panel_bounds(app_handle: &AppHandle, panel_height_px: f64) {
 }
 
 pub fn show_panel(app_handle: &AppHandle) {
-    if stored_tray_anchor().is_some() {
+    if stored_placement_anchor().is_some() {
         reposition_panel(app_handle, stored_panel_height());
     } else {
         let _ = position_panel_near_cursor(app_handle);
@@ -467,7 +517,8 @@ fn position_panel_at_taskbar_on(window: &WebviewWindow, monitor: &tauri::Monitor
         ),
         scale_factor,
     );
-    save_tray_anchor(
+    save_anchor(
+        AnchorSource::Taskbar,
         &anchor_position,
         &anchor_size,
         Some(VerticalAnchor::Bottom(
@@ -636,7 +687,12 @@ fn position_panel_near_cursor(app_handle: &AppHandle) -> Option<VerticalAnchor> 
         None,
         false,
     );
-    save_tray_anchor(&anchor_position, &anchor_size, vertical_anchor.clone());
+    save_anchor(
+        AnchorSource::Cursor,
+        &anchor_position,
+        &anchor_size,
+        vertical_anchor.clone(),
+    );
     vertical_anchor
 }
 
@@ -647,13 +703,22 @@ pub fn position_panel_at_tray_icon(
 ) {
     let vertical_anchor =
         position_panel_from_anchor(app_handle, &icon_position, &icon_size, None, None, true);
-    save_tray_anchor(&icon_position, &icon_size, vertical_anchor);
+    save_anchor(
+        AnchorSource::TrayIcon,
+        &icon_position,
+        &icon_size,
+        vertical_anchor,
+    );
 }
 
-/// Place the panel back at its tray anchor, or at the taskbar corner of the
-/// primary monitor (where Windows shows the tray) when no anchor is known yet.
+/// Place the panel back at the tray icon, or at the taskbar corner of the
+/// primary monitor (where Windows shows the tray) when no tray icon rect is
+/// known yet. A cursor anchor is never a tray target.
 pub(crate) fn reanchor_panel(app_handle: &AppHandle) {
-    if stored_tray_anchor().is_some() {
+    if let ReturnTarget::TrayIcon(anchor) = stored_return_target() {
+        if let Ok(mut slot) = panel_state_slot().lock() {
+            slot.placement_anchor = Some(anchor);
+        }
         reposition_panel(app_handle, stored_panel_height());
         return;
     }
@@ -671,7 +736,7 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
         save_panel_height(height);
     }
 
-    let Some(anchor) = stored_tray_anchor() else {
+    let Some(anchor) = stored_placement_anchor() else {
         return;
     };
 
@@ -688,10 +753,47 @@ pub fn reposition_panel(app_handle: &tauri::AppHandle, panel_height_px: Option<f
 #[cfg(test)]
 mod tests {
     use super::{
-        LogicalRect, PhysicalWindowBounds, VerticalAnchor, anchored_window_bounds,
-        compute_panel_placement, physical_window_bounds, preferred_tray_vertical_anchor,
-        taskbar_panel_position,
+        AnchorSource, LogicalRect, PanelAnchor, PanelState, PhysicalWindowBounds, ReturnTarget,
+        VerticalAnchor, anchored_window_bounds, compute_panel_placement, physical_window_bounds,
+        preferred_tray_vertical_anchor, taskbar_panel_position,
     };
+    use tauri::{PhysicalPosition, PhysicalSize, Position, Size};
+
+    fn anchor_at(x: i32, y: i32, side: u32) -> PanelAnchor {
+        PanelAnchor {
+            icon_position: Position::Physical(PhysicalPosition::new(x, y)),
+            icon_size: Size::Physical(PhysicalSize::new(side, side)),
+            vertical_anchor: None,
+        }
+    }
+
+    /// Regression: on a fresh launch the shortcut opens the panel at the
+    /// cursor on a second monitor. "Return to tray" must not send the panel to
+    /// that old cursor spot; with no tray icon rect it uses the taskbar.
+    #[test]
+    fn cursor_open_on_fresh_launch_never_becomes_the_tray_target() {
+        let mut state = PanelState::default();
+        let cursor = anchor_at(2382, 582, 36);
+        state.record_anchor(AnchorSource::Cursor, cursor.clone());
+
+        // The panel still follows the cursor anchor for resizes.
+        assert_eq!(state.placement_anchor, Some(cursor));
+        assert_eq!(state.return_target(), ReturnTarget::TaskbarFallback);
+
+        // A taskbar open is not a tray target either.
+        state.record_anchor(AnchorSource::Taskbar, anchor_at(1896, 1016, 24));
+        assert_eq!(state.return_target(), ReturnTarget::TaskbarFallback);
+    }
+
+    #[test]
+    fn tray_icon_click_is_the_tray_target_even_after_a_later_cursor_open() {
+        let mut state = PanelState::default();
+        let tray = anchor_at(1780, 1040, 40);
+        state.record_anchor(AnchorSource::TrayIcon, tray.clone());
+        state.record_anchor(AnchorSource::Cursor, anchor_at(2382, 582, 36));
+
+        assert_eq!(state.return_target(), ReturnTarget::TrayIcon(tray));
+    }
 
     /// Regression: the tray is on a 100% monitor while the panel is still on a
     /// 150% monitor. The bounds must use the tray monitor's scale; the old code
