@@ -6,6 +6,7 @@ import { ReportPricingEditor, loadModelPriceOverrides } from "@/components/repor
 import type { PluginOutput } from "@/lib/plugin-types"
 import {
   filterUsageHistory,
+  entryReports,
   entryTotalTokens,
   sumHistoryTokens,
   hasUsageHistory,
@@ -30,9 +31,13 @@ type UsageReportProps = {
   nowMs?: number
 }
 
-const PERIOD_OPTIONS: { value: UsageHistoryPeriod; label: string }[] = [
-  { value: "7d", label: "7d" },
-  { value: "30d", label: "30d" },
+type ReportPeriod = Extract<UsageHistoryPeriod, "7d" | "30d" | "weekToDate" | "monthToDate">
+
+const PERIOD_OPTIONS: { value: ReportPeriod; label: string; caption: string }[] = [
+  { value: "7d", label: "7d", caption: "last 7 days" },
+  { value: "30d", label: "30d", caption: "last 30 days" },
+  { value: "weekToDate", label: "This week", caption: "week to date, from Monday" },
+  { value: "monthToDate", label: "This month", caption: "month to date" },
 ]
 
 const METRIC_OPTIONS: { value: ReportMetric; label: string }[] = [
@@ -49,6 +54,24 @@ function metricValue(
   if (metric === "cost") return reportEntryCost(record, overrides)
   if (metric === "requests") return record.requests ?? null
   return entryTotalTokens(record)
+}
+
+/**
+ * Sums a metric over the records that report it. Cost skips "usage" rows, so a price
+ * override never adds estimated cost on top of a provider's separate cost row.
+ */
+function sumRecords(
+  records: readonly UsageHistoryRecord[],
+  metric: ReportMetric,
+  overrides: ModelPriceOverrides
+): number | null {
+  if (metric === "tokens") return sumHistoryTokens(records)
+  const kind = metric === "cost" ? "cost" : "usage"
+  return sumKnown(
+    records
+      .filter((record) => entryReports(record, kind))
+      .map((record) => metricValue(record, metric, overrides))
+  )
 }
 
 function formatCompact(value: number | null): string {
@@ -112,12 +135,9 @@ function dailySeries(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([day, dayRecords]) => ({
       day,
-      value:
-        metric === "tokens"
-          ? sumHistoryTokens(dayRecords)
-          : sumKnown(dayRecords.map((record) => metricValue(record, metric, overrides))),
-      tokens: sumHistoryTokens(dayRecords),
-      cost: sumKnown(dayRecords.map((record) => reportEntryCost(record, overrides))),
+      value: sumRecords(dayRecords, metric, overrides),
+      tokens: sumRecords(dayRecords, "tokens", overrides),
+      cost: sumRecords(dayRecords, "cost", overrides),
     }))
 }
 
@@ -269,20 +289,15 @@ function ProjectBreakdown({
   metric: ReportMetric
   overrides: ModelPriceOverrides
 }) {
-  const values = new Map<string, UsageHistoryRecord[]>()
+  const recordsByProject = new Map<string, UsageHistoryRecord[]>()
   for (const record of records) {
     const project = record.project?.trim() || "Unspecified project"
-    values.set(project, [...(values.get(project) ?? []), record])
+    recordsByProject.set(project, [...(recordsByProject.get(project) ?? []), record])
   }
-  const rows = [...values.entries()]
+  const rows = [...recordsByProject.entries()]
     .map(
       ([project, projectRecords]) =>
-        [
-          project,
-          metric === "tokens"
-            ? sumHistoryTokens(projectRecords)
-            : sumKnown(projectRecords.map((record) => metricValue(record, metric, overrides))),
-        ] as const
+        [project, sumRecords(projectRecords, metric, overrides)] as const
     )
     .sort((left, right) => {
       if (left[1] === null) return right[1] === null ? 0 : 1
@@ -381,7 +396,7 @@ export function UsageReport({
   stale = false,
   nowMs,
 }: UsageReportProps) {
-  const [period, setPeriod] = useState<UsageHistoryPeriod>("30d")
+  const [period, setPeriod] = useState<ReportPeriod>("30d")
   const [metric, setMetric] = useState<ReportMetric>("cost")
   const [providerId, setProviderId] = useState("")
   const [model, setModel] = useState("")
@@ -394,10 +409,11 @@ export function UsageReport({
   }, [])
 
   const available = useMemo(() => {
-    const records = filterUsageHistory(outputs, {
-      period: "30d",
-      nowMs,
-    })
+    // Month to date can start before the rolling 30-day window, so offer filter values
+    // from every selectable period.
+    const records = PERIOD_OPTIONS.flatMap((option) =>
+      filterUsageHistory(outputs, { period: option.value, nowMs })
+    )
     return {
       providerIds: [...new Set(records.map((record) => record.providerId))].sort(),
       models: [
@@ -425,7 +441,7 @@ export function UsageReport({
   }, [hasRequestData, metric])
   const selectedValue =
     metric === "cost"
-      ? sumKnown(records.map((record) => reportEntryCost(record, priceOverrides)))
+      ? sumRecords(records, "cost", priceOverrides)
       : metric === "requests"
         ? summary.totals.requests
         : summary.totals.totalTokens
@@ -470,9 +486,7 @@ export function UsageReport({
         <div className="text-right tabular-nums">
           <strong className="block text-base">{formatMetric(selectedValue, metric)}</strong>
           <span className="text-[11px] text-muted-foreground">
-            {period === "30d"
-              ? "last 30 days"
-              : PERIOD_OPTIONS.find((option) => option.value === period)?.label.toLowerCase()}
+            {PERIOD_OPTIONS.find((option) => option.value === period)?.caption}
           </span>
         </div>
       </div>
@@ -589,10 +603,7 @@ export function UsageReport({
         <div className="mt-2 grid grid-cols-3 divide-x divide-border text-center text-xs">
           <div className="px-1">
             <strong className="block tabular-nums">
-              {formatMetric(
-                sumKnown(records.map((record) => reportEntryCost(record, priceOverrides))),
-                "cost"
-              )}
+              {formatMetric(sumRecords(records, "cost", priceOverrides), "cost")}
             </strong>
             <span className="text-muted-foreground">Cost</span>
           </div>

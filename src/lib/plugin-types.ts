@@ -156,9 +156,17 @@ export type DataFreshness = {
 
 export type DataFreshnessGroups = Partial<Record<"quota" | "cost" | "history", DataFreshness>>
 
+/**
+ * Metrics a history row reports. A provider that reports cost and usage in separate rows
+ * marks each row: a "cost" row carries only `costUsd`, a "usage" row only token and request
+ * metrics. Without a scope, the row reports every metric and a missing value is unknown.
+ */
+export type UsageHistoryEntryScope = "cost" | "usage"
+
 export type UsageHistoryEntry = {
   periodStart: string
   periodEnd: string
+  scope?: UsageHistoryEntryScope
   model?: string
   project?: string
   account?: string

@@ -166,6 +166,9 @@ pub struct UsageHistory {
 pub struct UsageHistoryEntry {
     pub period_start: String,
     pub period_end: String,
+    /// Metrics this row reports. Absent means every metric; a missing value is unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<UsageHistoryEntryScope>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -190,6 +193,25 @@ pub struct UsageHistoryEntry {
     pub total_tokens: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub period_total_tokens: Option<f64>,
+}
+
+/// A provider that reports cost and usage in separate rows marks each row. A `Cost` row
+/// carries only `costUsd`; a `Usage` row carries only token and request metrics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UsageHistoryEntryScope {
+    Cost,
+    Usage,
+}
+
+impl UsageHistoryEntry {
+    pub(crate) fn reports_cost(&self) -> bool {
+        self.scope != Some(UsageHistoryEntryScope::Usage)
+    }
+
+    pub(crate) fn reports_usage(&self) -> bool {
+        self.scope != Some(UsageHistoryEntryScope::Cost)
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -242,7 +264,12 @@ impl UsageHistoryTotals {
             self.total_complete = true;
         }
 
-        add_metric(&mut self.cost_usd, &mut self.cost_complete, entry.cost_usd);
+        if entry.reports_cost() {
+            add_metric(&mut self.cost_usd, &mut self.cost_complete, entry.cost_usd);
+        }
+        if !entry.reports_usage() {
+            return;
+        }
         add_metric(
             &mut self.requests,
             &mut self.requests_complete,
@@ -363,7 +390,11 @@ fn add_totals(
         *target = None;
         return;
     }
-    *target = Some(target.unwrap_or_default() + other.unwrap_or_default());
+    // A complete `None` means no row reported this metric, so it adds nothing.
+    *target = match (*target, other) {
+        (Some(left), Some(right)) => Some(left + right),
+        (left, right) => left.or(right),
+    };
 }
 
 pub(crate) fn history_total_tokens<'a>(
@@ -374,6 +405,9 @@ pub(crate) fn history_total_tokens<'a>(
     let mut sum = 0.0;
     let mut found = false;
     for (scope, entry) in entries {
+        if matches!(entry.scope, Some(UsageHistoryEntryScope::Cost)) {
+            continue;
+        }
         found = true;
         if let Some(value) = entry.period_total_tokens.filter(|_| use_period_totals) {
             let key = (
@@ -1082,6 +1116,12 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
         return Err("periodStart must be before periodEnd".to_string());
     }
 
+    let scope = match optional_non_empty_string(entry, "scope")?.as_deref() {
+        None => None,
+        Some("cost") => Some(UsageHistoryEntryScope::Cost),
+        Some("usage") => Some(UsageHistoryEntryScope::Usage),
+        Some(_) => return Err("scope must be \"cost\" or \"usage\" when present".to_string()),
+    };
     let model = optional_non_empty_string(entry, "model")?;
     let project = optional_non_empty_string(entry, "project")?;
     let account = optional_non_empty_string(entry, "account")?;
@@ -1106,10 +1146,27 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
     {
         return Err("at least one usage metric is required".to_string());
     }
+    let has_usage_metric = requests.is_some()
+        || input_tokens.is_some()
+        || output_tokens.is_some()
+        || cache_read_tokens.is_some()
+        || cache_creation_tokens.is_some()
+        || reasoning_tokens.is_some()
+        || total_tokens.is_some();
+    match scope {
+        Some(UsageHistoryEntryScope::Cost) if cost_usd.is_none() || has_usage_metric => {
+            return Err("cost scope requires costUsd and no usage metrics".to_string());
+        }
+        Some(UsageHistoryEntryScope::Usage) if cost_usd.is_some() || !has_usage_metric => {
+            return Err("usage scope requires a usage metric and no costUsd".to_string());
+        }
+        _ => {}
+    }
 
     Ok(UsageHistoryEntry {
         period_start,
         period_end,
+        scope,
         model,
         project,
         account,
@@ -2205,6 +2262,142 @@ mod tests {
         let history = output.history.expect("valid envelope should remain");
         assert_eq!(history.entries.len(), 1);
         assert_eq!(history.entries[0].total_tokens, Some(42.0));
+    }
+
+    #[test]
+    fn run_probe_keeps_valid_scoped_history_entries_only() {
+        let plugin = test_plugin(
+            r#"
+            globalThis.__openusage_plugin = {
+                probe() {
+                    const day = { periodStart: "2026-07-10T00:00:00Z", periodEnd: "2026-07-11T00:00:00Z" };
+                    return {
+                        lines: [{ type: "text", label: "Today", value: "$1.25" }],
+                        history: {
+                            version: 1,
+                            source: "openai-organization",
+                            timeZone: "UTC",
+                            entries: [
+                                { ...day, scope: "cost", costUsd: 3 },
+                                { ...day, scope: "usage", model: "gpt-5", totalTokens: 10, requests: 1 },
+                                { ...day, scope: "cost", costUsd: 3, totalTokens: 1 },
+                                { ...day, scope: "usage", costUsd: 3, totalTokens: 1 },
+                                { ...day, scope: "usage", costUsd: 3 },
+                                { ...day, scope: "cost", totalTokens: 1 },
+                                { ...day, scope: "other", totalTokens: 1 }
+                            ]
+                        }
+                    };
+                }
+            };
+            "#,
+        );
+
+        let output = run_probe(&plugin, &temp_app_dir("scoped-entries"), "0.0.0", None);
+        let history = output.history.expect("valid envelope should remain");
+        assert_eq!(history.entries.len(), 2);
+        assert_eq!(history.entries[0].scope, Some(UsageHistoryEntryScope::Cost));
+        assert_eq!(
+            history.entries[1].scope,
+            Some(UsageHistoryEntryScope::Usage)
+        );
+        let json = serde_json::to_value(&history).expect("history should serialize");
+        assert_eq!(json["entries"][0]["scope"], "cost");
+        assert_eq!(json["entries"][1]["scope"], "usage");
+    }
+
+    fn scoped_entry(scope: Option<UsageHistoryEntryScope>) -> UsageHistoryEntry {
+        UsageHistoryEntry {
+            period_start: "2026-07-10T00:00:00Z".to_string(),
+            period_end: "2026-07-11T00:00:00Z".to_string(),
+            scope,
+            model: None,
+            project: None,
+            account: None,
+            cost_usd: None,
+            requests: None,
+            input_tokens: None,
+            output_tokens: None,
+            cache_read_tokens: None,
+            cache_creation_tokens: None,
+            reasoning_tokens: None,
+            total_tokens: None,
+            period_total_tokens: None,
+        }
+    }
+
+    #[test]
+    fn totals_sum_scoped_rows_over_the_rows_that_report_each_metric() {
+        let cost = UsageHistoryEntry {
+            cost_usd: Some(3.0),
+            ..scoped_entry(Some(UsageHistoryEntryScope::Cost))
+        };
+        let usage = UsageHistoryEntry {
+            requests: Some(2.0),
+            total_tokens: Some(100.0),
+            ..scoped_entry(Some(UsageHistoryEntryScope::Usage))
+        };
+        let mut totals = UsageHistoryTotals::default();
+        totals.add_entry(&cost);
+        totals.add_entry(&usage);
+        assert_eq!(totals.cost_usd, Some(3.0));
+        assert_eq!(totals.requests, Some(2.0));
+        assert_eq!(totals.total_tokens, Some(100.0));
+        assert_eq!(
+            history_total_tokens([("openai", &cost), ("openai", &usage)], true),
+            Some(100.0)
+        );
+        assert_eq!(totals.input_tokens, None);
+
+        // Combining a cost-only and a usage-only provider keeps each known total.
+        let mut cost_only = UsageHistoryTotals::default();
+        cost_only.add_entry(&cost);
+        let mut usage_only = UsageHistoryTotals::default();
+        usage_only.add_entry(&usage);
+        cost_only.add(&usage_only);
+        assert_eq!(cost_only.cost_usd, Some(3.0));
+        assert_eq!(cost_only.total_tokens, Some(100.0));
+
+        // Two cost-only totals never invent a zero token total.
+        let mut first = UsageHistoryTotals::default();
+        first.add_entry(&cost);
+        let mut second = UsageHistoryTotals::default();
+        second.add_entry(&cost);
+        first.add(&second);
+        assert_eq!(first.cost_usd, Some(6.0));
+        assert_eq!(first.total_tokens, None);
+    }
+
+    #[test]
+    fn totals_keep_unscoped_and_partly_reported_metrics_unknown() {
+        let unscoped_without_cost = UsageHistoryEntry {
+            total_tokens: Some(10.0),
+            ..scoped_entry(None)
+        };
+        let cost = UsageHistoryEntry {
+            cost_usd: Some(3.0),
+            ..scoped_entry(Some(UsageHistoryEntryScope::Cost))
+        };
+        let mut totals = UsageHistoryTotals::default();
+        totals.add_entry(&cost);
+        totals.add_entry(&unscoped_without_cost);
+        assert_eq!(totals.cost_usd, None);
+        assert_eq!(totals.total_tokens, Some(10.0));
+
+        let usage_without_requests = UsageHistoryEntry {
+            total_tokens: Some(5.0),
+            ..scoped_entry(Some(UsageHistoryEntryScope::Usage))
+        };
+        let usage_with_requests = UsageHistoryEntry {
+            requests: Some(1.0),
+            total_tokens: Some(5.0),
+            ..scoped_entry(Some(UsageHistoryEntryScope::Usage))
+        };
+        let mut usage = UsageHistoryTotals::default();
+        usage.add_entry(&usage_with_requests);
+        usage.add_entry(&usage_without_requests);
+        assert_eq!(usage.requests, None);
+        assert_eq!(usage.total_tokens, Some(10.0));
     }
 
     #[test]
