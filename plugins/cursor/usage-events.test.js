@@ -48,7 +48,7 @@ describe("cursor usage event history", () => {
     expect(body).toEqual({
       page: 1,
       pageSize: PAGE_SIZE,
-      startDate: String(localTime(10, 19, 0)),
+      startDate: String(localTime(10, 18, 0)),
       endDate: String(now().getTime()),
     })
   })
@@ -345,7 +345,7 @@ describe("cursor usage event history", () => {
     ["full pages up to the page limit", (page) => eventsPage(uniqueEvents(PAGE_SIZE, page * PAGE_SIZE))],
     ["only events without a timestamp", () => eventsPage([event({ timestamp: undefined }), event({ timestamp: "0" })], 2)],
     ["one event without a timestamp", () => eventsPage([event(), event({ timestamp: undefined })], 2)],
-    ["an event before the requested window", () => eventsPage([event({ timestamp: String(localTime(10, 18, 23)) })], 1)],
+    ["an event before the requested window", () => eventsPage([event({ timestamp: String(localTime(10, 17, 23)) })], 1)],
     ["an event after the requested window", () => eventsPage([event({ timestamp: String(now().getTime() + 60000) })], 1)],
     ["a timestamp outside the JavaScript date range", () => eventsPage([event({ timestamp: "9000000000000000" })], 1)],
   ])("omits history and keeps the summary for %s", async (_name, respond) => {

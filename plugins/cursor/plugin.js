@@ -15,7 +15,9 @@
   // Safety cap so a paging fault cannot loop forever (40 * 500 = 20k events per window).
   const USAGE_EVENTS_MAX_PAGES = 40
   const USAGE_EVENTS_PAGE_TIMEOUT_MS = 15000
-  const USAGE_HISTORY_DAYS = 30
+  // Today and the 30 days before it, so month to date on the 31st includes day 1
+  // (see docs/architecture.md).
+  const USAGE_HISTORY_DAYS = 31
   // The host stops a probe after 30 s and discards its result. History paging must
   // end 20 s after probe start, so the summary always returns in time.
   const USAGE_HISTORY_BUDGET_MS = 20000
