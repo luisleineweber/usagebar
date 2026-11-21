@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
+import { summarizeUsageHistory } from "../../src/lib/usage-history"
 
 const loadPlugin = async () => {
   await import("./plugin.js")
@@ -142,10 +143,12 @@ describe("openai-api plugin", () => {
       expect.arrayContaining([
         expect.objectContaining({
           periodStart: "2026-03-06T00:00:00.000Z",
+          scope: "cost",
           costUsd: 1.25,
         }),
         expect.objectContaining({
           periodStart: "2026-03-06T00:00:00.000Z",
+          scope: "usage",
           model: "gpt-5-mini",
           inputTokens: 1000000,
           outputTokens: 500000,
@@ -154,6 +157,160 @@ describe("openai-api plugin", () => {
         }),
       ])
     )
+  })
+
+  it("requests history from the month start on the 31st without widening 30-day lines", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-07-31T12:00:00.000Z"
+    setEnv(ctx, { OPENAI_ADMIN_API_KEY: "admin-key" })
+    const july1 = Date.parse("2026-07-01T00:00:00.000Z") / 1000
+    const july31 = Date.parse("2026-07-31T00:00:00.000Z") / 1000
+    ctx.host.http.request.mockImplementation((request) => {
+      if (request.url.includes("/v1/organization/costs")) {
+        return response(
+          JSON.stringify({
+            data: [
+              { start_time: july1, results: [{ amount: { value: 100, currency: "usd" } }] },
+              { start_time: july31, results: [{ amount: { value: 5, currency: "usd" } }] },
+            ],
+          })
+        )
+      }
+      return response(
+        JSON.stringify({
+          data: [
+            {
+              start_time: july1,
+              results: [
+                { model: "gpt-old", input_tokens: 900, output_tokens: 100, num_model_requests: 3 },
+              ],
+            },
+            {
+              start_time: july31,
+              results: [
+                { model: "gpt-5", input_tokens: 10, output_tokens: 5, num_model_requests: 1 },
+              ],
+            },
+          ],
+        })
+      )
+    })
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    for (const [request] of ctx.host.http.request.mock.calls) {
+      expect(request.url).toContain(`start_time=${july1}`)
+    }
+    expect(result.lines.find((line) => line.label === "30 days")?.value).toBe("$5.00")
+    expect(result.lines.find((line) => line.label === "Tokens")?.value).toBe("15 total")
+    expect(result.lines.find((line) => line.label === "Top model")?.value).toBe("gpt-5")
+
+    const outputs = [{ providerId: "openai-api", history: result.history }]
+    const nowMs = Date.parse(ctx.nowIso)
+    const totals = (period) =>
+      summarizeUsageHistory(outputs, { period, nowMs, timeZone: "UTC" }).totals
+    expect(totals("monthToDate")).toMatchObject({ costUsd: 105, totalTokens: 1015 })
+    expect(totals("30d")).toMatchObject({ costUsd: 5, totalTokens: 15 })
+    expect(totals("weekToDate")).toMatchObject({ costUsd: 5, totalTokens: 15 })
+  })
+
+  function mockPayloads(ctx, costResults, usageResults) {
+    const day = Date.parse("2026-07-31T00:00:00.000Z") / 1000
+    ctx.host.http.request.mockImplementation((request) =>
+      response(
+        JSON.stringify({
+          data: [
+            {
+              start_time: day,
+              results: request.url.includes("/v1/organization/costs") ? costResults : usageResults,
+            },
+          ],
+        })
+      )
+    )
+  }
+
+  it("fails the probe when a cost row omits its amount", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-07-31T12:00:00.000Z"
+    setEnv(ctx, { OPENAI_ADMIN_API_KEY: "admin-key" })
+    mockPayloads(ctx, [{ amount: { currency: "usd" } }], [])
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow("OpenAI cost response has a row without an amount.")
+  })
+
+  it.each([
+    ["input tokens", { model: "gpt-5", output_tokens: 15, num_model_requests: 1 }],
+    ["output tokens", { model: "gpt-5", input_tokens: 15, num_model_requests: 1 }],
+    ["requests", { model: "gpt-5", input_tokens: 10, output_tokens: 5 }],
+  ])("fails the probe when a usage row omits %s", async (_field, usageRow) => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-07-31T12:00:00.000Z"
+    setEnv(ctx, { OPENAI_ADMIN_API_KEY: "admin-key" })
+    mockPayloads(ctx, [{ amount: { value: 1, currency: "usd" } }], [usageRow])
+
+    const plugin = await loadPlugin()
+    expect(() => plugin.probe(ctx)).toThrow(
+      "OpenAI usage response has a row without input tokens, output tokens, or requests."
+    )
+  })
+
+  it("keeps explicit zero cost, tokens, and requests as zero", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-07-31T12:00:00.000Z"
+    setEnv(ctx, { OPENAI_ADMIN_API_KEY: "admin-key" })
+    mockPayloads(
+      ctx,
+      [{ amount: { value: "0.00", currency: "usd" } }],
+      [{ model: "gpt-5", input_tokens: 0, output_tokens: 7, num_model_requests: 0, requests: 9 }]
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+
+    expect(result.lines.find((line) => line.label === "Today")?.value).toBe("$0.00")
+    expect(result.lines.find((line) => line.label === "Requests")?.value).toBe("0")
+    expect(result.history.entries).toEqual([
+      expect.objectContaining({ scope: "cost", costUsd: 0 }),
+      expect.objectContaining({ scope: "usage", inputTokens: 0, outputTokens: 7, requests: 0 }),
+    ])
+  })
+
+  it("keeps an all-zero usage row so period totals are zero, not unknown", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-07-31T12:00:00.000Z"
+    setEnv(ctx, { OPENAI_ADMIN_API_KEY: "admin-key" })
+    mockPayloads(
+      ctx,
+      [{ amount: { value: 0, currency: "usd" } }],
+      [{ model: "gpt-5", input_tokens: 0, output_tokens: 0, num_model_requests: 0 }]
+    )
+
+    const plugin = await loadPlugin()
+    const result = plugin.probe(ctx)
+    const outputs = [{ providerId: "openai-api", history: result.history }]
+    const nowMs = Date.parse(ctx.nowIso)
+
+    for (const period of ["weekToDate", "monthToDate"]) {
+      expect(
+        summarizeUsageHistory(outputs, { period, nowMs, timeZone: "UTC" }).totals
+      ).toMatchObject({ costUsd: 0, totalTokens: 0, requests: 0 })
+    }
+  })
+
+  it("keeps the 30-day request window when it already covers the month start", async () => {
+    const ctx = makeCtx()
+    ctx.nowIso = "2026-07-10T12:00:00.000Z"
+    setEnv(ctx, { OPENAI_ADMIN_API_KEY: "admin-key" })
+    mockOpenAiRequests(ctx)
+
+    const plugin = await loadPlugin()
+    plugin.probe(ctx)
+
+    const start30 = Date.parse("2026-06-11T00:00:00.000Z") / 1000
+    expect(ctx.host.http.request.mock.calls[0][0].url).toContain(`start_time=${start30}`)
   })
 
   it("falls back to OPENAI_API_KEY when admin-specific env is absent", async () => {

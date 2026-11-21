@@ -63,7 +63,7 @@ Returns one cached usage snapshot for a known provider.
 
 Returns grouped cached usage history. Use `provider`, `from`, `to`, `model`, `project`, and `groupBy` query parameters to filter and group the result.
 
-History response `schemaVersion` is `2`. Every field in `totals` and group `totals` is `number | null`. `null` means the selected entries did not provide that metric; it is not zero.
+History response `schemaVersion` is `2`. Every field in `totals` and group `totals` is `number | null`. `null` means the selected entries did not provide that metric; it is not zero. An entry with `scope: "cost"` reports only `costUsd`, and an entry with `scope: "usage"` reports only token and request metrics. Totals skip entries whose scope excludes the metric. An entry without `scope` reports every metric, so one missing value makes that total `null`.
 
 ### Unsupported Methods
 
