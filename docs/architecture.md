@@ -181,7 +181,7 @@ The week start is fixed to Monday and does not follow the system locale, so ever
 
 A provider that returns history must cover the last 31 calendar days (today and the 30 days before it), or at least from the earlier of its 30-day window start and day 1 of the current month. Otherwise month to date on the 31st misses day 1 and shows a total that is too low.
 
-A history entry may set `scope`. A `"cost"` entry carries only `costUsd`, and a `"usage"` entry carries only token and request metrics. Use it when a provider reports cost and usage in separate rows, such as OpenAI's costs and completions endpoints. Totals sum each metric over the entries that report it, and stay `null` when none do. An entry without `scope` reports every metric, so one missing value keeps that total `null`. The Rust host rejects a scoped entry that carries metrics outside its scope.
+A history entry may set `scope`. A `"cost"` entry carries only cost metrics (`costUsd`, and optionally `chargedCostUsd`), and a `"usage"` entry carries only token and request metrics. Use it when a provider reports cost and usage in separate rows, such as OpenAI's costs and completions endpoints. Totals sum each metric over the entries that report it, and stay `null` when none do. An entry without `scope` reports every metric, so one missing value keeps that total `null`. The Rust host rejects a scoped entry that carries metrics outside its scope.
 
 ---
 

@@ -9,6 +9,26 @@
   const REST_USAGE_URL = "https://cursor.com/api/usage"
   const USAGE_SUMMARY_URL = "https://cursor.com/api/usage-summary"
   const STRIPE_URL = "https://cursor.com/api/auth/stripe"
+  const USAGE_EVENTS_URL = "https://cursor.com/api/dashboard/get-filtered-usage-events"
+  const USAGE_EVENTS_ORIGIN = "https://cursor.com"
+  const USAGE_EVENTS_PAGE_SIZE = 500
+  // Safety cap so a paging fault cannot loop forever (40 * 500 = 20k events per window).
+  const USAGE_EVENTS_MAX_PAGES = 40
+  const USAGE_EVENTS_PAGE_TIMEOUT_MS = 15000
+  // Today and the 30 days before it, so month to date on the 31st includes day 1
+  // (see docs/architecture.md).
+  const USAGE_HISTORY_DAYS = 31
+  // The host stops a probe after 30 s and discards its result. History paging must
+  // end 20 s after probe start, so the summary always returns in time.
+  const USAGE_HISTORY_BUDGET_MS = 20000
+  // Do not start a page with less time than this left in the budget.
+  const USAGE_HISTORY_MIN_PAGE_MS = 3000
+  // History changes slowly. Between fetches, the host keeps the last valid history.
+  const USAGE_HISTORY_REFRESH_MS = 30 * 60 * 1000
+  // Same minimum as the Claude plugin uses after HTTP 429.
+  const USAGE_HISTORY_MIN_RETRY_AFTER_MS = 5 * 60 * 1000
+  const USAGE_HISTORY_MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
+  const USAGE_HISTORY_SCHEDULE_FILE = "usage-history-schedule.json"
   const CLIENT_ID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
   const LOGIN_HINT = "Sign in via Cursor app or run `agent login`."
@@ -503,7 +523,495 @@
     )
   }
 
+  // ---------------------------------------------------------------------------
+  // Usage event history
+  //
+  // Two cost values come from each event and keep separate meanings:
+  // - `tokenUsage.totalCents` is the token cost at the model vendor's list price.
+  //   It maps to history `costUsd`, the same meaning as the ccusage-based providers.
+  // - `chargedCents` is the amount that Cursor deducted from the plan or charged.
+  //   It maps to history `chargedCostUsd`.
+  // The plugin never adds one to the other and never uses one in place of the other.
+  // A bucket metric is set only when every event in the bucket reports a valid value.
+  //
+  // When history is omitted, the host keeps the last valid history as retained data.
+  // So every doubtful result omits history instead of returning partial history.
+  // ---------------------------------------------------------------------------
+
+  function eventsFailure(reason, deferMs) {
+    var failure = { ok: false, reason: reason }
+    if (deferMs !== undefined) failure.deferMs = deferMs
+    return failure
+  }
+
+  function nonNegativeNumber(value) {
+    if (typeof value === "number") {
+      return Number.isFinite(value) && value >= 0 ? value : null
+    }
+    if (typeof value === "string" && value.trim() !== "") {
+      var parsed = Number(value)
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+    }
+    return null
+  }
+
+  function nonNegativeInteger(value) {
+    var number = nonNegativeNumber(value)
+    return number !== null && Number.isInteger(number) ? number : null
+  }
+
+  function stableStringify(value) {
+    if (Array.isArray(value)) {
+      return "[" + value.map(stableStringify).join(",") + "]"
+    }
+    if (value && typeof value === "object") {
+      return "{" + Object.keys(value).sort().map(function (key) {
+        return JSON.stringify(key) + ":" + stableStringify(value[key])
+      }).join(",") + "}"
+    }
+    return JSON.stringify(value === undefined ? null : value)
+  }
+
+  function parseUsageEventsPage(ctx, bodyText) {
+    var body = ctx.util.tryParseJson(bodyText)
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return eventsFailure("invalid JSON")
+    }
+    var keys = Object.keys(body)
+    // An empty object is an empty page that reports no total: an empty query, or a page
+    // after the last event. The caller checks the rows against any earlier total.
+    // Any other shape must carry the event list, so an error envelope cannot pass as
+    // confirmed empty usage.
+    if (keys.length === 0) return { ok: true, total: null, events: [] }
+
+    var total = null
+    if (Object.prototype.hasOwnProperty.call(body, "totalUsageEventsCount")) {
+      total = nonNegativeInteger(body.totalUsageEventsCount)
+      if (total === null) return eventsFailure("invalid totalUsageEventsCount")
+    }
+    if (!Object.prototype.hasOwnProperty.call(body, "usageEventsDisplay")) {
+      if (total !== null && keys.length === 1) return { ok: true, total: total, events: [] }
+      return eventsFailure("missing usageEventsDisplay")
+    }
+    if (!Array.isArray(body.usageEventsDisplay)) {
+      return eventsFailure("usageEventsDisplay is not an array")
+    }
+    return { ok: true, total: total, events: body.usageEventsDisplay }
+  }
+
+  function headerValue(headers, name) {
+    if (!headers || typeof headers !== "object") return null
+    var keys = Object.keys(headers)
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].toLowerCase() === name) return String(headers[keys[i]])
+    }
+    return null
+  }
+
+  // Retry-After holds delay seconds or an HTTP date. Without a usable value,
+  // wait one history refresh interval.
+  function retryAfterDelayMs(headers, nowMs) {
+    var value = headerValue(headers, "retry-after")
+    var delayMs = null
+    if (value !== null) {
+      var trimmed = value.trim()
+      if (/^\d+$/.test(trimmed)) {
+        delayMs = Number(trimmed) * 1000
+      } else {
+        var dateMs = Date.parse(trimmed)
+        if (Number.isFinite(dateMs)) delayMs = dateMs - nowMs
+      }
+    }
+    if (delayMs === null) return USAGE_HISTORY_REFRESH_MS
+    return Math.min(
+      Math.max(delayMs, USAGE_HISTORY_MIN_RETRY_AFTER_MS),
+      USAGE_HISTORY_MAX_RETRY_AFTER_MS
+    )
+  }
+
+  function fetchUsageEventsPage(ctx, session, page, window, timeoutMs) {
+    var resp
+    try {
+      resp = ctx.util.request({
+        method: "POST",
+        url: USAGE_EVENTS_URL,
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          // Cursor checks the Origin header on dashboard POST requests (CSRF guard).
+          Origin: USAGE_EVENTS_ORIGIN,
+          Cookie: "WorkosCursorSessionToken=" + session.sessionToken,
+        },
+        bodyText: JSON.stringify({
+          page: page,
+          pageSize: USAGE_EVENTS_PAGE_SIZE,
+          startDate: String(window.startMs),
+          endDate: String(window.endMs),
+        }),
+        timeoutMs: timeoutMs,
+      })
+    } catch (e) {
+      return eventsFailure("request failed: " + String(e))
+    }
+    if (resp.status === 429) {
+      return eventsFailure("HTTP 429", retryAfterDelayMs(resp.headers, Date.now()))
+    }
+    if (resp.status < 200 || resp.status >= 300) {
+      return eventsFailure("HTTP " + String(resp.status))
+    }
+    return parseUsageEventsPage(ctx, resp.bodyText)
+  }
+
+  // Every length k > 0 for which the last k rows of `previous` equal the first k rows of `current`.
+  function boundaryOverlaps(previous, current) {
+    var overlaps = []
+    var limit = Math.min(previous.length, current.length)
+    for (var count = 1; count <= limit; count++) {
+      var matches = true
+      for (var i = 0; i < count; i++) {
+        if (previous[previous.length - count + i] !== current[i]) {
+          matches = false
+          break
+        }
+      }
+      if (matches) overlaps.push(count)
+    }
+    return overlaps
+  }
+
+  // The endpoint has no stable event ID, and two real events can be identical.
+  // The reported total proves how many rows repeat, but not which rows. Rows are
+  // removed only when the repeats at page boundaries explain the excess exactly,
+  // with one possible overlap per boundary. Any other case omits history, because
+  // a guess could drop the wrong row and move usage to the wrong model.
+  function reconcilePages(pages, expectedTotal) {
+    var rawCount = pages.reduce(function (sum, page) { return sum + page.length }, 0)
+    if (rawCount < expectedTotal) {
+      return eventsFailure("incomplete pages: expected " + expectedTotal + ", received " + rawCount)
+    }
+    var excess = rawCount - expectedTotal
+    var removals = pages.map(function () { return 0 })
+    if (excess > 0) {
+      var keys = pages.map(function (page) { return page.map(stableStringify) })
+      var removable = 0
+      for (var p = 1; p < pages.length; p++) {
+        var overlaps = boundaryOverlaps(keys[p - 1], keys[p])
+        if (overlaps.length > 1) return eventsFailure("ambiguous overlap at page " + (p + 1))
+        removals[p] = overlaps.length === 1 ? overlaps[0] : 0
+        removable += removals[p]
+      }
+      if (removable !== excess) {
+        return eventsFailure(
+          "page overlap does not match total: " + excess + " extra rows, " + removable + " repeated"
+        )
+      }
+    }
+    var events = []
+    for (var i = 0; i < pages.length; i++) {
+      events = events.concat(pages[i].slice(removals[i]))
+    }
+    return { ok: true, events: events }
+  }
+
+  function fetchUsageEvents(ctx, session, window, deadlineMs) {
+    var pages = []
+    var expectedTotal = null
+    var completed = false
+    for (var page = 1; page <= USAGE_EVENTS_MAX_PAGES; page++) {
+      var remainingMs = deadlineMs - Date.now()
+      if (remainingMs < USAGE_HISTORY_MIN_PAGE_MS) {
+        return eventsFailure("time budget exhausted before page " + page, USAGE_HISTORY_REFRESH_MS)
+      }
+      var result = fetchUsageEventsPage(
+        ctx,
+        session,
+        page,
+        window,
+        Math.min(USAGE_EVENTS_PAGE_TIMEOUT_MS, remainingMs)
+      )
+      if (!result.ok) {
+        // A request that used up the budget would fail the same way on the next probe.
+        if (result.deferMs === undefined && deadlineMs - Date.now() < USAGE_HISTORY_MIN_PAGE_MS) {
+          return eventsFailure("time budget exhausted (" + result.reason + ")", USAGE_HISTORY_REFRESH_MS)
+        }
+        return result
+      }
+      if (result.total !== null) {
+        if (expectedTotal !== null && expectedTotal !== result.total) {
+          return eventsFailure("total changed between pages")
+        }
+        expectedTotal = result.total
+      }
+      if (result.events.length === 0) {
+        completed = true
+        break
+      }
+      pages.push(result.events)
+      if (result.events.length < USAGE_EVENTS_PAGE_SIZE) {
+        completed = true
+        break
+      }
+    }
+    // A full last page at the cap does not prove that no more events exist.
+    if (!completed) return eventsFailure("page limit reached", USAGE_HISTORY_REFRESH_MS)
+    if (expectedTotal === null) {
+      // Without a total, a row repeated at a page boundary cannot be told apart from
+      // identical real events, so any boundary overlap omits history.
+      var keys = pages.map(function (p) { return p.map(stableStringify) })
+      for (var index = 1; index < keys.length; index++) {
+        if (boundaryOverlaps(keys[index - 1], keys[index]).length > 0) {
+          return eventsFailure("pages overlap at page " + (index + 1) + " without a total")
+        }
+      }
+      return { ok: true, events: pages.reduce(function (all, p) { return all.concat(p) }, []) }
+    }
+    return reconcilePages(pages, expectedTotal)
+  }
+
+  function historyWindow(nowMs) {
+    var now = new Date(nowMs)
+    // Calendar arithmetic keeps whole local days across daylight saving changes.
+    var startMs = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - (USAGE_HISTORY_DAYS - 1)
+    ).getTime()
+    return { startMs: startMs, endMs: nowMs }
+  }
+
+  function localDayStartMs(ms) {
+    var date = new Date(ms)
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  }
+
+  function pad2(value) {
+    return (value < 10 ? "0" : "") + value
+  }
+
+  // RFC 3339 with the local offset, so the date part is the local calendar day.
+  function localRfc3339(date) {
+    var offsetMinutes = -date.getTimezoneOffset()
+    var absMinutes = Math.abs(offsetMinutes)
+    return (
+      date.getFullYear() + "-" + pad2(date.getMonth() + 1) + "-" + pad2(date.getDate()) +
+      "T" + pad2(date.getHours()) + ":" + pad2(date.getMinutes()) + ":" + pad2(date.getSeconds()) +
+      (offsetMinutes < 0 ? "-" : "+") + pad2(Math.floor(absMinutes / 60)) + ":" + pad2(absMinutes % 60)
+    )
+  }
+
+  function localDayPeriod(dayStartMs) {
+    var start = new Date(dayStartMs)
+    var end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1)
+    return { periodStart: localRfc3339(start), periodEnd: localRfc3339(end) }
+  }
+
+  function readTokenCount(tokenUsage, field) {
+    if (!tokenUsage) return null
+    return nonNegativeNumber(tokenUsage[field])
+  }
+
+  // Returns null when the event cannot be assigned to a day of the requested window.
+  function normalizeUsageEvent(raw, window) {
+    if (!raw || typeof raw !== "object") return null
+    var timestampMs = nonNegativeInteger(raw.timestamp)
+    if (timestampMs === null || timestampMs < window.startMs || timestampMs > window.endMs) return null
+    var tokenUsage = raw.tokenUsage && typeof raw.tokenUsage === "object" ? raw.tokenUsage : null
+    var model = typeof raw.model === "string" ? raw.model.trim() : ""
+    return {
+      timestampMs: timestampMs,
+      model: model || null,
+      inputTokens: readTokenCount(tokenUsage, "inputTokens"),
+      outputTokens: readTokenCount(tokenUsage, "outputTokens"),
+      cacheReadTokens: readTokenCount(tokenUsage, "cacheReadTokens"),
+      cacheCreationTokens: readTokenCount(tokenUsage, "cacheWriteTokens"),
+      listPriceCents: readTokenCount(tokenUsage, "totalCents"),
+      chargedCents: nonNegativeNumber(raw.chargedCents),
+    }
+  }
+
+  var BUCKET_METRICS = [
+    "inputTokens",
+    "outputTokens",
+    "cacheReadTokens",
+    "cacheCreationTokens",
+    "listPriceCents",
+    "chargedCents",
+  ]
+
+  // A null sum means at least one event in the bucket did not report the metric.
+  function addToBucket(bucket, event) {
+    bucket.requests += 1
+    for (var i = 0; i < BUCKET_METRICS.length; i++) {
+      var metric = BUCKET_METRICS[i]
+      var value = event[metric]
+      bucket[metric] = bucket[metric] === null || value === null ? null : bucket[metric] + value
+    }
+  }
+
+  function bucketEntry(bucket) {
+    var entry = localDayPeriod(bucket.dayStartMs)
+    if (bucket.model) entry.model = bucket.model
+    entry.requests = bucket.requests
+    if (bucket.inputTokens !== null) entry.inputTokens = bucket.inputTokens
+    if (bucket.outputTokens !== null) entry.outputTokens = bucket.outputTokens
+    if (bucket.cacheReadTokens !== null) entry.cacheReadTokens = bucket.cacheReadTokens
+    if (bucket.cacheCreationTokens !== null) entry.cacheCreationTokens = bucket.cacheCreationTokens
+    if (
+      bucket.inputTokens !== null &&
+      bucket.outputTokens !== null &&
+      bucket.cacheReadTokens !== null &&
+      bucket.cacheCreationTokens !== null
+    ) {
+      entry.totalTokens =
+        bucket.inputTokens + bucket.outputTokens + bucket.cacheReadTokens + bucket.cacheCreationTokens
+    }
+    if (bucket.listPriceCents !== null) entry.costUsd = bucket.listPriceCents / 100
+    if (bucket.chargedCents !== null) entry.chargedCostUsd = bucket.chargedCents / 100
+    return entry
+  }
+
+  function buildUsageEventHistory(rawEvents, window) {
+    var buckets = {}
+    var order = []
+    var unassigned = 0
+    for (var i = 0; i < rawEvents.length; i++) {
+      var event = normalizeUsageEvent(rawEvents[i], window)
+      if (!event) {
+        unassigned += 1
+        continue
+      }
+      var dayStartMs = localDayStartMs(event.timestampMs)
+      var key = dayStartMs + "\u0000" + (event.model || "")
+      if (!buckets[key]) {
+        buckets[key] = {
+          dayStartMs: dayStartMs,
+          model: event.model,
+          requests: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+          listPriceCents: 0,
+          chargedCents: 0,
+        }
+        order.push(key)
+      }
+      addToBucket(buckets[key], event)
+    }
+    // Day totals without these events would be too low, so keep the last valid history.
+    if (unassigned > 0) {
+      return eventsFailure(unassigned + " events without a valid timestamp in the requested window")
+    }
+    order.sort(function (a, b) {
+      var left = buckets[a]
+      var right = buckets[b]
+      if (left.dayStartMs !== right.dayStartMs) return left.dayStartMs - right.dayStartMs
+      return String(left.model || "").localeCompare(String(right.model || ""))
+    })
+    return {
+      ok: true,
+      history: {
+        version: 1,
+        source: "cursor-usage-events",
+        timeZone: "system-local",
+        entries: order.map(function (key) { return bucketEntry(buckets[key]) }),
+      },
+    }
+  }
+
+  function historySchedulePath(ctx) {
+    return ctx.app.pluginDataDir + "/" + USAGE_HISTORY_SCHEDULE_FILE
+  }
+
+  function readHistorySchedule(ctx) {
+    try {
+      var path = historySchedulePath(ctx)
+      if (!ctx.host.fs.exists(path)) return null
+      var data = ctx.util.tryParseJson(ctx.host.fs.readText(path))
+      if (
+        !data ||
+        typeof data.userId !== "string" ||
+        typeof data.nextFetchAtMs !== "number" ||
+        !Number.isFinite(data.nextFetchAtMs)
+      ) {
+        return null
+      }
+      return data
+    } catch (e) {
+      ctx.host.log.warn("usage events: history schedule unreadable: " + String(e))
+      return null
+    }
+  }
+
+  function writeHistorySchedule(ctx, userId, nextFetchAtMs) {
+    try {
+      ctx.host.fs.writeText(
+        historySchedulePath(ctx),
+        JSON.stringify({ userId: userId, nextFetchAtMs: nextFetchAtMs })
+      )
+    } catch (e) {
+      ctx.host.log.warn("usage events: history schedule not saved: " + String(e))
+    }
+  }
+
+  function isHistoryFetchDeferred(schedule, userId, nowMs) {
+    // A different account is always due. A date too far ahead (clock change) is ignored.
+    return Boolean(
+      schedule &&
+      schedule.userId === userId &&
+      schedule.nextFetchAtMs > nowMs &&
+      schedule.nextFetchAtMs - nowMs <= USAGE_HISTORY_MAX_RETRY_AFTER_MS
+    )
+  }
+
+  function refreshUsageEventHistory(ctx, session, probeStartedAtMs) {
+    if (!session) {
+      ctx.host.log.warn("usage events: cannot build session token; history omitted")
+      return undefined
+    }
+    var nowMs = Date.now()
+    var schedule = readHistorySchedule(ctx)
+    if (schedule && schedule.userId !== session.userId) {
+      // Another account signed in. The host drops the retained history of the earlier
+      // account, so its deferral is no longer valid: a later sign-in must fetch again,
+      // also when this account's request fails without a deferral.
+      writeHistorySchedule(ctx, session.userId, nowMs)
+      schedule = null
+    }
+    if (isHistoryFetchDeferred(schedule, session.userId, nowMs)) {
+      ctx.host.log.info(
+        "usage events: next history fetch at " + new Date(schedule.nextFetchAtMs).toISOString() +
+        "; host keeps the last history"
+      )
+      return undefined
+    }
+    var window = historyWindow(nowMs)
+    var fetched = fetchUsageEvents(ctx, session, window, probeStartedAtMs + USAGE_HISTORY_BUDGET_MS)
+    var built = fetched.ok ? buildUsageEventHistory(fetched.events, window) : fetched
+    if (!built.ok) {
+      if (built.deferMs !== undefined) {
+        writeHistorySchedule(ctx, session.userId, Date.now() + built.deferMs)
+      }
+      ctx.host.log.warn("usage events unavailable (" + built.reason + "); history omitted")
+      return undefined
+    }
+    writeHistorySchedule(ctx, session.userId, Date.now() + USAGE_HISTORY_REFRESH_MS)
+    return built.history
+  }
+
   function probe(ctx) {
+    const probeStartedAtMs = Date.now()
+    const state = { accessToken: null }
+    const result = probeSummary(ctx, state)
+    const session = buildSessionToken(ctx, state.accessToken)
+    // The host hashes this identifier and keeps retained history only for the same account.
+    if (session) result.accountKey = session.userId
+    const history = refreshUsageEventHistory(ctx, session, probeStartedAtMs)
+    if (history) result.history = history
+    return result
+  }
+
+  function probeSummary(ctx, state) {
     const authState = loadAuthState(ctx)
     let accessToken = authState.accessToken
     const refreshTokenValue = authState.refreshToken
@@ -584,6 +1092,7 @@
     }
 
     ctx.host.log.info("usage fetch succeeded")
+    state.accessToken = accessToken
 
     const usage = ctx.util.tryParseJson(usageResp.bodyText)
     if (usage === null) {

@@ -39,6 +39,8 @@ usagebar-cli statusline --watch 5
 
 History JSON totals use `number | null`. `null` means the selected history did not provide that metric; it is not zero.
 
+`costUsd` is the token cost at the model vendor's list price. `chargedCostUsd` is the amount that the provider charged or deducted from the plan. They are separate totals. UsageBar never adds one to the other and never uses one in place of the other. Only providers that report a charged amount, such as Cursor, set `chargedCostUsd`. Text output shows the list-price cost as `$1.25` and the charged amount as `charged $0.40`.
+
 ## Cache and exit behavior
 
 On Windows, the default cache is `%APPDATA%\com.sunstory.usagebar\usage-api-cache.json`. Set `USAGEBAR_APP_DATA_DIR` to read a different UsageBar data directory for development or support reproduction.

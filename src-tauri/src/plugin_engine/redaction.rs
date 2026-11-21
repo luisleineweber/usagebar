@@ -116,9 +116,25 @@ pub(crate) fn redact_body(body: &str) -> String {
         "email",
         "login",
         "analytics_tracking_id",
+        "owningUser",
+        "owningTeam",
     ];
     for key in sensitive_keys {
-        let pattern = format!(r#""{}":\s*"([^"]+)""#, key);
+        // JSON allows whitespace before the colon, so the pattern must allow it too.
+        let pattern = format!(r#""{}"\s*:\s*"([^"]+)""#, key);
+        if let Ok(re) = regex_lite::Regex::new(&pattern) {
+            result = re
+                .replace_all(&result, |caps: &regex_lite::Captures| {
+                    format!("\"{}\": \"{}\"", key, redact_value(&caps[1]))
+                })
+                .to_string();
+        }
+    }
+
+    // Some providers send owner IDs as JSON numbers.
+    let numeric_id_keys = ["owningUser", "owningTeam"];
+    for key in numeric_id_keys {
+        let pattern = format!(r#""{}"\s*:\s*(-?\d+)"#, key);
         if let Ok(re) = regex_lite::Regex::new(&pattern) {
             result = re
                 .replace_all(&result, |caps: &regex_lite::Captures| {
