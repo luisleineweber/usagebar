@@ -455,6 +455,7 @@ mod tests {
             time_zone: "system-local".to_string(),
             entries: vec![UsageHistoryEntry {
                 period_start: "2026-07-28T22:00:00Z".to_string(),
+                scope: None,
                 period_end: "2026-07-29T22:00:00Z".to_string(),
                 model: None,
                 project: None,
