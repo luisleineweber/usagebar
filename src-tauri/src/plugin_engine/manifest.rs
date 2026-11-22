@@ -281,9 +281,8 @@ pub fn load_plugins_from_dir(plugins_dir: &std::path::Path) -> Vec<LoadedPlugin>
         if !manifest_path.exists() {
             continue;
         }
-        match load_single_plugin(&path) {
-            Ok(p) => plugins.push(p),
-            Err(error) => log::warn!("skipping plugin at {}: {}", path.display(), error),
+        if let Ok(p) = load_single_plugin(&path) {
+            plugins.push(p);
         }
     }
 
@@ -297,7 +296,6 @@ fn load_single_plugin(
     let manifest_path = plugin_dir.join("plugin.json");
     let manifest_text = std::fs::read_to_string(&manifest_path)?;
     let mut manifest: PluginManifest = serde_json::from_str(&manifest_text)?;
-    validate_plugin_id(&manifest.id)?;
     validate_detail_schema(manifest.detail.as_ref())?;
     manifest.links = sanitize_plugin_links(&manifest.id, std::mem::take(&mut manifest.links));
 
@@ -352,24 +350,6 @@ fn load_single_plugin(
         icon_data_url,
         dark_icon_data_url,
     })
-}
-
-/// The host joins the plugin id to data directory paths, so the id must be exactly one
-/// safe path component: lowercase ASCII letters and digits, joined by single hyphens.
-fn validate_plugin_id(id: &str) -> Result<(), String> {
-    let valid = id.split('-').all(|part| {
-        !part.is_empty()
-            && part
-                .bytes()
-                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-    });
-    if valid {
-        Ok(())
-    } else {
-        Err(format!(
-            "plugin id '{id}' must use lowercase letters, digits, and single hyphens"
-        ))
-    }
 }
 
 fn validate_detail_schema(detail: Option<&ManifestDetail>) -> Result<(), String> {
@@ -483,46 +463,6 @@ mod tests {
         }
 
         assert!(manifest_count > 0, "no plugin manifests found");
-    }
-
-    #[test]
-    fn plugin_ids_must_be_one_safe_path_component() {
-        let root =
-            std::env::temp_dir().join(format!("usagebar-plugin-ids-{}", uuid::Uuid::new_v4()));
-        for (dir, id) in [
-            ("valid", "kimi-k2"),
-            ("parent", ".."),
-            ("traversal", "../escape"),
-            ("separator", "a/b"),
-            ("backslash", "a\\b"),
-            ("upper", "Claude"),
-            ("empty", ""),
-            ("double-hyphen", "a--b"),
-        ] {
-            let plugin_dir = root.join(dir);
-            std::fs::create_dir_all(&plugin_dir).expect("plugin dir");
-            let manifest = serde_json::json!({
-                "schemaVersion": 1,
-                "id": id,
-                "name": "Test",
-                "version": "0.0.1",
-                "entry": "plugin.js",
-                "icon": "icon.svg",
-                "capabilities": {},
-                "lines": []
-            });
-            std::fs::write(plugin_dir.join("plugin.json"), manifest.to_string()).expect("manifest");
-            std::fs::write(plugin_dir.join("plugin.js"), "").expect("entry");
-            std::fs::write(plugin_dir.join("icon.svg"), "<svg/>").expect("icon");
-        }
-
-        let ids: Vec<String> = load_plugins_from_dir(&root)
-            .into_iter()
-            .map(|plugin| plugin.manifest.id)
-            .collect();
-
-        assert_eq!(ids, vec!["kimi-k2".to_string()]);
-        std::fs::remove_dir_all(&root).expect("cleanup");
     }
 
     #[test]

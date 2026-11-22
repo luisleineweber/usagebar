@@ -14,12 +14,15 @@ afterEach(() => vi.useRealTimers())
 
 const probe = (ctx) => globalThis.__openusage_plugin.probe(ctx)
 const after = (ms) => "Try again after " + new Date(Date.now() + ms).toISOString()
+const at = (ms) => "Try again after " + new Date(START + ms).toISOString()
 const calls = (ctx, part) =>
   ctx.host.http.request.mock.calls.filter(([request]) => request.url.includes(part))
-const usageHoldPath = (ctx) => ctx.app.sharedPluginDataDir + "/rate-limit-default.json"
+const usageHoldPath = (ctx) => ctx.app.pluginDataDir + "/rate-limit-default.json"
 
 function oauth(token = "token", expiresAt = START + 24 * 60 * MINUTE) {
-  return JSON.stringify({ claudeAiOauth: { accessToken: token, refreshToken: "refresh", expiresAt } })
+  return JSON.stringify({
+    claudeAiOauth: { accessToken: token, refreshToken: "refresh", expiresAt },
+  })
 }
 
 function defaultAccountCtx() {
@@ -29,16 +32,25 @@ function defaultAccountCtx() {
   return ctx
 }
 
-// A second UsageBar build (installed and dev) uses its own app data dir on the same machine.
-function otherAppInstance(ctx) {
+// A second process of the same build reads and writes the same plugin data dir.
+function sameBuildProcess(ctx) {
   const other = defaultAccountCtx()
   other.host.fs = ctx.host.fs
-  other.app = {
-    ...ctx.app,
-    appDataDir: "/tmp/openusage-other",
-    pluginDataDir: "/tmp/openusage-other/plugin",
-  }
+  other.app = ctx.app
   return other
+}
+
+function webCtx(overageStatus = 200) {
+  const ctx = makeCtx()
+  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
+  ctx.host.http.request.mockImplementation(({ url }) => {
+    if (url.endsWith("/overage_spend_limit")) return { status: overageStatus, bodyText: "{}" }
+    if (url.endsWith("/organizations")) {
+      return { status: 200, bodyText: JSON.stringify([{ uuid: "org-1", capabilities: ["chat"] }]) }
+    }
+    return { status: 200, bodyText: JSON.stringify({ five_hour: { utilization: 42 } }) }
+  })
+  return ctx
 }
 
 function expectWait(ctx, ms) {
@@ -70,76 +82,56 @@ it("resets the wait only after a successful usage response", () => {
   expectWait(ctx, 5 * MINUTE)
 })
 
-it("keeps a separate, shared, increasing refresh hold", async () => {
+it("keeps a separate, increasing refresh hold in the plugin data dir", () => {
   const ctx = defaultAccountCtx()
   ctx.host.keychain.readGenericPassword.mockReturnValue(oauth("expired", 1))
   expectWait(ctx, 5 * MINUTE)
   expectWait(ctx, 10 * MINUTE)
   expect(calls(ctx, "/v1/oauth/token")).toHaveLength(2)
   expect(calls(ctx, "/api/oauth/usage")).toHaveLength(0)
-  expect(ctx.host.fs.exists(ctx.app.sharedPluginDataDir + "/rate-limit-refresh-default.json")).toBe(
-    true
-  )
+  expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-refresh-default.json")).toBe(true)
   expect(ctx.host.fs.exists(usageHoldPath(ctx))).toBe(false)
-
-  expect(() => probe(ctx)).toThrow(after(20 * MINUTE))
-  const other = otherAppInstance(ctx)
-  other.host.keychain.readGenericPassword.mockReturnValue(oauth("expired", 1))
-  vi.resetModules()
-  await import("./plugin.js")
-  expect(() => probe(other)).toThrow(after(20 * MINUTE))
-  expect(other.host.http.request).not.toHaveBeenCalled()
 })
 
-it("keeps web holds increasing and inside their own app data dir", () => {
+it("increases the web wait for repeated 429s", () => {
   const ctx = makeCtx()
   ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
   ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
   expectWait(ctx, 5 * MINUTE)
   expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
   expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-web-default.json")).toBe(true)
-
-  const other = otherAppInstance(ctx)
-  other.host.keychain.readGenericPassword.mockReturnValue(null)
-  other.host.providerSecrets.read = ctx.host.providerSecrets.read
-  other.host.http.request.mockReturnValue({ status: 500, bodyText: "" })
-  expect(() => probe(other)).toThrow("HTTP 500")
 })
 
-it("shares the default account hold with another app instance at startup", async () => {
-  const ctx = defaultAccountCtx()
-  expect(() => probe(ctx)).toThrow(after(5 * MINUTE))
-  const other = otherAppInstance(ctx)
-  vi.resetModules()
-  await import("./plugin.js")
-
-  expect(() => probe(other)).toThrow(after(5 * MINUTE))
-  expect(() => probe(other)).toThrow(after(5 * MINUTE))
-  expect(other.host.http.request).not.toHaveBeenCalled()
-})
-
-it("keeps managed profile holds inside their own app data dir", () => {
-  const ctx = defaultAccountCtx()
-  ctx.instanceRef = { providerId: "claude", instanceId: "work" }
-  ctx.host.providerSecrets.read.mockReturnValue(
-    JSON.stringify({ claudeAiOauth: { accessToken: "managed-token" } })
+it.each([
+  ["a rate-limited", 429],
+  ["a failed", 500],
+])("keeps the web count after %s overage request", (_, status) => {
+  const ctx = webCtx()
+  ctx.host.http.request.mockReturnValueOnce({ status: 429, bodyText: "" })
+  expectWait(ctx, 5 * MINUTE)
+  const web = ctx.host.http.request.getMockImplementation()
+  ctx.host.http.request.mockImplementation((request) =>
+    request.url.endsWith("/overage_spend_limit") ? { status, bodyText: "" } : web(request)
   )
-  expect(() => probe(ctx)).toThrow("HTTP 429")
-  const other = otherAppInstance(ctx)
-  other.instanceRef = ctx.instanceRef
-  other.host.providerSecrets.read = ctx.host.providerSecrets.read
-  other.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
+  if (status === 429) expectWait(ctx, 10 * MINUTE)
+  else expect(() => probe(ctx)).not.toThrow()
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  expect(() => probe(ctx)).toThrow(after((status === 429 ? 20 : 10) * MINUTE))
+})
 
-  expect(() => probe(other)).not.toThrow()
-  const defaultAccount = otherAppInstance(ctx)
-  defaultAccount.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
-  expect(() => probe(defaultAccount)).not.toThrow()
+it("resets the web count after a fully successful web probe", () => {
+  const ctx = webCtx()
+  ctx.host.http.request.mockReturnValueOnce({ status: 429, bodyText: "" })
+  expectWait(ctx, 5 * MINUTE)
+  expect(() => probe(ctx)).not.toThrow()
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  expect(() => probe(ctx)).toThrow(after(5 * MINUTE))
 })
 
 // No credential record carries a verified account identity, and usage holds must survive token
 // rotation and credential replacement. A login switch therefore keeps the hold, but only for
 // the window fixed when the hold was recorded.
-it("keeps the default hold across a login switch only until its fixed end", () => {
+it("keeps the hold across a login switch only until its fixed end", () => {
   const ctx = defaultAccountCtx()
   ctx.host.http.request.mockReturnValue({ status: 429, headers: { "Retry-After": "86400" } })
   expect(() => probe(ctx)).toThrow(after(60 * MINUTE))
@@ -152,55 +144,39 @@ it("keeps the default hold across a login switch only until its fixed end", () =
   expect(calls(ctx, "/api/oauth/usage")).toHaveLength(2)
 })
 
-it("does not let a late success clear a hold another instance recorded", () => {
+it("blocks a request when a hold appears after the probe's first check", () => {
   const ctx = defaultAccountCtx()
   expectWait(ctx, 5 * MINUTE)
-  const other = otherAppInstance(ctx)
+  const other = sameBuildProcess(ctx)
+  ctx.host.keychain.readGenericPassword.mockImplementationOnce(() => {
+    expect(() => probe(other)).toThrow(after(10 * MINUTE))
+    return oauth()
+  })
+  ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
+
+  expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
+  expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
+  expect(calls(ctx, "/api/oauth/usage")).toHaveLength(1)
+})
+
+it("does not let a late success clear a hold recorded during its request", () => {
+  const ctx = defaultAccountCtx()
+  expectWait(ctx, 5 * MINUTE)
+  vi.advanceTimersByTime(20 * MINUTE)
+  const other = sameBuildProcess(ctx)
   ctx.host.http.request.mockImplementationOnce(() => {
+    vi.setSystemTime(new Date(Date.now() - 10 * MINUTE))
     expect(() => probe(other)).toThrow(after(10 * MINUTE))
     return { status: 200, bodyText: "{}" }
   })
 
   expect(() => probe(ctx)).not.toThrow()
   expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
-  expect(calls(ctx, "/api/oauth/usage")).toHaveLength(2)
-  vi.advanceTimersByTime(10 * MINUTE)
-  expectWait(ctx, 20 * MINUTE)
-})
-
-it("does not let a success clear a hold written between its read and its write", () => {
-  const ctx = defaultAccountCtx()
-  expectWait(ctx, 5 * MINUTE)
-  const other = otherAppInstance(ctx)
-  ctx.host.http.request.mockReturnValueOnce({ status: 200, bodyText: "{}" })
-  const swap = ctx.host.fs.compareAndSwapText.getMockImplementation()
-  ctx.host.fs.compareAndSwapText.mockImplementationOnce((...args) => {
-    expect(() => probe(other)).toThrow(after(10 * MINUTE))
-    return swap(...args)
-  })
-
-  expect(() => probe(ctx)).not.toThrow()
-  expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
-})
-
-it("does not let a stale 429 decision overwrite a newer longer hold", () => {
-  const ctx = defaultAccountCtx()
-  const other = otherAppInstance(ctx)
-  other.host.http.request.mockReturnValue({ status: 429, headers: { "Retry-After": "2400" } })
-  const swap = ctx.host.fs.compareAndSwapText.getMockImplementation()
-  ctx.host.fs.compareAndSwapText.mockImplementationOnce((...args) => {
-    expect(() => probe(other)).toThrow(after(40 * MINUTE))
-    return swap(...args)
-  })
-
-  expect(() => probe(ctx)).toThrow(after(40 * MINUTE))
-  vi.advanceTimersByTime(40 * MINUTE)
-  expectWait(ctx, 10 * MINUTE)
 })
 
 it("does not escalate a 429 that arrives during an active hold", () => {
   const ctx = defaultAccountCtx()
-  const other = otherAppInstance(ctx)
+  const other = sameBuildProcess(ctx)
   ctx.host.http.request.mockImplementationOnce(() => {
     expect(() => probe(other)).toThrow(after(5 * MINUTE))
     return { status: 429, bodyText: "" }
@@ -212,7 +188,7 @@ it("does not escalate a 429 that arrives during an active hold", () => {
 
 it("extends an active hold when a concurrent 429 sends a longer Retry-After", () => {
   const ctx = defaultAccountCtx()
-  const other = otherAppInstance(ctx)
+  const other = sameBuildProcess(ctx)
   ctx.host.http.request.mockImplementationOnce(() => {
     expect(() => probe(other)).toThrow(after(5 * MINUTE))
     return { status: 429, headers: { "Retry-After": "900" } }
@@ -222,14 +198,36 @@ it("extends an active hold when a concurrent 429 sends a longer Retry-After", ()
   expectWait(ctx, 10 * MINUTE)
 })
 
+it("reads a legacy retryAt-only record as one 429", () => {
+  const ctx = defaultAccountCtx()
+  ctx.host.fs.writeText(usageHoldPath(ctx), JSON.stringify({ retryAt: START + 20 * MINUTE }))
+
+  expect(() => probe(ctx)).toThrow(at(20 * MINUTE))
+  expect(ctx.host.http.request).not.toHaveBeenCalled()
+  vi.advanceTimersByTime(20 * MINUTE)
+  expectWait(ctx, 10 * MINUTE)
+})
+
+it("caps a legacy retryAt-only record at one hour", () => {
+  const ctx = defaultAccountCtx()
+  ctx.host.fs.writeText(usageHoldPath(ctx), JSON.stringify({ retryAt: START + 5 * 60 * MINUTE }))
+
+  expect(() => probe(ctx)).toThrow(at(60 * MINUTE))
+  vi.advanceTimersByTime(30 * MINUTE)
+  expect(() => probe(ctx)).toThrow(at(60 * MINUTE))
+})
+
 it.each([
   ["invalid JSON", "{"],
   ["null", "null"],
   ["an array", "[]"],
   ["an infinite retryAt", '{"retryAt":1e999,"streak":1,"recordedAt":' + START + "}"],
-  ["a retryAt past the window", JSON.stringify({ retryAt: START + 61 * MINUTE, streak: 1, recordedAt: START })],
+  [
+    "a retryAt past the window",
+    JSON.stringify({ retryAt: START + 61 * MINUTE, streak: 1, recordedAt: START }),
+  ],
   ["a negative streak", JSON.stringify({ retryAt: START + MINUTE, streak: -1, recordedAt: START })],
-  ["a record without recordedAt", JSON.stringify({ retryAt: START + MINUTE })],
+  ["an infinite legacy retryAt", '{"retryAt":1e999}'],
 ])("logs and discards a hold record with %s", (_, text) => {
   const ctx = defaultAccountCtx()
   ctx.host.fs.writeText(usageHoldPath(ctx), text)
@@ -252,64 +250,4 @@ it("does not extend a hold when the clock moves back", () => {
   vi.advanceTimersByTime(5 * MINUTE)
   ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "{}" })
   expect(() => probe(ctx)).not.toThrow()
-})
-
-it("shows an error when the hold record keeps changing", () => {
-  const ctx = defaultAccountCtx()
-  ctx.host.fs.compareAndSwapText.mockReturnValue(false)
-
-  expect(() => probe(ctx)).toThrow("Claude rate-limit state is busy. Try again.")
-  expect(ctx.host.log.error).toHaveBeenCalled()
-})
-
-it("does not shorten a hold another build writes after this build samples the clock", () => {
-  const ctx = defaultAccountCtx()
-  const other = otherAppInstance(ctx)
-  const exists = ctx.host.fs.exists
-  let interleaved = false
-  ctx.host.fs.exists = (path) => {
-    if (!interleaved && path === usageHoldPath(ctx)) {
-      interleaved = true
-      vi.advanceTimersByTime(MINUTE)
-      expect(() => probe(other)).toThrow(after(5 * MINUTE))
-    }
-    return exists(path)
-  }
-
-  // The other build recorded its hold one minute later, so it ends six minutes after START.
-  expect(() => probe(ctx)).toThrow(
-    "Try again after " + new Date(START + 6 * MINUTE).toISOString()
-  )
-  expect(interleaved).toBe(true)
-  expect(ctx.host.http.request).not.toHaveBeenCalled()
-})
-
-it("keeps a hold recorded during a request even when the clock moved back", () => {
-  const ctx = defaultAccountCtx()
-  expectWait(ctx, 5 * MINUTE)
-  vi.advanceTimersByTime(20 * MINUTE)
-  const other = otherAppInstance(ctx)
-  ctx.host.http.request.mockImplementationOnce(() => {
-    vi.setSystemTime(new Date(Date.now() - 10 * MINUTE))
-    expect(() => probe(other)).toThrow(after(10 * MINUTE))
-    return { status: 200, bodyText: "{}" }
-  })
-
-  expect(() => probe(ctx)).not.toThrow()
-  expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
-})
-
-it("keeps the web count when only the overage request is rate limited", () => {
-  const ctx = makeCtx()
-  ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
-  ctx.host.http.request.mockImplementation(({ url }) => {
-    if (url.endsWith("/overage_spend_limit")) return { status: 429, bodyText: "" }
-    if (url.endsWith("/organizations")) {
-      return { status: 200, bodyText: JSON.stringify([{ uuid: "org-1", capabilities: ["chat"] }]) }
-    }
-    return { status: 200, bodyText: JSON.stringify({ five_hour: { utilization: 42 } }) }
-  })
-
-  expectWait(ctx, 5 * MINUTE)
-  expectWait(ctx, 10 * MINUTE)
 })
