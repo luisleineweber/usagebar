@@ -34,6 +34,7 @@ export type UsageHistoryRecord = UsageHistoryEntry & {
 
 export type UsageHistoryTotals = {
   costUsd: number | null
+  chargedCostUsd: number | null
   requests: number | null
   inputTokens: number | null
   outputTokens: number | null
@@ -321,6 +322,8 @@ export function summarizeUsageHistory(
     entryCount: records.length,
     totals: {
       costUsd: sumMetric(records, "cost", (record) => record.costUsd),
+      // The charged amount is a cost. Rows that report cost but omit it keep it unknown.
+      chargedCostUsd: sumMetric(records, "cost", (record) => record.chargedCostUsd),
       requests: sumMetric(records, "usage", (record) => record.requests),
       inputTokens: sumMetric(records, "usage", (record) => record.inputTokens),
       outputTokens: sumMetric(records, "usage", (record) => record.outputTokens),

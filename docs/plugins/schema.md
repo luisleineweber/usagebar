@@ -91,6 +91,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `links`            | array  | No       | Optional quick links shown on detail page                                                                       |
 | `status`           | object | No       | Optional machine-readable provider status source                                                                |
 | `sourceProvenance` | string | No       | Provider source class: `officialApi`, `officialLocalSource`, `privateEndpoint`, `cookieReplay`, or `htmlScrape` |
+| `accountScoped`    | bool   | No       | `true` when retained history needs a present, matching `accountKey` (see `api.md`); defaults to `false`         |
 | `capabilities`     | object | Yes      | Host API allowlist; omitted fields are denied                                                                   |
 | `lines`            | array  | Yes      | Output shape used for loading skeletons                                                                         |
 

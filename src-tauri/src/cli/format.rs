@@ -302,6 +302,9 @@ fn history_metrics(totals: &UsageHistoryTotals) -> String {
     if let Some(cost_usd) = totals.cost_usd {
         parts.push(format!("${}", money(cost_usd)));
     }
+    if let Some(charged_cost_usd) = totals.charged_cost_usd {
+        parts.push(format!("charged ${}", money(charged_cost_usd)));
+    }
     if let Some(total_tokens) = totals.total_tokens {
         parts.push(format!("{} tokens", number(total_tokens)));
     }
@@ -471,6 +474,7 @@ mod tests {
                     project: None,
                     account: None,
                     cost_usd: Some(1.25),
+                    charged_cost_usd: None,
                     requests: Some(2.0),
                     input_tokens: Some(10.0),
                     output_tokens: Some(5.0),
@@ -481,6 +485,7 @@ mod tests {
                 }],
             }),
             fetched_at: "2026-07-10T12:00:00Z".to_string(),
+            account_key: None,
             freshness: None,
         }
     }
@@ -631,6 +636,23 @@ mod tests {
         let text = history(&[snapshot], 7, now, false).unwrap().unwrap();
         assert!(text.contains("unknown usage"));
         assert!(!text.contains("0 usage"));
+    }
+
+    #[test]
+    fn history_labels_charged_cost_apart_from_list_price_cost() {
+        let now = OffsetDateTime::parse("2026-07-10T12:00:00Z", &Rfc3339).unwrap();
+        let mut snapshot = snapshot();
+        snapshot.history.as_mut().unwrap().entries[0].charged_cost_usd = Some(0.4);
+
+        let text = history(std::slice::from_ref(&snapshot), 7, now, false)
+            .unwrap()
+            .unwrap();
+        assert!(text.contains("Total: $1.25 | charged $0.40 |"), "{}", text);
+
+        let json = history(&[snapshot], 7, now, true).unwrap().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["totals"]["costUsd"], 1.25);
+        assert_eq!(value["totals"]["chargedCostUsd"], 0.4);
     }
 
     #[test]

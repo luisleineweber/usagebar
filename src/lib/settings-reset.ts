@@ -42,6 +42,7 @@ import {
 import { DEFAULT_NOTIFICATION_PREFERENCES } from "@/lib/notification-events"
 import { saveNotificationPreferences } from "@/lib/notification-settings"
 import { saveModelPriceOverrides } from "@/lib/report-pricing"
+import { DEFAULT_PANEL_MOVABLE, setPanelMovable } from "@/lib/panel-placement"
 import type { PluginMeta } from "@/lib/plugin-types"
 
 export type ResetSettings = {
@@ -103,6 +104,8 @@ export async function resetAllSettings(plugins: PluginMeta[]): Promise<ResetSett
   await saveShowHistoryInBar(defaults.showHistoryInBar)
   await saveNotificationPreferences(DEFAULT_NOTIFICATION_PREFERENCES)
   await saveModelPriceOverrides({})
+  // The native side owns the panel placement. It also forgets the moved spot.
+  await setPanelMovable(DEFAULT_PANEL_MOVABLE)
 
   return defaults
 }

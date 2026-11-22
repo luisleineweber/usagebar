@@ -39,6 +39,7 @@ pub(crate) fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
         .collect();
     crate::local_http_api::init(&app_data_dir, known_plugin_ids);
     crate::local_http_api::start_server();
+    crate::panel_placement_store::init(&app_data_dir);
 
     app.manage(Mutex::new(crate::AppState {
         plugins,
@@ -49,6 +50,7 @@ pub(crate) fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Erro
         )),
     }));
 
+    crate::panel_floating::init(app.handle());
     crate::tray::create(app.handle())?;
     #[cfg(target_os = "windows")]
     crate::taskbar_theme::watch(app.handle().clone());
