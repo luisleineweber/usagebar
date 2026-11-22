@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { PluginMeta } from "@/lib/plugin-types"
 
-const { saveModelPriceOverridesMock, saveNotificationPreferencesMock, storeState } = vi.hoisted(
-  () => ({
-    saveNotificationPreferencesMock: vi.fn(),
-    saveModelPriceOverridesMock: vi.fn(),
-    storeState: new Map<string, unknown>(),
-  })
-)
+const {
+  saveModelPriceOverridesMock,
+  saveNotificationPreferencesMock,
+  setPanelMovableMock,
+  storeState,
+} = vi.hoisted(() => ({
+  saveNotificationPreferencesMock: vi.fn(),
+  saveModelPriceOverridesMock: vi.fn(),
+  setPanelMovableMock: vi.fn(),
+  storeState: new Map<string, unknown>(),
+}))
 
 vi.mock("@tauri-apps/plugin-store", () => ({
   LazyStore: class {
@@ -29,6 +33,11 @@ vi.mock("@/lib/notification-settings", () => ({
 
 vi.mock("@/lib/report-pricing", () => ({
   saveModelPriceOverrides: saveModelPriceOverridesMock,
+}))
+
+vi.mock("@/lib/panel-placement", () => ({
+  DEFAULT_PANEL_MOVABLE: false,
+  setPanelMovable: setPanelMovableMock,
 }))
 
 import { resetAllSettings } from "@/lib/settings-reset"
@@ -57,6 +66,8 @@ describe("resetAllSettings", () => {
     saveModelPriceOverridesMock.mockReset()
     saveNotificationPreferencesMock.mockResolvedValue(undefined)
     saveModelPriceOverridesMock.mockResolvedValue(undefined)
+    setPanelMovableMock.mockReset()
+    setPanelMovableMock.mockResolvedValue({ movable: false, floating: false })
   })
 
   it("restores preferences and preserves provider configuration", async () => {
@@ -82,5 +93,6 @@ describe("resetAllSettings", () => {
     expect(storeState.get("providerConfigs")).toEqual(providerConfigs)
     expect(saveNotificationPreferencesMock).toHaveBeenCalledOnce()
     expect(saveModelPriceOverridesMock).toHaveBeenCalledWith({})
+    expect(setPanelMovableMock).toHaveBeenCalledWith(false)
   })
 })

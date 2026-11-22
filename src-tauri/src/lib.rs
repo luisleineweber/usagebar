@@ -19,6 +19,12 @@ mod global_shortcut;
 mod guided_cookie_login;
 mod local_http_api;
 mod panel;
+mod panel_anchor_monitor;
+mod panel_floating;
+mod panel_floating_geometry;
+#[cfg(target_os = "windows")]
+mod panel_move_tracking;
+mod panel_placement_store;
 mod plugin_commands;
 mod plugin_engine;
 #[cfg(not(test))]
@@ -138,6 +144,45 @@ fn apply_panel_bounds(app_handle: tauri::AppHandle, panel_height_px: f64) {
 
 #[cfg(not(test))]
 #[tauri::command]
+fn get_panel_placement() -> panel_floating::PanelPlacementView {
+    panel_floating::placement_view()
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn set_panel_movable(
+    app_handle: tauri::AppHandle,
+    enabled: bool,
+) -> Result<panel_floating::PanelPlacementView, String> {
+    panel_floating::set_movable(&app_handle, enabled)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn start_panel_drag(app_handle: tauri::AppHandle) -> Result<(), String> {
+    panel_floating::start_drag(&app_handle)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn nudge_panel(
+    app_handle: tauri::AppHandle,
+    dx: f64,
+    dy: f64,
+) -> Result<panel_floating::PanelPlacementView, String> {
+    panel_floating::nudge(&app_handle, dx, dy)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn return_panel_to_tray(
+    app_handle: tauri::AppHandle,
+) -> Result<panel_floating::PanelPlacementView, String> {
+    panel_floating::return_to_tray(&app_handle)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
 fn take_pending_panel_view() -> Option<String> {
     take_pending_panel_view_inner()
 }
@@ -241,6 +286,11 @@ pub fn run() {
             reposition_panel,
             sync_panel_geometry,
             apply_panel_bounds,
+            get_panel_placement,
+            set_panel_movable,
+            start_panel_drag,
+            nudge_panel,
+            return_panel_to_tray,
             take_pending_panel_view,
             sync_panel_view,
             show_panel_for_view,
