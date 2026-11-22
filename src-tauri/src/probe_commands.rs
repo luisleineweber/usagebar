@@ -10,6 +10,7 @@ use crate::AppState;
 use crate::local_http_api;
 use crate::plugin_engine;
 use crate::plugin_engine::runtime::ProviderInstanceRef;
+use crate::probe_instance_lock;
 
 const MAX_CONCURRENT_PROBES: usize = 4;
 const PROBE_WORKER_TIMEOUT: Duration = Duration::from_secs(35);
@@ -159,71 +160,89 @@ pub(crate) async fn start_probe_batch(
         let join_plugin = plugin.clone();
         let timeout_plugin = plugin.clone();
         let capacity_plugin = plugin.clone();
+        let busy_plugin = plugin.clone();
         let worker_handle = handle.clone();
 
         tauri::async_runtime::spawn(async move {
-            let mut output = match semaphore.acquire_owned().await {
-                Ok(_permit) => {
-                    let worker = tauri::async_runtime::spawn_blocking(move || {
-                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            plugin_engine::runtime::run_probe_for_instance_with_cache(
-                                &worker_plugin,
-                                &data_dir,
-                                &version,
-                                Some(&worker_handle),
-                                &worker_instance_ref,
-                                Some(worker_ccusage_cache),
-                            )
-                        }));
+            let instance_guard =
+                probe_instance_lock::acquire(&instance_ref, PROBE_WORKER_TIMEOUT).await;
+            let mut output = match instance_guard {
+                None => {
+                    log::error!(
+                        "probe {} skipped: an earlier probe of this instance is still running",
+                        capacity_plugin_id
+                    );
+                    plugin_engine::runtime::error_output(
+                        &busy_plugin,
+                        "an earlier provider probe is still running".to_string(),
+                    )
+                }
+                Some(instance_guard) => match semaphore.acquire_owned().await {
+                    Ok(_permit) => {
+                        let worker = tauri::async_runtime::spawn_blocking(move || {
+                            // Held until this worker ends, even after its timeout below.
+                            let _instance_guard = instance_guard;
+                            let result =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    plugin_engine::runtime::run_probe_for_instance_with_cache(
+                                        &worker_plugin,
+                                        &data_dir,
+                                        &version,
+                                        Some(&worker_handle),
+                                        &worker_instance_ref,
+                                        Some(worker_ccusage_cache),
+                                    )
+                                }));
 
-                        match result {
-                            Ok(output) => output,
-                            Err(_) => {
-                                log::error!("probe {} panicked", worker_plugin_id);
+                            match result {
+                                Ok(output) => output,
+                                Err(_) => {
+                                    log::error!("probe {} panicked", worker_plugin_id);
+                                    plugin_engine::runtime::error_output(
+                                        &panic_plugin,
+                                        "provider probe panicked".to_string(),
+                                    )
+                                }
+                            }
+                        });
+
+                        match tokio::time::timeout(PROBE_WORKER_TIMEOUT, worker).await {
+                            Ok(Ok(output)) => output,
+                            Ok(Err(error)) => {
+                                log::error!("probe {} worker failed: {}", join_plugin_id, error);
                                 plugin_engine::runtime::error_output(
-                                    &panic_plugin,
-                                    "provider probe panicked".to_string(),
+                                    &join_plugin,
+                                    "provider probe worker failed".to_string(),
+                                )
+                            }
+                            Err(_) => {
+                                log::error!(
+                                    "probe {} worker timed out after {} seconds",
+                                    join_plugin_id,
+                                    PROBE_WORKER_TIMEOUT.as_secs()
+                                );
+                                plugin_engine::runtime::error_output(
+                                    &timeout_plugin,
+                                    format!(
+                                        "provider probe timed out after {}s",
+                                        PROBE_WORKER_TIMEOUT.as_secs()
+                                    ),
                                 )
                             }
                         }
-                    });
-
-                    match tokio::time::timeout(PROBE_WORKER_TIMEOUT, worker).await {
-                        Ok(Ok(output)) => output,
-                        Ok(Err(error)) => {
-                            log::error!("probe {} worker failed: {}", join_plugin_id, error);
-                            plugin_engine::runtime::error_output(
-                                &join_plugin,
-                                "provider probe worker failed".to_string(),
-                            )
-                        }
-                        Err(_) => {
-                            log::error!(
-                                "probe {} worker timed out after {} seconds",
-                                join_plugin_id,
-                                PROBE_WORKER_TIMEOUT.as_secs()
-                            );
-                            plugin_engine::runtime::error_output(
-                                &timeout_plugin,
-                                format!(
-                                    "provider probe timed out after {}s",
-                                    PROBE_WORKER_TIMEOUT.as_secs()
-                                ),
-                            )
-                        }
                     }
-                }
-                Err(error) => {
-                    log::error!(
-                        "probe {} could not acquire worker slot: {}",
-                        capacity_plugin_id,
-                        error
-                    );
-                    plugin_engine::runtime::error_output(
-                        &capacity_plugin,
-                        "provider probe capacity unavailable".to_string(),
-                    )
-                }
+                    Err(error) => {
+                        log::error!(
+                            "probe {} could not acquire worker slot: {}",
+                            capacity_plugin_id,
+                            error
+                        );
+                        plugin_engine::runtime::error_output(
+                            &capacity_plugin,
+                            "provider probe capacity unavailable".to_string(),
+                        )
+                    }
+                },
             };
 
             let has_error = output.lines.iter().any(|line| {

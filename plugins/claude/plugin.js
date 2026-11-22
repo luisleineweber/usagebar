@@ -366,6 +366,8 @@
   }
 
   function requestClaudeWebJson(ctx, sessionKey, path, description, optional = false) {
+    // A web hold can start while an earlier request of this probe is in flight.
+    checkRateLimit(ctx, "web-")
     let response
     try {
       response = ctx.util.request({
@@ -819,7 +821,6 @@
         message: "Token refresh failed (HTTP " + String(resp.status) + "). Try again later.",
       }
     }
-    clearRateLimitAfterSuccess(ctx, "refresh", observedRefreshHold.text)
 
     const body = ctx.util.tryParseJson(resp.bodyText)
     const newAccessToken = body ? readNonEmptyString(body.access_token) : null
@@ -831,6 +832,7 @@
           "Provider response invalid: Claude token refresh returned no access token. Try again later.",
       }
     }
+    clearRateLimitAfterSuccess(ctx, "refresh", observedRefreshHold.text)
 
     // Validate the lifetime before any other use. The old expiry belongs to the old token, so
     // without a usable lifetime the new expiry is unknown.
@@ -853,6 +855,8 @@
   }
 
   // Only the HTTP request itself is a connection failure. Local failures stay visible as-is.
+  // Returns the response and the hold record observed before the request. The caller clears
+  // that record only after the response body is valid.
   function fetchUsage(ctx, accessToken, afterRefresh) {
     const observedUsageHold = admitRequest(ctx, "usage")
     let resp
@@ -875,11 +879,7 @@
         ? "Usage request failed after refresh. Try again."
         : "Usage request failed. Check your connection."
     }
-    const response = checkRateLimitResponse(ctx, resp)
-    if (response.status >= 200 && response.status < 300) {
-      clearRateLimitAfterSuccess(ctx, "usage", observedUsageHold)
-    }
-    return response
+    return { resp: checkRateLimitResponse(ctx, resp), observedUsageHold }
   }
 
   function readApiError(ctx, resp) {
@@ -1395,11 +1395,12 @@
       }
     }
 
-    let resp = fetchUsage(ctx, accessToken, false)
-    if (resp.status === 401 && !attemptedRefresh) {
+    let usageFetch = fetchUsage(ctx, accessToken, false)
+    if (usageFetch.resp.status === 401 && !attemptedRefresh) {
       ctx.host.log.info("usage returned 401, attempting refresh")
-      if (attemptRefresh()) resp = fetchUsage(ctx, accessToken, true)
+      if (attemptRefresh()) usageFetch = fetchUsage(ctx, accessToken, true)
     }
+    const resp = usageFetch.resp
 
     if (resp.status === 401) {
       if (refreshProblem) {
@@ -1422,6 +1423,7 @@
     if (data === null) {
       throw "Usage response invalid. Try again later."
     }
+    clearRateLimitAfterSuccess(ctx, "usage", usageFetch.observedUsageHold)
 
     const lines = []
     let plan = null

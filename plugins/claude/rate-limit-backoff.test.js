@@ -93,6 +93,29 @@ it("keeps a separate, increasing refresh hold in the plugin data dir", () => {
   expect(ctx.host.fs.exists(usageHoldPath(ctx))).toBe(false)
 })
 
+it("keeps the refresh count after an HTTP 200 refresh without an access token", () => {
+  const ctx = defaultAccountCtx()
+  ctx.host.keychain.readGenericPassword.mockReturnValue(oauth("expired", 1))
+  expectWait(ctx, 5 * MINUTE)
+  ctx.host.http.request.mockImplementation(({ url }) =>
+    url.includes("/v1/oauth/token")
+      ? { status: 200, bodyText: "{}" }
+      : { status: 401, bodyText: "" }
+  )
+  expect(() => probe(ctx)).toThrow("no access token")
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
+})
+
+it("keeps the usage count after an HTTP 200 usage response with invalid JSON", () => {
+  const ctx = defaultAccountCtx()
+  expectWait(ctx, 5 * MINUTE)
+  ctx.host.http.request.mockReturnValue({ status: 200, bodyText: "not json" })
+  expect(() => probe(ctx)).toThrow("Usage response invalid")
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
+})
+
 it("increases the web wait for repeated 429s", () => {
   const ctx = makeCtx()
   ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-web-session")
@@ -117,6 +140,25 @@ it.each([
   else expect(() => probe(ctx)).not.toThrow()
   ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
   expect(() => probe(ctx)).toThrow(after((status === 429 ? 20 : 10) * MINUTE))
+})
+
+it("stops the web probe when a hold starts during an earlier web request", () => {
+  const ctx = webCtx()
+  const web = ctx.host.http.request.getMockImplementation()
+  ctx.host.http.request.mockImplementation((request) => {
+    if (request.url.endsWith("/organizations")) {
+      const hold = { retryAt: Date.now() + 5 * MINUTE, streak: 1, recordedAt: Date.now() }
+      ctx.host.fs.writeText(
+        ctx.app.pluginDataDir + "/rate-limit-web-default.json",
+        JSON.stringify(hold)
+      )
+    }
+    return web(request)
+  })
+
+  expect(() => probe(ctx)).toThrow(after(5 * MINUTE))
+  expect(calls(ctx, "/usage")).toHaveLength(0)
+  expect(calls(ctx, "/overage_spend_limit")).toHaveLength(0)
 })
 
 it("resets the web count after a fully successful web probe", () => {

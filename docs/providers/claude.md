@@ -199,9 +199,11 @@ Each hold (usage, refresh, and web) counts its own consecutive HTTP 429 response
 - The backoff: 5 minutes for the first 429, then 10, 20, and at most 30 minutes.
 - The Retry-After value, capped at 60 minutes.
 
-Only a success of the same kind resets the count: OAuth usage for the usage hold, a token refresh for the refresh hold, and a web probe whose requests all succeed (including the optional overage request) for the web hold. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer.
+Only a valid success of the same kind resets the count: an OAuth usage response with a valid JSON body for the usage hold, a token refresh that returns an access token for the refresh hold, and a web probe whose requests all succeed (including the optional overage request) for the web hold. An HTTP 2xx response that fails validation keeps the count. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer.
 
-Each request reads its hold record once, directly before it is sent. That one record decides whether the request may go out, and it is the only record that the request's success may clear. A hold written after that read is kept, even if the clock changed.
+Each request reads its hold record directly before it is sent. That record decides whether the request may go out, and it is the only record that the request's success may clear. A hold written after that read is kept, even if the clock changed. Each web request checks the web hold again, so a hold that starts during an earlier web request stops the rest of the web probe.
+
+The host runs at most one probe per provider instance. A probe that passes its timeout can still be inside a blocking host call. The next probe of that instance waits until the earlier one ends, or reports an error if it does not end within the probe timeout.
 
 Holds stay in each build's plugin data directory. Installed and dev builds keep separate holds.
 
