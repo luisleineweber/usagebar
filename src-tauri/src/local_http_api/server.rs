@@ -419,6 +419,7 @@ mod tests {
             lines: vec![],
             history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
+            account_key: None,
             freshness: None,
         }
     }
@@ -593,6 +594,7 @@ mod tests {
                     project: None,
                     account: None,
                     cost_usd: Some(2.5),
+                    charged_cost_usd: None,
                     requests: Some(4.0),
                     input_tokens: Some(100.0),
                     output_tokens: Some(50.0),

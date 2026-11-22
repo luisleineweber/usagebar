@@ -191,6 +191,7 @@ mod tests {
                 platform_support: PlatformSupport::default(),
                 capabilities,
                 source_provenance: None,
+                account_scoped: false,
             },
             plugin_dir: std::path::PathBuf::from("."),
             entry_script: script.to_string(),

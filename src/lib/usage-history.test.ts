@@ -359,6 +359,7 @@ describe("summarizeUsageHistory", () => {
     expect(summary.entryCount).toBe(3)
     expect(summary.totals).toEqual({
       costUsd: null,
+      chargedCostUsd: null,
       requests: 5,
       inputTokens: null,
       outputTokens: 77,
@@ -462,6 +463,61 @@ describe("summarizeUsageHistory", () => {
     expect(partialUsage.totals.costUsd).toBeNull()
   })
 
+  it("sums charged cost apart from list-price cost and keeps partial charged totals unknown", () => {
+    const charged = summarizeUsageHistory(
+      [
+        output("cursor", [
+          historyEntry({ costUsd: 2, chargedCostUsd: 0.5 }),
+          historyEntry({ costUsd: 1, chargedCostUsd: 0 }),
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    expect(charged.totals.costUsd).toBe(3)
+    expect(charged.totals.chargedCostUsd).toBe(0.5)
+
+    const partial = summarizeUsageHistory(
+      [
+        output("cursor", [historyEntry({ costUsd: 2, chargedCostUsd: 0.5 })]),
+        output("codex", [historyEntry({ costUsd: 1 })]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    expect(partial.totals.costUsd).toBe(3)
+    expect(partial.totals.chargedCostUsd).toBeNull()
+  })
+
+  it("counts charged cost as a cost metric of scoped rows", () => {
+    const usageRow = { ...historyEntry(), scope: "usage" as const, costUsd: undefined }
+    const withUsageRows = summarizeUsageHistory(
+      [
+        output("cursor", [historyEntry({ costUsd: 2, chargedCostUsd: 0.5 })]),
+        output("openai-api", [usageRow]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    // A usage row reports no cost, so it does not make the charged total unknown.
+    expect(withUsageRows.totals.chargedCostUsd).toBe(0.5)
+
+    const withCostRow = summarizeUsageHistory(
+      [
+        output("cursor", [historyEntry({ costUsd: 2, chargedCostUsd: 0.5 })]),
+        output("openai-api", [
+          {
+            periodStart: "2026-07-10T00:00:00.000Z",
+            periodEnd: "2026-07-11T00:00:00.000Z",
+            scope: "cost",
+            costUsd: 3,
+          },
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    // A cost row without a charged amount keeps the charged total unknown.
+    expect(withCostRow.totals.costUsd).toBe(5)
+    expect(withCostRow.totals.chargedCostUsd).toBeNull()
+  })
+
   it("selects the top model by cost, then tokens and requests", () => {
     const summary = summarizeUsageHistory(
       [
@@ -522,6 +578,7 @@ describe("summarizeUsageHistory", () => {
 
     expect(summary.totals).toEqual({
       costUsd: null,
+      chargedCostUsd: null,
       requests: null,
       inputTokens: null,
       outputTokens: null,

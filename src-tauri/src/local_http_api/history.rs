@@ -325,6 +325,7 @@ mod tests {
             project: project.map(str::to_string),
             account: None,
             cost_usd: Some(1.5),
+            charged_cost_usd: None,
             requests: Some(2.0),
             input_tokens: Some(10.0),
             output_tokens: Some(5.0),
@@ -353,6 +354,7 @@ mod tests {
                 ],
             }),
             fetched_at: "2026-07-10T12:00:00Z".to_string(),
+            account_key: None,
             freshness: None,
         }
     }
@@ -403,6 +405,34 @@ mod tests {
             &parse_history_query(Some("model=a")).unwrap(),
         );
         assert_eq!(filtered.totals.total_tokens, Some(15.0));
+    }
+
+    #[test]
+    fn day_groups_use_the_local_date_of_offset_periods() {
+        let mut snapshot = snapshot();
+        let history = snapshot.history.as_mut().unwrap();
+        // Europe/Berlin: 2026-10-25 is the day the clock moves from +02:00 to +01:00.
+        history.entries = vec![
+            UsageHistoryEntry {
+                period_start: "2026-10-25T00:00:00+02:00".to_string(),
+                period_end: "2026-10-26T00:00:00+01:00".to_string(),
+                ..entry("2026-10-25", Some("gpt-5"), None)
+            },
+            UsageHistoryEntry {
+                period_start: "2026-10-26T00:00:00+01:00".to_string(),
+                period_end: "2026-10-27T00:00:00+01:00".to_string(),
+                ..entry("2026-10-26", Some("gpt-5"), None)
+            },
+        ];
+
+        let query = parse_history_query(Some("groupBy=day")).unwrap();
+        let response = build_history_response(vec![snapshot], &query);
+        let keys: Vec<&str> = response
+            .groups
+            .iter()
+            .map(|group| group.key.as_str())
+            .collect();
+        assert_eq!(keys, vec!["2026-10-25", "2026-10-26"]);
     }
 
     #[test]

@@ -91,6 +91,7 @@ export function usePanel({
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentMeasureRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
   const [canScrollDown, setCanScrollDown] = useState(false)
   const [panelHeightPx, setPanelHeightPx] = useState<number | null>(null)
   const [maxPanelHeightPx, setMaxPanelHeightPx] = useState<number | null>(null)
@@ -384,6 +385,7 @@ export function usePanel({
           container.scrollHeight
       )
       const footerHeightLogical = Math.ceil(footerRef.current?.getBoundingClientRect().height ?? 0)
+      const headerHeightLogical = Math.ceil(headerRef.current?.getBoundingClientRect().height ?? 0)
       const contentColumnStyle = contentColumnRef.current
         ? window.getComputedStyle(contentColumnRef.current)
         : null
@@ -395,7 +397,11 @@ export function usePanel({
       )
       const desiredHeightLogical = Math.max(
         1,
-        contentHeightLogical + footerHeightLogical + paddingTopLogical + paddingBottomLogical
+        contentHeightLogical +
+          headerHeightLogical +
+          footerHeightLogical +
+          paddingTopLogical +
+          paddingBottomLogical
       )
       const navMinHeightLogical = panelMinHeightForNav(showHistoryInBar)
       const viewMinHeightLogical = panelPreferredMinHeightForView(activeView, navPluginCount)
@@ -461,6 +467,7 @@ export function usePanel({
     })
     if (contentMeasureRef.current) observer.observe(contentMeasureRef.current)
     if (footerRef.current) observer.observe(footerRef.current)
+    if (headerRef.current) observer.observe(headerRef.current)
     if (scrollRef.current) observer.observe(scrollRef.current)
 
     return () => {
@@ -509,6 +516,7 @@ export function usePanel({
     scrollRef,
     contentMeasureRef,
     footerRef,
+    headerRef,
     canScrollDown,
     panelHeightPx,
     maxPanelHeightPx,
