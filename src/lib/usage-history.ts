@@ -1,6 +1,16 @@
-import type { PluginOutput, ProviderInstanceRef, UsageHistoryEntry } from "@/lib/plugin-types"
+import type {
+  PluginOutput,
+  ProviderInstanceRef,
+  UsageHistoryEntry,
+  UsageHistoryEntryScope,
+} from "@/lib/plugin-types"
 
-export type UsageHistoryPeriod = "today" | "yesterday" | "7d" | "30d"
+/**
+ * Rolling periods (`7d`, `30d`) include today and the days before it.
+ * Calendar-to-date periods start at local midnight on the first day of the current
+ * ISO 8601 week (Monday) or the current month, and end now.
+ */
+export type UsageHistoryPeriod = "today" | "yesterday" | "7d" | "30d" | "weekToDate" | "monthToDate"
 
 export type UsageHistoryFilters = {
   providerIds?: readonly string[]
@@ -24,6 +34,7 @@ export type UsageHistoryRecord = UsageHistoryEntry & {
 
 export type UsageHistoryTotals = {
   costUsd: number | null
+  chargedCostUsd: number | null
   requests: number | null
   inputTokens: number | null
   outputTokens: number | null
@@ -42,14 +53,19 @@ export type UsageHistoryTopModel = {
 
 export type UsageHistorySummary = {
   period: UsageHistoryPeriod
-  startMs: number
-  endMs: number
   entryCount: number
   totals: UsageHistoryTotals
   topModel: UsageHistoryTopModel | null
 }
 
-const PERIODS: readonly UsageHistoryPeriod[] = ["today", "yesterday", "7d", "30d"]
+const PERIODS: readonly UsageHistoryPeriod[] = [
+  "today",
+  "yesterday",
+  "7d",
+  "30d",
+  "weekToDate",
+  "monthToDate",
+]
 
 function finiteOrNull(value: number | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
@@ -74,6 +90,11 @@ export function entryTotalTokens(entry: UsageHistoryEntry): number | null {
     requiredTokenValues.reduce<number>((total, value) => total + (value ?? 0), 0) +
     (reasoningTokens ?? 0)
   )
+}
+
+/** False when the row's scope says it does not report metrics of this kind. */
+export function entryReports(entry: UsageHistoryEntry, kind: UsageHistoryEntryScope): boolean {
+  return entry.scope === undefined || entry.scope === kind
 }
 
 function selected(value: string | undefined, allowed: ReadonlySet<string> | null): boolean {
@@ -101,8 +122,12 @@ export function getUsageHistoryWindow(
     }
   }
 
-  const days = period === "7d" ? 7 : period === "30d" ? 30 : 1
-  const first = shiftCalendarDate(today, -(days - 1))
+  const first =
+    period === "weekToDate"
+      ? shiftCalendarDate(today, -isoWeekdayIndex(today))
+      : period === "monthToDate"
+        ? { ...today, day: 1 }
+        : shiftCalendarDate(today, -(ROLLING_DAYS[period] - 1))
   return {
     startMs: zonedMidnightMs(first.year, first.month, first.day, timeZone),
     endMs: nowMs,
@@ -110,6 +135,13 @@ export function getUsageHistoryWindow(
 }
 
 type CalendarDate = { year: number; month: number; day: number }
+
+const ROLLING_DAYS = { today: 1, "7d": 7, "30d": 30 } as const
+
+/** Days since the ISO 8601 week start: Monday = 0, Sunday = 6. */
+function isoWeekdayIndex(date: CalendarDate): number {
+  return (new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay() + 6) % 7
+}
 
 function zonedFormatter(timeZone: string, withTime = false): Intl.DateTimeFormat {
   const options: Intl.DateTimeFormatOptions = {
@@ -223,13 +255,19 @@ export function filterUsageHistory(
   return records
 }
 
+/**
+ * Sums a metric over the rows that report it. Null when no row reports it, or when a
+ * reporting row omits the value.
+ */
 function sumMetric(
   entries: readonly UsageHistoryEntry[],
+  kind: UsageHistoryEntryScope,
   getValue: (entry: UsageHistoryEntry) => number | undefined | null
 ): number | null {
-  if (entries.length === 0) return null
+  const reporting = entries.filter((entry) => entryReports(entry, kind))
+  if (reporting.length === 0) return null
   let total = 0
-  for (const entry of entries) {
+  for (const entry of reporting) {
     const value = finiteOrNull(getValue(entry) ?? undefined)
     if (value === null) return null
     total += value
@@ -250,9 +288,9 @@ function getTopModel(records: readonly UsageHistoryRecord[]): UsageHistoryTopMod
     [...byModel.entries()]
       .map(([model, modelRecords]) => ({
         model,
-        costUsd: sumMetric(modelRecords, (record) => record.costUsd),
-        requests: sumMetric(modelRecords, (record) => record.requests),
-        totalTokens: sumMetric(modelRecords, entryTotalTokens),
+        costUsd: sumMetric(modelRecords, "cost", (record) => record.costUsd),
+        requests: sumMetric(modelRecords, "usage", (record) => record.requests),
+        totalTokens: sumMetric(modelRecords, "usage", entryTotalTokens),
       }))
       .sort((a, b) => {
         const costOrder = compareKnownDescending(a.costUsd, b.costUsd)
@@ -275,27 +313,24 @@ export function summarizeUsageHistory(
   outputs: readonly Pick<PluginOutput, "providerId" | "history">[],
   query: UsageHistoryQuery
 ): UsageHistorySummary {
+  // Windows resolve per source time zone in filterUsageHistory, so one summary-wide
+  // start and end would disagree with UTC sources.
   const records = filterUsageHistory(outputs, query)
-  const { startMs, endMs } = getUsageHistoryWindow(
-    query.period,
-    query.nowMs,
-    query.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC"
-  )
 
   return {
     period: query.period,
-    startMs,
-    endMs,
     entryCount: records.length,
     totals: {
-      costUsd: sumMetric(records, (record) => record.costUsd),
-      requests: sumMetric(records, (record) => record.requests),
-      inputTokens: sumMetric(records, (record) => record.inputTokens),
-      outputTokens: sumMetric(records, (record) => record.outputTokens),
-      cacheReadTokens: sumMetric(records, (record) => record.cacheReadTokens),
-      cacheCreationTokens: sumMetric(records, (record) => record.cacheCreationTokens),
-      reasoningTokens: sumMetric(records, (record) => record.reasoningTokens),
-      totalTokens: sumMetric(records, entryTotalTokens),
+      costUsd: sumMetric(records, "cost", (record) => record.costUsd),
+      // The charged amount is a cost. Rows that report cost but omit it keep it unknown.
+      chargedCostUsd: sumMetric(records, "cost", (record) => record.chargedCostUsd),
+      requests: sumMetric(records, "usage", (record) => record.requests),
+      inputTokens: sumMetric(records, "usage", (record) => record.inputTokens),
+      outputTokens: sumMetric(records, "usage", (record) => record.outputTokens),
+      cacheReadTokens: sumMetric(records, "usage", (record) => record.cacheReadTokens),
+      cacheCreationTokens: sumMetric(records, "usage", (record) => record.cacheCreationTokens),
+      reasoningTokens: sumMetric(records, "usage", (record) => record.reasoningTokens),
+      totalTokens: sumMetric(records, "usage", entryTotalTokens),
     },
     topModel: getTopModel(records),
   }

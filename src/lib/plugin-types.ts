@@ -145,6 +145,10 @@ export type PluginOutput = {
     message: string
   }
   history?: UsageHistory
+  /** Host-hashed account identifier. Retained data is reused only for the same key. */
+  accountKey?: string
+  /** From the manifest. Retained data then needs a present, matching `accountKey`. */
+  accountScoped?: boolean
   freshness?: DataFreshnessGroups
   setupDetection?: SetupDetection[]
 }
@@ -156,13 +160,28 @@ export type DataFreshness = {
 
 export type DataFreshnessGroups = Partial<Record<"quota" | "cost" | "history", DataFreshness>>
 
+/**
+ * Metrics a history row reports. A provider that reports cost and usage in separate rows
+ * marks each row: a "cost" row carries only cost metrics (`costUsd`, optionally
+ * `chargedCostUsd`), a "usage" row only token and request
+ * metrics. Without a scope, the row reports every metric and a missing value is unknown.
+ */
+export type UsageHistoryEntryScope = "cost" | "usage"
+
 export type UsageHistoryEntry = {
   periodStart: string
   periodEnd: string
+  scope?: UsageHistoryEntryScope
   model?: string
   project?: string
   account?: string
+  /** Token cost at the model vendor's list price (API rate). Not an amount billed to the user. */
   costUsd?: number
+  /**
+   * Amount the provider charged or deducted from the plan for this usage.
+   * Never derived from `costUsd`. Omitted when the provider does not report it.
+   */
+  chargedCostUsd?: number
   requests?: number
   inputTokens?: number
   outputTokens?: number

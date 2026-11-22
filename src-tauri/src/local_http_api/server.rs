@@ -419,6 +419,7 @@ mod tests {
             lines: vec![],
             history: None,
             fetched_at: "2026-03-26T08:15:30Z".to_string(),
+            account_key: None,
             freshness: None,
         }
     }
@@ -587,11 +588,13 @@ mod tests {
                 time_zone: "UTC".to_string(),
                 entries: vec![crate::plugin_engine::runtime::UsageHistoryEntry {
                     period_start: "2026-07-10T00:00:00Z".to_string(),
+                    scope: None,
                     period_end: "2026-07-11T00:00:00Z".to_string(),
                     model: Some("sonnet".to_string()),
                     project: None,
                     account: None,
                     cost_usd: Some(2.5),
+                    charged_cost_usd: None,
                     requests: Some(4.0),
                     input_tokens: Some(100.0),
                     output_tokens: Some(50.0),
