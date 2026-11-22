@@ -602,6 +602,7 @@ mod tests {
                     cache_creation_tokens: None,
                     reasoning_tokens: None,
                     total_tokens: Some(150.0),
+                    period_total_tokens: None,
                 }],
             });
             state.snapshots.insert("claude".to_string(), snapshot);

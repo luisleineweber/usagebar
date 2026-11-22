@@ -222,8 +222,12 @@ pub fn build_history_response(
     let mut totals = UsageHistoryTotals::default();
     let mut grouped: BTreeMap<String, HistoryGroup> = BTreeMap::new();
     let mut providers = Vec::new();
+    let mut token_entries = Vec::new();
+    let mut group_token_entries: BTreeMap<String, Vec<(String, UsageHistoryEntry)>> =
+        BTreeMap::new();
 
-    for snapshot in snapshots {
+    for (snapshot_index, snapshot) in snapshots.into_iter().enumerate() {
+        let token_scope = format!("{}:{snapshot_index}", snapshot.provider_id);
         if !provider_filter.is_empty() && !provider_filter.contains(snapshot.provider_id.as_str()) {
             continue;
         }
@@ -237,8 +241,13 @@ pub fn build_history_response(
             .collect();
 
         for entry in &entries {
+            token_entries.push((token_scope.clone(), entry.clone()));
             totals.add_entry(entry);
             let (key, label) = group_key(query.group_by, &snapshot.provider_id, entry);
+            group_token_entries
+                .entry(key.clone())
+                .or_default()
+                .push((token_scope.clone(), entry.clone()));
             let group = grouped.entry(key.clone()).or_insert_with(|| HistoryGroup {
                 key,
                 label,
@@ -266,6 +275,23 @@ pub fn build_history_response(
         });
     }
 
+    let use_period_totals = query.model.is_none() && query.project.is_none();
+    totals.set_total_tokens(crate::plugin_engine::runtime::history_total_tokens(
+        token_entries
+            .iter()
+            .map(|(scope, entry)| (scope.as_str(), entry)),
+        use_period_totals,
+    ));
+    for (key, entries) in &group_token_entries {
+        if let Some(group) = grouped.get_mut(key) {
+            group
+                .totals
+                .set_total_tokens(crate::plugin_engine::runtime::history_total_tokens(
+                    entries.iter().map(|(scope, entry)| (scope.as_str(), entry)),
+                    use_period_totals && query.group_by != HistoryGroupBy::Model,
+                ));
+        }
+    }
     HistoryResponse {
         schema_version: 2,
         generated_at: OffsetDateTime::now_utc()
@@ -307,6 +333,7 @@ mod tests {
             cache_creation_tokens: None,
             reasoning_tokens: None,
             total_tokens: Some(15.0),
+            period_total_tokens: None,
         }
     }
 
@@ -361,6 +388,23 @@ mod tests {
         assert_eq!(response.groups[0].key, "opus");
         assert_eq!(response.totals.cost_usd, Some(1.5));
         assert_eq!(response.totals.total_tokens, Some(15.0));
+    }
+
+    #[test]
+    fn period_total_is_used_only_without_model_filter() {
+        let mut snapshot = snapshot();
+        let mut a = entry("2026-07-10", Some("a"), None);
+        let mut b = entry("2026-07-10", Some("b"), None);
+        a.period_total_tokens = Some(37.0);
+        b.period_total_tokens = Some(37.0);
+        snapshot.history.as_mut().unwrap().entries = vec![a, b];
+        let all = build_history_response(vec![snapshot.clone()], &HistoryQuery::default());
+        assert_eq!(all.totals.total_tokens, Some(37.0));
+        let filtered = build_history_response(
+            vec![snapshot],
+            &parse_history_query(Some("model=a")).unwrap(),
+        );
+        assert_eq!(filtered.totals.total_tokens, Some(15.0));
     }
 
     #[test]

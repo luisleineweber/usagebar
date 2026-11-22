@@ -282,6 +282,22 @@ describe("filterUsageHistory", () => {
 })
 
 describe("summarizeUsageHistory", () => {
+  it("combines scoped cost rows and authoritative period totals without assigning totals to models", () => {
+    const rows = [
+      historyEntry({ scope: "cost", model: undefined, costUsd: 2, totalTokens: undefined }),
+      historyEntry({ scope: "usage", model: "a", totalTokens: 10, periodTotalTokens: 37 }),
+      historyEntry({ scope: "usage", model: "b", totalTokens: 0, periodTotalTokens: 37 }),
+    ]
+    const outputs = [output("openai", rows)]
+    const query = { period: "today" as const, nowMs: NOW_MS, timeZone: "UTC" }
+    expect(summarizeUsageHistory(outputs, query).totals).toMatchObject({
+      costUsd: 2,
+      totalTokens: 37,
+    })
+    expect(summarizeUsageHistory(outputs, { ...query, models: ["a"] }).totals.totalTokens).toBe(10)
+    expect(summarizeUsageHistory(outputs, { ...query, models: ["b"] }).totals.totalTokens).toBe(0)
+  })
+
   it("sums Claude token rows when reasoning tokens are not reported", () => {
     const entry = historyEntry({
       inputTokens: 40,
