@@ -297,10 +297,12 @@ fn totals_for(entries: &[UsageHistoryEntry], use_period_totals: bool) -> UsageHi
     for entry in entries {
         totals.add_entry(entry);
     }
-    totals.set_total_tokens(crate::plugin_engine::runtime::history_total_tokens(
-        entries.iter().map(|entry| ("", entry)),
-        use_period_totals,
-    ));
+    if entries.iter().any(UsageHistoryEntry::reports_usage) {
+        totals.set_total_tokens(crate::plugin_engine::runtime::history_total_tokens(
+            entries.iter().map(|entry| ("", entry)),
+            use_period_totals,
+        ));
+    }
     totals
 }
 
@@ -615,6 +617,34 @@ mod tests {
         assert_eq!(value["command"], "history");
         assert_eq!(value["days"], 7);
         assert_eq!(value["providers"][0]["entries"][0]["totalTokens"], 15.0);
+    }
+
+    #[test]
+    fn history_combines_cost_and_usage_in_separate_snapshots() {
+        use crate::plugin_engine::runtime::UsageHistoryEntryScope;
+        let now = OffsetDateTime::parse("2026-07-10T12:00:00Z", &Rfc3339).unwrap();
+        let mut cost = snapshot();
+        let cost_entry = &mut cost.history.as_mut().unwrap().entries[0];
+        cost_entry.scope = Some(UsageHistoryEntryScope::Cost);
+        cost_entry.cost_usd = Some(3.0);
+        let mut usage = snapshot();
+        let usage_entry = &mut usage.history.as_mut().unwrap().entries[0];
+        usage_entry.scope = Some(UsageHistoryEntryScope::Usage);
+        usage_entry.cost_usd = None;
+        usage_entry.total_tokens = Some(100.0);
+        for snapshots in [
+            vec![cost.clone(), usage.clone()],
+            vec![usage.clone(), cost.clone()],
+        ] {
+            let json = history(&snapshots, 7, now, true).unwrap().unwrap();
+            let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert_eq!(value["totals"]["totalTokens"], 100.0);
+            assert_eq!(value["totals"]["costUsd"], 3.0);
+        }
+        usage.history.as_mut().unwrap().entries[0].total_tokens = None;
+        let json = history(&[cost, usage], 7, now, true).unwrap().unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(value["totals"]["totalTokens"].is_null());
     }
 
     #[test]

@@ -1143,6 +1143,7 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
         && cache_creation_tokens.is_none()
         && reasoning_tokens.is_none()
         && total_tokens.is_none()
+        && period_total_tokens.is_none()
     {
         return Err("at least one usage metric is required".to_string());
     }
@@ -1152,7 +1153,8 @@ fn parse_history_entry(entry: &Object<'_>) -> Result<UsageHistoryEntry, String> 
         || cache_read_tokens.is_some()
         || cache_creation_tokens.is_some()
         || reasoning_tokens.is_some()
-        || total_tokens.is_some();
+        || total_tokens.is_some()
+        || period_total_tokens.is_some();
     match scope {
         Some(UsageHistoryEntryScope::Cost) if cost_usd.is_none() || has_usage_metric => {
             return Err("cost scope requires costUsd and no usage metrics".to_string());
@@ -2281,6 +2283,7 @@ mod tests {
                                 { ...day, scope: "cost", costUsd: 3 },
                                 { ...day, scope: "usage", model: "gpt-5", totalTokens: 10, requests: 1 },
                                 { ...day, scope: "cost", costUsd: 3, totalTokens: 1 },
+                                { ...day, scope: "cost", costUsd: 3, periodTotalTokens: 10 },
                                 { ...day, scope: "usage", costUsd: 3, totalTokens: 1 },
                                 { ...day, scope: "usage", costUsd: 3 },
                                 { ...day, scope: "cost", totalTokens: 1 },
