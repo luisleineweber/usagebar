@@ -11,6 +11,7 @@ use crate::local_http_api;
 use crate::plugin_engine;
 use crate::plugin_engine::runtime::ProviderInstanceRef;
 use crate::probe_instance_lock;
+use crate::probe_instance_refs::resolve_instance_refs;
 
 const MAX_CONCURRENT_PROBES: usize = 4;
 const PROBE_WORKER_TIMEOUT: Duration = Duration::from_secs(35);
@@ -290,65 +291,4 @@ pub(crate) async fn start_probe_batch(
         plugin_ids: response_plugin_ids,
         instance_refs,
     })
-}
-
-pub(crate) fn resolve_instance_refs(
-    app_data_dir: &std::path::Path,
-    plugin_ids: &[String],
-    requested: Option<Vec<ProviderInstanceRef>>,
-) -> Vec<ProviderInstanceRef> {
-    let requested_by_provider: HashMap<_, _> = requested
-        .unwrap_or_default()
-        .into_iter()
-        .map(|instance| (instance.provider_id.clone(), instance))
-        .collect();
-    let selected_by_provider = load_selected_instance_ids(app_data_dir);
-
-    plugin_ids
-        .iter()
-        .map(|provider_id| match requested_by_provider.get(provider_id) {
-            Some(requested) if requested.instance_id.is_some() => requested.clone(),
-            Some(requested) => ProviderInstanceRef {
-                provider_id: provider_id.clone(),
-                instance_id: selected_by_provider
-                    .get(provider_id)
-                    .cloned()
-                    .or_else(|| requested.instance_id.clone()),
-            },
-            None => ProviderInstanceRef {
-                provider_id: provider_id.clone(),
-                instance_id: selected_by_provider.get(provider_id).cloned(),
-            },
-        })
-        .collect()
-}
-
-fn load_selected_instance_ids(app_data_dir: &std::path::Path) -> HashMap<String, String> {
-    for path in [
-        app_data_dir.join("settings.json"),
-        app_data_dir.join(".store").join("settings.json"),
-    ] {
-        let Ok(text) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
-            continue;
-        };
-        let Some(configs) = json
-            .get("providerConfigs")
-            .and_then(serde_json::Value::as_object)
-        else {
-            continue;
-        };
-        return configs
-            .iter()
-            .filter_map(|(provider_id, config)| {
-                config
-                    .get("selectedAccountProfileId")
-                    .and_then(serde_json::Value::as_str)
-                    .map(|instance_id| (provider_id.clone(), instance_id.to_string()))
-            })
-            .collect();
-    }
-    HashMap::new()
 }

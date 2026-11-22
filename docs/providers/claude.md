@@ -203,7 +203,7 @@ Only a valid success of the same kind resets the count: an OAuth usage response 
 
 Each request reads its hold record directly before it is sent. That record decides whether the request may go out, and it is the only record that the request's success may clear. A hold written after that read is kept, even if the clock changed. Each web request checks the web hold again, so a hold that starts during an earlier web request stops the rest of the web probe.
 
-The host runs at most one probe per provider instance. A probe that passes its timeout can still be inside a blocking host call. The next probe of that instance waits until the earlier one ends, or reports an error if it does not end within the probe timeout.
+The host runs at most one probe per provider instance. It trims the instance id, and an empty or blank id counts as the default instance, the same way the plugin reads it. A probe that passes its timeout can still be inside a blocking host call. The next probe of that instance waits until the earlier one ends, or reports an error if it does not end within the probe timeout.
 
 Holds stay in each build's plugin data directory. Installed and dev builds keep separate holds.
 
