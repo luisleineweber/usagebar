@@ -175,7 +175,8 @@ host.http.request({
   url: string,
   headers?: Record<string, string>,
   bodyText?: string,
-  timeoutMs?: number         // Default: 10000
+  timeoutMs?: number,        // Default: 10000
+  logResponseBody?: boolean  // Default: true
 }): {
   status: number,
   headers: Record<string, string>,
@@ -187,6 +188,7 @@ host.http.request({
 
 - **No redirects**: The HTTP client does not follow redirects (policy: none)
 - **Throws on network errors**: Connection failures, DNS errors, and timeouts throw
+- **Logged response preview**: The host logs the first 500 bytes of each response body. Values of credential request headers (for example `Authorization`, `Cookie`, or `X-Api-Key`) are masked in that preview, so a provider that echoes a submitted key does not put it in the log. Known secret patterns are redacted as well. Values shorter than 8 characters are not masked, so set `logResponseBody: false` on a request whose response can echo a credential. The host then logs only the response size.
 - **Capability-gated domains**: HTTP requests are limited to exact hosts or `*.example.com` wildcard hosts from `capabilities.httpDomains`. Empty or omitted domains block all plugin HTTP requests.
 
 ### Example: GET request

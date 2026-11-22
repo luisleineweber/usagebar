@@ -79,14 +79,28 @@ export function ProviderSecretField({
         >
           {field.label}
         </label>
-        <textarea
-          id={inputId}
-          aria-describedby={descriptionId}
-          className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
-          placeholder={field.placeholder}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-        />
+        {field.masked ? (
+          <input
+            id={inputId}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby={descriptionId}
+            className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
+            placeholder={field.placeholder}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        ) : (
+          <textarea
+            id={inputId}
+            aria-describedby={descriptionId}
+            className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-primary focus:border-primary"
+            placeholder={field.placeholder}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        )}
         <p id={descriptionId} className="mt-1 text-xs text-muted-foreground">
           {field.description}
           {!stored && storageNote ? ` ${storageNote}` : null}

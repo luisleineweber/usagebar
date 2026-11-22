@@ -26,7 +26,7 @@ Safety:
 | `codex` | `$CODEX_HOME/auth.json`, `~/.config/codex/auth.json`, `~/.codex/auth.json`, keychain, imported provider secret `account:<profileId>:authJson`, local `ccusage` runner | Works partially | File replay can fake auth/account shape; imported managed profiles let you pin a specific account; realistic usage still often depends on `ccusage`. |
 | `copilot` | `~/AppData/Roaming/GitHub CLI/hosts.yml`, `GH_CONFIG_DIR/hosts.yml`, keychain, `pluginDataDir/auth.json`, `gh auth token` | Works partially | You can fake the host file and cached token file, but final usage comes from GitHub HTTP. |
 | `cursor` | `~/AppData/Roaming/Cursor/User/globalStorage/state.vscdb`, keychain | Works partially | SQLite/keychain replay can fake session discovery, but billing/usage still comes from Cursor HTTP. |
-| `factory` | `~/.factory/auth.v2.file` + `~/.factory/auth.v2.key`, `~/.factory/auth.encrypted`, `~/.factory/auth.json`, keychain | Works partially | v2 encrypted store is now the primary path; local replay can fake login and refresh state, but real usage still comes from HTTP. |
+| `factory` | provider secret `apiKey`, `~/.factory/auth.v2.file` + `~/.factory/auth.v2.key`, `~/.factory/auth.encrypted`, `~/.factory/auth.json`, keychain | Works partially | A stored API key wins over local auth; otherwise the v2 encrypted store is the primary path; local replay can fake login and refresh state, but real usage still comes from HTTP. |
 | `gemini` | `~/.gemini/settings.json`, `~/.gemini/oauth_creds.json`, imported provider secret `account:<profileId>:authJson`, Gemini CLI `oauth2.js` install path | Works partially | Local files can fake OAuth setup; managed profiles pin one imported OAuth login; quota/plan still come from Google HTTP. |
 | `jetbrains-ai-assistant` | IDE quota XML under `~/AppData/Roaming/JetBrains/.../options/AIAssistantQuotaManager2.xml` or `~/AppData/Roaming/Google/...` | Works fully | This plugin is local-file driven. Replaying the XML is the main test path. |
 | `kilo` | stored provider secret `apiKey`, `KILO_API_KEY` | Works partially | Secret/env replay can fake auth setup, but usage still comes from the Kilo HTTP API. CLI auth fallback is not wired yet. |
@@ -136,13 +136,14 @@ Safety:
 
 ### `factory`
 - Local inputs read:
+- provider secret `apiKey` (takes precedence; local auth is not read while it exists)
 - `~/.factory/auth.v2.file`
 - `~/.factory/auth.v2.key`
 - `~/.factory/auth.encrypted`
 - `~/.factory/auth.json`
 - keychain fallback
 - What to fake:
-- The v2 encrypted file/key pair, or either legacy auth file with access/refresh token payloads.
+- A provider secret `apiKey` with a fake `fk-...` value, the v2 encrypted file/key pair, or either legacy auth file with access/refresh token payloads.
 - Limitation: real usage still comes from HTTP after auth is loaded.
 
 ### `gemini`
