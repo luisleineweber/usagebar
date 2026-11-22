@@ -630,6 +630,7 @@ fn inject_http<'js>(
                     log::info!("[plugin:{}] HTTP {} {}", pid, method_str, redacted_url);
                 }
 
+                let credential_values = request_credential_values(req.headers.as_ref());
                 let mut header_map = reqwest::header::HeaderMap::new();
                 if let Some(headers) = &req.headers {
                     for (key, val) in headers {
@@ -695,19 +696,11 @@ fn inject_http<'js>(
                     .text()
                     .map_err(|e| Exception::throw_message(&ctx_inner, &e.to_string()))?;
 
-                // Redact BEFORE truncation to ensure sensitive values are caught while intact
-                let redacted_body = redact_body(&body);
-                let body_preview = if redacted_body.len() > 500 {
-                    // UTF-8 safe truncation: find valid char boundary at or before 500
-                    let truncated: String = redacted_body
-                        .char_indices()
-                        .take_while(|(i, _)| *i < 500)
-                        .map(|(_, c)| c)
-                        .collect();
-                    format!("{}... ({} bytes total)", truncated, body.len())
-                } else {
-                    redacted_body
-                };
+                let body_preview = http_response_log_preview(
+                    &body,
+                    &credential_values,
+                    req.log_response_body.unwrap_or(true),
+                );
                 log::info!(
                     "[plugin:{}] HTTP {} {} -> {} | {}",
                     pid,
@@ -817,7 +810,8 @@ pub fn patch_http_wrapper(ctx: &rquickjs::Ctx<'_>) -> rquickjs::Result<()> {
                     headers: req.headers || null,
                     bodyText: req.bodyText || null,
                     timeoutMs: req.timeoutMs || 10000,
-                    dangerouslyIgnoreTls: req.dangerouslyIgnoreTls || false
+                    dangerouslyIgnoreTls: req.dangerouslyIgnoreTls || false,
+                    logResponseBody: req.logResponseBody !== false
                 });
                 var respJson = rawFn(json);
                 return JSON.parse(respJson);
@@ -1192,6 +1186,8 @@ struct HttpReqParams {
     body_text: Option<String>,
     timeout_ms: Option<u64>,
     dangerously_ignore_tls: Option<bool>,
+    /// False for requests whose response can echo a credential of any length.
+    log_response_body: Option<bool>,
 }
 
 #[derive(serde::Serialize)]
@@ -2202,6 +2198,154 @@ mod tests {
         let body = r#"{"key": "sk-1234567890abcdefghij"}"#;
         let redacted = redact_body(body);
         assert!(redacted.contains("sk-1...ghij"));
+    }
+
+    #[test]
+    fn redact_body_and_log_message_redact_factory_api_keys() {
+        let key = "fk-1234567890abcdefghij";
+        let body = format!(r#"{{"detail": "invalid key {}"}}"#, key);
+        assert!(!redact_body(&body).contains(key));
+        assert!(redact_body(&body).contains("fk-1...ghij"));
+        let msg = format!("usage request failed for {}", key);
+        assert!(!redact_log_message(&msg).contains(key));
+    }
+
+    #[test]
+    fn http_response_log_preview_drops_the_body_when_the_request_turns_it_off() {
+        // A 7-character key is below the echoed-credential minimum, so text redaction
+        // keeps it. Only a suppressed preview keeps it out of the log.
+        let key = "fk-a1b2";
+        let values = request_credential_values(Some(&bearer_headers(key)));
+        let body = format!(r#"{{"detail": "invalid key {}"}}"#, key);
+        assert!(
+            http_response_log_preview(&body, &values, true).contains(key),
+            "precondition: text redaction alone does not mask a short key"
+        );
+
+        let preview = http_response_log_preview(&body, &values, false);
+        assert!(!preview.contains(key));
+        assert!(!preview.contains("invalid key"));
+        assert_eq!(
+            preview,
+            format!("[response body not logged, {} bytes]", body.len())
+        );
+    }
+
+    #[test]
+    fn http_wrapper_forwards_log_response_body_and_defaults_it_to_true() {
+        let rt = Runtime::new().expect("runtime");
+        let ctx = Context::full(&rt).expect("context");
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>(
+                r#"
+                var __sent = [];
+                var __openusage_ctx = { host: { http: { _requestRaw: function(json) {
+                    __sent.push(JSON.parse(json));
+                    return JSON.stringify({ status: 200, headers: {}, bodyText: "" });
+                } } } };
+                "#,
+            )
+            .expect("fake host");
+            patch_http_wrapper(&ctx).expect("patch wrapper");
+            let sent: Vec<bool> = ctx
+                .eval(
+                    r#"
+                    __openusage_ctx.host.http.request({ url: "https://api.factory.ai", logResponseBody: false });
+                    __openusage_ctx.host.http.request({ url: "https://api.factory.ai" });
+                    __sent.map(function(req) { return req.logResponseBody; });
+                    "#,
+                )
+                .expect("requests");
+            assert_eq!(sent, vec![false, true]);
+        });
+    }
+
+    #[test]
+    fn http_request_params_read_the_log_response_body_option() {
+        let quiet: HttpReqParams =
+            serde_json::from_str(r#"{"url":"https://api.factory.ai","logResponseBody":false}"#)
+                .expect("request params");
+        assert_eq!(quiet.log_response_body, Some(false));
+        let default: HttpReqParams =
+            serde_json::from_str(r#"{"url":"https://api.factory.ai"}"#).expect("request params");
+        assert_eq!(default.log_response_body, None);
+    }
+
+    fn bearer_headers(token: &str) -> HashMap<String, String> {
+        HashMap::from([
+            ("Authorization".to_string(), format!("Bearer {}", token)),
+            ("Accept".to_string(), "application/json".to_string()),
+        ])
+    }
+
+    #[test]
+    fn http_body_log_preview_masks_an_echoed_bearer_key_of_any_format() {
+        // Synthetic key in a format the pattern redactor does not know.
+        let key = "zz.Synthetic+Key/0123456789=";
+        let values = request_credential_values(Some(&bearer_headers(key)));
+        let body = format!(r#"{{"detail": "API key {} is not valid"}}"#, key);
+
+        assert!(
+            redact_body(&body).contains(key),
+            "precondition: pattern redaction alone does not know this key format"
+        );
+        let preview = http_body_log_preview(&body, &values);
+        assert!(
+            !preview.contains(key),
+            "echoed key reached the log: {}",
+            preview
+        );
+        assert!(!preview.contains("Synthetic+Key"));
+        assert!(preview.contains("[REDACTED] is not valid"));
+    }
+
+    #[test]
+    fn http_body_log_preview_masks_an_echoed_key_before_truncation() {
+        let key = "fk-synthetic-0123456789abcdef";
+        let values = request_credential_values(Some(&bearer_headers(key)));
+        // The key starts just before the 500-byte cut, so truncation alone would split it.
+        let body = format!("{}{}{}", "x".repeat(490), key, "y".repeat(100));
+
+        let preview = http_body_log_preview(&body, &values);
+        assert!(!preview.contains("fk-synth"));
+        assert!(preview.ends_with(&format!("... ({} bytes total)", body.len())));
+    }
+
+    #[test]
+    fn request_credential_values_collects_credentials_but_not_ordinary_headers() {
+        let headers = HashMap::from([
+            (
+                "Authorization".to_string(),
+                "Bearer token-value-123".to_string(),
+            ),
+            ("X-Api-Key".to_string(), "api-key-value-456".to_string()),
+            (
+                "Cookie".to_string(),
+                "a=short; session=cookie-value-789".to_string(),
+            ),
+            ("Accept".to_string(), "application/json".to_string()),
+            ("User-Agent".to_string(), "OpenUsage".to_string()),
+        ]);
+
+        let values = request_credential_values(Some(&headers));
+        for expected in [
+            "Bearer token-value-123",
+            "token-value-123",
+            "api-key-value-456",
+            "cookie-value-789",
+        ] {
+            assert!(values.iter().any(|v| v == expected), "missing {}", expected);
+        }
+        assert!(
+            !values
+                .iter()
+                .any(|v| v == "application/json" || v == "OpenUsage")
+        );
+        assert!(
+            !values.iter().any(|v| v == "short"),
+            "short values stay unmasked"
+        );
+        assert!(request_credential_values(None).is_empty());
     }
 
     #[test]

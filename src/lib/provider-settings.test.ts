@@ -103,6 +103,26 @@ describe("getProviderSettingsDefinition", () => {
     expect(getProviderSettingsDefinition("mistral").secretField?.key).toBe("adminApiKey")
   })
 
+  it("offers an optional, masked Factory API key in the Windows app", () => {
+    const def = getProviderSettingsDefinition("factory", true)
+    expect(def.mode).toBe("editable")
+    expect(def.secretField?.key).toBe("apiKey")
+    expect(def.secretField?.masked).toBe(true)
+    expect(def.secretFieldRole).toBeUndefined()
+    expect(def.sourceOptions).toBeUndefined()
+  })
+
+  it("offers only the local droid login for Factory outside the Windows app", () => {
+    const def = getProviderSettingsDefinition("factory", false)
+    expect(def.mode).toBe("detected")
+    expect(def.secretField).toBeUndefined()
+    expect(def.connectHint).toContain("only in the Windows app")
+  })
+
+  it("keeps Cookie header fields multi-line", () => {
+    expect(getProviderSettingsDefinition("ollama").secretField?.masked).toBeUndefined()
+  })
+
   it("defines both Alibaba credential fields", () => {
     const definition = getProviderSettingsDefinition("alibaba")
     expect(definition.secretField?.key).toBe("apiKey")
@@ -498,6 +518,13 @@ describe("getProviderSourceLabel", () => {
 
   it("returns fallback for amp without apiKey", () => {
     expect(getProviderSourceLabel("amp")).toBe("Amp CLI credentials")
+  })
+
+  it("labels the stored Factory API key and the local droid login separately", () => {
+    expect(getProviderSourceLabel("factory", { secrets: { apiKey: { updatedAt: 1000 } } })).toBe(
+      "Stored Factory API key"
+    )
+    expect(getProviderSourceLabel("factory")).toBe("Local droid login")
   })
 
   it("returns GitHub auth + scope for copilot with workspaceId", () => {
