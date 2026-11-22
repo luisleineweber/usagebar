@@ -9,6 +9,30 @@
   const DEFAULT_SCOPES =
     "user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
   const REFRESH_BUFFER_MS = 5 * 60 * 1000 // refresh 5 minutes before expiration
+  // Keep in sync with plugin.json capabilities.httpDomains. The host blocks other domains.
+  const ALLOWED_REFRESH_DOMAINS = ["api.anthropic.com", "platform.claude.com", "claude.ai"]
+  // Known values are logged as-is. Any other provider value is logged as "other".
+  const OAUTH_ERROR_CODES = [
+    "invalid_request",
+    "invalid_client",
+    "invalid_grant",
+    "unauthorized_client",
+    "unsupported_grant_type",
+    "invalid_scope",
+  ]
+  const API_ERROR_TYPES = [
+    "invalid_request_error",
+    "authentication_error",
+    "permission_error",
+    "not_found_error",
+    "request_too_large",
+    "rate_limit_error",
+    "api_error",
+    "overloaded_error",
+  ]
+  // Anthropic's affirmative expiry text for an OAuth access token. Other 401 text, such as a
+  // revocation that mentions expiry, does not confirm expiry.
+  const OAUTH_TOKEN_EXPIRED_MESSAGE = /^OAuth token has expired\./
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
@@ -540,15 +564,47 @@
     })
   }
 
-  function isTokenExpired(oauth) {
-    if (oauth?.expiresAt === null || oauth?.expiresAt === undefined) return true
-    const expiresAt = Number(oauth.expiresAt)
-    return !Number.isFinite(expiresAt) || Date.now() >= expiresAt
+  // One conversion for saved expiry times: a finite number or a non-empty numeric string in
+  // unix milliseconds. Any other value is unknown (null).
+  function parseExpiresAtMs(value) {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null
+    if (typeof value !== "string" || !value.trim()) return null
+    const expiresAt = Number(value)
+    return Number.isFinite(expiresAt) ? expiresAt : null
   }
 
+  // Refresh holds treat an unknown expiry as expired.
+  function isTokenExpired(oauth) {
+    const expiresAt = parseExpiresAtMs(oauth?.expiresAt)
+    return expiresAt === null || Date.now() >= expiresAt
+  }
+
+  // A usage HTTP 401 confirms expiry only for a known expiry time that has passed.
+  function isExpiryConfirmed(expiresAtValue) {
+    const expiresAt = parseExpiresAtMs(expiresAtValue)
+    return expiresAt !== null && Date.now() >= expiresAt
+  }
+
+  function logLabel(value, knownValues) {
+    if (value === null) return "none"
+    return knownValues.indexOf(value) !== -1 ? value : "other"
+  }
+
+  function isAllowedRefreshUrl(url) {
+    if (typeof url !== "string") return false
+    const match = /^https:\/\/([^/?#@:]+)(?::(\d{1,5}))?(?:[/?#]|$)/i.exec(url)
+    if (!match || ALLOWED_REFRESH_DOMAINS.indexOf(match[1].toLowerCase()) === -1) return false
+    if (match[2] === undefined) return true
+    const port = Number(match[2])
+    return port >= 1 && port <= 65535
+  }
+
+  // Refresh outcomes: "refreshed", "unavailable" (no refresh token), "held" (an active refresh
+  // hold skips the refresh while the access token is still valid), "failed" (temporary network,
+  // server, or response failure) and "rejected" (the token endpoint refused the grant).
   function refreshToken(ctx, creds) {
-    // Imported copies retain Claude Code's refresh ownership. Only an explicitly
-    // app-owned managed document can rotate here; local credentials stay read-only.
+    const { oauth } = creds
+    // Claude Code keeps refresh ownership of local documents and imported copies.
     if (
       creds.source !== "managed-profile" ||
       creds.fullData.usagebarCredentialOwner !== "usagebar"
@@ -558,25 +614,38 @@
       if (
         current?.source === creds.source &&
         current.oauth?.accessToken &&
-        current.oauth.accessToken !== creds.oauth.accessToken
+        current.oauth.accessToken !== oauth.accessToken
       ) {
         creds.fullData = current.fullData
         creds.oauth = current.oauth
-        return current.oauth.accessToken
+        return {
+          kind: "refreshed",
+          accessToken: current.oauth.accessToken,
+          expiresAt: parseExpiresAtMs(current.oauth.expiresAt),
+        }
       }
-      return null
+      return { kind: "unavailable" }
     }
-    if (!creds.oauth.refreshToken) {
+    if (!oauth.refreshToken) {
       ctx.host.log.warn("refresh skipped: no refresh token")
-      return null
+      return { kind: "unavailable" }
     }
 
     const retryAt = readRateLimitRetryAt(ctx, "refresh")
     if (retryAt !== null) {
-      if (isTokenExpired(creds.oauth)) throw rateLimitMessage(retryAt)
-      return null
+      if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
+      ctx.host.log.info("refresh skipped: refresh hold is active and the token is still valid")
+      return { kind: "held" }
     }
     const oauthConfig = getOAuthConfig(ctx)
+    if (!isAllowedRefreshUrl(oauthConfig.refreshUrl)) {
+      ctx.host.log.error("refresh skipped: refreshUrl is outside the allowed domains")
+      throw (
+        "Claude OAuth config invalid: refreshUrl must use https on " +
+        ALLOWED_REFRESH_DOMAINS.join(", ") +
+        ". Fix ~/.usagebar/config.json."
+      )
+    }
     ctx.host.log.info("attempting token refresh")
     let result
     try {
@@ -586,75 +655,79 @@
             refreshUrl: oauthConfig.refreshUrl,
             clientId: oauthConfig.clientId,
             scopes: oauthConfig.scopes,
-            expectedAccessToken: creds.oauth.accessToken || "",
+            expectedAccessToken: oauth.accessToken || "",
           })
         )
       )
     } catch (e) {
-      // Storage/lock errors must reach the probe. Do not use the old token after
-      // rotation, and do not expose host exception details that may contain secrets.
+      // A native save or lock error must leave the probe before usage can use an old token.
       throw "Claude credential refresh failed. " + String(e)
     }
     if (result.credentials) {
       creds.fullData = JSON.parse(result.credentials)
       creds.oauth = creds.fullData.claudeAiOauth
-      return creds.oauth.accessToken
+      const expiresAt = parseExpiresAtMs(creds.oauth.expiresAt)
+      const lifetimeSeconds =
+        expiresAt === null ? null : Math.max(0, Math.round((expiresAt - Date.now()) / 1000))
+      ctx.host.log.info(
+        "refresh succeeded, new token lifetime: " +
+          (lifetimeSeconds === null ? "unknown" : String(lifetimeSeconds) + "s")
+      )
+      return { kind: "refreshed", accessToken: creds.oauth.accessToken, expiresAt }
     }
     if (!result.response) {
       ctx.host.log.error("refresh connection failed")
-      return null
+      return { kind: "failed", message: "Token refresh failed. Check your connection." }
     }
-    try {
-      const resp = checkRateLimitResponse(ctx, result.response, "refresh")
-      if (resp.status === 400 || resp.status === 401) {
-        let errorCode = null
-        const body = ctx.util.tryParseJson(resp.bodyText)
-        const knownCodes = [
-          "invalid_grant",
-          "invalid_request",
-          "invalid_client",
-          "unauthorized_client",
-          "unsupported_grant_type",
-          "invalid_scope",
-        ]
-        if (body) errorCode = body.error || body.error_description
-        const loggedCode = knownCodes.includes(errorCode) ? errorCode : "unknown"
-        ctx.host.log.error("refresh failed: status=" + resp.status + " error=" + loggedCode)
-        if (errorCode === "invalid_grant") {
-          throw "Session expired. Run `claude` to log in again."
-        }
-        throw "Token expired. Run `claude` to log in again."
-      }
-      if (resp.status < 200 || resp.status >= 300) {
-        ctx.host.log.warn("refresh returned unexpected status: " + resp.status)
-        return null
-      }
+    const resp = checkRateLimitResponse(ctx, result.response, "refresh")
 
+    if (resp.status === 400 || resp.status === 401) {
+      // OAuth token endpoints report refused grants with RFC 6749 error codes.
       const body = ctx.util.tryParseJson(resp.bodyText)
-      if (!body) {
-        ctx.host.log.warn("refresh response not valid JSON")
-        return null
+      const errorCode = body && typeof body.error === "string" ? body.error : null
+      ctx.host.log.error(
+        "refresh failed: status=" + resp.status + " error=" + logLabel(errorCode, OAUTH_ERROR_CODES)
+      )
+      if (errorCode === "invalid_grant") {
+        return { kind: "rejected", message: "Session expired. Run `claude` to log in again." }
       }
-      const newAccessToken = body.access_token
-      if (!newAccessToken) {
-        ctx.host.log.warn("refresh response missing access_token")
-        return null
+      if (errorCode === "invalid_scope") {
+        return {
+          kind: "rejected",
+          message:
+            "Invalid token: Claude refused the requested OAuth scopes. Run `claude` to log in again.",
+        }
       }
+      return {
+        kind: "rejected",
+        message:
+          "Token refresh rejected (HTTP " +
+          String(resp.status) +
+          "). Run `claude` to log in again if this persists.",
+      }
+    }
+    if (resp.status < 200 || resp.status >= 300) {
+      ctx.host.log.warn("refresh returned unexpected status: " + resp.status)
+      return {
+        kind: "failed",
+        message: "Token refresh failed (HTTP " + String(resp.status) + "). Try again later.",
+      }
+    }
 
-      // Successful token responses are stored by the host before it returns.
-      // A 2xx response without credentials is malformed and cannot replace them.
-      return null
-    } catch (e) {
-      if (typeof e === "string") throw e
-      ctx.host.log.error("refresh exception: " + String(e))
-      return null
+    // A successful token response is stored by the host before it returns credentials.
+    ctx.host.log.warn("refresh response has no usable access_token")
+    return {
+      kind: "failed",
+      message:
+        "Provider response invalid: Claude token refresh returned no access token. Try again later.",
     }
   }
 
-  function fetchUsage(ctx, accessToken) {
-    return checkRateLimitResponse(
-      ctx,
-      ctx.util.request({
+  // Only the HTTP request itself is a connection failure. Local failures stay visible as-is.
+  function fetchUsage(ctx, accessToken, afterRefresh) {
+    let resp
+    try {
+      resp = ctx.util.request({
         method: "GET",
         url: USAGE_URL,
         headers: {
@@ -666,7 +739,54 @@
         },
         timeoutMs: 10000,
       })
+    } catch (e) {
+      ctx.host.log.error("usage request exception: " + String(e))
+      throw afterRefresh
+        ? "Usage request failed after refresh. Try again."
+        : "Usage request failed. Check your connection."
+    }
+    return checkRateLimitResponse(ctx, resp)
+  }
+
+  function readApiError(ctx, resp) {
+    const body = ctx.util.tryParseJson(resp.bodyText)
+    const error = body && typeof body.error === "object" && body.error ? body.error : null
+    return {
+      type: error && typeof error.type === "string" ? error.type : null,
+      message: error && typeof error.message === "string" ? error.message : "",
+    }
+  }
+
+  // An HTTP 401 proves expiry only when the token's known expiry time has passed, or when
+  // Anthropic's authentication_error says the token expired. A revoked or otherwise rejected
+  // token gets a neutral message.
+  function usageUnauthorizedMessage(ctx, resp, expiredLocally, reimportRequired) {
+    const { type, message } = readApiError(ctx, resp)
+    ctx.host.log.error("usage returned 401: error.type=" + logLabel(type, API_ERROR_TYPES))
+    const expiredRemotely =
+      type === "authentication_error" && OAUTH_TOKEN_EXPIRED_MESSAGE.test(message)
+    if (expiredLocally || expiredRemotely) {
+      return reimportRequired
+        ? "Imported Claude login expired. Run Claude Code, then Re-import this Claude account in Settings."
+        : "Token expired. Run `claude` to log in again."
+    }
+    return (
+      "Invalid token: Claude rejected the sign-in (HTTP 401). " +
+      (reimportRequired
+        ? "Run Claude Code, then Re-import this Claude account in Settings."
+        : "Run `claude` to log in again.")
     )
+  }
+
+  // Anthropic reports a token without a required OAuth scope as a 403 permission_error.
+  // Other 403 responses deny access; they do not prove an expired sign-in.
+  function usageForbiddenMessage(ctx, resp) {
+    const { type, message } = readApiError(ctx, resp)
+    ctx.host.log.error("usage returned 403: error.type=" + logLabel(type, API_ERROR_TYPES))
+    if (type === "permission_error" && /scope requirement/i.test(message)) {
+      return "Invalid token: Claude login lacks the OAuth scope required for usage. Run `claude` to log in again."
+    }
+    return "Usage request denied (HTTP 403). Check your Claude account access."
   }
 
   function queryTokenUsage(ctx) {
@@ -1109,63 +1229,58 @@
       throw "Not logged in. Run `claude` to authenticate."
     }
 
-    const nowMs = Date.now()
     let accessToken = creds.oauth.accessToken
+    let tokenExpiresAt = creds.oauth.expiresAt
     let attemptedRefresh = false
+    let refreshProblem = null
 
-    // Proactively refresh if token is expired or about to expire
-    if (needsRefresh(ctx, creds.oauth, nowMs)) {
+    function tokenExpired() {
+      return isExpiryConfirmed(tokenExpiresAt)
+    }
+
+    // Each probe refreshes at most once. A failed or rejected refresh is kept while the current
+    // token can still be valid; the saved problem is reported only if usage then returns HTTP 401.
+    // A rejected refresh for a token that has already expired ends the probe at once.
+    function attemptRefresh() {
       attemptedRefresh = true
+      const result = refreshToken(ctx, creds)
+      if (result.kind === "refreshed") {
+        accessToken = result.accessToken
+        tokenExpiresAt = result.expiresAt
+        return true
+      }
+      if (result.kind === "rejected" && tokenExpired()) throw result.message
+      if (result.kind === "failed" || result.kind === "rejected") refreshProblem = result.message
+      return false
+    }
+
+    if (needsRefresh(ctx, creds.oauth, Date.now())) {
       ctx.host.log.info("token needs refresh (expired or expiring soon)")
-      const refreshed = refreshToken(ctx, creds)
-      if (refreshed) {
-        accessToken = refreshed
-      } else {
-        ctx.host.log.warn("proactive refresh failed, trying with existing token")
+      if (!attemptRefresh()) {
+        ctx.host.log.warn("proactive refresh did not return a token, trying with existing token")
       }
     }
 
-    let resp
-    let didRefresh = false
-    try {
-      resp = ctx.util.retryOnceOnAuth({
-        request: (token) => {
-          try {
-            return fetchUsage(ctx, token || accessToken)
-          } catch (e) {
-            if (typeof e === "string") throw e
-            ctx.host.log.error("usage request exception: " + String(e))
-            if (didRefresh) {
-              throw "Usage request failed after refresh. Try again."
-            }
-            throw "Usage request failed. Check your connection."
-          }
-        },
-        refresh: () => {
-          if (attemptedRefresh) return null
-          attemptedRefresh = true
-          ctx.host.log.info("usage returned 401, attempting refresh")
-          didRefresh = true
-          return refreshToken(ctx, creds)
-        },
-      })
-    } catch (e) {
-      if (typeof e === "string") throw e
-      ctx.host.log.error("usage request failed: " + String(e))
-      throw "Usage request failed. Check your connection."
+    let resp = fetchUsage(ctx, accessToken, false)
+    if (resp.status === 401 && !attemptedRefresh) {
+      ctx.host.log.info("usage returned 401, attempting refresh")
+      if (attemptRefresh()) resp = fetchUsage(ctx, accessToken, true)
     }
 
-    if (ctx.util.isAuthStatus(resp.status)) {
-      checkRateLimit(ctx, "refresh")
-      ctx.host.log.error("usage returned auth error after all retries: status=" + resp.status)
-      if (
-        creds.source === "managed-profile" &&
-        creds.fullData.usagebarCredentialOwner !== "usagebar"
-      ) {
-        throw "Imported Claude login expired. Run Claude Code, then Re-import this Claude account in Settings."
+    if (ctx.util.isAuthStatus(resp.status)) checkRateLimit(ctx, "refresh")
+    if (resp.status === 401) {
+      if (refreshProblem) {
+        ctx.host.log.error("usage returned 401 after a failed token refresh")
+        throw refreshProblem
       }
-      throw "Token expired. Run `claude` to log in again."
+      throw usageUnauthorizedMessage(
+        ctx,
+        resp,
+        tokenExpired(),
+        creds.source === "managed-profile" && creds.fullData.usagebarCredentialOwner !== "usagebar"
+      )
     }
+    if (resp.status === 403) throw usageForbiddenMessage(ctx, resp)
 
     if (resp.status < 200 || resp.status >= 300) {
       ctx.host.log.error("usage returned error: status=" + resp.status)

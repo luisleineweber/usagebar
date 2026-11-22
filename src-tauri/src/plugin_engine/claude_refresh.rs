@@ -251,14 +251,19 @@ impl Coordinator {
         {
             oauth.insert("refreshToken".into(), Value::String(refresh.into()));
         }
-        if let Some(seconds) = body.get("expires_in").and_then(Value::as_f64) {
-            let expires = time::OffsetDateTime::now_utc().unix_timestamp_nanos() as f64
-                / 1_000_000.0
-                + seconds * 1000.0;
-            if let Some(number) = serde_json::Number::from_f64(expires) {
-                oauth.insert("expiresAt".into(), Value::Number(number));
-            }
-        }
+        let expires_at = body
+            .get("expires_in")
+            .and_then(Value::as_f64)
+            .filter(|seconds| seconds.is_finite() && *seconds > 0.0)
+            .and_then(|seconds| {
+                let expires = time::OffsetDateTime::now_utc().unix_timestamp_nanos() as f64
+                    / 1_000_000.0
+                    + seconds * 1000.0;
+                serde_json::Number::from_f64(expires)
+            })
+            .map(Value::Number)
+            .unwrap_or(Value::Null);
+        oauth.insert("expiresAt".into(), expires_at);
 
         self.persist(
             store,

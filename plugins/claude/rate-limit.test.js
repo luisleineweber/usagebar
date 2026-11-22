@@ -58,7 +58,9 @@ it("does not refresh twice when usage rejects a proactively refreshed token", as
   )
   ownCredentials(ctx)
   await import("./plugin.js")
-  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("Token expired")
+  expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow(
+    "Invalid token: Claude rejected the sign-in (HTTP 401)"
+  )
   expect(
     ctx.host.http.request.mock.calls.filter(([request]) => request.url.includes("/v1/oauth/token"))
   ).toHaveLength(1)

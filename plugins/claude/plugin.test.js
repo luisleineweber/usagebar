@@ -428,13 +428,13 @@ describe("claude plugin", () => {
     expect(sessionLine.resetsAt).toBeUndefined()
   })
 
-  it("throws token expired on 401", async () => {
+  it("throws a rejected sign-in on 401 when expiry is not confirmed", async () => {
     const ctx = makeCtx()
     ctx.host.fs.readText = () => JSON.stringify({ claudeAiOauth: { accessToken: "token" } })
     ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "" })
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Token expired")
+    expect(() => plugin.probe(ctx)).toThrow("Invalid token: Claude rejected the sign-in (HTTP 401)")
   })
 
   it("throws HTTP status details for non-auth usage failures", async () => {
@@ -935,7 +935,7 @@ describe("claude plugin", () => {
     expect(() => plugin.probe(ctx)).toThrow("Session expired")
   })
 
-  it("throws token expired when usage remains unauthorized after refresh", async () => {
+  it("throws a rejected sign-in when usage remains unauthorized after refresh", async () => {
     const ctx = makeCtx()
     ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
     ctx.host.fs.readText = () =>
@@ -959,31 +959,7 @@ describe("claude plugin", () => {
 
     ownCredentials(ctx)
     const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Token expired")
-  })
-
-  it("throws token expired when refresh is unauthorized", async () => {
-    const ctx = makeCtx()
-    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1,
-        },
-      })
-
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 401, bodyText: JSON.stringify({ error: "nope" }) }
-      }
-      return { status: 500, bodyText: "" }
-    })
-
-    ownCredentials(ctx)
-    const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Token expired")
+    expect(() => plugin.probe(ctx)).toThrow("Invalid token: Claude rejected the sign-in (HTTP 401)")
   })
 
   it("continues when refresh request throws non-string error (returns null)", async () => {
@@ -1177,50 +1153,6 @@ describe("claude plugin", () => {
     expect(result.plan).toBeNull()
     expect(result.lines.find((line) => line.label === "Today")).toBeTruthy()
     expect(ctx.host.http.request).not.toHaveBeenCalled()
-  })
-
-  it("throws usage request failed when retryOnceOnAuth throws a non-string error", async () => {
-    const ctx = makeCtx()
-    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() + 60_000,
-        },
-      })
-
-    ctx.util.retryOnceOnAuth = () => {
-      throw new Error("network blew up")
-    }
-
-    const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Usage request failed. Check your connection.")
-  })
-
-  it("throws token expired when refresh response cannot be parsed", async () => {
-    const ctx = makeCtx()
-    ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
-    ctx.host.fs.readText = () =>
-      JSON.stringify({
-        claudeAiOauth: {
-          accessToken: "token",
-          refreshToken: "refresh",
-          expiresAt: Date.now() - 1,
-        },
-      })
-
-    ctx.host.http.request.mockImplementation((opts) => {
-      if (String(opts.url).includes("/v1/oauth/token")) {
-        return { status: 400, bodyText: "not-json" }
-      }
-      return { status: 500, bodyText: "" }
-    })
-
-    ownCredentials(ctx)
-    const plugin = await loadPlugin()
-    expect(() => plugin.probe(ctx)).toThrow("Token expired")
   })
 
   describe("token usage: ccusage integration", () => {

@@ -79,3 +79,14 @@ and unsaved errors use fixed text. Tests use only synthetic credentials in owned
 - S6 remains unchanged. Claude Code imports lose automatic refresh and must be re-imported after expiry. The PR body states this behavior and the pending product decision.
 - No request or response fields were added. Existing host redaction fields remain sufficient. Tests use only synthetic credentials.
 - Validation passed: bun run check; 129 Claude tests with --maxWorkers=1 --no-file-parallelism; 221 Rust library tests, with one live Edge test ignored. The first parallel Claude run timed out during worker startup. Plugin bundling passed, and all seven Claude source/bundle files match byte for byte. Rust checks used the same generated-sidecar exclusion. The full frontend suite and frontend build were not repeated for this one-line correction.
+
+
+## Main integration with Claude error causes
+
+Merged main at 44d03b7f. The Claude plugin combines the native refresh transaction with #35's refresh results and error messages. The probe keeps rejected grants, missing scopes, denied access, unconfirmed sign-ins, and connection failures distinct. The final auth error checks the refresh hold first. Native save and lock errors leave the probe before that check.
+
+The plugin tests keep #35's cause coverage with explicitly UsageBar-owned managed fixtures. The native regression confirmed that a new token could inherit the old expiry. The native host now saves an unknown expiry as null if the refresh response has no usable lifetime. The provider guide covers the combined behavior and the import restrictions.
+
+OAuth holds still prevent shared web fallback. Usage, refresh, and web holds stay separate. S6 still waits for the product decision. Claude Code credentials remain read-only, and imports require re-import after expiry. This merge adds no request or response fields.
+
+Validation passed for the main integration: 164 Claude tests, 225 Rust library tests with one live Edge test ignored, check:frontend, and bundle:plugins. Claude and OpenAI API bundle files match their sources byte for byte.

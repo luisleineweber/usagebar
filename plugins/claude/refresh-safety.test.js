@@ -149,7 +149,7 @@ it.each([
   expect(messages).not.toContain("[object Object]")
 })
 
-it("keeps legacy invalid_grant classification while filtering log values", async () => {
+it("does not treat error_description as an OAuth error code", async () => {
   vi.resetModules()
   const ctx = makeCtx()
   ctx.host.keychain.readGenericPassword.mockReturnValue(JSON.stringify(document("usagebar")))
@@ -159,8 +159,8 @@ it("keeps legacy invalid_grant classification while filtering log values", async
     bodyText: JSON.stringify({ error_description: "invalid_grant" }),
   })
   const loaded = await plugin()
-  expect(() => loaded.probe(ctx)).toThrow("Session expired")
-  expect(ctx.host.log.error).toHaveBeenCalledWith("refresh failed: status=400 error=invalid_grant")
+  expect(() => loaded.probe(ctx)).toThrow("Token refresh rejected (HTTP 400)")
+  expect(ctx.host.log.error).toHaveBeenCalledWith("refresh failed: status=400 error=none")
 })
 
 it.each([1, 120000])(
@@ -251,3 +251,20 @@ it.each([401, 403])(
     expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
   }
 )
+
+it("keeps the re-import action for an unconfirmed 401 on a Claude Code import", async () => {
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
+  const full = document("claude-code")
+  full.claudeAiOauth.expiresAt = Date.now() + 3600000
+  ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(full))
+  ctx.host.providerSecrets.refreshClaudeCredentials = vi.fn()
+  ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "{}" })
+  const loaded = await plugin()
+  expect(() => loaded.probe(ctx)).toThrow(
+    "Invalid token: Claude rejected the sign-in (HTTP 401). Run Claude Code, then Re-import this Claude account in Settings."
+  )
+  expect(ctx.host.providerSecrets.refreshClaudeCredentials).not.toHaveBeenCalled()
+  expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
+})

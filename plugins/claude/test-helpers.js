@@ -38,11 +38,20 @@ export function ownCredentials(ctx) {
     } catch {
       body = null
     }
-    if (response.status >= 200 && response.status < 300 && body?.access_token) {
+    if (
+      response.status >= 200 &&
+      response.status < 300 &&
+      typeof body?.access_token === "string" &&
+      body.access_token.trim()
+    ) {
       full.claudeAiOauth.accessToken = body.access_token
-      if (body.refresh_token) full.claudeAiOauth.refreshToken = body.refresh_token
-      if (typeof body.expires_in === "number")
-        full.claudeAiOauth.expiresAt = Date.now() + body.expires_in * 1000
+      if (typeof body.refresh_token === "string" && body.refresh_token.trim())
+        full.claudeAiOauth.refreshToken = body.refresh_token
+      const expiresAt =
+        Number.isFinite(body.expires_in) && body.expires_in > 0
+          ? Date.now() + body.expires_in * 1000
+          : null
+      full.claudeAiOauth.expiresAt = Number.isFinite(expiresAt) ? expiresAt : null
       credentials = JSON.stringify(full)
       ctx.host.providerSecrets.write("account:owned-test:authJson", credentials)
     }

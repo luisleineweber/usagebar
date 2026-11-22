@@ -54,6 +54,11 @@
     return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 1000)
   }
 
+  function startOfUtcMonthSeconds(seconds) {
+    const date = new Date(seconds * 1000)
+    return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1) / 1000)
+  }
+
   function buildUrl(path, params) {
     const query = []
     const keys = Object.keys(params)
@@ -97,13 +102,16 @@
     return parsed
   }
 
+  // A missing metric is unknown, not zero. Fail the probe instead of reporting a known total.
   function readCostAmount(result) {
-    if (!result || typeof result !== "object") return 0
     const amount =
-      result.amount && typeof result.amount === "object"
-        ? readNumber(result.amount.value)
-        : readNumber(result.amount)
-    return amount === null ? 0 : amount
+      result && typeof result === "object"
+        ? result.amount && typeof result.amount === "object"
+          ? readNumber(result.amount.value)
+          : readNumber(result.amount)
+        : null
+    if (amount === null) throw "OpenAI cost response has a row without an amount."
+    return amount
   }
 
   function readBuckets(payload) {
@@ -125,23 +133,30 @@
   }
 
   function readUsageResult(result) {
-    if (!result || typeof result !== "object") return null
-    const inputTokens = readNumber(result.input_tokens) || 0
-    const outputTokens = readNumber(result.output_tokens) || 0
-    const requests = readNumber(result.num_model_requests) || readNumber(result.requests) || 0
+    if (!result || typeof result !== "object") {
+      throw "OpenAI usage response has a row that is not an object."
+    }
+    const inputTokens = readNumber(result.input_tokens)
+    const outputTokens = readNumber(result.output_tokens)
+    const modelRequests = readNumber(result.num_model_requests)
+    const requests = modelRequests === null ? readNumber(result.requests) : modelRequests
+    if (inputTokens === null || outputTokens === null || requests === null) {
+      throw "OpenAI usage response has a row without input tokens, output tokens, or requests."
+    }
     const model = readString(result.model) || "unknown"
     return { model, inputTokens, outputTokens, requests }
   }
 
-  function summarizeUsage(payload) {
+  function summarizeUsage(payload, startSeconds, endSeconds) {
     const totals = { inputTokens: 0, outputTokens: 0, requests: 0 }
     const byModel = new Map()
     const buckets = readBuckets(payload)
     for (let i = 0; i < buckets.length; i += 1) {
+      const bucketStart = readNumber(buckets[i].start_time)
+      if (bucketStart === null || bucketStart < startSeconds || bucketStart >= endSeconds) continue
       const results = Array.isArray(buckets[i].results) ? buckets[i].results : []
       for (let j = 0; j < results.length; j += 1) {
         const row = readUsageResult(results[j])
-        if (!row) continue
         totals.inputTokens += row.inputTokens
         totals.outputTokens += row.outputTokens
         totals.requests += row.requests
@@ -167,6 +182,8 @@
     }
   }
 
+  // The costs endpoint has no model split, so cost and usage arrive as separate rows.
+  // The scope tells the report which metrics each row reports.
   function buildUsageHistory(costPayload, usagePayload) {
     const entries = []
     const costBuckets = readBuckets(costPayload)
@@ -178,7 +195,7 @@
       if (results.length === 0) continue
       let costUsd = 0
       for (let j = 0; j < results.length; j += 1) costUsd += readCostAmount(results[j])
-      entries.push({ ...period, costUsd })
+      entries.push({ ...period, scope: "cost", costUsd })
     }
 
     const usageBuckets = readBuckets(usagePayload)
@@ -189,11 +206,10 @@
       const results = Array.isArray(bucket.results) ? bucket.results : []
       for (let j = 0; j < results.length; j += 1) {
         const row = readUsageResult(results[j])
-        if (!row) continue
         const totalTokens = row.inputTokens + row.outputTokens
-        if (totalTokens === 0 && row.requests === 0) continue
         entries.push({
           ...period,
+          scope: "usage",
           model: row.model,
           inputTokens: row.inputTokens,
           outputTokens: row.outputTokens,
@@ -230,15 +246,17 @@
     const endSeconds = currentDayStart + DAY_SECONDS
     const start30 = currentDayStart - 29 * DAY_SECONDS
     const start7 = currentDayStart - 6 * DAY_SECONDS
+    // History must also cover month to date. On the 31st, day 1 is before the 30-day window.
+    const historyStart = Math.min(start30, startOfUtcMonthSeconds(currentDayStart))
 
     const costs = requestJson(ctx, apiKey, COSTS_PATH, {
-      start_time: start30,
+      start_time: historyStart,
       end_time: endSeconds,
       bucket_width: "1d",
       limit: 31,
     })
     const usage = requestJson(ctx, apiKey, COMPLETIONS_USAGE_PATH, {
-      start_time: start30,
+      start_time: historyStart,
       end_time: endSeconds,
       bucket_width: "1d",
       group_by: ["model"],
@@ -246,7 +264,7 @@
     })
 
     const costBuckets = readBuckets(costs)
-    const usageSummary = summarizeUsage(usage)
+    const usageSummary = summarizeUsage(usage, start30, endSeconds)
     const today = sumCosts(costBuckets, currentDayStart, endSeconds)
     const sevenDays = sumCosts(costBuckets, start7, endSeconds)
     const thirtyDays = sumCosts(costBuckets, start30, endSeconds)

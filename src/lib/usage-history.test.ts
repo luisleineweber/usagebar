@@ -74,6 +74,125 @@ describe("usage history calendar windows", () => {
   })
 })
 
+describe("usage history calendar-to-date windows", () => {
+  it("starts the week on Monday (ISO 8601) and the month on day 1", () => {
+    // Friday 2026-07-10.
+    expect(getUsageHistoryWindow("weekToDate", NOW_MS)).toEqual({
+      startMs: Date.UTC(2026, 6, 6),
+      endMs: NOW_MS,
+    })
+    expect(getUsageHistoryWindow("monthToDate", NOW_MS)).toEqual({
+      startMs: Date.UTC(2026, 6, 1),
+      endMs: NOW_MS,
+    })
+  })
+
+  it("keeps Monday in its own week and Sunday in the week that started six days earlier", () => {
+    const mondayMs = Date.UTC(2026, 6, 13, 0, 30)
+    expect(getUsageHistoryWindow("weekToDate", mondayMs).startMs).toBe(Date.UTC(2026, 6, 13))
+    const sundayMs = Date.UTC(2026, 6, 12, 23, 59)
+    expect(getUsageHistoryWindow("weekToDate", sundayMs).startMs).toBe(Date.UTC(2026, 6, 6))
+  })
+
+  it("crosses month and year boundaries for the week, and resets the month on day 1", () => {
+    // Friday 2027-01-01: the week started Monday 2026-12-28.
+    const newYearMs = Date.UTC(2027, 0, 1, 9)
+    expect(getUsageHistoryWindow("weekToDate", newYearMs).startMs).toBe(Date.UTC(2026, 11, 28))
+    expect(getUsageHistoryWindow("monthToDate", newYearMs).startMs).toBe(Date.UTC(2027, 0, 1))
+
+    // Wednesday 2026-04-01: the week started Monday 2026-03-30.
+    const aprilFirstMs = Date.UTC(2026, 3, 1, 9)
+    expect(getUsageHistoryWindow("weekToDate", aprilFirstMs).startMs).toBe(Date.UTC(2026, 2, 30))
+    expect(getUsageHistoryWindow("monthToDate", aprilFirstMs).startMs).toBe(Date.UTC(2026, 3, 1))
+
+    // Leap day stays inside February.
+    const leapDayMs = Date.UTC(2028, 1, 29, 9)
+    expect(getUsageHistoryWindow("monthToDate", leapDayMs).startMs).toBe(Date.UTC(2028, 1, 1))
+  })
+
+  it("resolves the local calendar day before choosing the week or month", () => {
+    // 2026-07-31T23:30Z is already Saturday 2026-08-01 in Berlin (UTC+2).
+    const nowMs = Date.UTC(2026, 6, 31, 23, 30)
+    expect(getUsageHistoryWindow("monthToDate", nowMs, "Europe/Berlin").startMs).toBe(
+      Date.UTC(2026, 6, 31, 22)
+    )
+    expect(getUsageHistoryWindow("monthToDate", nowMs, "UTC").startMs).toBe(Date.UTC(2026, 6, 1))
+    // 2026-07-13T02:00Z is still Sunday 2026-07-12 in Los Angeles (UTC-7).
+    const mondayUtcMs = Date.UTC(2026, 6, 13, 2)
+    expect(getUsageHistoryWindow("weekToDate", mondayUtcMs, "America/Los_Angeles").startMs).toBe(
+      Date.UTC(2026, 6, 6, 7)
+    )
+  })
+
+  it("uses local midnight before a daylight-saving change inside the window", () => {
+    // Berlin springs forward on Sunday 2026-03-29; the week began Monday 2026-03-23 at UTC+1.
+    const afterSpringForwardMs = Date.UTC(2026, 2, 29, 12)
+    expect(getUsageHistoryWindow("weekToDate", afterSpringForwardMs, "Europe/Berlin")).toEqual({
+      startMs: Date.UTC(2026, 2, 22, 23),
+      endMs: afterSpringForwardMs,
+    })
+    expect(getUsageHistoryWindow("monthToDate", afterSpringForwardMs, "Europe/Berlin")).toEqual({
+      startMs: Date.UTC(2026, 1, 28, 23),
+      endMs: afterSpringForwardMs,
+    })
+    // New York falls back on Sunday 2026-11-01; November began at UTC-4, the next week at UTC-5.
+    const afterFallBackMs = Date.UTC(2026, 10, 2, 15)
+    expect(getUsageHistoryWindow("monthToDate", afterFallBackMs, "America/New_York").startMs).toBe(
+      Date.UTC(2026, 10, 1, 4)
+    )
+    expect(getUsageHistoryWindow("weekToDate", afterFallBackMs, "America/New_York").startMs).toBe(
+      Date.UTC(2026, 10, 2, 5)
+    )
+  })
+
+  it("keeps rolling 7d and 30d ranges separate from the calendar periods", () => {
+    const newYearMs = Date.UTC(2027, 0, 1, 9)
+    expect(getUsageHistoryWindow("7d", newYearMs).startMs).toBe(Date.UTC(2026, 11, 26))
+    expect(getUsageHistoryWindow("30d", newYearMs).startMs).toBe(Date.UTC(2026, 11, 3))
+  })
+
+  it("does not report zero for an empty or partly unknown calendar period", () => {
+    const outputs = [
+      output("codex", [
+        historyEntry({
+          periodStart: "2026-06-30T00:00:00.000Z",
+          periodEnd: "2026-07-01T00:00:00.000Z",
+        }),
+        historyEntry({
+          periodStart: "2026-07-06T00:00:00.000Z",
+          periodEnd: "2026-07-07T00:00:00.000Z",
+          costUsd: undefined,
+        }),
+      ]),
+    ]
+    const nextMonthMs = Date.UTC(2026, 7, 3, 12)
+    const empty = summarizeUsageHistory(outputs, {
+      period: "monthToDate",
+      nowMs: nextMonthMs,
+      timeZone: "UTC",
+    })
+    expect(empty.entryCount).toBe(0)
+    expect(empty.totals.costUsd).toBeNull()
+    expect(empty.totals.totalTokens).toBeNull()
+
+    const week = summarizeUsageHistory(outputs, {
+      period: "weekToDate",
+      nowMs: NOW_MS,
+      timeZone: "UTC",
+    })
+    expect(week.entryCount).toBe(1)
+    expect(week.totals.costUsd).toBeNull()
+    expect(week.totals.totalTokens).toBe(100)
+
+    const month = summarizeUsageHistory(outputs, {
+      period: "monthToDate",
+      nowMs: NOW_MS,
+      timeZone: "UTC",
+    })
+    expect(month.entryCount).toBe(1)
+  })
+})
+
 describe("filterUsageHistory", () => {
   it("filters by provider, model, project, and period", () => {
     const outputs = [
@@ -234,6 +353,99 @@ describe("summarizeUsageHistory", () => {
     })
   })
 
+  it("sums scoped cost and usage rows over the rows that report each metric", () => {
+    const summary = summarizeUsageHistory(
+      [
+        output("openai-api", [
+          {
+            periodStart: "2026-07-10T00:00:00.000Z",
+            periodEnd: "2026-07-11T00:00:00.000Z",
+            scope: "cost",
+            costUsd: 3,
+          },
+          {
+            periodStart: "2026-07-09T00:00:00.000Z",
+            periodEnd: "2026-07-10T00:00:00.000Z",
+            scope: "cost",
+            costUsd: 0,
+          },
+          {
+            periodStart: "2026-07-10T00:00:00.000Z",
+            periodEnd: "2026-07-11T00:00:00.000Z",
+            scope: "usage",
+            model: "gpt-5",
+            inputTokens: 60,
+            outputTokens: 40,
+            totalTokens: 100,
+            requests: 2,
+          },
+          {
+            periodStart: "2026-07-10T00:00:00.000Z",
+            periodEnd: "2026-07-11T00:00:00.000Z",
+            scope: "usage",
+            model: "gpt-4.1",
+            inputTokens: 5,
+            outputTokens: 5,
+            totalTokens: 10,
+            requests: 1,
+          },
+        ]),
+      ],
+      { period: "7d", nowMs: NOW_MS }
+    )
+
+    expect(summary.totals).toMatchObject({
+      costUsd: 3,
+      requests: 3,
+      inputTokens: 65,
+      outputTokens: 45,
+      totalTokens: 110,
+      cacheReadTokens: null,
+    })
+    expect(summary.topModel).toEqual({
+      model: "gpt-5",
+      costUsd: null,
+      requests: 2,
+      totalTokens: 100,
+    })
+  })
+
+  it("keeps a scoped metric unknown when no row reports it or a reporting row omits it", () => {
+    const costOnly = summarizeUsageHistory(
+      [
+        output("openai-api", [
+          {
+            ...historyEntry(),
+            scope: "cost",
+            model: undefined,
+            requests: undefined,
+            inputTokens: undefined,
+            outputTokens: undefined,
+            reasoningTokens: undefined,
+            totalTokens: undefined,
+          },
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    expect(costOnly.totals.costUsd).toBe(1)
+    expect(costOnly.totals.totalTokens).toBeNull()
+    expect(costOnly.totals.requests).toBeNull()
+
+    const partialUsage = summarizeUsageHistory(
+      [
+        output("openai-api", [
+          { ...historyEntry(), scope: "usage", costUsd: undefined },
+          { ...historyEntry(), scope: "usage", costUsd: undefined, requests: undefined },
+        ]),
+      ],
+      { period: "today", nowMs: NOW_MS }
+    )
+    expect(partialUsage.totals.totalTokens).toBe(200)
+    expect(partialUsage.totals.requests).toBeNull()
+    expect(partialUsage.totals.costUsd).toBeNull()
+  })
+
   it("selects the top model by cost, then tokens and requests", () => {
     const summary = summarizeUsageHistory(
       [
@@ -325,7 +537,7 @@ describe("summarizeUsageHistory", () => {
     expect(zeroSummary.totals.totalTokens).toBe(0)
   })
 
-  it("builds all four period summaries from the same filters", () => {
+  it("builds every period summary from the same filters", () => {
     const summaries = summarizeUsageHistoryPeriods(
       [
         output("codex", [
@@ -343,5 +555,7 @@ describe("summarizeUsageHistory", () => {
     expect(summaries.yesterday.entryCount).toBe(1)
     expect(summaries["7d"].entryCount).toBe(2)
     expect(summaries["30d"].entryCount).toBe(2)
+    expect(summaries.weekToDate.entryCount).toBe(2)
+    expect(summaries.monthToDate.entryCount).toBe(2)
   })
 })

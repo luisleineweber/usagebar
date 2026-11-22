@@ -161,6 +161,7 @@ fn preserves_document_rotation_and_missing_refresh_token() {
             saved["claudeAiOauth"]["refreshToken"],
             if rotate { "rotated" } else { "refresh" }
         );
+        assert_eq!(saved["claudeAiOauth"]["expiresAt"].is_null(), !rotate);
         assert_eq!(saved["claudeAiOauth"]["extra"], true);
         assert_eq!(saved["unrelated"]["keep"], true);
         assert!(store.recovery().unwrap().is_none());
@@ -387,4 +388,38 @@ fn native_non_windows_refresh_is_explicitly_unsupported() {
         !target.data_dir.exists(),
         "unsupported refresh must not touch storage"
     );
+}
+
+#[test]
+fn rotated_token_does_not_keep_expiry_from_previous_token() {
+    for lifetime in [
+        None,
+        Some(Value::Null),
+        Some(serde_json::json!(true)),
+        Some(serde_json::json!("3600")),
+        Some(serde_json::json!(1.0e308)),
+        Some(serde_json::json!(0)),
+        Some(serde_json::json!(-5)),
+        Some(serde_json::json!("3600\ninjected")),
+        Some(serde_json::json!({"toString": "invalid"})),
+    ] {
+        let store = TestStore::new();
+        let mut body = serde_json::json!({"access_token": "new", "refresh_token": "rotated"});
+        if let Some(lifetime) = lifetime {
+            body["expires_in"] = lifetime;
+        }
+        let result = Coordinator::default()
+            .refresh(&locks(), &store, "old", |_| {
+                let mut response = response();
+                response.body_text = body.to_string();
+                Ok(response)
+            })
+            .unwrap();
+        let saved: Value = serde_json::from_str(&result.credentials.unwrap()).unwrap();
+        assert_eq!(saved["claudeAiOauth"]["expiresAt"], Value::Null);
+        assert_eq!(
+            serde_json::from_str::<Value>(&store.read().unwrap().unwrap()).unwrap(),
+            saved
+        );
+    }
 }
