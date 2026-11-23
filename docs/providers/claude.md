@@ -144,10 +144,14 @@ It saves a valid replacement only after verifying the same account and organizat
 usage. If the source is missing or expired, run Claude Code once. UsageBar picks up the updated login
 on the next probe. A selected profile never uses a different login or a shared web cookie.
 
-Older imports that lack a link can link automatically if the saved token or credential chain still
-proves the same account. If both credentials have changed and the old token can no longer verify the
-account, link that import again once in Settings. This protects existing profiles after a Claude Code
-account switch.
+Older imports can link automatically if the access tokens match or Claude verifies both identities.
+For an older import that cannot prove its identity, select **Link current Claude Code login** on that
+profile in Settings and confirm. UsageBar verifies the current Claude Code account and keeps the
+profile ID and selection.
+
+A check that finds no update can retry once after usage HTTP 401. Temporary account verification
+errors allow usage with a still-valid saved token. Verification HTTP 429 gives account verification
+its own retry time. It does not set the OAuth usage, refresh, or web hold.
 
 Direct refresh requires a separate UsageBar-owned managed credential document with
 `usagebarCredentialOwner: "usagebar"`. Missing or unknown ownership stays with Claude Code. Do not add

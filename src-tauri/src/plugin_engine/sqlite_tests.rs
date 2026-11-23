@@ -76,7 +76,7 @@ fn sqlite_runtime_values_semicolons_and_batch_writes() {
 #[test]
 fn sqlite_runtime_provider_queries() {
     with_database(|connection, path| {
-        connection.execute_batch("CREATE TABLE ItemTable (key TEXT, value TEXT); CREATE TABLE auth_kv (key TEXT, value TEXT); CREATE TABLE message (data TEXT, time_created INTEGER);").unwrap();
+        connection.execute_batch("CREATE TABLE ItemTable (key TEXT, value TEXT); CREATE TABLE auth_kv (key TEXT, value TEXT); CREATE TABLE message (data TEXT, time_created INTEGER); CREATE TABLE session_message (type TEXT, data TEXT);").unwrap();
         for key in [
             "windsurfAuthStatus",
             "antigravityUnifiedStateSync.oauthToken",
@@ -110,9 +110,15 @@ fn sqlite_runtime_provider_queries() {
             );
         }
         connection.execute("INSERT INTO message VALUES (?1, 1000)", [r#"{"providerID":"opencode","role":"assistant","cost":0.25,"modelID":"fixture","tokens":{"input":10,"output":2,"cache":{"read":3,"write":4},"total":19}}"#]).unwrap();
-        for source in [
-            include_str!("../../../plugins/opencode/plugin.js"),
-            include_str!("../../../plugins/opencode-go/plugin.js"),
+        connection
+            .execute(
+                "INSERT INTO session_message VALUES ('assistant', ?1)",
+                [r#"{"model":{"providerID":"opencode-go","id":"fixture"}}"#],
+            )
+            .unwrap();
+        for (source, expected_count) in [
+            (include_str!("../../../plugins/opencode/plugin.js"), 2),
+            (include_str!("../../../plugins/opencode-go/plugin.js"), 3),
         ] {
             // Run the actual SQL templates, with fixed time and provider parameters.
             let templates: Vec<_> = source
@@ -123,7 +129,7 @@ fn sqlite_runtime_provider_queries() {
                 .collect();
             assert_eq!(
                 templates.len(),
-                2,
+                expected_count,
                 "update SQL coverage when callers change"
             );
             for template in templates {

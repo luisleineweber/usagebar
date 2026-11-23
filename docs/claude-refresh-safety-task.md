@@ -108,3 +108,14 @@ deletion. The new lookup uses a fixed HTTPS endpoint. Its bearer authorization m
 redaction list. The host logs no profile identity, token, or response body.
 
 Validation passed with main at d9c2af96. The 166 Claude tests and 302 Rust library tests passed. One live Edge test was ignored. check:frontend and bundle:plugins passed. All Claude, Cursor, Factory, and OpenAI API bundle files match their sources. The account verification response was tested with fixtures.
+
+
+## S6 review follow-up
+
+- Settings can link the current verified Claude Code login to a selected profile after confirmation. It keeps the profile ID and selection. An established link cannot switch to a different account.
+- Automatic linking requires the same access token or matching identities from two online checks. A matching refresh token alone is insufficient.
+- A proactive sync that cannot replace the token can recheck the source once after usage HTTP 401. A temporary identity verification failure permits usage with a valid saved token. Verification has a separate Retry-After deadline.
+- Managed reads, sync, and direct refresh return an allowlisted credential projection. Refresh failures return status, a fixed code label, and a parsed retry delay. Raw provider bodies and headers, refresh tokens, and account link details remain native.
+- Merged main through #39 at `8b26b87e` without conflicts.
+
+Validation on Windows passed with synthetic credentials. All 276 focused plugin and Settings tests and 309 Rust library tests passed. One live Edge test was ignored. Frontend checks, Rust checks, the ccusage fixture check, and plugin bundling passed. The Claude, Codex, and OpenCode Go bundles match their sources byte for byte. Local Rust checks excluded the generated release sidecar.

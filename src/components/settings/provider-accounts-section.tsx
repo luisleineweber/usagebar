@@ -5,6 +5,7 @@ import {
   deleteProviderAccountProfile,
   importCurrentProviderAccountProfile,
   listProviderAccountProfiles,
+  linkCurrentClaudeCodeLogin,
 } from "@/lib/provider-accounts"
 import type { ProviderConfig } from "@/lib/provider-settings"
 
@@ -23,6 +24,10 @@ export function ProviderAccountsSection({
     () => ({
       list: () => listProviderAccountProfiles(providerId),
       importCurrent: () => importCurrentProviderAccountProfile(providerId),
+      linkCurrent:
+        providerId === "claude"
+          ? (profileId: string) => linkCurrentClaudeCodeLogin(profileId, true)
+          : undefined,
       remove: (profileId: string) => deleteProviderAccountProfile(providerId, profileId),
     }),
     [providerId]
@@ -39,6 +44,7 @@ export function ProviderAccountsSection({
       message={accounts.message}
       error={accounts.error}
       onImport={() => void accounts.importCurrent()}
+      onLink={api.linkCurrent ? (profileId) => void accounts.linkCurrent(profileId) : undefined}
       onSelect={(profileId) => void accounts.select(profileId)}
       onDelete={(profileId) => void accounts.remove(profileId)}
     />

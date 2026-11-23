@@ -439,6 +439,48 @@ pub(crate) async fn import_current_provider_account_profile(
         .ok_or_else(|| "Could not complete the account import".to_string())?
 }
 
+#[tauri::command]
+pub(crate) async fn link_current_claude_code_login(
+    app_handle: tauri::AppHandle,
+    profile_id: String,
+    confirmed: bool,
+) -> Result<provider_account_store::ProviderAccountProfile, String> {
+    if !confirmed {
+        return Err("Confirm the Claude Code link in Settings.".into());
+    }
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|_| "Could not access the app data directory")?;
+    let read_dir = data_dir.clone();
+    let key = managed_profile_secret_key(&profile_id);
+    let (previous, resolved) = tauri::async_runtime::spawn_blocking(move || {
+        let previous = crate::claude_import::current_import(&read_dir, &key)?;
+        let resolved = crate::claude_import::resolve_current_claude_auth()?;
+        Ok::<_, String>((previous, resolved))
+    })
+    .await
+    .map_err(|_| "Could not verify the Claude Code sign-in".to_string())??;
+    let (sender, mut receiver) = tauri::async_runtime::channel(1);
+    app_handle
+        .run_on_main_thread(move || {
+            let result = provider_account_store::link_claude_profile(
+                &data_dir,
+                &profile_id,
+                &previous,
+                resolved,
+                confirmed,
+                crate::now_utc_unix_ms(),
+            );
+            let _ = sender.try_send(result);
+        })
+        .map_err(|_| "Could not link the Claude Code sign-in".to_string())?;
+    receiver
+        .recv()
+        .await
+        .ok_or_else(|| "Could not complete the Claude Code link".to_string())?
+}
+
 fn resolve_provider_account_import(
     provider_id: &str,
     now_ms: i64,

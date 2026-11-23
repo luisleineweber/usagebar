@@ -81,19 +81,19 @@ fn rejects_a_different_user_in_the_same_organization_and_a_different_organizatio
             |_| Ok(Some(profile(account, organization))),
         )
         .unwrap_err();
-        assert!(error.contains("different account"));
+        assert!(error.user_message().contains("different account"));
     }
 }
 
 #[test]
-fn legacy_import_can_link_on_an_exact_credential_match() {
-    let old = document("old", "old-refresh", 100);
+fn legacy_import_can_link_on_an_exact_access_token_match() {
+    let old = document("old", "old-refresh", 300);
     let updated = updated_document(
         &old,
         200,
-        |source| Ok((source == Source::File).then(|| document("new", "old-refresh", 300))),
+        |source| Ok((source == Source::File).then(|| document("old", "new-refresh", 300))),
         |access| {
-            assert_eq!(access, "new");
+            assert_eq!(access, "old");
             Ok(Some(profile("a", "org")))
         },
     )
@@ -103,16 +103,17 @@ fn legacy_import_can_link_on_an_exact_credential_match() {
 }
 
 #[test]
-fn expired_legacy_import_cannot_adopt_an_unrelated_chain() {
+fn expired_legacy_import_cannot_relink_with_only_a_matching_refresh_token() {
     let old = document("old", "old-refresh", 100);
     assert_eq!(
         updated_document(
             &old,
             200,
-            |_| Ok(Some(document("new", "new-refresh", 300))),
+            |_| Ok(Some(document("new", "old-refresh", 300))),
             |_| panic!("old account cannot be verified"),
         )
-        .unwrap_err(),
+        .unwrap_err()
+        .user_message(),
         LINK_REQUIRED
     );
 }
@@ -168,7 +169,91 @@ fn sync_updates_only_the_captured_profile_and_cannot_restore_a_concurrent_delete
         },
     )
     .unwrap_err();
-    assert!(error.contains("changed"));
+    assert!(error.user_message().contains("changed"));
     assert!(read(key).is_none());
     assert_eq!(read(other).as_deref(), Some(original.as_str()));
+}
+
+#[test]
+fn credential_projection_excludes_refresh_token_and_link() {
+    let projection = public_credentials(&linked(100).to_string()).unwrap();
+    assert_eq!(projection["claudeAiOauth"]["accessToken"], "old");
+    assert_eq!(projection["claudeAiOauth"]["expiresAt"], 100);
+    assert_eq!(projection["claudeAiOauth"]["hasRefreshToken"], false);
+    assert!(projection.get(LINK).is_none());
+    assert!(projection["claudeAiOauth"].get("refreshToken").is_none());
+}
+
+#[test]
+fn retry_after_accepts_numbers_and_http_dates_only() {
+    assert_eq!(retry_after_seconds("600"), Some(600));
+    assert_eq!(
+        retry_after_seconds("Wed, 21 Oct 2015 07:28:00 GMT"),
+        Some(0)
+    );
+    assert_eq!(retry_after_seconds("synthetic-secret"), None);
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn relink_requires_confirmation_and_preserves_the_selected_profile_id() {
+    let dir = std::env::temp_dir().join(format!("usagebar-relink-test-{}", uuid::Uuid::new_v4()));
+    let previous = document("old", "old-refresh", 100).to_string();
+    let previous_profile = crate::provider_account_store::import_profile(
+        &dir,
+        "claude",
+        crate::provider_account_store::ImportedProviderAccount {
+            label: "Old".into(),
+            email: None,
+            account_id: Some("org".into()),
+        },
+        0,
+    )
+    .unwrap();
+    let id = &previous_profile.profile_id;
+    let key = format!("account:{id}:authJson");
+    crate::protected_store::save(&dir, "claude", &key, &previous).unwrap();
+    let resolve = || ResolvedClaudeAuth {
+        email: Some("new@example.test".into()),
+        account_id: "account:org".into(),
+        auth_json: bind(
+            document("new", "new-refresh", 300),
+            Source::File,
+            profile("account", "org").identity,
+        )
+        .unwrap(),
+    };
+    assert!(
+        crate::provider_account_store::link_claude_profile(
+            &dir,
+            id,
+            &previous,
+            resolve(),
+            false,
+            1
+        )
+        .is_err()
+    );
+    assert_eq!(current_import(&dir, &key).unwrap(), previous);
+    let updated =
+        crate::provider_account_store::link_claude_profile(&dir, id, &previous, resolve(), true, 2)
+            .unwrap();
+    assert_eq!(updated.profile_id, *id);
+    assert_eq!(updated.account_id.as_deref(), Some("account:org"));
+    assert_eq!(
+        crate::provider_account_store::list_profiles(&dir, "claude").unwrap(),
+        [updated]
+    );
+    assert_eq!(current_import(&dir, &key).unwrap(), resolve().auth_json);
+}
+
+#[test]
+fn user_confirmation_does_not_replace_an_established_account_with_a_different_identity() {
+    let next = bind(
+        document("new", "new-refresh", 300),
+        Source::File,
+        profile("other", "org").identity,
+    )
+    .unwrap();
+    assert!(authorize_relink(&linked(100).to_string(), &next, true).is_err());
 }

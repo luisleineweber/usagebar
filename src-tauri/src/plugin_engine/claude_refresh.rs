@@ -70,11 +70,42 @@ impl Default for Coordinator {
         }
     }
 }
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub(super) struct Outcome {
     credentials: Option<String>,
     response: Option<HttpRespParams>,
+}
+
+impl Outcome {
+    pub(super) fn public_result(self) -> Result<Value, String> {
+        let credentials = self
+            .credentials
+            .as_deref()
+            .map(crate::claude_import::public_credentials)
+            .transpose()?;
+        let response = self.response.map(|response| {
+            let retry = (response.status == 429).then(|| {
+                response.headers.iter().find(|(name, _)| name.eq_ignore_ascii_case("retry-after"))
+                    .and_then(|(_, value)| crate::claude_import::retry_after_seconds(value))
+                    .unwrap_or(300)
+            });
+            let error_code = if matches!(response.status, 400 | 401) {
+                serde_json::from_str::<Value>(&response.body_text).ok()
+                    .and_then(|body| body["error"].as_str().map(|code| match code {
+                        "invalid_request" => "invalid_request",
+                        "invalid_client" => "invalid_client",
+                        "invalid_grant" => "invalid_grant",
+                        "unauthorized_client" => "unauthorized_client",
+                        "unsupported_grant_type" => "unsupported_grant_type",
+                        "invalid_scope" => "invalid_scope",
+                        _ => "other",
+                    }))
+            } else {
+                None
+            };
+            serde_json::json!({ "status": response.status, "retryAfterSeconds": retry, "errorCode": error_code })
+        });
+        Ok(serde_json::json!({ "credentials": credentials, "response": response }))
+    }
 }
 
 fn chain_path(directory: &Path, document: &str) -> Result<PathBuf, String> {

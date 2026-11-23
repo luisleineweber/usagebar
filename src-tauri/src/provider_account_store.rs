@@ -145,6 +145,43 @@ pub fn import_profile(
     Ok(profile)
 }
 
+/// Update the existing profile and its credential in one serialized operation.
+pub(crate) fn link_claude_profile(
+    data_dir: &Path,
+    profile_id: &str,
+    previous: &str,
+    resolved: crate::claude_import::ResolvedClaudeAuth,
+    confirmed: bool,
+    now_ms: i64,
+) -> Result<ProviderAccountProfile, String> {
+    crate::claude_import::authorize_relink(previous, &resolved.auth_json, confirmed)?;
+    crate::protected_store::transaction(data_dir, |store| {
+        let mut file = load_accounts_file(data_dir, "claude")?;
+        let profile = file
+            .profiles
+            .iter_mut()
+            .find(|p| p.profile_id == profile_id)
+            .ok_or("The selected Claude profile was removed.")?;
+        let key = format!("account:{profile_id}:authJson");
+        if store.read("claude", &key)?.as_deref() != Some(previous) {
+            return Err("The selected Claude import changed. Try again.".into());
+        }
+        store.save("claude", &key, &resolved.auth_json)?;
+        profile.label = crate::claude_profile_label(
+            resolved.email.as_deref(),
+            Some(&resolved.account_id),
+            now_ms,
+        );
+        profile.email = resolved.email;
+        profile.account_id = Some(resolved.account_id);
+        profile.last_imported_at = now_ms;
+        profile.last_error = None;
+        let updated = profile.clone();
+        save_accounts_file(data_dir, "claude", &file)?;
+        Ok(updated)
+    })
+}
+
 pub fn delete_profile(
     app_data_dir: &Path,
     provider_id: &str,

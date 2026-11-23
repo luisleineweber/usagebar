@@ -41,12 +41,13 @@
       usage: "rate-limit-",
       refresh: "rate-limit-refresh-",
       "web-": "rate-limit-web-",
+      verify: "rate-limit-verify-",
     }
     if (!Object.prototype.hasOwnProperty.call(prefixes, endpoint)) {
       throw new Error("Unknown Claude rate-limit endpoint: " + endpoint)
     }
     let instanceId = encodeURIComponent(ctx.instanceRef?.instanceId || "default")
-    if (endpoint === "usage" && /^(web-|refresh-)/i.test(instanceId)) {
+    if (endpoint === "usage" && /^(web-|refresh-|verify-)/i.test(instanceId)) {
       instanceId = "%" + instanceId.charCodeAt(0).toString(16) + instanceId.slice(1)
     }
     return ctx.app.pluginDataDir + "/" + prefixes[endpoint] + instanceId + ".json"
@@ -76,7 +77,11 @@
     const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
     const value = key ? String(headers[key]).trim() : ""
     const now = Date.now()
-    const retryAt = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value)
+    const retryAt = Number.isFinite(response.retryAfterSeconds)
+      ? now + response.retryAfterSeconds * 1000
+      : /^\d+$/.test(value)
+        ? now + Number(value) * 1000
+        : Date.parse(value)
     ctx.host.fs.writeText(
       rateLimitPath(ctx, endpoint),
       JSON.stringify({
@@ -212,7 +217,12 @@
     }
 
     const oauth = parsed.claudeAiOauth
-    if (!oauth.accessToken && !oauth.refreshToken) {
+    if (
+      !oauth.accessToken &&
+      !oauth.refreshToken &&
+      !oauth.hasRefreshToken &&
+      parsed.usagebarCredentialOwner === "usagebar"
+    ) {
       throw "Selected Claude account is invalid. Re-import or choose another account."
     }
 
@@ -541,7 +551,9 @@
     const oauth = credentials && credentials.oauth
     return !!(
       oauth &&
-      (readNonEmptyString(oauth.accessToken) || readNonEmptyString(oauth.refreshToken))
+      (readNonEmptyString(oauth.accessToken) ||
+        readNonEmptyString(oauth.refreshToken) ||
+        oauth.hasRefreshToken)
     )
   }
 
@@ -608,12 +620,46 @@
   }
 
   function syncClaudeCodeImport(ctx, creds) {
-    const saved = ctx.host.providerSecrets.syncClaudeCodeCredentials()
-    if (!saved) return false
-    creds.fullData = JSON.parse(saved)
-    creds.oauth = creds.fullData.claudeAiOauth
-    creds.account = extractAccountState(creds.fullData)
-    return true
+    const heldUntil = readRateLimitRetryAt(ctx, "verify")
+    if (heldUntil !== null) {
+      return { kind: "failed", message: accountVerificationHold(heldUntil) }
+    }
+    const raw = ctx.host.providerSecrets.syncClaudeCodeCredentials()
+    if (!raw) return { kind: "unavailable" }
+    const result = JSON.parse(raw)
+    if (result.kind === "linkRequired") {
+      return {
+        kind: "failed",
+        message:
+          "Could not verify this older Claude import. In Settings, select Link current Claude Code login for this profile.",
+      }
+    }
+    if (result.kind === "deferred") {
+      if (Number.isFinite(result.retryAfterSeconds)) {
+        const retryAt = Date.now() + result.retryAfterSeconds * 1000
+        ctx.host.fs.writeText(rateLimitPath(ctx, "verify"), JSON.stringify({ retryAt }))
+        return { kind: "failed", message: accountVerificationHold(retryAt) }
+      }
+      return {
+        kind: "failed",
+        message: "Could not verify the Claude Code account. Try again later.",
+      }
+    }
+    creds.fullData = result
+    creds.oauth = result.claudeAiOauth
+    return {
+      kind: "refreshed",
+      accessToken: creds.oauth.accessToken,
+      expiresAt: parseExpiresAtMs(creds.oauth.expiresAt),
+    }
+  }
+
+  function accountVerificationHold(retryAt) {
+    return (
+      "Claude account verification failed (HTTP 429). Try again after " +
+      new Date(retryAt).toISOString() +
+      "."
+    )
   }
 
   // Refresh outcomes: "refreshed", "unavailable" (no refresh token), "held" (an active refresh
@@ -627,17 +673,14 @@
         if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
         return { kind: "held" }
       }
-      if (syncClaudeCodeImport(ctx, creds)) {
-        return {
-          kind: "refreshed",
-          accessToken: creds.oauth.accessToken,
-          expiresAt: parseExpiresAtMs(creds.oauth.expiresAt),
-        }
+      const result = syncClaudeCodeImport(ctx, creds)
+      if (
+        result.kind !== "refreshed" &&
+        (!readNonEmptyString(oauth.accessToken) || isExpiryConfirmed(oauth.expiresAt))
+      ) {
+        throw result.message || "Claude Code sign-in needs an update. " + RUN_CLAUDE_CODE
       }
-      if (!readNonEmptyString(oauth.accessToken) || isExpiryConfirmed(oauth.expiresAt)) {
-        throw "Claude Code sign-in needs an update. " + RUN_CLAUDE_CODE
-      }
-      return { kind: "unavailable" }
+      return result
     }
     if (creds.source !== "managed-profile") {
       ctx.host.log.info("Claude Code owns credential refresh; reloading the current access token")
@@ -657,7 +700,7 @@
       }
       return { kind: "unavailable" }
     }
-    if (!oauth.refreshToken) {
+    if (!oauth.hasRefreshToken && !oauth.refreshToken) {
       ctx.host.log.warn("refresh skipped: no refresh token")
       return { kind: "unavailable" }
     }
@@ -695,7 +738,7 @@
       throw "Claude credential refresh failed. " + String(e)
     }
     if (result.credentials) {
-      creds.fullData = JSON.parse(result.credentials)
+      creds.fullData = result.credentials
       creds.oauth = creds.fullData.claudeAiOauth
       const expiresAt = parseExpiresAtMs(creds.oauth.expiresAt)
       const lifetimeSeconds =
@@ -714,8 +757,7 @@
 
     if (resp.status === 400 || resp.status === 401) {
       // OAuth token endpoints report refused grants with RFC 6749 error codes.
-      const body = ctx.util.tryParseJson(resp.bodyText)
-      const errorCode = body && typeof body.error === "string" ? body.error : null
+      const errorCode = resp.errorCode ?? null
       ctx.host.log.error(
         "refresh failed: status=" + resp.status + " error=" + logLabel(errorCode, OAUTH_ERROR_CODES)
       )
@@ -1264,19 +1306,22 @@
     let accessToken = creds.oauth.accessToken
     let tokenExpiresAt = creds.oauth.expiresAt
     let attemptedRefresh = false
+    let replacedAccess = false
     let refreshProblem = null
 
     function tokenExpired() {
       return isExpiryConfirmed(tokenExpiresAt)
     }
 
-    // Each probe refreshes at most once. A failed or rejected refresh is kept while the current
+    // Each probe rotates at most once. Imports can recheck after HTTP 401. A failed or rejected refresh is kept while the current
     // token can still be valid; the saved problem is reported only if usage then returns HTTP 401.
     // A rejected refresh for a token that has already expired ends the probe at once.
     function attemptRefresh() {
       attemptedRefresh = true
       const result = refreshToken(ctx, creds)
       if (result.kind === "refreshed") {
+        replacedAccess = true
+        refreshProblem = null
         accessToken = result.accessToken
         tokenExpiresAt = result.expiresAt
         return true
@@ -1294,7 +1339,10 @@
     }
 
     let resp = fetchUsage(ctx, accessToken, false)
-    if (resp.status === 401 && !attemptedRefresh) {
+    if (
+      resp.status === 401 &&
+      (!attemptedRefresh || (isClaudeCodeImport(creds) && !replacedAccess))
+    ) {
       ctx.host.log.info("usage returned 401, attempting refresh")
       if (attemptRefresh()) resp = fetchUsage(ctx, accessToken, true)
     }

@@ -469,6 +469,7 @@ mod tests {
                 cache_creation_tokens: None,
                 reasoning_tokens: None,
                 total_tokens: Some(42.0),
+                period_total_tokens: None,
             }],
         }
     }

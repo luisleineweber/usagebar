@@ -1,3 +1,4 @@
+import { entryTotalTokens, summarizeUsageHistory } from "../../src/lib/usage-history"
 import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
@@ -716,6 +717,111 @@ describe("opencode-go plugin", () => {
 
     expect(result.lines[0]).toMatchObject({ label: "Free", used: 1 })
     expect(ctx.host.log.warn).toHaveBeenCalledWith("opencode auth file is not valid json")
+  })
+
+  it("detects v2-only history without inferring a Free count", async () => {
+    const ctx = makeCtx()
+    ctx.host.sqlite.query.mockImplementation((_path, sql) => {
+      if (String(sql).includes("FROM session_message")) return JSON.stringify([{ present: 1 }])
+      throw new Error("no such table: message")
+    })
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: { daily: [{ date: "2026-11-01", totalTokens: 174 }] },
+    })
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.plan).toBeUndefined()
+    expect(result.lines.some((line) => line.label === "Free")).toBe(false)
+    expect(ctx.host.ccusage.query).toHaveBeenCalled()
+    expect(entryTotalTokens(result.history.entries[0])).toBe(174)
+  })
+
+  it("keeps a multi-model daily total without assigning it to a model", async () => {
+    const ctx = makeCtx()
+    setHistoryQuery(ctx, [{ createdMs: Date.now(), modelId: "qwen-free", cost: 0 }])
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: {
+        daily: [
+          {
+            date: "2026-11-01",
+            totalTokens: 174,
+            totalCost: 0.03,
+            modelBreakdowns: [
+              {
+                modelName: "a",
+                inputTokens: 100,
+                outputTokens: 20,
+                cacheReadTokens: 30,
+                cacheCreationTokens: 5,
+                cost: 0.02,
+              },
+              {
+                modelName: "b",
+                inputTokens: 10,
+                outputTokens: 2,
+                cacheReadTokens: 0,
+                cacheCreationTokens: 0,
+                cost: 0.01,
+              },
+            ],
+          },
+        ],
+      },
+    })
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.history.entries).toHaveLength(2)
+    const outputs = [{ providerId: "opencode-go", history: result.history }]
+    const options = { period: "30d", nowMs: Date.parse("2026-11-02T12:00:00Z"), timeZone: "UTC" }
+    expect(summarizeUsageHistory(outputs, options).totals.totalTokens).toBe(174)
+    expect(summarizeUsageHistory(outputs, { ...options, models: ["a"] }).totals).toMatchObject({
+      totalTokens: 155,
+      costUsd: 0.02,
+    })
+    expect(summarizeUsageHistory(outputs, { ...options, models: ["b"] }).totals).toMatchObject({
+      totalTokens: 12,
+      costUsd: 0.01,
+    })
+  })
+
+  it("keeps ccusage completed compaction cost and token components in history", async () => {
+    const ctx = makeCtx()
+    setHistoryQuery(ctx, [{ createdMs: Date.now(), modelId: "qwen-free", cost: 0 }])
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: {
+        daily: [
+          {
+            date: "2026-11-01",
+            totalTokens: 174,
+            totalCost: 0.03,
+            modelBreakdowns: [
+              {
+                modelName: "gpt-5",
+                inputTokens: 110,
+                outputTokens: 22,
+                cacheReadTokens: 30,
+                cacheCreationTokens: 5,
+                cost: 0.03,
+                storedCost: 0.03,
+              },
+            ],
+          },
+        ],
+      },
+    })
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.history.entries).toEqual([
+      expect.objectContaining({
+        model: "gpt-5",
+        inputTokens: 110,
+        outputTokens: 22,
+        cacheReadTokens: 30,
+        cacheCreationTokens: 5,
+        costUsd: 0.03,
+      }),
+    ])
+    expect(entryTotalTokens(result.history.entries[0])).toBe(174)
   })
 
   it("adds complete ccusage model history and skips invalid days", async () => {

@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 
 export type ManagedAccountProfileView = {
@@ -37,6 +38,7 @@ export function ManagedAccountsView({
   message,
   error,
   onImport,
+  onLink,
   onSelect,
   onDelete,
 }: {
@@ -48,9 +50,11 @@ export function ManagedAccountsView({
   message: string | null
   error: string | null
   onImport: () => void
+  onLink?: (profileId: string) => void
   onSelect: (profileId: string) => void
   onDelete: (profileId: string) => void
 }) {
+  const [linkTarget, setLinkTarget] = useState<string | null>(null)
   const copy = managedAccountCopy(providerId, providerName)
   return (
     <div>
@@ -96,6 +100,18 @@ export function ManagedAccountsView({
                       Active
                     </span>
                   )}
+                  {onLink && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-expanded={linkTarget === profile.profileId}
+                      onClick={() => setLinkTarget(profile.profileId)}
+                      disabled={loading}
+                    >
+                      Link current Claude Code login
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -106,6 +122,39 @@ export function ManagedAccountsView({
                     Delete
                   </Button>
                 </div>
+                {onLink && linkTarget === profile.profileId && (
+                  <div
+                    className="basis-full space-y-2"
+                    role="group"
+                    aria-label={`Link ${profile.label}`}
+                  >
+                    <p className="text-sm text-muted-foreground">
+                      This replaces the login for {profile.label}. Check that Claude Code is signed
+                      in to the account you want this profile to track.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={loading}
+                        onClick={() => {
+                          setLinkTarget(null)
+                          onLink(profile.profileId)
+                        }}
+                      >
+                        Confirm link
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setLinkTarget(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </li>
             )
           })}

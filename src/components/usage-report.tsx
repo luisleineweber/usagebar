@@ -8,6 +8,7 @@ import {
   filterUsageHistory,
   entryReports,
   entryTotalTokens,
+  sumHistoryTokens,
   hasUsageHistory,
   summarizeUsageHistory,
   type UsageHistoryPeriod,
@@ -64,6 +65,7 @@ function sumRecords(
   metric: ReportMetric,
   overrides: ModelPriceOverrides
 ): number | null {
+  if (metric === "tokens") return sumHistoryTokens(records)
   const kind = metric === "cost" ? "cost" : "usage"
   return sumKnown(
     records

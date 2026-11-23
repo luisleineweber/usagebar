@@ -78,8 +78,9 @@ use tauri_plugin_log::{Target, TargetKind};
 use credential_commands::{
     delete_codex_account_profile, delete_provider_account_profile, delete_provider_secret,
     import_browser_cookies, import_current_codex_account_profile,
-    import_current_provider_account_profile, list_browser_import_sources,
-    list_codex_account_profiles, list_provider_account_profiles, set_provider_secret,
+    import_current_provider_account_profile, link_current_claude_code_login,
+    list_browser_import_sources, list_codex_account_profiles, list_provider_account_profiles,
+    set_provider_secret,
 };
 #[cfg(not(test))]
 use guided_cookie_login::capture_provider_cookie_header;
@@ -312,6 +313,7 @@ pub fn run() {
             delete_codex_account_profile,
             list_provider_account_profiles,
             import_current_provider_account_profile,
+            link_current_claude_code_login,
             delete_provider_account_profile,
             update_global_shortcut,
             #[cfg(target_os = "windows")]

@@ -133,34 +133,111 @@ fn parse_profile(value: &Value) -> Option<Profile> {
     })
 }
 
-fn read_profile(access: &str) -> Result<Option<Profile>, String> {
-    let response = crate::plugin_engine::host_api::claude_identity_client(PROFILE_URL)?
+#[derive(Debug)]
+pub(crate) enum SyncError {
+    Hard(String),
+    LinkRequired,
+    Deferred(Option<u64>),
+}
+
+impl From<String> for SyncError {
+    fn from(error: String) -> Self {
+        Self::Hard(error)
+    }
+}
+
+impl From<&str> for SyncError {
+    fn from(error: &str) -> Self {
+        Self::Hard(error.into())
+    }
+}
+
+impl SyncError {
+    pub(crate) fn user_message(&self) -> &str {
+        match self {
+            Self::Hard(message) => message,
+            Self::LinkRequired => LINK_REQUIRED,
+            Self::Deferred(Some(_)) => {
+                "Claude account verification is rate limited. Try again later."
+            }
+            Self::Deferred(None) => "Could not verify the Claude Code account. Try again later.",
+        }
+    }
+}
+
+pub(crate) fn retry_after_seconds(value: &str) -> Option<u64> {
+    let value = value.trim();
+    let seconds = value.parse::<u64>().ok().or_else(|| {
+        let until =
+            time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc2822)
+                .ok()?;
+        Some(
+            (until - time::OffsetDateTime::now_utc())
+                .whole_seconds()
+                .max(0) as u64,
+        )
+    })?;
+    // Bound the value to a valid JavaScript date without exposing the raw header.
+    Some(seconds.min(8_000_000_000_000))
+}
+
+fn read_profile(access: &str) -> Result<Option<Profile>, SyncError> {
+    let response = crate::plugin_engine::host_api::claude_identity_client(PROFILE_URL)
+        .map_err(|_| SyncError::Deferred(None))?
         .get(PROFILE_URL)
         .bearer_auth(access)
         .header("anthropic-beta", "oauth-2025-04-20")
         .send()
-        .map_err(
-            |_| "Could not verify the Claude Code account. Check your connection and try again.",
-        )?;
+        .map_err(|_| SyncError::Deferred(None))?;
     match response.status().as_u16() {
         200 => {
-            let bytes = response
-                .bytes()
-                .map_err(|_| "Could not read the Claude Code account response")?;
-            let value = serde_json::from_slice(&bytes)
-                .map_err(|_| "Invalid Claude Code account response")?;
+            let bytes = response.bytes().map_err(|_| SyncError::Deferred(None))?;
+            let value = serde_json::from_slice(&bytes).map_err(|_| SyncError::Deferred(None))?;
             parse_profile(&value)
                 .map(Some)
-                .ok_or_else(|| "Claude did not return an account and organization ID".into())
+                .ok_or(SyncError::Deferred(None))
         }
         401 | 403 => Ok(None),
-        429 => {
-            Err("Claude account verification is rate limited (HTTP 429). Try again later.".into())
-        }
-        status => Err(format!(
-            "Could not verify the Claude Code account (HTTP {status}). Try again later."
-        )),
+        429 => Err(SyncError::Deferred(Some(
+            response
+                .headers()
+                .get("retry-after")
+                .and_then(|value| value.to_str().ok())
+                .and_then(retry_after_seconds)
+                .unwrap_or(300),
+        ))),
+        _ => Err(SyncError::Deferred(None)),
     }
+}
+
+pub(crate) fn public_credentials(raw: &str) -> Result<Value, String> {
+    let document: Value = serde_json::from_str(raw).map_err(|_| "Invalid Claude credentials")?;
+    let oauth = document["claudeAiOauth"]
+        .as_object()
+        .ok_or("Invalid Claude credentials")?;
+    let mut public_oauth = serde_json::Map::new();
+    for key in [
+        "accessToken",
+        "expiresAt",
+        "subscriptionType",
+        "rateLimitTier",
+    ] {
+        if let Some(value) = oauth
+            .get(key)
+            .filter(|value| value.is_string() || value.is_number() || value.is_null())
+        {
+            public_oauth.insert(key.into(), value.clone());
+        }
+    }
+    let owned = document["usagebarCredentialOwner"] == "usagebar";
+    public_oauth.insert(
+        "hasRefreshToken".into(),
+        Value::Bool(owned && token(&document, "refreshToken").is_some()),
+    );
+    Ok(serde_json::json!({
+        "usagebarCredentialOwner": if owned { "usagebar" } else { "claude-code" },
+        "claudeAiOauth": public_oauth,
+    }))
 }
 
 fn bind(mut document: Value, source: Source, identity: Identity) -> Result<String, String> {
@@ -179,7 +256,9 @@ pub(crate) fn resolve_current_claude_auth() -> Result<ResolvedClaudeAuth, String
         let Some(access) = valid_access(&document, now) else {
             continue;
         };
-        let Some(profile) = read_profile(access)? else {
+        let Some(profile) =
+            read_profile(access).map_err(|error| error.user_message().to_owned())?
+        else {
             return Err(format!(
                 "Could not verify the Claude Code sign-in. {RUN_CLAUDE}"
             ));
@@ -203,8 +282,8 @@ fn updated_document(
     current: &Value,
     now: i64,
     mut read_source: impl FnMut(Source) -> Result<Option<Value>, String>,
-    mut read_profile: impl FnMut(&str) -> Result<Option<Profile>, String>,
-) -> Result<Option<String>, String> {
+    mut read_profile: impl FnMut(&str) -> Result<Option<Profile>, SyncError>,
+) -> Result<Option<String>, SyncError> {
     match current.get("usagebarCredentialOwner") {
         None => {} // Older imports had no owner marker.
         Some(value) if value.as_str() == Some("claude-code") => {}
@@ -230,11 +309,10 @@ fn updated_document(
         if profile.identity != link.identity {
             return Err("Claude Code is signed in to a different account. Sign in to the account selected in UsageBar.".into());
         }
-        return bind(candidate, link.source, link.identity).map(Some);
+        return Ok(Some(bind(candidate, link.source, link.identity)?));
     }
 
-    // Legacy copies have no source or verified identity. Match the old chain
-    // first, or verify both access tokens while the old one still works.
+    // Legacy copies can link only on the exact access token or two verified identities.
     let mut unproven_source = false;
     for source in SOURCES {
         let Some(candidate) = read_source(source)? else {
@@ -243,10 +321,8 @@ fn updated_document(
         let Some(access) = valid_access(&candidate, now) else {
             continue;
         };
-        let same_chain = Some(access) == token(current, "accessToken")
-            || token(&candidate, "refreshToken")
-                .is_some_and(|refresh| Some(refresh) == token(current, "refreshToken"));
-        let old_profile = if same_chain {
+        let same_access = Some(access) == token(current, "accessToken");
+        let old_profile = if same_access {
             None
         } else {
             let Some(access) = valid_access(current, now) else {
@@ -266,15 +342,15 @@ fn updated_document(
             unproven_source = true;
             continue;
         }
-        return bind(candidate, source, profile.identity).map(Some);
+        return Ok(Some(bind(candidate, source, profile.identity)?));
     }
-    if unproven_source && valid_access(current, now).is_none() {
-        return Err(LINK_REQUIRED.into());
+    if unproven_source {
+        return Err(SyncError::LinkRequired);
     }
     Ok(None)
 }
 
-pub(crate) fn sync(data_dir: &Path, key: &str) -> Result<Option<String>, String> {
+pub(crate) fn sync(data_dir: &Path, key: &str) -> Result<Option<String>, SyncError> {
     sync_with(
         data_dir,
         key,
@@ -289,8 +365,8 @@ fn sync_with(
     key: &str,
     now: i64,
     read_source: impl FnMut(Source) -> Result<Option<Value>, String>,
-    read_profile: impl FnMut(&str) -> Result<Option<Profile>, String>,
-) -> Result<Option<String>, String> {
+    read_profile: impl FnMut(&str) -> Result<Option<Profile>, SyncError>,
+) -> Result<Option<String>, SyncError> {
     let previous =
         crate::protected_store::transaction(data_dir, |store| store.read("claude", key))?.ok_or(
             "The selected Claude import is unavailable. Select the account again in Settings.",
@@ -310,6 +386,38 @@ fn sync_with(
     let saved: Value =
         serde_json::from_str(&updated).map_err(|_| "Could not read updated Claude import")?;
     Ok((token(&saved, "accessToken") != token(&current, "accessToken")).then_some(updated))
+}
+
+pub(crate) fn current_import(data_dir: &Path, key: &str) -> Result<String, String> {
+    crate::protected_store::transaction(data_dir, |store| store.read("claude", key))?
+        .ok_or_else(|| "The selected Claude import is unavailable.".into())
+}
+
+pub(crate) fn authorize_relink(
+    previous: &str,
+    updated: &str,
+    confirmed: bool,
+) -> Result<(), String> {
+    if !confirmed {
+        return Err("Confirm the Claude Code link in Settings.".into());
+    }
+    let previous: Value = serde_json::from_str(previous).map_err(|_| "Invalid Claude import")?;
+    if previous["usagebarCredentialOwner"] == "usagebar" {
+        return Err("This profile has its own UsageBar sign-in.".into());
+    }
+    let Some(link) = previous.get(LINK) else {
+        return Ok(());
+    };
+    let saved: Link =
+        serde_json::from_value(link.clone()).map_err(|_| "Invalid Claude Code account link")?;
+    let updated: Value =
+        serde_json::from_str(updated).map_err(|_| "Invalid Claude Code sign-in")?;
+    let verified: Link = serde_json::from_value(updated[LINK].clone())
+        .map_err(|_| "Could not verify the Claude Code account")?;
+    if saved.identity != verified.identity {
+        return Err("Claude Code is signed in to a different account. Sign in to the account selected in UsageBar.".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]

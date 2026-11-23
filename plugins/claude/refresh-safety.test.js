@@ -77,7 +77,7 @@ describe("Claude refresh ownership", () => {
       expiresAt: Date.now() + 3600000,
     }
     ctx.host.providerSecrets.refreshClaudeCredentials = vi.fn(() =>
-      JSON.stringify({ credentials: JSON.stringify(updated), response: null })
+      JSON.stringify({ credentials: updated, response: null })
     )
     usage(ctx)
     ;(await plugin()).probe(ctx)
@@ -179,7 +179,7 @@ it.each([1, 120000])(
     ctx.host.providerSecrets.refreshClaudeCredentials = vi.fn(() =>
       JSON.stringify({
         credentials: null,
-        response: { status: 429, headers: { "Retry-After": "600" }, bodyText: "{}" },
+        response: { status: 429, retryAfterSeconds: 600 },
       })
     )
     const loaded = await plugin()
@@ -304,4 +304,59 @@ it("asks the user to run Claude Code when neither imported token nor source is v
   expect(() => loaded.probe(ctx)).toThrow("Run Claude Code once, then try again")
   expect(ctx.host.http.request).not.toHaveBeenCalled()
   expect(ctx.host.providerSecrets.refreshClaudeCredentials).not.toHaveBeenCalled()
+})
+
+it.each([
+  ["a source change", null, true],
+  ["a verification hold", { kind: "deferred", retryAfterSeconds: 600 }, false],
+  ["a verification connection failure", { kind: "deferred", retryAfterSeconds: null }, false],
+])("keeps usage available after %s during proactive import sync", async (_label, first, retry) => {
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
+  const full = document("claude-code")
+  full.claudeAiOauth.expiresAt = Date.now() + 60_000
+  ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(full))
+  const updated = {
+    ...full,
+    claudeAiOauth: { accessToken: "new", expiresAt: Date.now() + 3600000 },
+  }
+  ctx.host.providerSecrets.syncClaudeCodeCredentials = vi
+    .fn()
+    .mockReturnValueOnce(first === null ? null : JSON.stringify(first))
+    .mockReturnValue(JSON.stringify(updated))
+  ctx.host.http.request.mockImplementation(({ headers }) => ({
+    status: retry && headers.Authorization === "Bearer old" ? 401 : 200,
+    bodyText: JSON.stringify({ five_hour: { utilization: 0 } }),
+  }))
+  const loaded = await plugin()
+  expect(loaded.probe(ctx).lines.find((line) => line.label === "Session").used).toBe(0)
+  expect(ctx.host.http.request).toHaveBeenCalledTimes(retry ? 2 : 1)
+  expect(ctx.host.providerSecrets.syncClaudeCodeCredentials).toHaveBeenCalledTimes(retry ? 2 : 1)
+  if (!retry) {
+    expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-verify-imported.json")).toBe(
+      first?.retryAfterSeconds === 600
+    )
+    expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-imported.json")).toBe(false)
+    expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-web-imported.json")).toBe(false)
+    expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-refresh-imported.json")).toBe(
+      false
+    )
+  }
+})
+
+it("offers the Settings link if an older import is rejected before its recorded expiry", async () => {
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
+  const full = document("claude-code")
+  full.claudeAiOauth.expiresAt = Date.now() + 3600000
+  ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(full))
+  ctx.host.providerSecrets.syncClaudeCodeCredentials.mockReturnValue(
+    JSON.stringify({ kind: "linkRequired" })
+  )
+  ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "{}" })
+  const loaded = await plugin()
+  expect(() => loaded.probe(ctx)).toThrow("Link current Claude Code login")
+  expect(ctx.host.http.request).toHaveBeenCalledOnce()
 })

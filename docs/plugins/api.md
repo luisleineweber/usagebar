@@ -302,7 +302,7 @@ For the Claude plugin with HTTP and provider-secret capabilities and a captured 
 ```typescript
 host.providerSecrets.refreshClaudeCredentials(optionsJson: string): string
 // optionsJson: { refreshUrl, clientId, scopes, expectedAccessToken }
-// result JSON: { credentials: string | null, response: HttpResponse | null }
+// result JSON: { credentials: ClaudeProbeCredentials | null, response: ClaudeRefreshError | null }
 ```
 
 The host binds the secret key to the captured instance. JavaScript cannot supply another profile key.
@@ -320,7 +320,7 @@ A failed main write throws a visible save error. A later runtime or process repl
 record before it sends another refresh request. On Windows the recovery record is a separate DPAPI
 file. If recovery cannot be written, the host still attempts a verified compare-and-replace into the main store under the store lock. Only if both writes fail does it report unsaved credentials and retain the document and chain lock in memory. Successful credential removal or replacement cancels pending state without another old-profile probe. A crash before either protected write succeeds cannot preserve an unstored response.
 
-It returns stored credentials, or a non-success/malformed HTTP response for existing plugin handling.
+It returns the saved access token, expiry, and usage metadata, or a restricted error result. The error result carries the HTTP status, a safe OAuth code label, and a parsed Retry-After delay when applicable. The host keeps the refresh token, link metadata, raw headers, and response body out of the plugin result.
 A transport failure returns both fields as null and logs a fixed error.
 The host does not log options, request bodies, credential documents, or response bodies.
 
@@ -333,9 +333,9 @@ host.providerSecrets.syncClaudeCodeCredentials(): string | null | undefined
 Only Claude probes for a captured managed instance receive this binding. The host reads the linked
 Claude Code source and verifies the replacement access token against the saved account and
 organization. It sends only the access token to the fixed HTTPS account endpoint. It does not send a
-refresh token or write to Claude Code storage. The host returns the updated credential document after
-saving it to the protected profile store. No replacement returns an empty result. Identity or storage
-errors are visible. The plugin checks its OAuth holds before calling this binding.
+refresh token or write to Claude Code storage. The host returns probe credentials after saving them to the protected profile store. The probe projection contains the access token, expiry, usage metadata, and ownership and refresh availability flags. It omits the refresh token and link metadata. Claude managed reads use the same projection. Only the native host can save those records.
+
+An empty result means there is no replacement. Temporary verification failure returns a deferred result with an optional Retry-After delay. The plugin can continue with the saved token while it is valid. This delay applies only to account verification. The plugin also checks its existing OAuth holds before calling this binding.
 
 ## SQLite
 
@@ -617,14 +617,15 @@ Returns a status envelope:
 
 ### Behavior
 
-- **Runtime runners**: Executes pinned `ccusage@20.0.19` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
+- **Runtime runners**: Executes pinned `ccusage@20.0.49` via fallback chain `bunx -> pnpm dlx -> yarn dlx -> npm exec -> npx`
 - **Windows launchers**: Resolves `.exe`, `.cmd`, and `.bat` package-manager launchers from the user's npm application-data directory and `PATH`; a globally installed ccusage version is not used
 - **Cold starts**: Gives each pinned package-runner attempt up to 30 seconds so an initial registry/cache fill is not discarded by the normal warm-start budget
 - **Provider-aware**: Resolves provider from `opts.provider` or the plugin id, including aliases such as `factory` → `droid` and `opencode-go` → `opencode`
 - **Focused commands**: Uses `ccusage <source> daily`; it intentionally does not use `ccusage daily` because that aggregates all detected agents
-- **Legacy fallback**: If `ccusage@20.0.19` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude or `@ccusage/codex@18.0.11` for Codex
+- **Legacy fallback**: If `ccusage@20.0.49` cannot run through the package manager release-age policy, retries with release-age-safe `ccusage@18.0.11` for Claude. Codex has no legacy fallback because it can undercount spawned subagent usage
 - **No provider API calls**: Usage is computed from local JSONL session files; the host does not call Claude/Codex (or other provider) APIs, but package runners may contact a package registry to download the `ccusage` CLI if it is not already available locally
 - **Graceful degradation**: returns `no_runner` when no runner exists, `runner_failed` when execution fails
+- **Codex limitation**: Independent spawned rollouts with identical usage can be merged and undercounted. See [ccusage issue #2184](https://github.com/ccusage/ccusage/issues/2184).
 - **Pricing**: Uses ccusage's built-in LiteLLM pricing data
 
 ### DailyUsage
@@ -682,3 +683,5 @@ if (result.status === "ok") {
 ## See Also
 
 - [Plugin Schema](./schema.md) - Plugin structure, manifest format, and output schema
+
+History model rows may include `periodTotalTokens` when the provider supplies an authoritative total for the full period. Repeat the same value on all model rows for that period. Use it once for an unfiltered period total; model-filtered totals use the model rows.

@@ -617,14 +617,36 @@ describe("codex plugin", () => {
     const result = plugin.probe(ctx)
 
     const todayLine = result.lines.find((l) => l.label === "Today")
-    expect(todayLine).toBeTruthy()
-    expect(todayLine.value).toContain("$0.00")
-    expect(todayLine.value).toContain("0 tokens")
+    expect(todayLine).toBeUndefined()
     const yesterdayLine = result.lines.find((l) => l.label === "Yesterday")
-    expect(yesterdayLine).toBeTruthy()
-    expect(yesterdayLine.value).toContain("$0.00")
-    expect(yesterdayLine.value).toContain("0 tokens")
+    expect(yesterdayLine).toBeUndefined()
     expect(result.lines.find((l) => l.label === "Last 30 Days")).toBeUndefined()
+  })
+
+  it("omits a day whose total tokens are missing", async () => {
+    const ctx = makeCtx()
+    ctx.host.fs.writeText(
+      "~/.codex/auth.json",
+      JSON.stringify({ tokens: { access_token: "token" }, last_refresh: new Date().toISOString() })
+    )
+    ctx.host.http.request.mockReturnValue({
+      status: 200,
+      headers: { "x-codex-primary-used-percent": "10" },
+      bodyText: JSON.stringify({}),
+    })
+    const today = new Date()
+    const dayKey =
+      today.toLocaleString("en-US", { month: "short" }) +
+      " " +
+      String(today.getDate()).padStart(2, "0") +
+      ", " +
+      today.getFullYear()
+    ctx.host.ccusage.query.mockReturnValue({
+      status: "ok",
+      data: { daily: [{ date: dayKey, costUSD: 0.5 }] },
+    })
+    const result = (await loadPlugin()).probe(ctx)
+    expect(result.lines.find((line) => line.label === "Today")).toBeUndefined()
   })
 
   it("shows empty Yesterday state when yesterday's totals are zero (regression)", async () => {
@@ -687,13 +709,9 @@ describe("codex plugin", () => {
     const result = plugin.probe(ctx)
 
     const todayLine = result.lines.find((l) => l.label === "Today")
-    expect(todayLine).toBeTruthy()
-    expect(todayLine.value).toContain("$0.00")
-    expect(todayLine.value).toContain("0 tokens")
+    expect(todayLine).toBeUndefined()
     const yesterdayLine = result.lines.find((l) => l.label === "Yesterday")
-    expect(yesterdayLine).toBeTruthy()
-    expect(yesterdayLine.value).toContain("$0.00")
-    expect(yesterdayLine.value).toContain("0 tokens")
+    expect(yesterdayLine).toBeUndefined()
 
     const last30 = result.lines.find((l) => l.label === "Last 30 Days")
     expect(last30).toBeTruthy()

@@ -38,8 +38,27 @@ pub(super) fn inject<'js>(
         rquickjs::Function::new(
             ctx.clone(),
             move |ctx: rquickjs::Ctx<'_>| -> rquickjs::Result<Option<String>> {
-                crate::claude_import::sync(&sync_target.data_dir, &sync_target.secret_key)
-                    .map_err(|error| Exception::throw_message(&ctx, &error))
+                use crate::claude_import::{SyncError, public_credentials};
+                match crate::claude_import::sync(&sync_target.data_dir, &sync_target.secret_key) {
+                    Ok(Some(raw)) => public_credentials(&raw)
+                        .map(|value| Some(value.to_string()))
+                        .map_err(|error| Exception::throw_message(&ctx, &error)),
+                    Ok(None) => Ok(None),
+                    Err(SyncError::Deferred(seconds)) => Ok(Some(
+                        serde_json::json!({
+                            "kind": "deferred",
+                            "retryAfterSeconds": seconds,
+                        })
+                        .to_string(),
+                    )),
+                    Err(SyncError::LinkRequired) => Ok(Some(
+                        serde_json::json!({
+                            "kind": "linkRequired",
+                        })
+                        .to_string(),
+                    )),
+                    Err(SyncError::Hard(error)) => Err(Exception::throw_message(&ctx, &error)),
+                }
             },
         )?,
     )?;
@@ -100,9 +119,10 @@ fn inject_transaction<'js>(
                         |token| send(&options, token),
                     )
                     .map_err(|error| Exception::throw_message(&ctx, &error))?;
-                serde_json::to_string(&outcome).map_err(|_| {
-                    Exception::throw_message(&ctx, "Could not encode Claude refresh result")
-                })
+                outcome
+                    .public_result()
+                    .map(|value| value.to_string())
+                    .map_err(|error| Exception::throw_message(&ctx, &error))
             },
         )?,
     )?;

@@ -47,14 +47,32 @@ export function ownCredentials(ctx) {
       full.claudeAiOauth.accessToken = body.access_token
       if (typeof body.refresh_token === "string" && body.refresh_token.trim())
         full.claudeAiOauth.refreshToken = body.refresh_token
-      const expiresAt =
+      const newExpiry =
         Number.isFinite(body.expires_in) && body.expires_in > 0
           ? Date.now() + body.expires_in * 1000
           : null
-      full.claudeAiOauth.expiresAt = Number.isFinite(expiresAt) ? expiresAt : null
-      credentials = JSON.stringify(full)
-      ctx.host.providerSecrets.write("account:owned-test:authJson", credentials)
+      full.claudeAiOauth.expiresAt = Number.isFinite(newExpiry) ? newExpiry : null
+      ctx.host.providerSecrets.write("account:owned-test:authJson", JSON.stringify(full))
+      const { accessToken, expiresAt, subscriptionType, rateLimitTier } = full.claudeAiOauth
+      credentials = {
+        usagebarCredentialOwner: "usagebar",
+        claudeAiOauth: { accessToken, expiresAt, subscriptionType, rateLimitTier },
+      }
     }
-    return JSON.stringify({ credentials, response })
+    const retryHeader = Object.keys(response.headers ?? {}).find(
+      (key) => key.toLowerCase() === "retry-after"
+    )
+    const retryValue = retryHeader ? String(response.headers[retryHeader]).trim() : ""
+    const retryAfterSeconds = /^\d+$/.test(retryValue)
+      ? Number(retryValue)
+      : (Date.parse(retryValue) - Date.now()) / 1000
+    return JSON.stringify({
+      credentials,
+      response: {
+        status: response.status,
+        retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null,
+        errorCode: typeof body?.error === "string" ? body.error : null,
+      },
+    })
   })
 }
