@@ -107,6 +107,19 @@ it("keeps the refresh count after an HTTP 200 refresh without an access token", 
   expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
 })
 
+it.each([
+  ["an array", "[]"],
+  ["a string", '"ok"'],
+  ["a number", "42"],
+])("keeps the usage count after an HTTP 200 usage response with %s", (_, bodyText) => {
+  const ctx = defaultAccountCtx()
+  expectWait(ctx, 5 * MINUTE)
+  ctx.host.http.request.mockReturnValue({ status: 200, bodyText })
+  probe(ctx)
+  ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
+})
+
 it("keeps the usage count after an HTTP 200 usage response with invalid JSON", () => {
   const ctx = defaultAccountCtx()
   expectWait(ctx, 5 * MINUTE)

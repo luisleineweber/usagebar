@@ -205,7 +205,7 @@ Each request reads its hold record directly before it is sent. That record decid
 
 The host runs at most one probe per provider instance. It trims the instance id, and an empty or blank id counts as the default instance, the same way the plugin reads it. A probe that passes its timeout can still be inside a blocking host call. The next probe of that instance waits until the earlier one ends, or reports an error if it does not end within the probe timeout.
 
-Holds stay in each build's plugin data directory. Installed and dev builds keep separate holds.
+Holds stay in each build's plugin data directory. Installed and dev builds keep separate holds. The one-probe-per-instance guard works only inside one process. Two processes that share a data directory, such as dev builds from two worktrees, can clear each other's new hold. The result is extra HTTP 429 requests, not lost data.
 
 No credential record carries a verified account identity, and usage holds survive token rotation and credential replacement. If you switch the Claude Code login during a hold, the new login keeps the hold until its stored end. That end is at most 60 minutes after the hold was recorded.
 
@@ -213,4 +213,4 @@ No credential record carries a verified account identity, and usage holds surviv
 
 A hold record stores `retryAt`, `streak`, and `recordedAt`. It contains no tokens and no account data. A record from an earlier version that stores only `retryAt` counts as one 429. Its remaining wait is capped at 60 minutes.
 
-UsageBar logs and discards a record that is not valid JSON, is not an object, has non-finite times, or ends more than 60 minutes after `recordedAt`. If the system clock moves back during a hold, the remaining wait restarts once from the new time. It does not grow by the size of the clock change. Each read takes the record before the clock, so a record written just before the read is not mistaken for a clock change.
+UsageBar logs and discards a record that is not valid JSON, is not an object, has non-finite times, or ends more than 60 minutes after `recordedAt`. If the system clock moves back during a hold, the full hold restarts once from the new time. It does not grow by the size of the clock change. Each read takes the record before the clock, so a record written just before the read is not mistaken for a clock change.

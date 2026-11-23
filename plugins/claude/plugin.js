@@ -93,8 +93,8 @@
     const hold = value && parseHold(value)
     if (hold) {
       if (hold.retryAt <= now || now >= hold.recordedAt) return { hold }
-      // The clock moved back. Restart the remaining wait once from now, so the hold cannot
-      // grow by the size of the clock change.
+      // The clock moved back. Restart the full hold once from now, so the hold cannot grow by
+      // the size of the clock change.
       ctx.host.log.warn("clock moved back during a Claude rate-limit hold")
       const rebased = {
         retryAt: now + (hold.retryAt - hold.recordedAt),
@@ -1423,7 +1423,11 @@
     if (data === null) {
       throw "Usage response invalid. Try again later."
     }
-    clearRateLimitAfterSuccess(ctx, "usage", usageFetch.observedUsageHold)
+    // Only a plain object is a usage payload. An empty object still counts: its missing values
+    // show as missing data.
+    if (typeof data === "object" && !Array.isArray(data)) {
+      clearRateLimitAfterSuccess(ctx, "usage", usageFetch.observedUsageHold)
+    }
 
     const lines = []
     let plan = null
