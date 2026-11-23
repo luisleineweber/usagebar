@@ -634,22 +634,14 @@
   }
 
   function pushDayUsageLine(lines, ctx, label, dayEntry) {
-    const tokens = Number(dayEntry && dayEntry.totalTokens) || 0
+    if (!dayEntry || dayEntry.totalTokens == null) return
+    const tokens = Number(dayEntry.totalTokens)
+    if (!Number.isFinite(tokens) || tokens < 0) return
     const cost = usageCostUsd(dayEntry)
-    if (tokens > 0) {
-      lines.push(
-        ctx.line.text({
-          label: label,
-          value: costAndTokensLabel({ tokens: tokens, costUSD: cost }),
-        })
-      )
-      return
-    }
-
     lines.push(
       ctx.line.text({
         label: label,
-        value: costAndTokensLabel({ tokens: 0, costUSD: 0 }, { includeZeroTokens: true }),
+        value: costAndTokensLabel({ tokens: tokens, costUSD: cost }, { includeZeroTokens: true }),
       })
     )
   }

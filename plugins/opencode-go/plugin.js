@@ -34,6 +34,15 @@
     LIMIT 1
   `
 
+  const V2_HISTORY_EXISTS_SQL = `
+    SELECT 1 AS present
+    FROM session_message
+    WHERE json_valid(data)
+      AND type IN ('assistant', 'compaction')
+      AND json_extract(data, '$.model.providerID') IN (${HISTORY_PROVIDER_SQL})
+    LIMIT 1
+  `
+
   const HISTORY_ROWS_SQL = `
     SELECT
       CAST(COALESCE(json_extract(data, '$.time.created'), time_created) AS INTEGER) AS createdMs,
@@ -626,8 +635,9 @@
 
   function hasHistory(ctx) {
     const result = queryRows(ctx, HISTORY_EXISTS_SQL)
-    if (!result.ok) return { ok: false, present: false }
-    return { ok: true, present: result.rows.length > 0 }
+    if (result.ok && result.rows.length > 0) return { ok: true, present: true }
+    const v2 = queryRows(ctx, V2_HISTORY_EXISTS_SQL)
+    return { ok: result.ok, present: false, v2Present: v2.ok && v2.rows.length > 0 }
   }
 
   function loadHistory(ctx) {
@@ -688,7 +698,7 @@
   function probe(ctx) {
     const authProfile = loadAuthProfile(ctx)
     const history = hasHistory(ctx)
-    const detected = !!authProfile || (history.ok && history.present)
+    const detected = !!authProfile || (history.ok && history.present) || history.v2Present
 
     if (!detected) {
       throw "OpenCode Go not detected. Log in with OpenCode Go or use it locally first."
@@ -703,6 +713,9 @@
       return { lines: appendZenBalanceLine(ctx, [buildExpiredKeyLine(ctx)]) }
     }
 
+    if (!authProfile && history.v2Present && !history.present) {
+      return { lines: appendZenBalanceLine(ctx, buildSoftEmptyLines(ctx)) }
+    }
     return { plan: PLAN.free, lines: buildFreeLines(ctx, history) }
   }
 
@@ -723,6 +736,11 @@
     if (!rowsResult.ok) return appendZenBalanceLine(ctx, buildSoftEmptyLines(ctx))
 
     return buildFreeUsageLines(ctx, rowsResult.rows, readNowMs())
+  }
+
+  function historyMetric(value) {
+    if (value == null) return NaN
+    return Number(value)
   }
 
   function addCcusageHistory(ctx, result) {
@@ -750,21 +768,30 @@
       if (!m) continue
       var start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
       var end = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1)
-      var rows =
-        Array.isArray(daily[i].modelBreakdowns) && daily[i].modelBreakdowns.length
-          ? daily[i].modelBreakdowns
-          : [daily[i]]
+      var breakdowns = Array.isArray(daily[i].modelBreakdowns)
+        ? daily[i].modelBreakdowns.filter((row) => row && typeof row === "object")
+        : []
+      var rows = breakdowns.length ? breakdowns : [daily[i]]
       for (var j = 0; j < rows.length; j += 1) {
         var row = rows[j] || {},
           entry = { periodStart: start.toISOString(), periodEnd: end.toISOString() },
           model = String(row.modelName || row.model || "").trim(),
-          input = Number(row.inputTokens),
-          output = Number(row.outputTokens),
-          cacheRead = Number(row.cacheReadTokens),
-          cacheCreation = Number(row.cacheCreationTokens),
-          reasoning = Number(row.reasoningTokens),
-          total = Number(row.totalTokens),
-          cost = Number(row.cost != null ? row.cost : row.totalCost)
+          input = historyMetric(row.inputTokens),
+          output = historyMetric(row.outputTokens),
+          cacheRead = historyMetric(row.cacheReadTokens),
+          cacheCreation = historyMetric(row.cacheCreationTokens),
+          reasoning = historyMetric(row.reasoningTokens),
+          total = historyMetric(
+            breakdowns.length === 1 && daily[i].totalTokens != null
+              ? daily[i].totalTokens
+              : row.totalTokens
+          ),
+          cost = historyMetric(row.cost != null ? row.cost : row.totalCost)
+        if (breakdowns.length > 1 && daily[i].totalTokens != null) {
+          var periodTotal = historyMetric(daily[i].totalTokens)
+          if (Number.isFinite(periodTotal) && periodTotal >= 0)
+            entry.periodTotalTokens = periodTotal
+        }
         if (model) entry.model = model
         if (Number.isFinite(input) && input >= 0) entry.inputTokens = input
         if (Number.isFinite(output) && output >= 0) entry.outputTokens = output

@@ -92,6 +92,38 @@ export function entryTotalTokens(entry: UsageHistoryEntry): number | null {
   )
 }
 
+/** Sum authoritative period totals once, without attributing them to a model. */
+export function sumHistoryTokens(records: readonly UsageHistoryRecord[]): number | null {
+  const reporting = records.filter((record) => entryReports(record, "usage"))
+  if (!reporting.length) return null
+  const periodTotals = new Map<string, number>()
+  let total = 0
+  for (const record of reporting) {
+    if (record.periodTotalTokens !== undefined) {
+      const periodTotal = finiteOrNull(record.periodTotalTokens)
+      if (periodTotal === null) return null
+      const key = JSON.stringify([
+        record.providerId,
+        record.instanceRef,
+        record.source,
+        record.periodStart,
+        record.periodEnd,
+        record.project,
+        record.account,
+      ])
+      const previous = periodTotals.get(key)
+      if (previous !== undefined && previous !== periodTotal) return null
+      periodTotals.set(key, periodTotal)
+    } else {
+      const value = entryTotalTokens(record)
+      if (value === null) return null
+      total += value
+    }
+  }
+  for (const value of periodTotals.values()) total += value
+  return total
+}
+
 /** False when the row's scope says it does not report metrics of this kind. */
 export function entryReports(entry: UsageHistoryEntry, kind: UsageHistoryEntryScope): boolean {
   return entry.scope === undefined || entry.scope === kind
@@ -244,6 +276,7 @@ export function filterUsageHistory(
 
       records.push({
         ...entry,
+        periodTotalTokens: models || projects ? undefined : entry.periodTotalTokens,
         providerId: output.providerId,
         instanceRef: output.instanceRef,
         source: output.history.source,
@@ -330,7 +363,7 @@ export function summarizeUsageHistory(
       cacheReadTokens: sumMetric(records, "usage", (record) => record.cacheReadTokens),
       cacheCreationTokens: sumMetric(records, "usage", (record) => record.cacheCreationTokens),
       reasoningTokens: sumMetric(records, "usage", (record) => record.reasoningTokens),
-      totalTokens: sumMetric(records, "usage", entryTotalTokens),
+      totalTokens: sumHistoryTokens(records),
     },
     topModel: getTopModel(records),
   }

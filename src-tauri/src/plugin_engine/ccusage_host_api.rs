@@ -1,10 +1,8 @@
-const CCUSAGE_VERSION: &str = "20.0.19";
+const CCUSAGE_VERSION: &str = "20.0.49";
 const CCUSAGE_PACKAGE_NAME: &str = "ccusage";
 const CCUSAGE_BIN_NAME: &str = "ccusage";
 const CCUSAGE_LEGACY_VERSION: &str = "18.0.11";
 const CCUSAGE_LEGACY_CLAUDE_PACKAGE_NAME: &str = "ccusage";
-const CCUSAGE_LEGACY_CODEX_PACKAGE_NAME: &str = "@ccusage/codex";
-const CCUSAGE_LEGACY_CODEX_BIN_NAME: &str = "ccusage-codex";
 const CCUSAGE_TIMEOUT_SECS: u64 = 30;
 const CCUSAGE_POLL_INTERVAL_MS: u64 = 100;
 
@@ -210,20 +208,15 @@ fn ccusage_provider_config(provider: CcusageProvider) -> CcusageProviderConfig {
 }
 
 fn ccusage_legacy_supported(provider: CcusageProvider) -> bool {
-    matches!(provider, CcusageProvider::Claude | CcusageProvider::Codex)
+    matches!(provider, CcusageProvider::Claude)
 }
 
 fn ccusage_package_spec() -> String {
     format!("{}@{}", CCUSAGE_PACKAGE_NAME, CCUSAGE_VERSION)
 }
 
-fn ccusage_legacy_package_spec(provider: CcusageProvider) -> String {
-    let package_name = match provider {
-        CcusageProvider::Claude => CCUSAGE_LEGACY_CLAUDE_PACKAGE_NAME,
-        CcusageProvider::Codex => CCUSAGE_LEGACY_CODEX_PACKAGE_NAME,
-        _ => CCUSAGE_PACKAGE_NAME,
-    };
-    format!("{}@{}", package_name, CCUSAGE_LEGACY_VERSION)
+fn ccusage_legacy_package_spec() -> String {
+    format!("{}@{}", CCUSAGE_LEGACY_CLAUDE_PACKAGE_NAME, CCUSAGE_LEGACY_VERSION)
 }
 
 fn ccusage_home_override(opts: &CcusageQueryOpts, provider: CcusageProvider) -> Option<&str> {
@@ -674,13 +667,7 @@ fn ccusage_runner_args(
 ) -> Vec<String> {
     let package_spec = match flavor {
         CcusageCommandFlavor::Current => ccusage_package_spec(),
-        CcusageCommandFlavor::Legacy => ccusage_legacy_package_spec(provider),
-    };
-    let npm_exec_bin = match (flavor, provider) {
-        (CcusageCommandFlavor::Current, _) => CCUSAGE_BIN_NAME,
-        (CcusageCommandFlavor::Legacy, CcusageProvider::Claude) => CCUSAGE_BIN_NAME,
-        (CcusageCommandFlavor::Legacy, CcusageProvider::Codex) => CCUSAGE_LEGACY_CODEX_BIN_NAME,
-        (CcusageCommandFlavor::Legacy, _) => CCUSAGE_BIN_NAME,
+        CcusageCommandFlavor::Legacy => ccusage_legacy_package_spec(),
     };
     let mut args: Vec<String> = match kind {
         CcusageRunnerKind::Bunx => {
@@ -709,7 +696,7 @@ fn ccusage_runner_args(
             "--yes".to_string(),
             format!("--package={package_spec}"),
             "--".to_string(),
-            npm_exec_bin.to_string(),
+            CCUSAGE_BIN_NAME.to_string(),
         ],
         CcusageRunnerKind::Npx => vec!["--yes".to_string(), package_spec],
     };
