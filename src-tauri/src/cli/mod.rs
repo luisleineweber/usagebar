@@ -152,6 +152,7 @@ mod tests {
             lines: Vec::new(),
             history: None,
             fetched_at: "2026-07-12T08:00:00Z".to_string(),
+            account_key: None,
             freshness: None,
         };
         let file = serde_json::json!({

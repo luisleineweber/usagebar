@@ -23,6 +23,45 @@
 | Requests | `/api/usage` (enterprise) | overview | count | Enterprise accounts only; unchanged from previous behavior |
 | On-demand | `spendLimitUsage` | detail | dollars | Only when individual or pooled limit > 0 |
 
+### Usage history
+
+The plugin also returns daily, per-model usage history for the last 31 local days (today and the 30 days before it), so month to date on the 31st includes day 1. It comes from `POST https://cursor.com/api/dashboard/get-filtered-usage-events`. History is extra data: when the event fetch fails, the plugin keeps the summary lines, omits `history`, and logs a warning. When a successful output has no `history`, the host keeps the last valid history as retained data, but only for the same account. The plugin returns the Cursor user ID (from the access token `sub`) as `accountKey`. The runtime hashes it, and retained history is dropped when another account signs in. The plugin omits history for every doubtful result instead of returning partial history.
+
+Each entry covers one local calendar day. `periodStart` and `periodEnd` are RFC 3339 values with the local UTC offset, for example `2026-10-25T00:00:00+02:00` to `2026-10-26T00:00:00+01:00` in Europe/Berlin. The date part is the local date, so day groups in the local HTTP API and CLI show the correct day.
+
+| History field | Source field | Meaning |
+|---|---|---|
+| `requests` | count of events | Number of usage events in the day and model bucket |
+| `inputTokens` | `tokenUsage.inputTokens` | |
+| `outputTokens` | `tokenUsage.outputTokens` | |
+| `cacheReadTokens` | `tokenUsage.cacheReadTokens` | |
+| `cacheCreationTokens` | `tokenUsage.cacheWriteTokens` | |
+| `totalTokens` | sum of the four token fields | Set only when all four are known |
+| `costUsd` | `tokenUsage.totalCents / 100` | **List-price token cost.** The token cost at the model vendor's API price. It is not the amount Cursor billed. |
+| `chargedCostUsd` | `chargedCents / 100` | **Charged plan cost.** The amount Cursor deducted from the plan or charged. |
+
+Rules:
+
+- Events are grouped by local calendar day and `model`. An event without a model goes into a bucket without a model label.
+- Every event must have a `timestamp` inside the requested window. When one event does not, day totals would be too low, so history is omitted.
+- A bucket metric is set only when every event in the bucket reports a valid, non-negative value. Otherwise the metric stays unknown (omitted). A missing `chargedCents` is never treated as zero.
+- `costUsd` and `chargedCostUsd` are never added together, and one is never used in place of the other.
+
+**Event paging.** The request body is `{ page, pageSize, startDate, endDate }`. Page numbers start at 1, the page size is 500, and the dates are Unix milliseconds as strings. The request uses the session cookie and an `Origin: https://cursor.com` header (Cursor checks it on dashboard POST requests). The response is `{ totalUsageEventsCount, usageEventsDisplay: [...] }`.
+
+- Paging stops at an empty page or a page shorter than the page size. A full page at the 40-page limit makes the window incomplete, so history is omitted.
+- An empty object `{}` is an empty page without a total: as the first page it means a confirmed empty window, and after other pages it ends paging. The rows are then checked against the total from earlier pages. Any other response without `usageEventsDisplay` (for example an error envelope) is a failure.
+- When `totalUsageEventsCount` changes between pages, or fewer events arrive than it reports, history is omitted.
+- The endpoint has no stable event ID, and two real events can be identical. The reported total proves how many rows repeat, but not which rows. The plugin removes rows only when the raw row count is higher than `totalUsageEventsCount` and the repeats at page boundaries explain that excess exactly, with one possible overlap per boundary. In every other case history is omitted, because a guess could drop the wrong row and move usage to the wrong model. When the response has no total, the plugin cannot prove a repeat. Then any rows that repeat at a page boundary omit history, and pages without boundary repeats are joined.
+
+**Time budget.** The host stops a probe after 30 seconds and discards its result. History paging must end 20 seconds after the probe starts. Each page uses the smaller of 15 seconds and the remaining budget as its timeout. The plugin does not start a page with less than 3 seconds left. When the budget runs out, the plugin returns the summary and omits history.
+
+**Refresh schedule.** History changes slowly, so the plugin fetches it at most every 30 minutes. Between fetches it omits `history`, and the host shows the last valid history. The next fetch time is stored with the Cursor user ID in `usage-history-schedule.json` in the plugin data directory. A different signed-in user, or a stored time more than one day ahead, starts a fetch at once. When another user signs in, the plugin first replaces the stored schedule with a due entry for that user. The host drops the earlier account's retained history at that point, so the earlier deferral is no longer valid: when the earlier user signs in again, history is fetched again, also when the other user's request failed. So a deferral for one account never delays the history of another account.
+
+- After HTTP 429 the next fetch waits for `Retry-After` (delay seconds or an HTTP date), at least 5 minutes and at most 1 day. Without a usable header, it waits 30 minutes.
+- When the time budget or the page limit runs out, the next fetch waits 30 minutes, because the same window would fail again.
+- After other failures the next probe tries again.
+
 **Enterprise flow** remains request-based via the REST `/api/usage` endpoint -- unchanged.
 
 **Team detection**: an account is treated as "team" when `planName` is `"Team"`, or `spendLimitUsage.limitType` is `"team"`, or `spendLimitUsage.pooledLimit` is a positive number. Team accounts display Total usage in dollars; individual accounts display it as a percentage.
@@ -139,6 +178,50 @@ Returns subscription and Stripe customer balance metadata from `cursor.com`.
 ```
 
 `customerBalance` is in cents. Negative means customer credit/prepaid balance.
+
+### POST https://cursor.com/api/dashboard/get-filtered-usage-events
+
+Returns account usage events for a time window. See [Usage history](#usage-history) for paging and mapping.
+
+#### Headers
+
+| Header | Required | Value |
+|---|---|---|
+| Cookie | yes | `WorkosCursorSessionToken=<userId>%3A%3A<access_token>` |
+| Origin | yes | `https://cursor.com` |
+| Content-Type | yes | `application/json` |
+
+#### Request
+
+```json
+{ "page": 1, "pageSize": 500, "startDate": "1792886400000", "endDate": "1795449000000" }
+```
+
+#### Response (partial)
+
+```jsonc
+{
+  "totalUsageEventsCount": 2,
+  "usageEventsDisplay": [
+    {
+      "timestamp": "1795435200000",          // unix ms (string)
+      "model": "claude-4.5-sonnet",
+      "kind": "USAGE_EVENT_KIND_INCLUDED_IN_PRO",
+      "chargedCents": 4,                     // amount charged or deducted from the plan
+      "owningUser": "...",                   // redacted in host logs
+      "tokenUsage": {
+        "inputTokens": 100,
+        "outputTokens": 50,
+        "cacheWriteTokens": 10,
+        "cacheReadTokens": 5,
+        "totalCents": 25                     // token cost at vendor list price
+      }
+    }
+  ]
+}
+```
+
+Numbers can arrive as numbers or numeric strings.
 
 ## Authentication
 

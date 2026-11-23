@@ -9,7 +9,7 @@
   "platformSupport": {
     "windows": {
       "state": "experimental",
-      "message": "Experimental on Windows. Run `droid` so ~/.factory/auth.v2.file and ~/.factory/auth.v2.key exist before launching UsageBar. Legacy auth.encrypted and auth.json still work."
+      "message": "Experimental on Windows. Save a Factory API key in Setup, or run `droid` so ~/.factory/auth.v2.file and ~/.factory/auth.v2.key exist. Legacy auth.encrypted and auth.json still work."
     }
   },
   "lines": [
@@ -29,6 +29,7 @@
     "fs": true,
     "crypto": true,
     "keychain": true,
+    "providerSecrets": true,
     "http": true,
     "ccusage": true,
     "httpDomains": ["api.workos.com", "api.factory.ai"]

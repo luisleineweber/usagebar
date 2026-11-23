@@ -54,7 +54,9 @@ describe("Claude refresh ownership", () => {
   it("keeps an imported managed chain owned by Claude Code", async () => {
     const ctx = makeCtx()
     ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
-    ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(document(undefined)))
+    const full = document(undefined)
+    full.claudeAiOauth.expiresAt = Date.now() + 3600000
+    ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(full))
     usage(ctx)
     ;(await plugin()).probe(ctx)
     expect(
@@ -118,14 +120,14 @@ describe("Claude refresh ownership", () => {
   })
 })
 
-it("asks to re-import an expired managed Claude Code login", async () => {
+it("asks the user to run Claude Code for an expired import", async () => {
   vi.resetModules()
   const ctx = makeCtx()
   ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
   ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(document("claude-code")))
   ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "{}" })
   const loaded = await plugin()
-  expect(() => loaded.probe(ctx)).toThrow("Re-import this Claude account in Settings")
+  expect(() => loaded.probe(ctx)).toThrow("Run Claude Code once, then try again")
   expect(ctx.host.keychain.readGenericPassword).not.toHaveBeenCalled()
 })
 
@@ -252,7 +254,7 @@ it.each([401, 403])(
   }
 )
 
-it("keeps the re-import action for an unconfirmed 401 on a Claude Code import", async () => {
+it("keeps the Claude Code action for an unconfirmed 401 on an import", async () => {
   vi.resetModules()
   const ctx = makeCtx()
   ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
@@ -263,8 +265,43 @@ it("keeps the re-import action for an unconfirmed 401 on a Claude Code import", 
   ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "{}" })
   const loaded = await plugin()
   expect(() => loaded.probe(ctx)).toThrow(
-    "Invalid token: Claude rejected the sign-in (HTTP 401). Run Claude Code, then Re-import this Claude account in Settings."
+    "Invalid token: Claude rejected the sign-in (HTTP 401). Run Claude Code once, then try again."
   )
   expect(ctx.host.providerSecrets.refreshClaudeCredentials).not.toHaveBeenCalled()
   expect(ctx.host.providerSecrets.read).not.toHaveBeenCalledWith("cookieHeader")
+})
+
+it("uses the updated Claude Code import without a refresh request", async () => {
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
+  ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(document("claude-code")))
+  const updated = document("claude-code")
+  updated.claudeAiOauth.accessToken = "new-cli"
+  updated.claudeAiOauth.expiresAt = Date.now() + 3600000
+  ctx.host.providerSecrets.syncClaudeCodeCredentials = vi.fn(() => JSON.stringify(updated))
+  ctx.host.providerSecrets.refreshClaudeCredentials = vi.fn()
+  usage(ctx)
+  const result = (await plugin()).probe(ctx)
+  expect(result.lines.find((line) => line.label === "Session").used).toBe(0)
+  expect(ctx.host.providerSecrets.syncClaudeCodeCredentials).toHaveBeenCalledOnce()
+  expect(ctx.host.providerSecrets.refreshClaudeCredentials).not.toHaveBeenCalled()
+  expect(ctx.host.http.request).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: "Bearer new-cli" }),
+    })
+  )
+})
+
+it("asks the user to run Claude Code when neither imported token nor source is valid", async () => {
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
+  ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(document("claude-code")))
+  ctx.host.providerSecrets.syncClaudeCodeCredentials = vi.fn(() => null)
+  ctx.host.providerSecrets.refreshClaudeCredentials = vi.fn()
+  const loaded = await plugin()
+  expect(() => loaded.probe(ctx)).toThrow("Run Claude Code once, then try again")
+  expect(ctx.host.http.request).not.toHaveBeenCalled()
+  expect(ctx.host.providerSecrets.refreshClaudeCredentials).not.toHaveBeenCalled()
 })

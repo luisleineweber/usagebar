@@ -166,7 +166,7 @@ fn try_parse_json_or_hex_json(text: &str) -> Option<JsonValue> {
     serde_json::from_str(&decoded).ok()
 }
 
-fn json_string_or_object(text: &str) -> Option<JsonValue> {
+pub(crate) fn json_string_or_object(text: &str) -> Option<JsonValue> {
     let parsed = try_parse_json_or_hex_json(text)?;
     match parsed {
         JsonValue::String(inner) => {
@@ -196,13 +196,6 @@ fn decode_base64url_to_json(token: &str) -> Option<JsonValue> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedCodexAuth {
-    pub(crate) auth_json: String,
-    pub(crate) email: Option<String>,
-    pub(crate) account_id: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct ResolvedClaudeAuth {
     pub(crate) auth_json: String,
     pub(crate) email: Option<String>,
     pub(crate) account_id: Option<String>,
@@ -273,92 +266,6 @@ pub(crate) fn gemini_profile_label(
         return format!("Gemini {}", account_id);
     }
     format!("Gemini {}", now_ms)
-}
-
-fn claude_credentials_path() -> Option<PathBuf> {
-    Some(dirs::home_dir()?.join(".claude").join(".credentials.json"))
-}
-
-fn normalize_claude_auth(mut json: JsonValue) -> Option<ResolvedClaudeAuth> {
-    let object = json.as_object()?;
-    let oauth = object.get("claudeAiOauth")?.as_object()?;
-    let access_token = json_string_field(oauth, "accessToken");
-    let refresh_token = json_string_field(oauth, "refreshToken");
-    if access_token.is_none() && refresh_token.is_none() {
-        return None;
-    }
-
-    let account = object.get("oauthAccount").and_then(JsonValue::as_object);
-    let email = account
-        .and_then(|value| json_string_field(value, "emailAddress"))
-        .map(str::to_string);
-    let account_id = account
-        .and_then(|value| {
-            json_string_field(value, "organizationUuid")
-                .or_else(|| json_string_field(value, "organizationId"))
-                .or_else(|| json_string_field(value, "organizationName"))
-        })
-        .map(str::to_string);
-
-    // Import copies a Claude Code login; it does not create a separate refresh chain.
-    json.as_object_mut()?.insert(
-        "usagebarCredentialOwner".into(),
-        JsonValue::String("claude-code".into()),
-    );
-    Some(ResolvedClaudeAuth {
-        auth_json: serde_json::to_string_pretty(&json).ok()?,
-        email,
-        account_id,
-    })
-}
-
-fn read_claude_auth_from_path(
-    path: &std::path::Path,
-) -> Result<Option<ResolvedClaudeAuth>, String> {
-    let raw = match std::fs::read_to_string(path) {
-        Ok(raw) => raw,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => {
-            return Err(format!(
-                "Could not read Claude auth file {}: {}",
-                path.display(),
-                error
-            ));
-        }
-    };
-
-    Ok(json_string_or_object(&raw).and_then(normalize_claude_auth))
-}
-
-fn read_claude_auth_from_keychain() -> Result<Option<ResolvedClaudeAuth>, String> {
-    let entry = Entry::new("OpenUsage", "Claude Code-credentials")
-        .map_err(|error| format!("Could not access Claude keychain entry: {}", error))?;
-
-    match entry.get_password() {
-        Ok(value) => Ok(json_string_or_object(&value).and_then(normalize_claude_auth)),
-        Err(error) => {
-            let message = error.to_string();
-            if crate::is_missing_credential_error(&message) {
-                Ok(None)
-            } else {
-                Err(format!("Could not read Claude keychain entry: {}", error))
-            }
-        }
-    }
-}
-
-pub(crate) fn resolve_current_claude_auth() -> Result<ResolvedClaudeAuth, String> {
-    if let Some(auth) = read_claude_auth_from_keychain()? {
-        return Ok(auth);
-    }
-
-    if let Some(path) = claude_credentials_path() {
-        if let Some(auth) = read_claude_auth_from_path(&path)? {
-            return Ok(auth);
-        }
-    }
-
-    Err("No current Claude login was found. Run `claude` on this machine first.".to_string())
 }
 
 pub(crate) fn claude_profile_label(
@@ -536,40 +443,8 @@ pub(crate) fn codex_profile_label(
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_claude_auth, normalize_gemini_auth};
+    use super::normalize_gemini_auth;
     use base64::Engine;
-
-    #[test]
-    fn normalizes_claude_identity_without_exposing_auth_fields() {
-        let auth = normalize_claude_auth(serde_json::json!({
-            "claudeAiOauth": {
-                "accessToken": "access-token",
-                "refreshToken": "refresh-token"
-            },
-            "oauthAccount": {
-                "emailAddress": "claude@example.com",
-                "organizationUuid": "org-claude"
-            }
-        }))
-        .expect("Claude auth");
-
-        assert_eq!(auth.email.as_deref(), Some("claude@example.com"));
-        assert_eq!(auth.account_id.as_deref(), Some("org-claude"));
-        assert!(auth.auth_json.contains("accessToken"));
-    }
-
-    #[test]
-    fn imported_claude_credentials_keep_cli_ownership_and_full_document() {
-        let auth = normalize_claude_auth(serde_json::json!({
-            "usagebarCredentialOwner": "usagebar",
-            "claudeAiOauth": { "accessToken": "synthetic", "refreshToken": "synthetic-refresh", "unknown": true },
-            "unrelated": { "keep": true }
-        })).unwrap();
-        let document: serde_json::Value = serde_json::from_str(&auth.auth_json).unwrap();
-        assert_eq!(document["usagebarCredentialOwner"], "claude-code");
-        assert_eq!(document["claudeAiOauth"]["unknown"], true);
-        assert_eq!(document["unrelated"]["keep"], true);
-    }
 
     #[test]
     fn normalizes_gemini_identity_from_the_id_token() {

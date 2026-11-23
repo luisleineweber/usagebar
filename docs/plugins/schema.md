@@ -91,6 +91,7 @@ Bundled plugins live under `src-tauri/resources/bundled_plugins/<id>/`.
 | `links`            | array  | No       | Optional quick links shown on detail page                                                                       |
 | `status`           | object | No       | Optional machine-readable provider status source                                                                |
 | `sourceProvenance` | string | No       | Provider source class: `officialApi`, `officialLocalSource`, `privateEndpoint`, `cookieReplay`, or `htmlScrape` |
+| `accountScoped`    | bool   | No       | `true` when retained history needs a present, matching `accountKey` (see `api.md`); defaults to `false`         |
 | `capabilities`     | object | Yes      | Host API allowlist; omitted fields are denied                                                                   |
 | `lines`            | array  | Yes      | Output shape used for loading skeletons                                                                         |
 
@@ -332,14 +333,23 @@ ctx.line.badge({
 | Condition                | Result                                       |
 | ------------------------ | -------------------------------------------- |
 | Plugin throws a string   | Error badge with that string                 |
-| Plugin throws non-string | Error badge with a generic fallback message  |
+| Plugin throws an object  | Error badge with its `message`; `category` sets the error category |
+| Thrown value has no text | Error badge with a generic fallback message  |
 | Promise rejects          | Error badge                                  |
 | Promise never resolves   | Error badge (timeout)                        |
 | Invalid line type        | Error badge                                  |
 | Missing `lines` array    | Error badge                                  |
 | Invalid progress values  | Error badge (line-specific validation error) |
 
-Prefer throwing short, actionable strings (not `Error` objects).
+Prefer throwing short, actionable strings. The host classifies a thrown string by its text. When the text cannot carry the category, throw an object with `message` and `category`:
+
+```javascript
+const error = new Error("API key was rejected (HTTP 401). Replace it in Setup.")
+error.category = "credentialInvalid"
+throw error
+```
+
+Categories: `credentialMissing`, `credentialUnavailable`, `credentialUnreadable`, `credentialInvalid`, `credentialExpired`, `providerResponse`, `unknown`. Settings uses a credential category to show the provider as signed out, even when the app stores a credential for it.
 
 ## Minimal Example
 

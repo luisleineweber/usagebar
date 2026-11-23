@@ -599,16 +599,47 @@
     return port >= 1 && port <= 65535
   }
 
+  const RUN_CLAUDE_CODE = "Run Claude Code once, then try again."
+
+  function isClaudeCodeImport(creds) {
+    return (
+      creds?.source === "managed-profile" && creds.fullData.usagebarCredentialOwner !== "usagebar"
+    )
+  }
+
+  function syncClaudeCodeImport(ctx, creds) {
+    const saved = ctx.host.providerSecrets.syncClaudeCodeCredentials()
+    if (!saved) return false
+    creds.fullData = JSON.parse(saved)
+    creds.oauth = creds.fullData.claudeAiOauth
+    creds.account = extractAccountState(creds.fullData)
+    return true
+  }
+
   // Refresh outcomes: "refreshed", "unavailable" (no refresh token), "held" (an active refresh
   // hold skips the refresh while the access token is still valid), "failed" (temporary network,
   // server, or response failure) and "rejected" (the token endpoint refused the grant).
   function refreshToken(ctx, creds) {
     const { oauth } = creds
-    // Claude Code keeps refresh ownership of local documents and imported copies.
-    if (
-      creds.source !== "managed-profile" ||
-      creds.fullData.usagebarCredentialOwner !== "usagebar"
-    ) {
+    if (isClaudeCodeImport(creds)) {
+      const retryAt = readRateLimitRetryAt(ctx, "refresh")
+      if (retryAt !== null) {
+        if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
+        return { kind: "held" }
+      }
+      if (syncClaudeCodeImport(ctx, creds)) {
+        return {
+          kind: "refreshed",
+          accessToken: creds.oauth.accessToken,
+          expiresAt: parseExpiresAtMs(creds.oauth.expiresAt),
+        }
+      }
+      if (!readNonEmptyString(oauth.accessToken) || isExpiryConfirmed(oauth.expiresAt)) {
+        throw "Claude Code sign-in needs an update. " + RUN_CLAUDE_CODE
+      }
+      return { kind: "unavailable" }
+    }
+    if (creds.source !== "managed-profile") {
       ctx.host.log.info("Claude Code owns credential refresh; reloading the current access token")
       const current = loadCredentials(ctx)
       if (
@@ -760,21 +791,19 @@
   // An HTTP 401 proves expiry only when the token's known expiry time has passed, or when
   // Anthropic's authentication_error says the token expired. A revoked or otherwise rejected
   // token gets a neutral message.
-  function usageUnauthorizedMessage(ctx, resp, expiredLocally, reimportRequired) {
+  function usageUnauthorizedMessage(ctx, resp, expiredLocally, fromClaudeCodeImport) {
     const { type, message } = readApiError(ctx, resp)
     ctx.host.log.error("usage returned 401: error.type=" + logLabel(type, API_ERROR_TYPES))
     const expiredRemotely =
       type === "authentication_error" && OAUTH_TOKEN_EXPIRED_MESSAGE.test(message)
     if (expiredLocally || expiredRemotely) {
-      return reimportRequired
-        ? "Imported Claude login expired. Run Claude Code, then Re-import this Claude account in Settings."
+      return fromClaudeCodeImport
+        ? "Claude Code sign-in expired. " + RUN_CLAUDE_CODE
         : "Token expired. Run `claude` to log in again."
     }
     return (
       "Invalid token: Claude rejected the sign-in (HTTP 401). " +
-      (reimportRequired
-        ? "Run Claude Code, then Re-import this Claude account in Settings."
-        : "Run `claude` to log in again.")
+      (fromClaudeCodeImport ? RUN_CLAUDE_CODE : "Run `claude` to log in again.")
     )
   }
 
@@ -1201,6 +1230,9 @@
     if (!creds?.oauth?.accessToken?.trim() || isTokenExpired(creds?.oauth)) {
       checkRateLimit(ctx, "refresh")
     }
+    if (isClaudeCodeImport(creds) && !readNonEmptyString(creds.oauth.accessToken)) {
+      refreshToken(ctx, creds)
+    }
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const webResult = buildClaudeWebResult(ctx)
       if (webResult) {
@@ -1273,12 +1305,7 @@
         ctx.host.log.error("usage returned 401 after a failed token refresh")
         throw refreshProblem
       }
-      throw usageUnauthorizedMessage(
-        ctx,
-        resp,
-        tokenExpired(),
-        creds.source === "managed-profile" && creds.fullData.usagebarCredentialOwner !== "usagebar"
-      )
+      throw usageUnauthorizedMessage(ctx, resp, tokenExpired(), isClaudeCodeImport(creds))
     }
     if (resp.status === 403) throw usageForbiddenMessage(ctx, resp)
 

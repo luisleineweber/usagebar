@@ -134,11 +134,20 @@ The profile UUID also scopes cached snapshots, local history, quota notification
 
 Direct UsageBar-owned refresh and recovery are Windows-only in this build. Linux and macOS reject before any direct refresh request. The refresh endpoint must use HTTPS.
 
-Claude Code owns credentials from its keychain and local files. UsageBar reads these documents and
-reloads the same source when usage rejects an old access token. It does not refresh or write them.
-Importing a managed profile preserves that ownership. Imports do not create an independent refresh
-chain. When an imported access token expires, run Claude Code and re-import that account. A selected
-managed profile never reads another local login as a fallback.
+Claude Code owns its local sign-in. UsageBar never updates that source or sends its refresh token.
+When you import a profile, UsageBar links the source to the account and organization verified by
+Claude's OAuth profile response. The source is the same credentials file or credential store entry
+used for the import. Account metadata from a separate file cannot verify the link.
+
+When the imported token is near expiry or fails with HTTP 401, UsageBar checks the linked source.
+It saves a valid replacement only after verifying the same account and organization, then uses it for
+usage. If the source is missing or expired, run Claude Code once. UsageBar picks up the updated login
+on the next probe. A selected profile never uses a different login or a shared web cookie.
+
+Older imports that lack a link can link automatically if the saved token or credential chain still
+proves the same account. If both credentials have changed and the old token can no longer verify the
+account, link that import again once in Settings. This protects existing profiles after a Claude Code
+account switch.
 
 Direct refresh requires a separate UsageBar-owned managed credential document with
 `usagebarCredentialOwner: "usagebar"`. Missing or unknown ownership stays with Claude Code. Do not add
@@ -193,7 +202,7 @@ The probe keeps these causes separate:
 | Usage server failure      | Other usage non-2xx status                                                                                                                | `Usage request failed (HTTP <status>). Try again later.`                                                   |
 | Rate limit                | HTTP 429 from usage or refresh                                                                                                            | See [HTTP 429 handling](#http-429-handling).                                                               |
 
-For a Claude Code import, a usage HTTP 401 still directs the user to re-import the account in Settings. The message claims expiry only when the expiry time or response confirms it.
+After a failed sync, a usage HTTP 401 on a Claude Code import asks the user to run Claude Code. The message claims expiry only when the expiry time or response confirms it.
 
 A failed or rejected refresh does not stop the probe while the current access token can still be valid. The probe then tries usage with the current token and reports the refresh problem only if usage returns HTTP 401. A rejected refresh for a token whose expiry time has passed ends the probe at once. An invalid OAuth config ends the probe before any request. Logs record known provider error codes and types; any other value is logged as `other`. Local failures, such as a failed write of the retry deadline, keep their own error and are not reported as connection failures.
 

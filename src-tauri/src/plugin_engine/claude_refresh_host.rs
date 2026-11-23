@@ -32,6 +32,17 @@ pub(super) fn inject<'js>(
         data_dir: data_dir.to_path_buf(),
         secret_key: format!("account:{id}:authJson"),
     };
+    let sync_target = target.clone();
+    secrets.set(
+        "syncClaudeCodeCredentials",
+        rquickjs::Function::new(
+            ctx.clone(),
+            move |ctx: rquickjs::Ctx<'_>| -> rquickjs::Result<Option<String>> {
+                crate::claude_import::sync(&sync_target.data_dir, &sync_target.secret_key)
+                    .map_err(|error| Exception::throw_message(&ctx, &error))
+            },
+        )?,
+    )?;
     let home = dirs::home_dir()
         .ok_or_else(|| Exception::throw_message(ctx, "Home directory is unavailable"))?;
     let lock_path = home.join(".usagebar").join("claude-refresh-locks");

@@ -175,7 +175,8 @@ host.http.request({
   url: string,
   headers?: Record<string, string>,
   bodyText?: string,
-  timeoutMs?: number         // Default: 10000
+  timeoutMs?: number,        // Default: 10000
+  logResponseBody?: boolean  // Default: true
 }): {
   status: number,
   headers: Record<string, string>,
@@ -187,6 +188,7 @@ host.http.request({
 
 - **No redirects**: The HTTP client does not follow redirects (policy: none)
 - **Throws on network errors**: Connection failures, DNS errors, and timeouts throw
+- **Logged response preview**: The host logs the first 500 bytes of each response body. Values of credential request headers (for example `Authorization`, `Cookie`, or `X-Api-Key`) are masked in that preview, so a provider that echoes a submitted key does not put it in the log. Known secret patterns are redacted as well. Values shorter than 8 characters are not masked, so set `logResponseBody: false` on a request whose response can echo a credential. The host then logs only the response size.
 - **Capability-gated domains**: HTTP requests are limited to exact hosts or `*.example.com` wildcard hosts from `capabilities.httpDomains`. Empty or omitted domains block all plugin HTTP requests.
 
 ### Example: GET request
@@ -322,6 +324,19 @@ It returns stored credentials, or a non-success/malformed HTTP response for exis
 A transport failure returns both fields as null and logs a fixed error.
 The host does not log options, request bodies, credential documents, or response bodies.
 
+### Sync an imported Claude Code profile
+
+```typescript
+host.providerSecrets.syncClaudeCodeCredentials(): string | null | undefined
+```
+
+Only Claude probes for a captured managed instance receive this binding. The host reads the linked
+Claude Code source and verifies the replacement access token against the saved account and
+organization. It sends only the access token to the fixed HTTPS account endpoint. It does not send a
+refresh token or write to Claude Code storage. The host returns the updated credential document after
+saving it to the protected profile store. No replacement returns an empty result. Identity or storage
+errors are visible. The plugin checks its OAuth holds before calling this binding.
+
 ## SQLite
 
 ### Query (Read-Only)
@@ -407,6 +422,19 @@ If a plugin defines `detectSetup(ctx)`, UsageBar calls it before `probe(ctx)`. T
 - The auto-update timer fires (configurable: 5/15/30/60 minutes)
 
 Any token refresh logic (e.g., OAuth refresh) must run inside `probe(ctx)` at those times.
+
+### Account key and retained history
+
+When a successful probe result has no `history`, the host and the frontend keep the last valid history. A plugin that can change accounts without a provider instance (for example, the user signs in to another account in the provider app) must set `"accountScoped": true` in `plugin.json` and return `accountKey`, a stable identifier of the signed-in account:
+
+```js
+return { plan: plan, lines: lines, accountKey: userId }
+```
+
+- The runtime replaces the value at once with a SHA-256 digest that is scoped to the provider. The raw value never reaches the cache, the frontend, the local HTTP API, or the logs. Use an identifier, never a token or a secret.
+- For an account-scoped plugin, retained history is reused only when both the new result and the cached result have an account key and the keys are the same. Two missing keys do not prove the same account, so a result without a key never reuses history. The runtime logs a warning when an account-scoped plugin returns no key.
+- For other plugins, retained history is reused when the keys are equal, which is usually no key on both sides.
+- The value must be a non-empty string of at most 512 bytes. Other values are ignored with a warning.
 
 ## Line Builders
 

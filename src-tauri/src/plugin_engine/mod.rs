@@ -24,6 +24,7 @@ pub mod browser_bridge {
         Err("browser-backed requests are unavailable in Rust unit tests".to_string())
     }
 }
+pub(crate) mod account_key;
 mod approved_cookies;
 pub(crate) mod env;
 pub mod freshness;

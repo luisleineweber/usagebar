@@ -4,7 +4,7 @@ Claude refresh could lose a rotated token after a failed write and process exit.
 
 The host now writes protected recovery before replacing a credential. Recovery runs before another refresh, including after restart. Direct refresh and restart recovery are Windows-only. Recovery uses a separate DPAPI file. All store changes share an OS lock. Compare-and-replace runs under that lock. Deletion or replacement cancels recovery. Refresh locks use a credential-chain fingerprint and do not block unrelated chains.
 
-Claude Code owns local credentials and imported snapshots. Imports do not receive an independent refresh chain. Imported accounts therefore lose automatic token refresh with this change. When an import expires, UsageBar asks the user to run Claude Code and re-import that account in Settings. Only explicitly UsageBar-owned credentials can refresh directly. This task adds no login flow.
+Claude Code owns the refresh chain of local credentials and imports. UsageBar now updates managed copies from their verified Claude Code source. Only explicitly UsageBar-owned credentials can refresh directly. This task adds no login flow.
 
 ## Review round 1
 
@@ -13,7 +13,7 @@ Claude Code owns local credentials and imported snapshots. Imports do not receiv
 - S3: All store changes share an OS lock. Claude compare-and-replace cannot undo deletion or lose another provider's write. Startup secret-file migration also uses the lock.
 - S4: Locks follow credential chains. Replacement/removal releases a retained lock on retry. Unrelated chains can proceed.
 - S5: Logs contain status and a whitelisted OAuth code, never unknown server values or descriptions. Existing error distinctions remain intact.
-- S6: Expired imports receive an explicit re-import error. The loss of auto-refresh is stated above and in the PR body.
+- S6: Round 1 proposed re-import on expiry. The user rejected this behavior. See the automatic source sync below.
 - S7: At the review check, #30 and #33 were still open. Rebase after #30, then #33. Keep #30's visible OAuth 429, route refresh 429 to #33's refresh hold, preserve storage errors through its catch, and keep #35's error distinctions.
 
 The release single-instance guard does not cover development builds or Claude Code. The host combines normal probes for one instance. Each probe gets a new JavaScript runtime. Native process tests cover refresh exclusion, recovery replay, deletion and writes for another provider.
@@ -87,6 +87,24 @@ Merged main at 44d03b7f. The Claude plugin combines the native refresh transacti
 
 The plugin tests keep #35's cause coverage with explicitly UsageBar-owned managed fixtures. The native regression confirmed that a new token could inherit the old expiry. The native host now saves an unknown expiry as null if the refresh response has no usable lifetime. The provider guide covers the combined behavior and the import restrictions.
 
-OAuth holds still prevent shared web fallback. Usage, refresh, and web holds stay separate. S6 still waits for the product decision. Claude Code credentials remain read-only, and imports require re-import after expiry. This merge adds no request or response fields.
+OAuth holds still prevent shared web fallback. Usage, refresh, and web holds stay separate. At this point the release decision on S6 was still pending. This merge added no request or response fields.
 
 Validation passed for the main integration: 164 Claude tests, 225 Rust library tests with one live Edge test ignored, check:frontend, and bundle:plugins. Claude and OpenAI API bundle files match their sources byte for byte.
+
+
+## S6 automatic source sync
+
+The user rejected re-import on expiry. New imports link the exact Claude Code source and the account
+and organization verified by the OAuth profile response. On expiry or HTTP 401, the native host reads
+the linked source. It uses a valid replacement only when both identities match and the selected copy
+still matches the document read before verification. The host sends no refresh token and writes
+nothing to Claude Code storage. The plugin tells the user to run Claude Code when the source needs an
+update. Existing imports can link automatically with proof from their old credentials. If the old
+login is already unprovable after rotation, they need a one-time link in Settings.
+
+The two probe regressions failed before the change. Native tests cover exact source selection, account
+switches within an organization, missing or expired source, safe legacy linking, and concurrent profile
+deletion. The new lookup uses a fixed HTTPS endpoint. Its bearer authorization matches the host's
+redaction list. The host logs no profile identity, token, or response body.
+
+Validation passed with main at d9c2af96. The 166 Claude tests and 302 Rust library tests passed. One live Edge test was ignored. check:frontend and bundle:plugins passed. All Claude, Cursor, Factory, and OpenAI API bundle files match their sources. The account verification response was tested with fixtures.

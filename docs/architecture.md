@@ -181,7 +181,7 @@ The week start is fixed to Monday and does not follow the system locale, so ever
 
 A provider that returns history must cover the last 31 calendar days (today and the 30 days before it), or at least from the earlier of its 30-day window start and day 1 of the current month. Otherwise month to date on the 31st misses day 1 and shows a total that is too low.
 
-A history entry may set `scope`. A `"cost"` entry carries only `costUsd`, and a `"usage"` entry carries only token and request metrics. Use it when a provider reports cost and usage in separate rows, such as OpenAI's costs and completions endpoints. Totals sum each metric over the entries that report it, and stay `null` when none do. An entry without `scope` reports every metric, so one missing value keeps that total `null`. The Rust host rejects a scoped entry that carries metrics outside its scope.
+A history entry may set `scope`. A `"cost"` entry carries only cost metrics (`costUsd`, and optionally `chargedCostUsd`), and a `"usage"` entry carries only token and request metrics. Use it when a provider reports cost and usage in separate rows, such as OpenAI's costs and completions endpoints. Totals sum each metric over the entries that report it, and stay `null` when none do. An entry without `scope` reports every metric, so one missing value keeps that total `null`. The Rust host rejects a scoped entry that carries metrics outside its scope.
 
 ---
 
@@ -242,6 +242,11 @@ A history entry may set `scope`. A `"cost"` entry carries only `costUsd`, and a 
 | `src-tauri/src/plugin_engine/` | Rust plugin host: execution, capability gating, host API handlers |
 | `src-tauri/src/provider_secret_store.rs` | DPAPI-encrypted credential storage |
 | `src-tauri/src/provider_account_store.rs` | UUID-backed managed account registry |
+| `src-tauri/src/panel_floating.rs` | Opt-in movable panel: commands, remembered spot, return to tray |
+| `src-tauri/src/panel_floating_geometry.rs` | Pure physical-pixel geometry: monitor choice and work-area clamping |
+| `src-tauri/src/panel_placement_store.rs` | `panel-placement.json` persistence (movable flag and floating origin) |
+| `src-tauri/src/panel_move_tracking.rs` | Win32 subclass: user move loops and display, DPI, work-area changes, handled via a posted message |
+| `src-tauri/src/panel_anchor_monitor.rs` | Picks the tray anchor's monitor, so re-anchoring uses that monitor's work area and scale |
 | `src-tauri/src/tray.rs` | Tray icon + context menu wiring |
 | `plugins/` | Provider plugin source (one folder per provider) |
 
@@ -259,8 +264,9 @@ A history entry may set `scope`. A `"cost"` entry carries only `costUsd`, and a 
 ## Claude credential refresh ownership
 
 The probe coordinator combines work for one provider instance. It does not lock other processes.
-Claude Code documents and managed imports remain read-only during probes. Explicitly UsageBar-owned
-refresh uses the host transaction in `plugin_engine/claude_refresh.rs` and its native store binding.
+Claude Code sources remain read-only. The host updates a managed import only from its linked
+source after verifying the account and organization. It compares and saves the selected copy under
+the store lock so a concurrent replacement or deletion wins. Explicitly UsageBar-owned refresh uses the host transaction in `plugin_engine/claude_refresh.rs` and its native store binding.
 A user-wide OS lock covers each credential chain. A protected recovery record precedes replacement
 of the main credential and is replayed after a restart. On Windows this record uses a separate DPAPI
 file so an unreadable main store cannot prevent recording a rotation. All provider-store mutations

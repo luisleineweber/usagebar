@@ -7,6 +7,7 @@ mod app_nap;
 mod app_startup;
 mod atomic_file;
 mod browser_cookie_import;
+mod claude_import;
 pub mod cli;
 mod codex_account_store;
 #[cfg(not(test))]
@@ -20,6 +21,12 @@ mod global_shortcut;
 mod guided_cookie_login;
 mod local_http_api;
 mod panel;
+mod panel_anchor_monitor;
+mod panel_floating;
+mod panel_floating_geometry;
+#[cfg(target_os = "windows")]
+mod panel_move_tracking;
+mod panel_placement_store;
 mod plugin_commands;
 mod plugin_engine;
 #[cfg(not(test))]
@@ -51,9 +58,8 @@ use std::sync::{Mutex, OnceLock};
 pub(crate) use analytics::{app_started_day_key, should_track_app_started};
 pub(crate) use credential_support::{
     claude_profile_label, codex_profile_label, gemini_profile_label, guided_cookie_policy,
-    now_utc_unix_ms, read_provider_config_string, resolve_current_claude_auth,
-    resolve_current_codex_auth, resolve_current_gemini_auth,
-    validate_guided_cookie_capture_request,
+    now_utc_unix_ms, read_provider_config_string, resolve_current_codex_auth,
+    resolve_current_gemini_auth, validate_guided_cookie_capture_request,
 };
 #[cfg(all(desktop, not(test)))]
 use global_shortcut::update_global_shortcut;
@@ -136,6 +142,45 @@ fn sync_panel_geometry(panel_height_px: f64) {
 #[tauri::command]
 fn apply_panel_bounds(app_handle: tauri::AppHandle, panel_height_px: f64) {
     panel::apply_panel_bounds(&app_handle, panel_height_px);
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn get_panel_placement() -> panel_floating::PanelPlacementView {
+    panel_floating::placement_view()
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn set_panel_movable(
+    app_handle: tauri::AppHandle,
+    enabled: bool,
+) -> Result<panel_floating::PanelPlacementView, String> {
+    panel_floating::set_movable(&app_handle, enabled)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn start_panel_drag(app_handle: tauri::AppHandle) -> Result<(), String> {
+    panel_floating::start_drag(&app_handle)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn nudge_panel(
+    app_handle: tauri::AppHandle,
+    dx: f64,
+    dy: f64,
+) -> Result<panel_floating::PanelPlacementView, String> {
+    panel_floating::nudge(&app_handle, dx, dy)
+}
+
+#[cfg(not(test))]
+#[tauri::command]
+fn return_panel_to_tray(
+    app_handle: tauri::AppHandle,
+) -> Result<panel_floating::PanelPlacementView, String> {
+    panel_floating::return_to_tray(&app_handle)
 }
 
 #[cfg(not(test))]
@@ -243,6 +288,11 @@ pub fn run() {
             reposition_panel,
             sync_panel_geometry,
             apply_panel_bounds,
+            get_panel_placement,
+            set_panel_movable,
+            start_panel_drag,
+            nudge_panel,
+            return_panel_to_tray,
             take_pending_panel_view,
             sync_panel_view,
             show_panel_for_view,
@@ -316,6 +366,7 @@ mod tests {
             },
             capabilities: HostCapabilities::default(),
             source_provenance: None,
+            account_scoped: false,
         }
     }
 
