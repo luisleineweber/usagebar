@@ -199,7 +199,7 @@ Each hold (usage, refresh, and web) counts its own consecutive HTTP 429 response
 - The backoff: 5 minutes for the first 429, then 10, 20, and at most 30 minutes.
 - The Retry-After value, capped at 60 minutes.
 
-Only a valid success of the same kind resets the count: an OAuth usage response with a valid JSON body for the usage hold, a token refresh that returns an access token for the refresh hold, and a web probe whose requests all succeed (including the optional overage request) for the web hold. An HTTP 2xx response that fails validation keeps the count. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer.
+Only a valid success of the same kind resets the count: an HTTP 200 OAuth usage response whose body is a JSON object for the usage hold (`{}` counts; `[]`, strings, numbers, and `null` keep the count), a token refresh that returns an access token for the refresh hold, and a web probe whose requests all succeed (including the optional overage request) for the web hold. An HTTP 2xx response that fails validation keeps the count. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer.
 
 Each request reads its hold record directly before it is sent. That record decides whether the request may go out, and it is the only record that the request's success may clear. A hold written after that read is kept, even if the clock changed. Each web request checks the web hold again, so a hold that starts during an earlier web request stops the rest of the web probe.
 
@@ -213,4 +213,4 @@ No credential record carries a verified account identity, and usage holds surviv
 
 A hold record stores `retryAt`, `streak`, and `recordedAt`. It contains no tokens and no account data. A record from an earlier version that stores only `retryAt` counts as one 429. Its remaining wait is capped at 60 minutes.
 
-UsageBar logs and discards a record that is not valid JSON, is not an object, has non-finite times, or ends more than 60 minutes after `recordedAt`. If the system clock moves back during a hold, the full hold restarts once from the new time. It does not grow by the size of the clock change. Each read takes the record before the clock, so a record written just before the read is not mistaken for a clock change.
+UsageBar logs and discards a record that is not valid JSON, is not an object, has non-finite times, or ends more than 60 minutes after `recordedAt`. If the system clock moves back before `recordedAt` during a hold, the full hold restarts once from the new time. It does not grow by the size of the clock change. If the clock moves back but stays at or after `recordedAt`, the stored `retryAt` stays. Each read takes the record before the clock, so a record written just before the read is not mistaken for a clock change.

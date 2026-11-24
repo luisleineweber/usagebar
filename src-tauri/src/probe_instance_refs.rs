@@ -147,4 +147,19 @@ mod tests {
         assert_eq!(resolve(&dir, None).instance_id, None);
         assert_eq!(resolve(&dir, Some("")).instance_id, None);
     }
+
+    // An omitted id means "use the selected profile", and a blank id is the same as omitted.
+    #[test]
+    fn a_blank_instance_id_resolves_like_an_omitted_one_with_a_saved_profile() {
+        let dir = temp_app_dir("saved");
+        std::fs::write(
+            dir.join("settings.json"),
+            r#"{"providerConfigs":{"claude":{"selectedAccountProfileId":"profile-a"}}}"#,
+        )
+        .expect("write settings");
+        let omitted = resolve(&dir, None);
+        assert_eq!(omitted.instance_id.as_deref(), Some("profile-a"));
+        assert_eq!(resolve(&dir, Some("")), omitted);
+        assert_eq!(resolve(&dir, Some("  ")), omitted);
+    }
 }
