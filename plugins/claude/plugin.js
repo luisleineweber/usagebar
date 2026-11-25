@@ -36,28 +36,100 @@
   const WEB_SESSION_EXPIRED_MESSAGE =
     "Claude web session expired. Re-capture the Cookie header from claude.ai and try again."
 
+  const RATE_LIMIT_PREFIXES = {
+    usage: "rate-limit-",
+    refresh: "rate-limit-refresh-",
+    "web-": "rate-limit-web-",
+    verify: "rate-limit-verify-",
+  }
+  const RATE_LIMIT_BASE_WAIT_MS = 5 * 60 * 1000
+  const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000
+  const RATE_LIMIT_MAX_WAIT_MS = 60 * 60 * 1000
+  const RATE_LIMIT_MAX_STREAK = 1000
+
   function rateLimitPath(ctx, endpoint = "usage") {
-    const prefixes = {
-      usage: "rate-limit-",
-      refresh: "rate-limit-refresh-",
-      "web-": "rate-limit-web-",
-      verify: "rate-limit-verify-",
-    }
-    if (!Object.prototype.hasOwnProperty.call(prefixes, endpoint)) {
+    if (!Object.prototype.hasOwnProperty.call(RATE_LIMIT_PREFIXES, endpoint)) {
       throw new Error("Unknown Claude rate-limit endpoint: " + endpoint)
     }
     let instanceId = encodeURIComponent(ctx.instanceRef?.instanceId || "default")
     if (endpoint === "usage" && /^(web-|refresh-|verify-)/i.test(instanceId)) {
       instanceId = "%" + instanceId.charCodeAt(0).toString(16) + instanceId.slice(1)
     }
-    return ctx.app.pluginDataDir + "/" + prefixes[endpoint] + instanceId + ".json"
+    return ctx.app.pluginDataDir + "/" + RATE_LIMIT_PREFIXES[endpoint] + instanceId + ".json"
+  }
+
+  function parseJsonObject(text) {
+    let value
+    try {
+      value = JSON.parse(text)
+    } catch {
+      return null
+    }
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null
+  }
+
+  // A hold is { retryAt, streak, recordedAt }. streak counts consecutive 429s and resets only
+  // after a success. recordedAt fixes the cap. A cleared hold has retryAt 0 and streak 0.
+  function parseHold(value) {
+    const { retryAt, streak, recordedAt } = value
+    if (!Number.isFinite(retryAt) || !Number.isFinite(recordedAt) || recordedAt < 0) return null
+    if (!Number.isInteger(streak) || streak < 0 || streak > RATE_LIMIT_MAX_STREAK) return null
+    if (retryAt === 0) return { retryAt, streak, recordedAt }
+    if (retryAt < recordedAt || retryAt > recordedAt + RATE_LIMIT_MAX_WAIT_MS) return null
+    return { retryAt, streak, recordedAt }
+  }
+
+  // Records written before streaks existed hold only retryAt. They count as one 429.
+  function parseLegacyHold(value, now) {
+    const keys = Object.keys(value)
+    if (keys.length !== 1 || keys[0] !== "retryAt" || !Number.isFinite(value.retryAt)) return null
+    const retryAt = value.retryAt > now ? Math.min(value.retryAt, now + RATE_LIMIT_MAX_WAIT_MS) : 0
+    return { retryAt, streak: 1, recordedAt: now }
+  }
+
+  // Returns the stored hold and, when the record must be rewritten, the record to store.
+  function readStoredHold(ctx, text, now) {
+    if (text === null) return { hold: null }
+    const value = parseJsonObject(text)
+    const hold = value && parseHold(value)
+    if (hold) {
+      if (hold.retryAt <= now || now >= hold.recordedAt) return { hold }
+      // The clock moved back. Restart the full hold once from now, so the hold cannot grow by
+      // the size of the clock change.
+      ctx.host.log.warn("clock moved back during a Claude rate-limit hold")
+      const rebased = {
+        retryAt: now + (hold.retryAt - hold.recordedAt),
+        streak: hold.streak,
+        recordedAt: now,
+      }
+      return { hold: rebased, repair: rebased }
+    }
+    const legacy = value && parseLegacyHold(value, now)
+    if (legacy) return { hold: legacy, repair: legacy }
+    ctx.host.log.warn("discarding invalid Claude rate-limit record")
+    return { hold: null, repair: { retryAt: 0, streak: 0, recordedAt: now } }
+  }
+
+  // Reads one endpoint's hold and rewrites invalid, legacy, or clock-shifted records.
+  // Returns the record text as stored after that and the parsed hold.
+  function readHold(ctx, endpoint) {
+    const path = rateLimitPath(ctx, endpoint)
+    const text = ctx.host.fs.exists(path) ? ctx.host.fs.readText(path) : null
+    // Sample the clock after the read, so a record written just before it is not taken for
+    // a clock change.
+    const { hold, repair } = readStoredHold(ctx, text, Date.now())
+    if (repair === undefined) return { text, hold }
+    const repairedText = JSON.stringify(repair)
+    ctx.host.fs.writeText(path, repairedText)
+    return { text: repairedText, hold }
+  }
+
+  function activeRetryAt(hold) {
+    return hold && Date.now() < hold.retryAt ? hold.retryAt : null
   }
 
   function readRateLimitRetryAt(ctx, endpoint = "usage") {
-    const path = rateLimitPath(ctx, endpoint)
-    if (!ctx.host.fs.exists(path)) return null
-    const state = JSON.parse(ctx.host.fs.readText(path))
-    return Date.now() < state.retryAt ? state.retryAt : null
+    return activeRetryAt(readHold(ctx, endpoint).hold)
   }
 
   function rateLimitMessage(retryAt) {
@@ -71,23 +143,67 @@
     if (retryAt !== null) throw rateLimitMessage(retryAt)
   }
 
-  function checkRateLimitResponse(ctx, response, endpoint = "usage") {
-    if (response.status !== 429) return response
+  // The gate for one request. The same observed record decides whether the request may go
+  // out and is the only record that the request's success may clear.
+  function admitRequest(ctx, endpoint) {
+    const observed = readHold(ctx, endpoint)
+    const retryAt = activeRetryAt(observed.hold)
+    if (retryAt !== null) throw rateLimitMessage(retryAt)
+    return observed.text
+  }
+
+  function retryAfterMs(response, now) {
+    if (Number.isFinite(response.retryAfterSeconds)) {
+      return Math.min(Math.max(0, response.retryAfterSeconds * 1000), RATE_LIMIT_MAX_WAIT_MS)
+    }
     const headers = response.headers || {}
     const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
     const value = key ? String(headers[key]).trim() : ""
+    const retryAt = /^\d+$/.test(value) ? now + Number(value) * 1000 : Date.parse(value)
+    if (!Number.isFinite(retryAt)) return 0
+    return Math.min(Math.max(0, retryAt - now), RATE_LIMIT_MAX_WAIT_MS)
+  }
+
+  function recordRateLimit(ctx, endpoint, response) {
+    const { hold } = readHold(ctx, endpoint)
     const now = Date.now()
-    const retryAt = Number.isFinite(response.retryAfterSeconds)
-      ? now + response.retryAfterSeconds * 1000
-      : /^\d+$/.test(value)
-        ? now + Number(value) * 1000
-        : Date.parse(value)
-    ctx.host.fs.writeText(
-      rateLimitPath(ctx, endpoint),
-      JSON.stringify({
-        retryAt: Math.max(now + REFRESH_BUFFER_MS, Number.isFinite(retryAt) ? retryAt : 0),
-      })
-    )
+    const retryAfter = retryAfterMs(response, now)
+    let next
+    if (hold && now < hold.retryAt) {
+      // A request that was in flight when the hold started is not a new 429. It can only
+      // make the hold longer.
+      if (now + retryAfter <= hold.retryAt) return hold.retryAt
+      next = { retryAt: now + retryAfter, streak: hold.streak, recordedAt: now }
+    } else {
+      const streak = Math.min((hold ? hold.streak : 0) + 1, RATE_LIMIT_MAX_STREAK)
+      const backoff = Math.min(
+        RATE_LIMIT_BASE_WAIT_MS * 2 ** Math.min(streak - 1, 10),
+        RATE_LIMIT_MAX_BACKOFF_MS
+      )
+      next = { retryAt: now + Math.max(backoff, retryAfter), streak, recordedAt: now }
+    }
+    ctx.host.fs.writeText(rateLimitPath(ctx, endpoint), JSON.stringify(next))
+    return next.retryAt
+  }
+
+  // A success resets the count only if the record is still exactly the one observed before
+  // the request. A newer record is kept.
+  function clearRateLimitAfterSuccess(ctx, endpoint, observedText) {
+    if (observedText === null) return
+    const observed = parseJsonObject(observedText)
+    if (!observed || observed.streak === 0) return
+    const path = rateLimitPath(ctx, endpoint)
+    const currentText = ctx.host.fs.exists(path) ? ctx.host.fs.readText(path) : null
+    if (currentText !== observedText) {
+      ctx.host.log.info("kept a Claude " + endpoint + " hold that changed during the request")
+      return
+    }
+    ctx.host.fs.writeText(path, JSON.stringify({ retryAt: 0, streak: 0, recordedAt: Date.now() }))
+  }
+
+  function checkRateLimitResponse(ctx, response, endpoint = "usage") {
+    if (response.status !== 429) return response
+    recordRateLimit(ctx, endpoint, response)
     checkRateLimit(ctx, endpoint)
     return response
   }
@@ -260,6 +376,8 @@
   }
 
   function requestClaudeWebJson(ctx, sessionKey, path, description, optional = false) {
+    // A web hold can start while an earlier request of this probe is in flight.
+    checkRateLimit(ctx, "web-")
     let response
     try {
       response = ctx.util.request({
@@ -620,7 +738,8 @@
   }
 
   function syncClaudeCodeImport(ctx, creds) {
-    const heldUntil = readRateLimitRetryAt(ctx, "verify")
+    const observedVerificationHold = readHold(ctx, "verify")
+    const heldUntil = activeRetryAt(observedVerificationHold.hold)
     if (heldUntil !== null) {
       return { kind: "failed", message: accountVerificationHold(heldUntil) }
     }
@@ -636,8 +755,7 @@
     }
     if (result.kind === "deferred") {
       if (Number.isFinite(result.retryAfterSeconds)) {
-        const retryAt = Date.now() + result.retryAfterSeconds * 1000
-        ctx.host.fs.writeText(rateLimitPath(ctx, "verify"), JSON.stringify({ retryAt }))
+        const retryAt = recordRateLimit(ctx, "verify", result)
         return { kind: "failed", message: accountVerificationHold(retryAt) }
       }
       return {
@@ -645,6 +763,13 @@
         message: "Could not verify the Claude Code account. Try again later.",
       }
     }
+    if (!readNonEmptyString(result.claudeAiOauth?.accessToken)) {
+      return {
+        kind: "failed",
+        message: "Could not verify the Claude Code account. Try again later.",
+      }
+    }
+    clearRateLimitAfterSuccess(ctx, "verify", observedVerificationHold.text)
     creds.fullData = result
     creds.oauth = result.claudeAiOauth
     return {
@@ -705,7 +830,8 @@
       return { kind: "unavailable" }
     }
 
-    const retryAt = readRateLimitRetryAt(ctx, "refresh")
+    const observedRefreshHold = readHold(ctx, "refresh")
+    const retryAt = activeRetryAt(observedRefreshHold.hold)
     if (retryAt !== null) {
       if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
       ctx.host.log.info("refresh skipped: refresh hold is active and the token is still valid")
@@ -737,7 +863,8 @@
       // A native save or lock error must leave the probe before usage can use an old token.
       throw "Claude credential refresh failed. " + String(e)
     }
-    if (result.credentials) {
+    if (readNonEmptyString(result.credentials?.claudeAiOauth?.accessToken)) {
+      clearRateLimitAfterSuccess(ctx, "refresh", observedRefreshHold.text)
       creds.fullData = result.credentials
       creds.oauth = creds.fullData.claudeAiOauth
       const expiresAt = parseExpiresAtMs(creds.oauth.expiresAt)
@@ -797,7 +924,10 @@
   }
 
   // Only the HTTP request itself is a connection failure. Local failures stay visible as-is.
+  // Returns the response and the hold record observed before the request. The caller clears
+  // that record only after the response body is valid.
   function fetchUsage(ctx, accessToken, afterRefresh) {
+    const observedUsageHold = admitRequest(ctx, "usage")
     let resp
     try {
       resp = ctx.util.request({
@@ -818,7 +948,7 @@
         ? "Usage request failed after refresh. Try again."
         : "Usage request failed. Check your connection."
     }
-    return checkRateLimitResponse(ctx, resp)
+    return { resp: checkRateLimitResponse(ctx, resp), observedUsageHold }
   }
 
   function readApiError(ctx, resp) {
@@ -1160,7 +1290,7 @@
 
   function buildClaudeWebResult(ctx) {
     if (readManagedProfileId(ctx)) return null
-    checkRateLimit(ctx, "web-")
+    const observedWebHold = admitRequest(ctx, "web-")
     const cookieHeader = loadStoredCookieHeader(ctx)
     if (!cookieHeader) return null
     const sessionKey = sessionKeyFromCookieHeader(cookieHeader)
@@ -1230,6 +1360,9 @@
       "overage",
       true
     )
+    // The optional overage request returns null when it fails. Reset the count only after
+    // every web request of this probe succeeded.
+    if (overage !== null) clearRateLimitAfterSuccess(ctx, "web-", observedWebHold)
     if (overage && overage.is_enabled === true) {
       const used = Number(overage.used_credits)
       const limit = Number(overage.monthly_credit_limit)
@@ -1338,14 +1471,15 @@
       }
     }
 
-    let resp = fetchUsage(ctx, accessToken, false)
+    let usageFetch = fetchUsage(ctx, accessToken, false)
     if (
-      resp.status === 401 &&
+      usageFetch.resp.status === 401 &&
       (!attemptedRefresh || (isClaudeCodeImport(creds) && !replacedAccess))
     ) {
       ctx.host.log.info("usage returned 401, attempting refresh")
-      if (attemptRefresh()) resp = fetchUsage(ctx, accessToken, true)
+      if (attemptRefresh()) usageFetch = fetchUsage(ctx, accessToken, true)
     }
+    const resp = usageFetch.resp
 
     if (ctx.util.isAuthStatus(resp.status)) checkRateLimit(ctx, "refresh")
     if (resp.status === 401) {
@@ -1368,6 +1502,11 @@
     data = ctx.util.tryParseJson(resp.bodyText)
     if (data === null) {
       throw "Usage response invalid. Try again later."
+    }
+    // Only a plain object is a usage payload. An empty object still counts: its missing values
+    // show as missing data.
+    if (typeof data === "object" && !Array.isArray(data)) {
+      clearRateLimitAfterSuccess(ctx, "usage", usageFetch.observedUsageHold)
     }
 
     const lines = []

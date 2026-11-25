@@ -10,6 +10,8 @@ use crate::AppState;
 use crate::local_http_api;
 use crate::plugin_engine;
 use crate::plugin_engine::runtime::ProviderInstanceRef;
+use crate::probe_instance_lock;
+use crate::probe_instance_refs::resolve_instance_refs;
 
 const MAX_CONCURRENT_PROBES: usize = 4;
 const PROBE_WORKER_TIMEOUT: Duration = Duration::from_secs(35);
@@ -159,71 +161,89 @@ pub(crate) async fn start_probe_batch(
         let join_plugin = plugin.clone();
         let timeout_plugin = plugin.clone();
         let capacity_plugin = plugin.clone();
+        let busy_plugin = plugin.clone();
         let worker_handle = handle.clone();
 
         tauri::async_runtime::spawn(async move {
-            let mut output = match semaphore.acquire_owned().await {
-                Ok(_permit) => {
-                    let worker = tauri::async_runtime::spawn_blocking(move || {
-                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            plugin_engine::runtime::run_probe_for_instance_with_cache(
-                                &worker_plugin,
-                                &data_dir,
-                                &version,
-                                Some(&worker_handle),
-                                &worker_instance_ref,
-                                Some(worker_ccusage_cache),
-                            )
-                        }));
+            let instance_guard =
+                probe_instance_lock::acquire(&instance_ref, PROBE_WORKER_TIMEOUT).await;
+            let mut output = match instance_guard {
+                None => {
+                    log::error!(
+                        "probe {} skipped: an earlier probe of this instance is still running",
+                        capacity_plugin_id
+                    );
+                    plugin_engine::runtime::error_output(
+                        &busy_plugin,
+                        "an earlier provider probe is still running".to_string(),
+                    )
+                }
+                Some(instance_guard) => match semaphore.acquire_owned().await {
+                    Ok(_permit) => {
+                        let worker = tauri::async_runtime::spawn_blocking(move || {
+                            // Held until this worker ends, even after its timeout below.
+                            let _instance_guard = instance_guard;
+                            let result =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    plugin_engine::runtime::run_probe_for_instance_with_cache(
+                                        &worker_plugin,
+                                        &data_dir,
+                                        &version,
+                                        Some(&worker_handle),
+                                        &worker_instance_ref,
+                                        Some(worker_ccusage_cache),
+                                    )
+                                }));
 
-                        match result {
-                            Ok(output) => output,
-                            Err(_) => {
-                                log::error!("probe {} panicked", worker_plugin_id);
+                            match result {
+                                Ok(output) => output,
+                                Err(_) => {
+                                    log::error!("probe {} panicked", worker_plugin_id);
+                                    plugin_engine::runtime::error_output(
+                                        &panic_plugin,
+                                        "provider probe panicked".to_string(),
+                                    )
+                                }
+                            }
+                        });
+
+                        match tokio::time::timeout(PROBE_WORKER_TIMEOUT, worker).await {
+                            Ok(Ok(output)) => output,
+                            Ok(Err(error)) => {
+                                log::error!("probe {} worker failed: {}", join_plugin_id, error);
                                 plugin_engine::runtime::error_output(
-                                    &panic_plugin,
-                                    "provider probe panicked".to_string(),
+                                    &join_plugin,
+                                    "provider probe worker failed".to_string(),
+                                )
+                            }
+                            Err(_) => {
+                                log::error!(
+                                    "probe {} worker timed out after {} seconds",
+                                    join_plugin_id,
+                                    PROBE_WORKER_TIMEOUT.as_secs()
+                                );
+                                plugin_engine::runtime::error_output(
+                                    &timeout_plugin,
+                                    format!(
+                                        "provider probe timed out after {}s",
+                                        PROBE_WORKER_TIMEOUT.as_secs()
+                                    ),
                                 )
                             }
                         }
-                    });
-
-                    match tokio::time::timeout(PROBE_WORKER_TIMEOUT, worker).await {
-                        Ok(Ok(output)) => output,
-                        Ok(Err(error)) => {
-                            log::error!("probe {} worker failed: {}", join_plugin_id, error);
-                            plugin_engine::runtime::error_output(
-                                &join_plugin,
-                                "provider probe worker failed".to_string(),
-                            )
-                        }
-                        Err(_) => {
-                            log::error!(
-                                "probe {} worker timed out after {} seconds",
-                                join_plugin_id,
-                                PROBE_WORKER_TIMEOUT.as_secs()
-                            );
-                            plugin_engine::runtime::error_output(
-                                &timeout_plugin,
-                                format!(
-                                    "provider probe timed out after {}s",
-                                    PROBE_WORKER_TIMEOUT.as_secs()
-                                ),
-                            )
-                        }
                     }
-                }
-                Err(error) => {
-                    log::error!(
-                        "probe {} could not acquire worker slot: {}",
-                        capacity_plugin_id,
-                        error
-                    );
-                    plugin_engine::runtime::error_output(
-                        &capacity_plugin,
-                        "provider probe capacity unavailable".to_string(),
-                    )
-                }
+                    Err(error) => {
+                        log::error!(
+                            "probe {} could not acquire worker slot: {}",
+                            capacity_plugin_id,
+                            error
+                        );
+                        plugin_engine::runtime::error_output(
+                            &capacity_plugin,
+                            "provider probe capacity unavailable".to_string(),
+                        )
+                    }
+                },
             };
 
             let has_error = output.lines.iter().any(|line| {
@@ -271,65 +291,4 @@ pub(crate) async fn start_probe_batch(
         plugin_ids: response_plugin_ids,
         instance_refs,
     })
-}
-
-pub(crate) fn resolve_instance_refs(
-    app_data_dir: &std::path::Path,
-    plugin_ids: &[String],
-    requested: Option<Vec<ProviderInstanceRef>>,
-) -> Vec<ProviderInstanceRef> {
-    let requested_by_provider: HashMap<_, _> = requested
-        .unwrap_or_default()
-        .into_iter()
-        .map(|instance| (instance.provider_id.clone(), instance))
-        .collect();
-    let selected_by_provider = load_selected_instance_ids(app_data_dir);
-
-    plugin_ids
-        .iter()
-        .map(|provider_id| match requested_by_provider.get(provider_id) {
-            Some(requested) if requested.instance_id.is_some() => requested.clone(),
-            Some(requested) => ProviderInstanceRef {
-                provider_id: provider_id.clone(),
-                instance_id: selected_by_provider
-                    .get(provider_id)
-                    .cloned()
-                    .or_else(|| requested.instance_id.clone()),
-            },
-            None => ProviderInstanceRef {
-                provider_id: provider_id.clone(),
-                instance_id: selected_by_provider.get(provider_id).cloned(),
-            },
-        })
-        .collect()
-}
-
-fn load_selected_instance_ids(app_data_dir: &std::path::Path) -> HashMap<String, String> {
-    for path in [
-        app_data_dir.join("settings.json"),
-        app_data_dir.join(".store").join("settings.json"),
-    ] {
-        let Ok(text) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
-            continue;
-        };
-        let Some(configs) = json
-            .get("providerConfigs")
-            .and_then(serde_json::Value::as_object)
-        else {
-            continue;
-        };
-        return configs
-            .iter()
-            .filter_map(|(provider_id, config)| {
-                config
-                    .get("selectedAccountProfileId")
-                    .and_then(serde_json::Value::as_str)
-                    .map(|instance_id| (provider_id.clone(), instance_id.to_string()))
-            })
-            .collect();
-    }
-    HashMap::new()
 }

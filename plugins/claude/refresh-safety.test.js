@@ -187,7 +187,7 @@ it.each([1, 120000])(
     expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-owned.json")).toBe(false)
     expect(
       JSON.parse(ctx.host.fs.readText(ctx.app.pluginDataDir + "/rate-limit-refresh-owned.json"))
-    ).toEqual({ retryAt: Date.now() + 600000 })
+    ).toEqual({ retryAt: Date.now() + 600000, streak: 1, recordedAt: Date.now() })
     vi.resetModules()
     vi.advanceTimersByTime(5000)
     usage(ctx)
@@ -358,5 +358,54 @@ it("offers the Settings link if an older import is rejected before its recorded 
   ctx.host.http.request.mockReturnValue({ status: 401, bodyText: "{}" })
   const loaded = await plugin()
   expect(() => loaded.probe(ctx)).toThrow("Link current Claude Code login")
+  expect(ctx.host.http.request).toHaveBeenCalledOnce()
+})
+
+it("bounds and resets the separate verification streak after a verified replacement", async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date("2026-11-03T13:15:00Z"))
+  vi.resetModules()
+  const ctx = makeCtx()
+  ctx.instanceRef = { providerId: "claude", instanceId: "imported" }
+  ctx.host.providerSecrets.read.mockReturnValue(JSON.stringify(document("claude-code")))
+  const updated = { ...document("claude-code"), claudeAiOauth: { accessToken: "new" } }
+  const sync = ctx.host.providerSecrets.syncClaudeCodeCredentials
+  sync
+    .mockReturnValueOnce(JSON.stringify({ kind: "deferred", retryAfterSeconds: 7200 }))
+    .mockReturnValueOnce(JSON.stringify({ kind: "deferred", retryAfterSeconds: 60 }))
+    .mockReturnValueOnce(JSON.stringify(updated))
+    .mockReturnValue(JSON.stringify({ kind: "deferred", retryAfterSeconds: 60 }))
+  usage(ctx)
+  const loaded = await plugin()
+  const path = ctx.app.pluginDataDir + "/rate-limit-verify-imported.json"
+  for (const [streak, minutes] of [
+    [1, 60],
+    [2, 10],
+  ]) {
+    const retryAt = Date.now() + minutes * 60_000
+    expect(() => loaded.probe(ctx)).toThrow("Claude account verification failed (HTTP 429)")
+    expect(JSON.parse(ctx.host.fs.readText(path))).toEqual({
+      retryAt,
+      streak,
+      recordedAt: Date.now(),
+    })
+    vi.setSystemTime(new Date(retryAt))
+  }
+  expect(ctx.host.http.request).not.toHaveBeenCalled()
+  loaded.probe(ctx)
+  expect(JSON.parse(ctx.host.fs.readText(path))).toEqual({
+    retryAt: 0,
+    streak: 0,
+    recordedAt: Date.now(),
+  })
+  expect(() => loaded.probe(ctx)).toThrow("Claude account verification failed (HTTP 429)")
+  expect(JSON.parse(ctx.host.fs.readText(path))).toEqual({
+    retryAt: Date.now() + 300_000,
+    streak: 1,
+    recordedAt: Date.now(),
+  })
+  for (const prefix of ["rate-limit-", "rate-limit-web-", "rate-limit-refresh-"]) {
+    expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/" + prefix + "imported.json")).toBe(false)
+  }
   expect(ctx.host.http.request).toHaveBeenCalledOnce()
 })

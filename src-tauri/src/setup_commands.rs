@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::AppState;
 use crate::plugin_engine::runtime::ProviderInstanceRef;
 use crate::plugin_engine::setup_detection::{self, SetupDetection};
-use crate::probe_commands::resolve_instance_refs;
+use crate::probe_instance_refs::resolve_instance_refs;
 
 const SETUP_SCAN_WORKER_TIMEOUT: Duration = Duration::from_secs(15);
 
