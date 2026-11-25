@@ -30,6 +30,8 @@ mod plugin_engine;
 #[cfg(not(test))]
 mod probe_commands;
 mod probe_coordinator;
+mod probe_instance_lock;
+mod probe_instance_refs;
 mod provider_account_store;
 #[cfg(target_os = "windows")]
 mod provider_secret_store;
