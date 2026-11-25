@@ -2,7 +2,7 @@
 
 This repo treats a release as a tagged, reproducible build with matching version metadata, current release notes, and a verified artifact path.
 
-Release in preparation (not yet published):
+Current release:
 
 ```text
 v0.2.1
@@ -111,7 +111,7 @@ Use the release gate above for the final local artifact or GitHub release candid
 - Claude checks on the combined final candidate: usage holds keep HTTP 429 visible; refresh holds skip token refresh but allow OAuth usage with a valid access token; expired or missing tokens keep a refresh hold visible as HTTP 429. Both OAuth holds block shared web cookie reads and web requests. Check separate usage, refresh, and web deadlines, managed profile selection, credential source isolation, escaped organization IDs, and an unknown (`null`) web subscription plan.
 - Required CI and dependency audits on the combined final source.
 
-PRs #30 and #33 are included from main. The remaining v0.2.1 change set is not yet decided. Final integration and combined tests remain open. Rebuild the combined final candidate and check its release notes before tagging.
+The v0.2.1 change set includes all PRs merged to main from #26 through #45.
 
 Metadata preparation does not complete these checks. Do not install or uninstall apps, or change user data, as part of metadata preparation.
 
