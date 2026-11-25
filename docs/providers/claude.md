@@ -147,7 +147,9 @@ on the next probe. A selected profile never uses a different login or a shared w
 Older imports can link automatically if the access tokens match or Claude verifies both identities.
 For an older import that cannot prove its identity, select **Link current Claude Code login** on that
 profile in Settings and confirm. UsageBar verifies the current Claude Code account and keeps the
-profile ID and selection.
+profile ID and selection. If **Import current login** finds an older profile with the same email or
+organization, or the selected profile is an older import, it points to the link action on that
+profile. If UsageBar cannot save the profile details when linking, it restores the previous sign-in.
 
 A check that finds no update can retry once after usage HTTP 401. Temporary account verification
 errors allow usage with a still-valid saved token. Verification HTTP 429 gives account verification

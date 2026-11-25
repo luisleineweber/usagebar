@@ -119,3 +119,8 @@ Validation passed with main at d9c2af96. The 166 Claude tests and 302 Rust libra
 - Merged main through #39 at `8b26b87e` without conflicts.
 
 Validation on Windows passed with synthetic credentials. All 276 focused plugin and Settings tests and 309 Rust library tests passed. One live Edge test was ignored. Frontend checks, Rust checks, the ccusage fixture check, and plugin bundling passed. The Claude, Codex, and OpenCode Go bundles match their sources byte for byte. Local Rust checks excluded the generated release sidecar.
+
+## Review recheck
+
+- **Import current login** points to **Link current Claude Code login** when the verified login may belong to an older profile. It keeps the profile list and selection as they were.
+- If the profile registry write fails during a link, the host restores the previous credential under the store lock and reports the save error.
