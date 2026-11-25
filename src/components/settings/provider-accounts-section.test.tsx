@@ -1,13 +1,14 @@
-import { act, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ProviderAccountsSection } from "@/components/settings/provider-accounts-section"
 
-const listMock = vi.hoisted(() => vi.fn())
+const { listMock, linkMock } = vi.hoisted(() => ({ listMock: vi.fn(), linkMock: vi.fn() }))
 
 vi.mock("@/lib/provider-accounts", () => ({
   listProviderAccountProfiles: listMock,
   importCurrentProviderAccountProfile: vi.fn(),
   deleteProviderAccountProfile: vi.fn(),
+  linkCurrentClaudeCodeLogin: linkMock,
 }))
 
 const pinned = { profileId: "p1", label: "Work", email: "dev@example.com", lastImportedAt: 1 }
@@ -15,6 +16,31 @@ const pinned = { profileId: "p1", label: "Work", email: "dev@example.com", lastI
 describe("ProviderAccountsSection pinned profile", () => {
   beforeEach(() => {
     listMock.mockReset()
+  })
+
+  it("confirms a link for the existing profile and keeps its selection", async () => {
+    const linked = { ...pinned, label: "Verified Work" }
+    listMock.mockResolvedValueOnce([pinned]).mockResolvedValueOnce([linked])
+    linkMock.mockResolvedValueOnce(linked)
+    const onConfigChange = vi.fn(async () => undefined)
+    render(
+      <ProviderAccountsSection
+        providerId="claude"
+        providerName="Claude"
+        config={{ selectedAccountProfileId: "p1" }}
+        onConfigChange={onConfigChange}
+      />
+    )
+    const action = await screen.findByRole("button", { name: "Link current Claude Code login" })
+    fireEvent.click(action)
+    expect(linkMock).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
+    expect(linkMock).not.toHaveBeenCalled()
+    fireEvent.click(action)
+    fireEvent.click(screen.getByRole("button", { name: "Confirm link" }))
+    expect(await screen.findByText("Verified Work")).toBeInTheDocument()
+    expect(linkMock).toHaveBeenCalledExactlyOnceWith("p1", true)
+    expect(onConfigChange).not.toHaveBeenCalled()
   })
 
   it("does not clear the pinned profile before a delayed list response", async () => {

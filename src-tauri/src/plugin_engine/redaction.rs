@@ -107,6 +107,7 @@ pub(crate) fn redact_body(body: &str) -> String {
         "id_token",
         "idToken",
         "accessToken",
+        "expectedAccessToken",
         "refreshToken",
         "user_id",
         "userId",

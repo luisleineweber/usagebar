@@ -34,3 +34,10 @@ export async function deleteProviderAccountProfile(
 ): Promise<ProviderAccountProfile | null> {
   return invoke("delete_provider_account_profile", { providerId, profileId })
 }
+
+export async function linkCurrentClaudeCodeLogin(
+  profileId: string,
+  confirmed: boolean
+): Promise<ProviderAccountProfile> {
+  return invoke("link_current_claude_code_login", { profileId, confirmed })
+}

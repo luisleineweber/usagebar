@@ -115,9 +115,18 @@ pub fn import_profile(
     now_ms: i64,
 ) -> Result<ProviderAccountProfile, String> {
     let mut file = load_accounts_file(app_data_dir, provider_id)?;
-    if let Some(existing_index) = file.profiles.iter().position(|profile| {
+    let existing_index = file.profiles.iter().position(|profile| {
         profile.email == imported.email && profile.account_id == imported.account_id
-    }) {
+    });
+    if provider_id == "claude" {
+        check_claude_legacy_import(
+            app_data_dir,
+            &file.profiles,
+            &imported,
+            existing_index.is_none(),
+        )?;
+    }
+    if let Some(existing_index) = existing_index {
         let existing = &mut file.profiles[existing_index];
         existing.label = imported.label;
         existing.email = imported.email;
@@ -145,6 +154,123 @@ pub fn import_profile(
     Ok(profile)
 }
 
+fn check_claude_legacy_import(
+    data_dir: &Path,
+    profiles: &[ProviderAccountProfile],
+    imported: &ImportedProviderAccount,
+    creating_profile: bool,
+) -> Result<(), String> {
+    let Some((_, org_id)) = imported
+        .account_id
+        .as_deref()
+        .and_then(|id| id.split_once(':'))
+    else {
+        return Ok(());
+    };
+    let mut legacy = profiles
+        .iter()
+        .filter(|profile| {
+            profile
+                .account_id
+                .as_deref()
+                .is_none_or(|id| !id.contains(':'))
+        })
+        .peekable();
+    if legacy.peek().is_none() {
+        return Ok(());
+    }
+
+    let selected =
+        crate::read_provider_config_string(data_dir, "claude", "selectedAccountProfileId")?;
+    let selected_legacy =
+        selected.and_then(|id| legacy.clone().find(|profile| profile.profile_id == id));
+    let profile = match selected_legacy {
+        Some(profile) => profile,
+        None if creating_profile => {
+            let same_email = |profile: &ProviderAccountProfile| {
+                profile
+                    .email
+                    .as_deref()
+                    .zip(imported.email.as_deref())
+                    .is_some_and(|(saved, current)| saved.eq_ignore_ascii_case(current))
+            };
+            let has_email_match = legacy.clone().any(same_email);
+            let mut matches = legacy.filter(|profile| {
+                if has_email_match {
+                    same_email(profile)
+                } else {
+                    profile.account_id.as_deref() == Some(org_id)
+                }
+            });
+            let Some(profile) = matches.next() else {
+                return Ok(());
+            };
+            if matches.next().is_some() {
+                return Err("More than one older Claude profile matches this login. In Settings, choose the correct profile and use Link current Claude Code login.".into());
+            }
+            profile
+        }
+        None => return Ok(()),
+    };
+    Err(format!(
+        "In Settings, select Link current Claude Code login for the older profile \"{}\".",
+        profile.label
+    ))
+}
+
+/// Update the existing profile and its credential in one serialized operation.
+pub(crate) fn link_claude_profile(
+    data_dir: &Path,
+    profile_id: &str,
+    previous: &str,
+    resolved: crate::claude_import::ResolvedClaudeAuth,
+    confirmed: bool,
+    now_ms: i64,
+) -> Result<ProviderAccountProfile, String> {
+    crate::claude_import::authorize_relink(previous, &resolved.auth_json, confirmed)?;
+    crate::protected_store::transaction(data_dir, |store| {
+        let mut file = load_accounts_file(data_dir, "claude")?;
+        let profile = file
+            .profiles
+            .iter_mut()
+            .find(|p| p.profile_id == profile_id)
+            .ok_or("The selected Claude profile was removed.")?;
+        let key = format!("account:{profile_id}:authJson");
+        if store.read("claude", &key)?.as_deref() != Some(previous) {
+            return Err("The selected Claude import changed. Try again.".into());
+        }
+        profile.label = crate::claude_profile_label(
+            resolved.email.as_deref(),
+            Some(&resolved.account_id),
+            now_ms,
+        );
+        profile.email = resolved.email;
+        profile.account_id = Some(resolved.account_id);
+        profile.last_imported_at = now_ms;
+        profile.last_error = None;
+        let updated = profile.clone();
+        let result = store
+            .save("claude", &key, &resolved.auth_json)
+            .and_then(|()| save_accounts_file(data_dir, "claude", &file));
+        if let Err(error) = result {
+            // A credential save can report an error after writing, during recovery cleanup.
+            let restore = store.read("claude", &key).and_then(|current| {
+                if current.as_deref() != Some(previous) {
+                    store.save("claude", &key, previous)?;
+                }
+                Ok(())
+            });
+            return Err(match restore {
+                Ok(()) => error,
+                Err(restore_error) => format!(
+                    "{error}. Could not confirm restoration of the previous Claude Code sign-in. {restore_error}"
+                ),
+            });
+        }
+        Ok(updated)
+    })
+}
+
 pub fn delete_profile(
     app_data_dir: &Path,
     provider_id: &str,
@@ -162,6 +288,34 @@ pub fn delete_profile(
     let removed = file.profiles.remove(index);
     save_accounts_file(app_data_dir, provider_id, &file)?;
     Ok(Some(removed))
+}
+
+/// Shared by the Tauri delete command and native regression tests.
+pub(crate) fn delete_profile_with_credentials(
+    app_data_dir: &Path,
+    provider_id: &str,
+    profile_id: &str,
+) -> Result<Option<ProviderAccountProfile>, String> {
+    if !list_profiles(app_data_dir, provider_id)?
+        .iter()
+        .any(|profile| profile.profile_id == profile_id)
+    {
+        return Ok(None);
+    }
+    // Keep the profile selectable for retry until credential removal succeeds.
+    let secret_key = format!("account:{}:authJson", profile_id);
+    crate::protected_store::delete(app_data_dir, provider_id, &secret_key).map_err(|error| {
+        format!(
+            "Could not remove imported {} profile auth: {}",
+            provider_id, error
+        )
+    })?;
+    #[cfg(target_os = "windows")]
+    {
+        let service = crate::provider_secret_service(provider_id, &secret_key);
+        crate::delete_provider_secret_service(&service)?;
+    }
+    delete_profile(app_data_dir, provider_id, profile_id)
 }
 
 #[cfg(test)]
@@ -219,5 +373,203 @@ mod tests {
         assert_eq!(list_profiles(&dir, "claude").unwrap(), vec![second]);
 
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn importing_verified_claude_login_points_to_the_matching_legacy_profile() {
+        for (email, account_id, selected) in [
+            (None, Some("org"), false),
+            (Some("WORK@example.test"), Some("old-org"), false),
+            (None, None, true),
+        ] {
+            let dir = temp_dir();
+            let previous = import_profile(
+                &dir,
+                "claude",
+                ImportedProviderAccount {
+                    label: "Old Work".into(),
+                    email: email.map(str::to_owned),
+                    account_id: account_id.map(str::to_owned),
+                },
+                1,
+            )
+            .unwrap();
+            if selected {
+                select_claude_profile(&dir, &previous.profile_id);
+            }
+
+            let result = import_profile(
+                &dir,
+                "claude",
+                ImportedProviderAccount {
+                    label: "Verified Work".into(),
+                    email: Some("work@example.test".into()),
+                    account_id: Some("account:org".into()),
+                },
+                2,
+            );
+            let profiles = list_profiles(&dir, "claude").unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            let error = result.expect_err("a legacy profile must be linked in place");
+            assert!(error.contains("Link current Claude Code login"));
+            assert!(error.contains(&previous.label));
+            assert_eq!(profiles, [previous]);
+        }
+    }
+
+    fn select_claude_profile(dir: &Path, profile_id: &str) {
+        let settings = serde_json::json!({
+            "providerConfigs": { "claude": { "selectedAccountProfileId": profile_id } }
+        });
+        std::fs::write(dir.join("settings.json"), settings.to_string()).unwrap();
+    }
+
+    fn claude_account(label: &str, email: &str, account_id: &str) -> ImportedProviderAccount {
+        ImportedProviderAccount {
+            label: label.into(),
+            email: Some(email.into()),
+            account_id: Some(account_id.into()),
+        }
+    }
+
+    fn two_legacy_claude_profiles(dir: &Path) -> [ProviderAccountProfile; 2] {
+        [
+            import_profile(
+                dir,
+                "claude",
+                claude_account("Alice", "alice@example.test", "org"),
+                1,
+            )
+            .unwrap(),
+            import_profile(
+                dir,
+                "claude",
+                claude_account("Bob", "bob@example.test", "org"),
+                2,
+            )
+            .unwrap(),
+        ]
+    }
+
+    #[test]
+    fn selected_legacy_claude_profile_takes_priority_over_an_existing_duplicate() {
+        let dir = temp_dir();
+        let duplicate = claude_account("Duplicate", "bob@example.test", "account:org");
+        let existing = import_profile(&dir, "claude", duplicate.clone(), 1).unwrap();
+        let legacy = import_profile(
+            &dir,
+            "claude",
+            claude_account("Old Bob", "bob@example.test", "org"),
+            2,
+        )
+        .unwrap();
+        assert_eq!(
+            import_profile(&dir, "claude", duplicate.clone(), 1).unwrap(),
+            existing
+        );
+        select_claude_profile(&dir, &legacy.profile_id);
+
+        let result = import_profile(&dir, "claude", duplicate, 3);
+        let profiles = list_profiles(&dir, "claude").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let error = result.expect_err("the selected legacy profile still needs to be linked");
+        assert!(error.contains("Link current Claude Code login") && error.contains("Old Bob"));
+        assert_eq!(profiles, [legacy, existing]);
+    }
+
+    #[test]
+    fn selected_legacy_claude_profile_takes_priority_over_other_matches() {
+        let dir = temp_dir();
+        let [_, bob] = two_legacy_claude_profiles(&dir);
+        select_claude_profile(&dir, &bob.profile_id);
+
+        let result = import_profile(
+            &dir,
+            "claude",
+            claude_account("New", "alice@example.test", "account:org"),
+            3,
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let error = result.unwrap_err();
+        assert!(error.contains("Bob") && !error.contains("Alice"), "{error}");
+    }
+
+    #[test]
+    fn legacy_claude_email_match_takes_priority_over_organization() {
+        let dir = temp_dir();
+        two_legacy_claude_profiles(&dir);
+
+        let result = import_profile(
+            &dir,
+            "claude",
+            claude_account("New", "bob@example.test", "account:org"),
+            3,
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        let error = result.unwrap_err();
+        assert!(error.contains("Bob") && !error.contains("Alice"), "{error}");
+    }
+
+    #[test]
+    fn ambiguous_claude_organization_match_does_not_name_a_profile() {
+        let dir = temp_dir();
+        let [alice, bob] = two_legacy_claude_profiles(&dir);
+
+        let result = import_profile(
+            &dir,
+            "claude",
+            claude_account("New", "other@example.test", "account:org"),
+            3,
+        );
+        let profiles = list_profiles(&dir, "claude").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let error = result.unwrap_err();
+        assert!(error.contains("Link current Claude Code login"));
+        assert!(
+            !error.contains("Alice") && !error.contains("Bob"),
+            "{error}"
+        );
+        assert_eq!(profiles, [bob, alice]);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn relink_registry_write_failure_preserves_the_previous_claude_credentials() {
+        let dir = temp_dir();
+        let previous_profile = import_profile(
+            &dir,
+            "claude",
+            ImportedProviderAccount {
+                label: "Old Work".into(),
+                email: None,
+                account_id: Some("org".into()),
+            },
+            1,
+        )
+        .unwrap();
+        let previous = r#"{"claudeAiOauth":{"accessToken":"old-fixture"}}"#;
+        let key = format!("account:{}:authJson", previous_profile.profile_id);
+        crate::protected_store::save(&dir, "claude", &key, previous).unwrap();
+        std::fs::create_dir(accounts_file_path(&dir, "claude").with_extension("json.tmp")).unwrap();
+
+        let error = link_claude_profile(
+            &dir,
+            &previous_profile.profile_id,
+            previous,
+            crate::claude_import::ResolvedClaudeAuth {
+                email: Some("work@example.test".into()),
+                account_id: "account:org".into(),
+                auth_json: r#"{"claudeAiOauth":{"accessToken":"new-fixture"}}"#.into(),
+            },
+            true,
+            2,
+        )
+        .unwrap_err();
+        let credentials = crate::claude_import::current_import(&dir, &key).unwrap();
+        let profiles = list_profiles(&dir, "claude").unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(error.contains("Could not write claude account registry"));
+        assert_eq!(credentials, previous);
+        assert_eq!(profiles, [previous_profile]);
     }
 }

@@ -280,7 +280,7 @@ Reads and writes app-owned provider secrets for the currently running plugin.
 
 - Secrets are automatically namespaced to the current plugin/provider id.
 - On Windows, values are stored through the local protected provider secret store.
-- On macOS/Linux, values are stored in the system credential vault.
+- On macOS/Linux, storage follows the configured keyring backend. This build has no native backend features enabled; Claude refresh must not rely on it for restart recovery.
 - `read(...)` throws when the secret is missing or the credential store is unavailable.
 - `write(...)` throws when the value is empty or the credential store write fails.
 
@@ -294,6 +294,48 @@ const auth = JSON.parse(authJson)
 auth.tokens.access_token = refreshedAccessToken
 ctx.host.providerSecrets.write(secretKey, JSON.stringify(auth))
 ```
+
+### Claude credential refresh transaction
+
+For the Claude plugin with HTTP and provider-secret capabilities and a captured managed instance:
+
+```typescript
+host.providerSecrets.refreshClaudeCredentials(optionsJson: string): string
+// optionsJson: { refreshUrl, clientId, scopes, expectedAccessToken }
+// result JSON: { credentials: ClaudeProbeCredentials | null, response: ClaudeRefreshError | null }
+```
+
+The host binds the secret key to the captured instance. JavaScript cannot supply another profile key.
+The credential document must have `usagebarCredentialOwner: "usagebar"`. Imported Claude Code
+credentials retain Claude Code ownership. The endpoint must use HTTPS and pass the plugin HTTP domain allowlist. Direct Claude refresh and recovery are Windows-only; other platforms reject before storage access or a request.
+
+The host reloads the document under an OS lock for the credential chain. The lock file name is a
+SHA-256 fingerprint; it contains no token. Unrelated chains can refresh independently.
+The host sends the refresh request and writes a protected recovery record before it replaces the
+main credential. Compare, replace and recovery cleanup share the same cross-process store lock as
+settings, account deletion and all other provider-secret writes. A replacement or deletion cancels
+replay instead of restoring an old profile.
+
+A failed main write throws a visible save error. A later runtime or process replays the protected
+record before it sends another refresh request. On Windows the recovery record is a separate DPAPI
+file. If recovery cannot be written, the host still attempts a verified compare-and-replace into the main store under the store lock. Only if both writes fail does it report unsaved credentials and retain the document and chain lock in memory. Successful credential removal or replacement cancels pending state without another old-profile probe. A crash before either protected write succeeds cannot preserve an unstored response.
+
+It returns the saved access token, expiry, and usage metadata, or a restricted error result. The error result carries the HTTP status, a safe OAuth code label, and a parsed Retry-After delay when applicable. The host keeps the refresh token, link metadata, raw headers, and response body out of the plugin result.
+A transport failure returns both fields as null and logs a fixed error.
+The host does not log options, request bodies, credential documents, or response bodies.
+
+### Sync an imported Claude Code profile
+
+```typescript
+host.providerSecrets.syncClaudeCodeCredentials(): string | null | undefined
+```
+
+Only Claude probes for a captured managed instance receive this binding. The host reads the linked
+Claude Code source and verifies the replacement access token against the saved account and
+organization. It sends only the access token to the fixed HTTPS account endpoint. It does not send a
+refresh token or write to Claude Code storage. The host returns probe credentials after saving them to the protected profile store. The probe projection contains the access token, expiry, usage metadata, and ownership and refresh availability flags. It omits the refresh token and link metadata. Claude managed reads use the same projection. Only the native host can save those records.
+
+An empty result means there is no replacement. Temporary verification failure returns a deferred result with an optional Retry-After delay. The plugin can continue with the saved token while it is valid. This delay applies only to account verification. The plugin also checks its existing OAuth holds before calling this binding.
 
 ## SQLite
 

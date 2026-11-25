@@ -8,6 +8,7 @@ export type ManagedAccountsApi<Profile extends ManagedAccountProfileView> = {
   list: () => Promise<Profile[]>
   importCurrent: () => Promise<{ profile: Profile; wasFirstProfile: boolean }>
   remove: (profileId: string) => Promise<unknown>
+  linkCurrent?: (profileId: string) => Promise<Profile>
 }
 
 /**
@@ -93,6 +94,22 @@ export function useManagedAccounts<Profile extends ManagedAccountProfileView>({
     }
   }
 
+  const linkCurrent = async (profileId: string) => {
+    if (!api.linkCurrent) return
+    setLoading(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const linked = await api.linkCurrent(profileId)
+      setLoaded({ source: api, profiles: await api.list() })
+      setMessage(`Linked ${linked.label}.`)
+    } catch (linkError) {
+      setError(getErrorMessage(linkError, "Could not link the current Claude Code login."))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const select = async (profileId: string) => {
     if (!onConfigChange) return
     setError(null)
@@ -130,6 +147,7 @@ export function useManagedAccounts<Profile extends ManagedAccountProfileView>({
     message,
     error,
     importCurrent,
+    linkCurrent,
     select,
     remove,
   }

@@ -81,6 +81,7 @@ export const makeCtx = () => {
       providerSecrets: {
         read: vi.fn(() => null),
         write: vi.fn(),
+        syncClaudeCodeCredentials: vi.fn(() => null),
       },
       ls: {
         discover: vi.fn(() => null),

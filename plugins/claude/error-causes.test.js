@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest"
 import { readFileSync } from "node:fs"
 import { makeCtx } from "../test-helpers.js"
+import { ownCredentials } from "./test-helpers.js"
 
 const USAGE_OK = {
   status: 200,
@@ -30,6 +31,7 @@ function makeClaudeCtx({ expiresAt = Date.now() + 3_600_000, refreshToken = "ref
   ctx.host.fs.exists = (path) => !String(path).includes("rate-limit-")
   ctx.host.fs.readText = () =>
     JSON.stringify({ claudeAiOauth: { accessToken: "token", refreshToken, expiresAt } })
+  ownCredentials(ctx)
   return ctx
 }
 
@@ -257,6 +259,7 @@ it("clears the saved expiry when a refreshed token has no lifetime", async () =>
       claudeAiOauth: { accessToken: "token", refreshToken: "refresh", expiresAt: Date.now() - 1 },
     })
   )
+  ownCredentials(ctx)
   const usageTokens = []
   let refreshes = 0
   ctx.host.http.request.mockImplementation((opts) => {
@@ -272,7 +275,9 @@ it("clears the saved expiry when a refreshed token has no lifetime", async () =>
 
   const run = await probe(ctx)
   expect(run).not.toThrow()
-  const saved = JSON.parse(ctx.host.fs.readText(credPath)).claudeAiOauth
+  const saved = JSON.parse(
+    ctx.host.providerSecrets.read("account:owned-test:authJson")
+  ).claudeAiOauth
   expect(saved).toMatchObject({ accessToken: "token2", expiresAt: null })
 
   // The second probe reads the saved credentials. The rejected refresh must not count the
@@ -459,6 +464,7 @@ it.each([
         claudeAiOauth: { accessToken: "token", refreshToken: "refresh", expiresAt: Date.now() - 1 },
       })
     )
+    ownCredentials(ctx)
     const calls = routeRequests(ctx, {
       usage: USAGE_OK,
       refresh: {
@@ -469,7 +475,9 @@ it.each([
 
     expect(await probe(ctx)).not.toThrow()
     expect(calls).toEqual({ usage: 1, refresh: 1 })
-    expect(JSON.parse(ctx.host.fs.readText(credPath)).claudeAiOauth).toMatchObject({
+    expect(
+      JSON.parse(ctx.host.providerSecrets.read("account:owned-test:authJson")).claudeAiOauth
+    ).toMatchObject({
       accessToken: "token2",
       expiresAt: null,
     })

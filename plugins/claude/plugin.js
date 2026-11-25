@@ -40,6 +40,7 @@
     usage: "rate-limit-",
     refresh: "rate-limit-refresh-",
     "web-": "rate-limit-web-",
+    verify: "rate-limit-verify-",
   }
   const RATE_LIMIT_BASE_WAIT_MS = 5 * 60 * 1000
   const RATE_LIMIT_MAX_BACKOFF_MS = 30 * 60 * 1000
@@ -51,7 +52,7 @@
       throw new Error("Unknown Claude rate-limit endpoint: " + endpoint)
     }
     let instanceId = encodeURIComponent(ctx.instanceRef?.instanceId || "default")
-    if (endpoint === "usage" && /^(web-|refresh-)/i.test(instanceId)) {
+    if (endpoint === "usage" && /^(web-|refresh-|verify-)/i.test(instanceId)) {
       instanceId = "%" + instanceId.charCodeAt(0).toString(16) + instanceId.slice(1)
     }
     return ctx.app.pluginDataDir + "/" + RATE_LIMIT_PREFIXES[endpoint] + instanceId + ".json"
@@ -152,6 +153,9 @@
   }
 
   function retryAfterMs(response, now) {
+    if (Number.isFinite(response.retryAfterSeconds)) {
+      return Math.min(Math.max(0, response.retryAfterSeconds * 1000), RATE_LIMIT_MAX_WAIT_MS)
+    }
     const headers = response.headers || {}
     const key = Object.keys(headers).find((name) => name.toLowerCase() === "retry-after")
     const value = key ? String(headers[key]).trim() : ""
@@ -168,7 +172,7 @@
     if (hold && now < hold.retryAt) {
       // A request that was in flight when the hold started is not a new 429. It can only
       // make the hold longer.
-      if (now + retryAfter <= hold.retryAt) return
+      if (now + retryAfter <= hold.retryAt) return hold.retryAt
       next = { retryAt: now + retryAfter, streak: hold.streak, recordedAt: now }
     } else {
       const streak = Math.min((hold ? hold.streak : 0) + 1, RATE_LIMIT_MAX_STREAK)
@@ -179,6 +183,7 @@
       next = { retryAt: now + Math.max(backoff, retryAfter), streak, recordedAt: now }
     }
     ctx.host.fs.writeText(rateLimitPath(ctx, endpoint), JSON.stringify(next))
+    return next.retryAt
   }
 
   // A success resets the count only if the record is still exactly the one observed before
@@ -328,7 +333,12 @@
     }
 
     const oauth = parsed.claudeAiOauth
-    if (!oauth.accessToken && !oauth.refreshToken) {
+    if (
+      !oauth.accessToken &&
+      !oauth.refreshToken &&
+      !oauth.hasRefreshToken &&
+      parsed.usagebarCredentialOwner === "usagebar"
+    ) {
       throw "Selected Claude account is invalid. Re-import or choose another account."
     }
 
@@ -659,7 +669,9 @@
     const oauth = credentials && credentials.oauth
     return !!(
       oauth &&
-      (readNonEmptyString(oauth.accessToken) || readNonEmptyString(oauth.refreshToken))
+      (readNonEmptyString(oauth.accessToken) ||
+        readNonEmptyString(oauth.refreshToken) ||
+        oauth.hasRefreshToken)
     )
   }
 
@@ -671,31 +683,6 @@
     } catch (e) {
       ctx.host.log.warn("setup scan could not read Claude credentials: " + String(e))
       return [{ id: "claude-oauth", state: "unavailable" }]
-    }
-  }
-
-  function saveCredentials(ctx, source, fullData, secretKey) {
-    // MUST use minified JSON - macOS `security -w` hex-encodes values with newlines,
-    // which Claude Code can't read back, causing it to invalidate the session.
-    const text = JSON.stringify(fullData)
-    if (source === "managed-profile") {
-      try {
-        ctx.host.providerSecrets.write(secretKey, text)
-      } catch (e) {
-        ctx.host.log.error("Failed to write managed Claude credentials: " + String(e))
-      }
-    } else if (source === "file") {
-      try {
-        ctx.host.fs.writeText(CRED_FILE, text)
-      } catch (e) {
-        ctx.host.log.error("Failed to write Claude credentials file: " + String(e))
-      }
-    } else if (source === "keychain") {
-      try {
-        ctx.host.keychain.writeGenericPassword(KEYCHAIN_SERVICE, text)
-      } catch (e) {
-        ctx.host.log.error("Failed to write Claude credentials keychain: " + String(e))
-      }
     }
   }
 
@@ -742,12 +729,103 @@
     return port >= 1 && port <= 65535
   }
 
+  const RUN_CLAUDE_CODE = "Run Claude Code once, then try again."
+
+  function isClaudeCodeImport(creds) {
+    return (
+      creds?.source === "managed-profile" && creds.fullData.usagebarCredentialOwner !== "usagebar"
+    )
+  }
+
+  function syncClaudeCodeImport(ctx, creds) {
+    const observedVerificationHold = readHold(ctx, "verify")
+    const heldUntil = activeRetryAt(observedVerificationHold.hold)
+    if (heldUntil !== null) {
+      return { kind: "failed", message: accountVerificationHold(heldUntil) }
+    }
+    const raw = ctx.host.providerSecrets.syncClaudeCodeCredentials()
+    if (!raw) return { kind: "unavailable" }
+    const result = JSON.parse(raw)
+    if (result.kind === "linkRequired") {
+      return {
+        kind: "failed",
+        message:
+          "Could not verify this older Claude import. In Settings, select Link current Claude Code login for this profile.",
+      }
+    }
+    if (result.kind === "deferred") {
+      if (Number.isFinite(result.retryAfterSeconds)) {
+        const retryAt = recordRateLimit(ctx, "verify", result)
+        return { kind: "failed", message: accountVerificationHold(retryAt) }
+      }
+      return {
+        kind: "failed",
+        message: "Could not verify the Claude Code account. Try again later.",
+      }
+    }
+    if (!readNonEmptyString(result.claudeAiOauth?.accessToken)) {
+      return {
+        kind: "failed",
+        message: "Could not verify the Claude Code account. Try again later.",
+      }
+    }
+    clearRateLimitAfterSuccess(ctx, "verify", observedVerificationHold.text)
+    creds.fullData = result
+    creds.oauth = result.claudeAiOauth
+    return {
+      kind: "refreshed",
+      accessToken: creds.oauth.accessToken,
+      expiresAt: parseExpiresAtMs(creds.oauth.expiresAt),
+    }
+  }
+
+  function accountVerificationHold(retryAt) {
+    return (
+      "Claude account verification failed (HTTP 429). Try again after " +
+      new Date(retryAt).toISOString() +
+      "."
+    )
+  }
+
   // Refresh outcomes: "refreshed", "unavailable" (no refresh token), "held" (an active refresh
   // hold skips the refresh while the access token is still valid), "failed" (temporary network,
   // server, or response failure) and "rejected" (the token endpoint refused the grant).
   function refreshToken(ctx, creds) {
-    const { oauth, source, fullData } = creds
-    if (!oauth.refreshToken) {
+    const { oauth } = creds
+    if (isClaudeCodeImport(creds)) {
+      const retryAt = readRateLimitRetryAt(ctx, "refresh")
+      if (retryAt !== null) {
+        if (isTokenExpired(oauth)) throw rateLimitMessage(retryAt)
+        return { kind: "held" }
+      }
+      const result = syncClaudeCodeImport(ctx, creds)
+      if (
+        result.kind !== "refreshed" &&
+        (!readNonEmptyString(oauth.accessToken) || isExpiryConfirmed(oauth.expiresAt))
+      ) {
+        throw result.message || "Claude Code sign-in needs an update. " + RUN_CLAUDE_CODE
+      }
+      return result
+    }
+    if (creds.source !== "managed-profile") {
+      ctx.host.log.info("Claude Code owns credential refresh; reloading the current access token")
+      const current = loadCredentials(ctx)
+      if (
+        current?.source === creds.source &&
+        current.oauth?.accessToken &&
+        current.oauth.accessToken !== oauth.accessToken
+      ) {
+        creds.fullData = current.fullData
+        creds.oauth = current.oauth
+        return {
+          kind: "refreshed",
+          accessToken: current.oauth.accessToken,
+          expiresAt: parseExpiresAtMs(current.oauth.expiresAt),
+        }
+      }
+      return { kind: "unavailable" }
+    }
+    if (!oauth.hasRefreshToken && !oauth.refreshToken) {
       ctx.host.log.warn("refresh skipped: no refresh token")
       return { kind: "unavailable" }
     }
@@ -769,30 +847,44 @@
       )
     }
     ctx.host.log.info("attempting token refresh")
-    let rawResp
+    let result
     try {
-      rawResp = ctx.util.request({
-        method: "POST",
-        url: oauthConfig.refreshUrl,
-        headers: { "Content-Type": "application/json" },
-        bodyText: JSON.stringify({
-          grant_type: "refresh_token",
-          refresh_token: oauth.refreshToken,
-          client_id: oauthConfig.clientId,
-          scope: oauthConfig.scopes,
-        }),
-        timeoutMs: 15000,
-      })
+      result = JSON.parse(
+        ctx.host.providerSecrets.refreshClaudeCredentials(
+          JSON.stringify({
+            refreshUrl: oauthConfig.refreshUrl,
+            clientId: oauthConfig.clientId,
+            scopes: oauthConfig.scopes,
+            expectedAccessToken: oauth.accessToken || "",
+          })
+        )
+      )
     } catch (e) {
-      ctx.host.log.error("refresh request exception: " + String(e))
+      // A native save or lock error must leave the probe before usage can use an old token.
+      throw "Claude credential refresh failed. " + String(e)
+    }
+    if (readNonEmptyString(result.credentials?.claudeAiOauth?.accessToken)) {
+      clearRateLimitAfterSuccess(ctx, "refresh", observedRefreshHold.text)
+      creds.fullData = result.credentials
+      creds.oauth = creds.fullData.claudeAiOauth
+      const expiresAt = parseExpiresAtMs(creds.oauth.expiresAt)
+      const lifetimeSeconds =
+        expiresAt === null ? null : Math.max(0, Math.round((expiresAt - Date.now()) / 1000))
+      ctx.host.log.info(
+        "refresh succeeded, new token lifetime: " +
+          (lifetimeSeconds === null ? "unknown" : String(lifetimeSeconds) + "s")
+      )
+      return { kind: "refreshed", accessToken: creds.oauth.accessToken, expiresAt }
+    }
+    if (!result.response) {
+      ctx.host.log.error("refresh connection failed")
       return { kind: "failed", message: "Token refresh failed. Check your connection." }
     }
-    const resp = checkRateLimitResponse(ctx, rawResp, "refresh")
+    const resp = checkRateLimitResponse(ctx, result.response, "refresh")
 
     if (resp.status === 400 || resp.status === 401) {
       // OAuth token endpoints report refused grants with RFC 6749 error codes.
-      const body = ctx.util.tryParseJson(resp.bodyText)
-      const errorCode = body && typeof body.error === "string" ? body.error : null
+      const errorCode = resp.errorCode ?? null
       ctx.host.log.error(
         "refresh failed: status=" + resp.status + " error=" + logLabel(errorCode, OAUTH_ERROR_CODES)
       )
@@ -822,36 +914,13 @@
       }
     }
 
-    const body = ctx.util.tryParseJson(resp.bodyText)
-    const newAccessToken = body ? readNonEmptyString(body.access_token) : null
-    if (!newAccessToken) {
-      ctx.host.log.warn("refresh response has no usable access_token")
-      return {
-        kind: "failed",
-        message:
-          "Provider response invalid: Claude token refresh returned no access token. Try again later.",
-      }
+    // A successful token response is stored by the host before it returns credentials.
+    ctx.host.log.warn("refresh response has no usable access_token")
+    return {
+      kind: "failed",
+      message:
+        "Provider response invalid: Claude token refresh returned no access token. Try again later.",
     }
-    clearRateLimitAfterSuccess(ctx, "refresh", observedRefreshHold.text)
-
-    // Validate the lifetime before any other use. The old expiry belongs to the old token, so
-    // without a usable lifetime the new expiry is unknown.
-    const lifetimeSeconds =
-      Number.isFinite(body.expires_in) && body.expires_in > 0 ? body.expires_in : null
-    const expiresAt = lifetimeSeconds === null ? null : Date.now() + lifetimeSeconds * 1000
-
-    oauth.accessToken = newAccessToken
-    if (body.refresh_token) oauth.refreshToken = body.refresh_token
-    oauth.expiresAt = expiresAt
-
-    fullData.claudeAiOauth = oauth
-    saveCredentials(ctx, source, fullData, creds.secretKey)
-
-    ctx.host.log.info(
-      "refresh succeeded, new token lifetime: " +
-        (lifetimeSeconds === null ? "unknown" : String(lifetimeSeconds) + "s")
-    )
-    return { kind: "refreshed", accessToken: newAccessToken, expiresAt }
   }
 
   // Only the HTTP request itself is a connection failure. Local failures stay visible as-is.
@@ -894,13 +963,20 @@
   // An HTTP 401 proves expiry only when the token's known expiry time has passed, or when
   // Anthropic's authentication_error says the token expired. A revoked or otherwise rejected
   // token gets a neutral message.
-  function usageUnauthorizedMessage(ctx, resp, expiredLocally) {
+  function usageUnauthorizedMessage(ctx, resp, expiredLocally, fromClaudeCodeImport) {
     const { type, message } = readApiError(ctx, resp)
     ctx.host.log.error("usage returned 401: error.type=" + logLabel(type, API_ERROR_TYPES))
     const expiredRemotely =
       type === "authentication_error" && OAUTH_TOKEN_EXPIRED_MESSAGE.test(message)
-    if (expiredLocally || expiredRemotely) return "Token expired. Run `claude` to log in again."
-    return "Invalid token: Claude rejected the sign-in (HTTP 401). Run `claude` to log in again."
+    if (expiredLocally || expiredRemotely) {
+      return fromClaudeCodeImport
+        ? "Claude Code sign-in expired. " + RUN_CLAUDE_CODE
+        : "Token expired. Run `claude` to log in again."
+    }
+    return (
+      "Invalid token: Claude rejected the sign-in (HTTP 401). " +
+      (fromClaudeCodeImport ? RUN_CLAUDE_CODE : "Run `claude` to log in again.")
+    )
   }
 
   // Anthropic reports a token without a required OAuth scope as a 403 permission_error.
@@ -1321,19 +1397,16 @@
   function probe(ctx) {
     const activeRetryAt = readRateLimitRetryAt(ctx)
     if (activeRetryAt !== null) throw rateLimitMessage(activeRetryAt)
-    try {
-      return probeWithCredentials(ctx)
-    } catch (e) {
-      const retryAt = readRateLimitRetryAt(ctx) ?? readRateLimitRetryAt(ctx, "refresh")
-      if (retryAt === null) throw e
-      throw rateLimitMessage(retryAt)
-    }
+    return probeWithCredentials(ctx)
   }
 
   function probeWithCredentials(ctx) {
     const creds = loadCredentials(ctx)
     if (!creds?.oauth?.accessToken?.trim() || isTokenExpired(creds?.oauth)) {
       checkRateLimit(ctx, "refresh")
+    }
+    if (isClaudeCodeImport(creds) && !readNonEmptyString(creds.oauth.accessToken)) {
+      refreshToken(ctx, creds)
     }
     if (!creds || !creds.oauth || !creds.oauth.accessToken || !creds.oauth.accessToken.trim()) {
       const webResult = buildClaudeWebResult(ctx)
@@ -1366,19 +1439,22 @@
     let accessToken = creds.oauth.accessToken
     let tokenExpiresAt = creds.oauth.expiresAt
     let attemptedRefresh = false
+    let replacedAccess = false
     let refreshProblem = null
 
     function tokenExpired() {
       return isExpiryConfirmed(tokenExpiresAt)
     }
 
-    // Each probe refreshes at most once. A failed or rejected refresh is kept while the current
+    // Each probe rotates at most once. Imports can recheck after HTTP 401. A failed or rejected refresh is kept while the current
     // token can still be valid; the saved problem is reported only if usage then returns HTTP 401.
     // A rejected refresh for a token that has already expired ends the probe at once.
     function attemptRefresh() {
       attemptedRefresh = true
       const result = refreshToken(ctx, creds)
       if (result.kind === "refreshed") {
+        replacedAccess = true
+        refreshProblem = null
         accessToken = result.accessToken
         tokenExpiresAt = result.expiresAt
         return true
@@ -1396,18 +1472,22 @@
     }
 
     let usageFetch = fetchUsage(ctx, accessToken, false)
-    if (usageFetch.resp.status === 401 && !attemptedRefresh) {
+    if (
+      usageFetch.resp.status === 401 &&
+      (!attemptedRefresh || (isClaudeCodeImport(creds) && !replacedAccess))
+    ) {
       ctx.host.log.info("usage returned 401, attempting refresh")
       if (attemptRefresh()) usageFetch = fetchUsage(ctx, accessToken, true)
     }
     const resp = usageFetch.resp
 
+    if (ctx.util.isAuthStatus(resp.status)) checkRateLimit(ctx, "refresh")
     if (resp.status === 401) {
       if (refreshProblem) {
         ctx.host.log.error("usage returned 401 after a failed token refresh")
         throw refreshProblem
       }
-      throw usageUnauthorizedMessage(ctx, resp, tokenExpired())
+      throw usageUnauthorizedMessage(ctx, resp, tokenExpired(), isClaudeCodeImport(creds))
     }
     if (resp.status === 403) throw usageForbiddenMessage(ctx, resp)
 

@@ -47,7 +47,7 @@ fn save_provider_secret_file(app_data_dir: &Path, file: &ProviderSecretFile) -> 
 }
 
 #[cfg(target_os = "windows")]
-mod windows {
+pub(crate) mod windows {
     use super::*;
     use windows_sys::Win32::Foundation::LocalFree;
     use windows_sys::Win32::Security::Cryptography::{
@@ -61,7 +61,7 @@ mod windows {
         }
     }
 
-    fn protect_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    pub(crate) fn protect_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
         let input = blob_from_bytes(bytes);
         let mut output = CRYPT_INTEGER_BLOB {
             cbData: 0,
@@ -94,7 +94,7 @@ mod windows {
         Ok(protected)
     }
 
-    fn unprotect_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
+    pub(crate) fn unprotect_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
         let input = blob_from_bytes(bytes);
         let mut output = CRYPT_INTEGER_BLOB {
             cbData: 0,
@@ -194,7 +194,7 @@ pub fn save_provider_secret(
     secret_key: &str,
     value: &str,
 ) -> Result<(), String> {
-    windows::save_provider_secret(app_data_dir, provider_id, secret_key, value)
+    crate::protected_store::save(app_data_dir, provider_id, secret_key, value)
 }
 
 #[cfg(target_os = "windows")]
@@ -212,7 +212,7 @@ pub fn delete_provider_secret(
     provider_id: &str,
     secret_key: &str,
 ) -> Result<(), String> {
-    windows::delete_provider_secret(app_data_dir, provider_id, secret_key)
+    crate::protected_store::delete(app_data_dir, provider_id, secret_key)
 }
 
 #[cfg(test)]

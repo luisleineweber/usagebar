@@ -37,63 +37,20 @@ fn managed_profile_secret_key(profile_id: &str) -> String {
 }
 
 fn save_managed_profile_secret(
-    _app_data_dir: &std::path::Path,
+    app_data_dir: &std::path::Path,
     provider_id: &str,
     profile_id: &str,
     auth_json: &str,
 ) -> Result<(), String> {
-    let secret_key = managed_profile_secret_key(profile_id);
-
-    #[cfg(target_os = "windows")]
-    {
-        provider_secret_store::save_provider_secret(
-            _app_data_dir,
-            provider_id,
-            &secret_key,
-            auth_json,
-        )
-        .map_err(|error| {
-            format!(
-                "Could not save imported {} profile auth: {}",
-                provider_id, error
-            )
-        })
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let service = crate::provider_secret_service(provider_id, &secret_key);
-        let entry = crate::open_provider_secret_entry(crate::provider_secret_entry_spec(&service))
-            .map_err(|error| format!("Could not access the system credential vault: {}", error))?;
-        entry.set_password(auth_json).map_err(|error| {
-            format!(
-                "Could not save imported {} profile auth: {}",
-                provider_id, error
-            )
-        })
-    }
-}
-
-fn delete_managed_profile_secret(
-    _app_data_dir: &std::path::Path,
-    provider_id: &str,
-    profile_id: &str,
-) -> Result<(), String> {
-    let secret_key = managed_profile_secret_key(profile_id);
-
-    #[cfg(target_os = "windows")]
-    provider_secret_store::delete_provider_secret(_app_data_dir, provider_id, &secret_key)
-        .map_err(|error| {
-            format!(
-                "Could not remove imported {} profile auth: {}",
-                provider_id, error
-            )
-        })?;
-
-    let service = crate::provider_secret_service(provider_id, &secret_key);
-    crate::delete_provider_secret_service(&service).map_err(|error| {
+    crate::protected_store::save(
+        app_data_dir,
+        provider_id,
+        &managed_profile_secret_key(profile_id),
+        auth_json,
+    )
+    .map_err(|error| {
         format!(
-            "Could not remove imported {} profile auth: {}",
+            "Could not save imported {} profile auth: {}",
             provider_id, error
         )
     })
@@ -223,6 +180,8 @@ pub(crate) fn set_provider_secret(
                     label, error
                 )
             })?;
+
+        let _vault_lock = crate::protected_store::lock(std::path::Path::new(""))?;
 
         entry.set_password(trimmed_value).map_err(|error| {
             format!(
@@ -362,6 +321,7 @@ pub(crate) fn import_current_codex_account_profile(
         let service = crate::provider_secret_service("codex", &secret_key);
         let entry = crate::open_provider_secret_entry(crate::provider_secret_entry_spec(&service))
             .map_err(|error| format!("Could not access the system credential vault: {}", error))?;
+        let _vault_lock = crate::protected_store::lock(std::path::Path::new(""))?;
         entry
             .set_password(&resolved.auth_json)
             .map_err(|error| format!("Could not save imported Codex profile auth: {}", error))?;
@@ -429,7 +389,7 @@ pub(crate) fn list_provider_account_profiles(
 }
 
 #[tauri::command]
-pub(crate) fn import_current_provider_account_profile(
+pub(crate) async fn import_current_provider_account_profile(
     app_handle: tauri::AppHandle,
     provider_id: String,
 ) -> Result<ImportedProviderAccountResponse, String> {
@@ -438,20 +398,104 @@ pub(crate) fn import_current_provider_account_profile(
         .path()
         .app_data_dir()
         .map_err(|error| format!("Could not access the app data directory: {}", error))?;
-    let existing_profiles = provider_account_store::list_profiles(&app_data_dir, &provider_id)?;
     let now_ms = crate::now_utc_unix_ms();
+    let provider = provider_id.clone();
+    let (imported, auth_json) = tauri::async_runtime::spawn_blocking(move || {
+        resolve_provider_account_import(&provider, now_ms)
+    })
+    .await
+    .map_err(|_| "Could not complete the account import".to_string())??;
 
-    let (label, email, account_id, auth_json) = match provider_id.as_str() {
+    // Keep metadata changes serialized with the synchronous profile deletion command.
+    let (sender, mut receiver) = tauri::async_runtime::channel(1);
+    app_handle
+        .run_on_main_thread(move || {
+            let result = (|| {
+                let was_first_profile =
+                    provider_account_store::list_profiles(&app_data_dir, &provider_id)?.is_empty();
+                let profile = provider_account_store::import_profile(
+                    &app_data_dir,
+                    &provider_id,
+                    imported,
+                    now_ms,
+                )?;
+                save_managed_profile_secret(
+                    &app_data_dir,
+                    &provider_id,
+                    &profile.profile_id,
+                    &auth_json,
+                )?;
+                Ok(ImportedProviderAccountResponse {
+                    profile,
+                    was_first_profile,
+                })
+            })();
+            let _ = sender.try_send(result);
+        })
+        .map_err(|_| "Could not save the imported account".to_string())?;
+    receiver
+        .recv()
+        .await
+        .ok_or_else(|| "Could not complete the account import".to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn link_current_claude_code_login(
+    app_handle: tauri::AppHandle,
+    profile_id: String,
+    confirmed: bool,
+) -> Result<provider_account_store::ProviderAccountProfile, String> {
+    if !confirmed {
+        return Err("Confirm the Claude Code link in Settings.".into());
+    }
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|_| "Could not access the app data directory")?;
+    let read_dir = data_dir.clone();
+    let key = managed_profile_secret_key(&profile_id);
+    let (previous, resolved) = tauri::async_runtime::spawn_blocking(move || {
+        let previous = crate::claude_import::current_import(&read_dir, &key)?;
+        let resolved = crate::claude_import::resolve_current_claude_auth()?;
+        Ok::<_, String>((previous, resolved))
+    })
+    .await
+    .map_err(|_| "Could not verify the Claude Code sign-in".to_string())??;
+    let (sender, mut receiver) = tauri::async_runtime::channel(1);
+    app_handle
+        .run_on_main_thread(move || {
+            let result = provider_account_store::link_claude_profile(
+                &data_dir,
+                &profile_id,
+                &previous,
+                resolved,
+                confirmed,
+                crate::now_utc_unix_ms(),
+            );
+            let _ = sender.try_send(result);
+        })
+        .map_err(|_| "Could not link the Claude Code sign-in".to_string())?;
+    receiver
+        .recv()
+        .await
+        .ok_or_else(|| "Could not complete the Claude Code link".to_string())?
+}
+
+fn resolve_provider_account_import(
+    provider_id: &str,
+    now_ms: i64,
+) -> Result<(provider_account_store::ImportedProviderAccount, String), String> {
+    let (label, email, account_id, auth_json) = match provider_id {
         "claude" => {
-            let resolved = crate::resolve_current_claude_auth()?;
+            let resolved = crate::claude_import::resolve_current_claude_auth()?;
             (
                 crate::claude_profile_label(
                     resolved.email.as_deref(),
-                    resolved.account_id.as_deref(),
+                    Some(&resolved.account_id),
                     now_ms,
                 ),
                 resolved.email,
-                resolved.account_id,
+                Some(resolved.account_id),
                 resolved.auth_json,
             )
         }
@@ -489,22 +533,14 @@ pub(crate) fn import_current_provider_account_profile(
         }
     };
 
-    let profile = provider_account_store::import_profile(
-        &app_data_dir,
-        &provider_id,
+    Ok((
         provider_account_store::ImportedProviderAccount {
             label,
             email,
             account_id,
         },
-        now_ms,
-    )?;
-    save_managed_profile_secret(&app_data_dir, &provider_id, &profile.profile_id, &auth_json)?;
-
-    Ok(ImportedProviderAccountResponse {
-        profile,
-        was_first_profile: existing_profiles.is_empty(),
-    })
+        auth_json,
+    ))
 }
 
 #[tauri::command]
@@ -523,9 +559,5 @@ pub(crate) fn delete_provider_account_profile(
         .path()
         .app_data_dir()
         .map_err(|error| format!("Could not access the app data directory: {}", error))?;
-    let removed = provider_account_store::delete_profile(&app_data_dir, &provider_id, profile_id)?;
-    if removed.is_some() {
-        delete_managed_profile_secret(&app_data_dir, &provider_id, profile_id)?;
-    }
-    Ok(removed)
+    provider_account_store::delete_profile_with_credentials(&app_data_dir, &provider_id, profile_id)
 }

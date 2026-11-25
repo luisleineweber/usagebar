@@ -260,3 +260,22 @@ A history entry may set `scope`. A `"cost"` entry carries only cost metrics (`co
 - **IPC:** JS must use **camelCase** parameters (`{ batchId, pluginIds }`). Tauri auto-converts to Rust snake_case.
 - **Tailwind:** use design tokens (`text-muted-foreground`, `bg-destructive/5`, etc.) over hardcoded colors.
 - **Icons:** use `iconColorMode: "multicolor"` for artwork with fixed colors. Other icons use the brand-color mask.
+
+## Claude credential refresh ownership
+
+The probe coordinator combines work for one provider instance. It does not lock other processes.
+Claude Code sources remain read-only. The host updates a managed import only from its linked
+source after verifying the account and organization. It compares and saves the selected copy under
+the store lock so a concurrent replacement or deletion wins. Explicitly UsageBar-owned refresh uses the host transaction in `plugin_engine/claude_refresh.rs` and its native store binding.
+A user-wide OS lock covers each credential chain. A protected recovery record precedes replacement
+of the main credential and is replayed after a restart. On Windows this record uses a separate DPAPI
+file so an unreadable main store cannot prevent recording a rotation. All provider-store mutations
+share a second OS lock. Compare-and-replace, account removal and other provider writes use that lock.
+A captured instance controls the destination; recovery cannot cross profiles or restore a removed one.
+
+Direct Claude refresh and recovery are Windows-only. The native host rejects other platforms before
+reading refresh credentials or sending a request. It also requires HTTPS before entering a refresh
+transaction. If recovery storage fails, it still attempts the verified main-store compare-and-replace.
+The exceptional unsaved state lives in the shared pending-refresh store. Successful credential
+replacement or removal cancels it directly. The production account-delete command keeps profile
+metadata until credential removal succeeds, so a storage failure leaves the account available for retry.

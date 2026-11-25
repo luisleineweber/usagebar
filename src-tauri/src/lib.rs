@@ -7,12 +7,14 @@ mod app_nap;
 mod app_startup;
 mod atomic_file;
 mod browser_cookie_import;
+mod claude_import;
 pub mod cli;
 mod codex_account_store;
 #[cfg(not(test))]
 mod credential_commands;
 mod credential_support;
 mod dev_data_migration;
+mod file_lock;
 #[cfg(not(test))]
 mod global_shortcut;
 #[cfg(not(test))]
@@ -32,6 +34,7 @@ mod probe_commands;
 mod probe_coordinator;
 mod probe_instance_lock;
 mod probe_instance_refs;
+mod protected_store;
 mod provider_account_store;
 #[cfg(target_os = "windows")]
 mod provider_secret_store;
@@ -57,9 +60,8 @@ use std::sync::{Mutex, OnceLock};
 pub(crate) use analytics::{app_started_day_key, should_track_app_started};
 pub(crate) use credential_support::{
     claude_profile_label, codex_profile_label, gemini_profile_label, guided_cookie_policy,
-    now_utc_unix_ms, read_provider_config_string, resolve_current_claude_auth,
-    resolve_current_codex_auth, resolve_current_gemini_auth,
-    validate_guided_cookie_capture_request,
+    now_utc_unix_ms, read_provider_config_string, resolve_current_codex_auth,
+    resolve_current_gemini_auth, validate_guided_cookie_capture_request,
 };
 #[cfg(all(desktop, not(test)))]
 use global_shortcut::update_global_shortcut;
@@ -78,8 +80,9 @@ use tauri_plugin_log::{Target, TargetKind};
 use credential_commands::{
     delete_codex_account_profile, delete_provider_account_profile, delete_provider_secret,
     import_browser_cookies, import_current_codex_account_profile,
-    import_current_provider_account_profile, list_browser_import_sources,
-    list_codex_account_profiles, list_provider_account_profiles, set_provider_secret,
+    import_current_provider_account_profile, link_current_claude_code_login,
+    list_browser_import_sources, list_codex_account_profiles, list_provider_account_profiles,
+    set_provider_secret,
 };
 #[cfg(not(test))]
 use guided_cookie_login::capture_provider_cookie_header;
@@ -312,6 +315,7 @@ pub fn run() {
             delete_codex_account_profile,
             list_provider_account_profiles,
             import_current_provider_account_profile,
+            link_current_claude_code_login,
             delete_provider_account_profile,
             update_global_shortcut,
             #[cfg(target_os = "windows")]

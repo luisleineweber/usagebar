@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
+import { ownCredentials } from "./test-helpers.js"
 
 const START = Date.parse("2026-11-03T13:15:00Z")
 const MINUTE = 60_000
@@ -17,7 +18,9 @@ const after = (ms) => "Try again after " + new Date(Date.now() + ms).toISOString
 const at = (ms) => "Try again after " + new Date(START + ms).toISOString()
 const calls = (ctx, part) =>
   ctx.host.http.request.mock.calls.filter(([request]) => request.url.includes(part))
-const usageHoldPath = (ctx) => ctx.app.pluginDataDir + "/rate-limit-default.json"
+const usageHoldPath = (ctx) =>
+  ctx.app.pluginDataDir + "/rate-limit-" + (ctx.instanceRef?.instanceId || "default") + ".json"
+const ownedRefreshHoldPath = (ctx) => ctx.app.pluginDataDir + "/rate-limit-refresh-owned-test.json"
 
 function oauth(token = "token", expiresAt = START + 24 * 60 * MINUTE) {
   return JSON.stringify({
@@ -85,17 +88,19 @@ it("resets the wait only after a successful usage response", () => {
 it("keeps a separate, increasing refresh hold in the plugin data dir", () => {
   const ctx = defaultAccountCtx()
   ctx.host.keychain.readGenericPassword.mockReturnValue(oauth("expired", 1))
+  ownCredentials(ctx)
   expectWait(ctx, 5 * MINUTE)
   expectWait(ctx, 10 * MINUTE)
   expect(calls(ctx, "/v1/oauth/token")).toHaveLength(2)
   expect(calls(ctx, "/api/oauth/usage")).toHaveLength(0)
-  expect(ctx.host.fs.exists(ctx.app.pluginDataDir + "/rate-limit-refresh-default.json")).toBe(true)
+  expect(ctx.host.fs.exists(ownedRefreshHoldPath(ctx))).toBe(true)
   expect(ctx.host.fs.exists(usageHoldPath(ctx))).toBe(false)
 })
 
 it("keeps the refresh count after an HTTP 200 refresh without an access token", () => {
   const ctx = defaultAccountCtx()
   ctx.host.keychain.readGenericPassword.mockReturnValue(oauth("expired", 1))
+  ownCredentials(ctx)
   expectWait(ctx, 5 * MINUTE)
   ctx.host.http.request.mockImplementation(({ url }) =>
     url.includes("/v1/oauth/token")
@@ -106,6 +111,28 @@ it("keeps the refresh count after an HTTP 200 refresh without an access token", 
   ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
   expect(() => probe(ctx)).toThrow(after(10 * MINUTE))
 })
+
+it.each([false, true])(
+  "clears only the observed hold after native refresh (changed: %s)",
+  (changed) => {
+    const ctx = defaultAccountCtx()
+    ctx.host.keychain.readGenericPassword.mockReturnValue(oauth("expired", 1))
+    ownCredentials(ctx)
+    const path = ownedRefreshHoldPath(ctx)
+    expectWait(ctx, 5 * MINUTE)
+    const now = Date.now()
+    const newer = { retryAt: now + 10 * MINUTE, streak: 2, recordedAt: now }
+    ctx.host.http.request.mockImplementation(({ url }) => {
+      if (!url.includes("/v1/oauth/token")) return { status: 200, bodyText: "{}" }
+      if (changed) ctx.host.fs.writeText(path, JSON.stringify(newer))
+      return { status: 200, bodyText: JSON.stringify({ access_token: "new", expires_in: 3600 }) }
+    })
+    probe(ctx)
+    expect(JSON.parse(ctx.host.fs.readText(path))).toEqual(
+      changed ? newer : { retryAt: 0, streak: 0, recordedAt: now }
+    )
+  }
+)
 
 it.each([
   ["an array", "[]"],

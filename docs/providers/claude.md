@@ -132,7 +132,39 @@ The profile UUID also scopes cached snapshots, local history, quota notification
 
 ### Token Refresh
 
-Access tokens are short-lived JWTs. Refreshed proactively 5 minutes before expiration, or reactively once on HTTP 401. A usage HTTP 403 does not start a refresh.
+Direct UsageBar-owned refresh and recovery are Windows-only in this build. Linux and macOS reject before any direct refresh request. The refresh endpoint must use HTTPS.
+
+Claude Code owns its local sign-in. UsageBar never updates that source or sends its refresh token.
+When you import a profile, UsageBar links the source to the account and organization verified by
+Claude's OAuth profile response. The source is the same credentials file or credential store entry
+used for the import. Account metadata from a separate file cannot verify the link.
+
+When the imported token is near expiry or fails with HTTP 401, UsageBar checks the linked source.
+It saves a valid replacement only after verifying the same account and organization, then uses it for
+usage. If the source is missing or expired, run Claude Code once. UsageBar picks up the updated login
+on the next probe. A selected profile never uses a different login or a shared web cookie.
+
+Older imports can link automatically if the access tokens match or Claude verifies both identities.
+For an older import that cannot prove its identity, select **Link current Claude Code login** on that
+profile in Settings and confirm. UsageBar verifies the current Claude Code account and keeps the
+profile ID and selection. **Import current login** points to the selected older profile first, even
+if the login already has another profile. If no older profile is selected, an email match takes
+priority over an organization match. When more than one older profile matches, choose the correct
+profile in Settings and use its link action. If UsageBar cannot save the profile details when
+linking, it restores the previous sign-in.
+
+A check that finds no update can retry once after usage HTTP 401. Temporary account verification
+errors allow usage with a still-valid saved token. Verification HTTP 429 gives account verification
+its own retry time. It does not set the OAuth usage, refresh, or web hold.
+
+Direct refresh requires a separate UsageBar-owned managed credential document with
+`usagebarCredentialOwner: "usagebar"`. Missing or unknown ownership stays with Claude Code. Do not add
+this field to a copy of a Claude Code login. This change adds no separate login flow or user setting.
+For explicitly owned documents, refresh runs five minutes before expiry or once after usage HTTP 401. A usage HTTP 403 does not start a refresh.
+The host serializes each refresh chain across runtimes and UsageBar processes. It preserves the full
+credential document in protected recovery storage before it replaces the main credential. A write
+failure is visible. A later runtime or process replays recovery before it sends another refresh
+request. If recovery storage fails, the host still attempts a verified main-store write. It reports unsaved credentials only if both writes fail. Successful credential removal or replacement cancels pending state. A failed credential deletion keeps the profile available for retry. Other provider writes use the same store lock, and unrelated refresh chains remain available.
 
 ```
 POST https://platform.claude.com/v1/oauth/token
@@ -178,13 +210,15 @@ The probe keeps these causes separate:
 | Usage server failure      | Other usage non-2xx status                                                                                                                | `Usage request failed (HTTP <status>). Try again later.`                                                   |
 | Rate limit                | HTTP 429 from usage or refresh                                                                                                            | See [HTTP 429 handling](#http-429-handling).                                                               |
 
+After a failed sync, a usage HTTP 401 on a Claude Code import asks the user to run Claude Code. The message claims expiry only when the expiry time or response confirms it.
+
 A failed or rejected refresh does not stop the probe while the current access token can still be valid. The probe then tries usage with the current token and reports the refresh problem only if usage returns HTTP 401. A rejected refresh for a token whose expiry time has passed ends the probe at once. An invalid OAuth config ends the probe before any request. Logs record known provider error codes and types; any other value is logged as `other`. Local failures, such as a failed write of the retry deadline, keep their own error and are not reported as connection failures.
 
 ### HTTP 429 handling
 
-OAuth usage and token refresh responses save separate per-profile retry deadlines in plugin data. Usage holds survive token rotation and credential replacement. Token identity does not prove an account change. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token refresh at most once.
+OAuth usage and native token refresh responses save separate per-profile retry deadlines in plugin data. Managed profiles keep separate holds. Startup and manual refresh respect these holds. Retry-After supports seconds and HTTP dates. An active refresh hold skips token refresh. A still-valid access token can request usage, including within the five-minute expiry buffer. Expired credentials keep the refresh hold visible. Each probe attempts token rotation at most once. Credential-save and unsaved errors remain visible if a hold changes during the transaction.
 
-A usage hold returns HTTP 429. A refresh hold returns HTTP 429 when the access token is expired or missing. A valid access token can still return OAuth usage during a refresh hold. Both OAuth holds block shared web cookie reads and web requests. An organization can contain multiple users, so an organization match does not prove the same account owns both sessions. UsageBar has no verified user identity binding between the selected OAuth token and the shared web session. It does not join metadata from `~/.claude.json` to a token from another record. Managed profiles never read shared cookies.
+A usage hold returns HTTP 429. A refresh hold returns HTTP 429 when the access token is expired or missing, or when OAuth usage rejects it with HTTP 401 or 403 before its recorded expiry. A valid access token can still return OAuth usage during a refresh hold. Both OAuth holds block shared web cookie reads and web requests. An organization can contain multiple users, so an organization match does not prove the same account owns both sessions. UsageBar has no verified user identity binding between the selected OAuth token and the shared web session. It does not join metadata from `~/.claude.json` to a token from another record. Managed profiles never read shared cookies.
 
 The earlier test records with `oauthAccount` embedded beside `claudeAiOauth` were synthetic, not evidence of a real credential format. The authentication documentation does not establish that format or a cross-session user binding. See [Claude Code authentication](https://code.claude.com/docs/en/authentication). No embedded identity or `organizationId` alias is used to authorize web fallback.
 
@@ -194,20 +228,20 @@ The tray retains successful data within the current session. It does not load th
 
 #### Wait time
 
-Each hold (usage, refresh, and web) counts its own consecutive HTTP 429 responses. The wait is the longer of two values:
+Each hold (usage, refresh, web, and account verification) counts its own consecutive HTTP 429 responses. The wait is the longer of two values:
 
 - The backoff: 5 minutes for the first 429, then 10, 20, and at most 30 minutes.
 - The Retry-After value, capped at 60 minutes.
 
-Only a valid success of the same kind resets the count: an HTTP 200 OAuth usage response whose body is a JSON object for the usage hold (`{}` counts; `[]`, strings, numbers, and `null` keep the count), a token refresh that returns an access token for the refresh hold, and a web probe whose requests all succeed (including the optional overage request) for the web hold. An HTTP 2xx response that fails validation keeps the count. An expired hold does not reset it. A 429 from a request that was in flight when the hold started does not add to the count; it can only make the hold longer.
+Only a valid success of the same kind resets the count. For usage, the response body must be a JSON object. `{}` counts. Arrays, strings, numbers, and `null` keep the count. For refresh, the native host must return a usable access token. For web, all requests must succeed, including the optional overage request. For account verification, the native sync must return a verified replacement token. Successful usage does not clear verification backoff. A 2xx response that fails validation and an expired hold both keep the count. A 429 from a request already in flight when the hold started can extend the hold without adding to the count.
 
-Each request reads its hold record directly before it is sent. That record decides whether the request may go out, and it is the only record that the request's success may clear. A hold written after that read is kept, even if the clock changed. Each web request checks the web hold again, so a hold that starts during an earlier web request stops the rest of the web probe.
+Each request or native credential operation reads its hold record before it starts. That record decides whether the operation can start and is the only record that its success can clear. A hold written after that read is kept, even if the clock changed. Each web request checks the web hold again, so a hold that starts during an earlier web request stops the rest of the web probe.
 
 The host runs at most one probe per provider instance. It trims the instance id, and an empty or blank id counts as the default instance, the same way the plugin reads it. A probe that passes its timeout can still be inside a blocking host call. The next probe of that instance waits until the earlier one ends, or reports an error if it does not end within the probe timeout.
 
 Holds stay in each build's plugin data directory. Installed and dev builds keep separate holds. The one-probe-per-instance guard works only inside one process. Two processes that share a data directory, such as dev builds from two worktrees, can clear each other's new hold. The result is extra HTTP 429 requests, not lost data.
 
-No credential record carries a verified account identity, and usage holds survive token rotation and credential replacement. If you switch the Claude Code login during a hold, the new login keeps the hold until its stored end. That end is at most 60 minutes after the hold was recorded.
+Holds belong to the probe instance. Usage holds survive token rotation and credential replacement. If you switch the Claude Code login during a hold, the new login keeps the hold until its stored end. That end is at most 60 minutes after the hold was recorded.
 
 #### Hold records
 

@@ -1,3 +1,7 @@
+#[path = "claude_refresh.rs"]
+mod claude_refresh;
+#[path = "claude_refresh_host.rs"]
+mod claude_refresh_host;
 use crate::plugin_engine::browser_bridge;
 use crate::plugin_engine::env::*;
 use crate::plugin_engine::manifest::HostCapabilities;
@@ -268,7 +272,7 @@ pub(crate) fn inject_host_api_with_instance_and_cache<'js>(
 
     probe_ctx.set("nowIso", iso_now())?;
 
-    if let Some(instance_ref) = instance_ref {
+    if let Some(instance_ref) = instance_ref.clone() {
         let instance_obj = Object::new(ctx.clone())?;
         instance_obj.set("providerId", instance_ref.provider_id)?;
         if let Some(instance_id) = instance_ref.instance_id {
@@ -323,6 +327,21 @@ pub(crate) fn inject_host_api_with_instance_and_cache<'js>(
     }
     if capabilities.provider_secrets {
         inject_provider_secrets(ctx, &host, plugin_id, app_data_dir)?;
+        if plugin_id == "claude" && capabilities.http {
+            if let Some(instance) = instance_ref
+                .as_ref()
+                .filter(|instance| instance.provider_id == "claude")
+            {
+                let secrets: Object = host.get("providerSecrets")?;
+                claude_refresh_host::inject(
+                    ctx,
+                    &secrets,
+                    app_data_dir,
+                    instance,
+                    &capabilities.http_domains,
+                )?;
+            }
+        }
     }
     if capabilities.sqlite_read || capabilities.sqlite_write {
         inject_sqlite(ctx, &host, capabilities.sqlite_write)?;
@@ -1384,6 +1403,17 @@ fn inject_provider_secrets<'js>(
         Function::new(
             ctx.clone(),
             move |ctx_inner: Ctx<'_>, secret_key: String| -> rquickjs::Result<String> {
+                let public_read = |raw: String| {
+                    if pid == "claude"
+                        && secret_key.starts_with("account:")
+                        && secret_key.ends_with(":authJson")
+                    {
+                        return crate::claude_import::public_credentials(&raw)
+                            .map(|value| value.to_string())
+                            .map_err(|error| Exception::throw_message(&ctx_inner, &error));
+                    }
+                    Ok(raw)
+                };
                 #[cfg(target_os = "windows")]
                 {
                     let mut provider_ids = vec![pid.clone()];
@@ -1397,7 +1427,7 @@ fn inject_provider_secrets<'js>(
                             &provider_id,
                             &secret_key,
                         ) {
-                            Ok(Some(secret)) => return Ok(secret),
+                            Ok(Some(secret)) => return public_read(secret),
                             Ok(None) => {}
                             Err(error) => {
                                 return Err(Exception::throw_message(
@@ -1427,7 +1457,7 @@ fn inject_provider_secrets<'js>(
                             )
                         })?;
                         match entry.get_password() {
-                            Ok(password) => return Ok(password),
+                            Ok(password) => return public_read(password),
                             Err(error) => {
                                 let message = error.to_string();
                                 if is_missing_credential_error(&message) {
@@ -1451,7 +1481,6 @@ fn inject_provider_secrets<'js>(
     )?;
 
     let pid = plugin_id.to_string();
-    #[cfg(target_os = "windows")]
     let data_dir = _app_data_dir.to_path_buf();
     provider_secrets_obj.set(
         "write",
@@ -1466,6 +1495,15 @@ fn inject_provider_secrets<'js>(
                         "provider secret key is required",
                     ));
                 }
+                if pid == "claude"
+                    && trimmed_key.starts_with("account:")
+                    && trimmed_key.ends_with(":authJson")
+                {
+                    return Err(Exception::throw_message(
+                        &ctx_inner,
+                        "Claude managed credentials are saved by the native host",
+                    ));
+                }
                 if trimmed_value.is_empty() {
                     return Err(Exception::throw_message(
                         &ctx_inner,
@@ -1473,37 +1511,9 @@ fn inject_provider_secrets<'js>(
                     ));
                 }
 
-                #[cfg(target_os = "windows")]
-                provider_secret_store::save_provider_secret(
-                    &data_dir,
-                    &pid,
-                    trimmed_key,
-                    trimmed_value,
-                )
-                .map_err(|error| {
-                    Exception::throw_message(
-                        &ctx_inner,
-                        &format!("provider secret store write failed: {}", error),
-                    )
-                })?;
-
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let service = provider_secret_service(&pid, trimmed_key);
-                    let entry = open_provider_secret_entry(provider_secret_entry_spec(&service))
-                        .map_err(|error| {
-                            Exception::throw_message(
-                                &ctx_inner,
-                                &format!("credential store unavailable: {}", error),
-                            )
-                        })?;
-                    entry.set_password(trimmed_value).map_err(|error| {
-                        Exception::throw_message(
-                            &ctx_inner,
-                            &format!("credential write failed: {}", error),
-                        )
-                    })?;
-                }
+                crate::protected_store::save(&data_dir, &pid, trimmed_key, trimmed_value).map_err(
+                    |_| Exception::throw_message(&ctx_inner, "provider secret store write failed"),
+                )?;
 
                 Ok(())
             },
@@ -1692,6 +1702,14 @@ fn redact_proxy_url(url: &str) -> String {
         }
     }
     url.to_string()
+}
+
+pub(crate) fn claude_identity_client(url: &str) -> Result<reqwest::blocking::Client, String> {
+    let proxy = load_app_config()
+        .and_then(|config| config.proxy)
+        .filter(|proxy| proxy.enabled && !proxy.url.is_empty() && !should_bypass_proxy(url));
+    build_client_with_proxy(10000, false, proxy.as_ref().map(|proxy| proxy.url.as_str()))
+        .map_err(|_| "Could not create the Claude account verification connection".into())
 }
 
 fn build_client_with_proxy(

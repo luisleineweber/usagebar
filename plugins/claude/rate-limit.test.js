@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest"
 import { makeCtx } from "../test-helpers.js"
+import { ownCredentials } from "./test-helpers.js"
 
 afterEach(() => vi.useRealTimers())
 
@@ -55,6 +56,7 @@ it("does not refresh twice when usage rejects a proactively refreshed token", as
       ? { status: 200, bodyText: JSON.stringify({ access_token: "new", expires_in: 3600 }) }
       : { status: 401, bodyText: "{}" }
   )
+  ownCredentials(ctx)
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow(
     "Invalid token: Claude rejected the sign-in (HTTP 401)"
@@ -91,6 +93,7 @@ it.each([
     headers: { "Retry-After": retryAfter },
     bodyText: "{}",
   })
+  if (endpoint === "refresh") ownCredentials(ctx)
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
   vi.resetModules()
@@ -285,11 +288,13 @@ it("allows a valid replacement token to use usage during a refresh hold", async 
     JSON.stringify({ claudeAiOauth: { accessToken: "old", refreshToken: "refresh", expiresAt: 1 } })
   )
   ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  ownCredentials(ctx)
   vi.resetModules()
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
-  ctx.host.keychain.readGenericPassword.mockReturnValue(
+  ctx.host.providerSecrets.read.mockReturnValue(
     JSON.stringify({
+      usagebarCredentialOwner: "usagebar",
       claudeAiOauth: { accessToken: "replacement", expiresAt: Date.now() + 3600000 },
     })
   )
@@ -319,13 +324,17 @@ it("uses a valid token near expiry during a refresh hold", async () => {
   vi.setSystemTime(new Date("2026-11-03T13:15:00Z"))
   const ctx = makeCtx()
   const credentials = (expiresAt) =>
-    JSON.stringify({ claudeAiOauth: { accessToken: "test", refreshToken: "refresh", expiresAt } })
+    JSON.stringify({
+      usagebarCredentialOwner: "usagebar",
+      claudeAiOauth: { accessToken: "test", refreshToken: "refresh", expiresAt },
+    })
   ctx.host.keychain.readGenericPassword.mockReturnValue(credentials(1))
   ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  ownCredentials(ctx)
   vi.resetModules()
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
-  ctx.host.keychain.readGenericPassword.mockReturnValue(credentials(Date.now() + 120000))
+  ctx.host.providerSecrets.read.mockReturnValue(credentials(Date.now() + 120000))
   ctx.host.http.request.mockReturnValue({
     status: 200,
     bodyText: JSON.stringify({ five_hour: { utilization: 27 } }),
@@ -354,6 +363,7 @@ it.each(["usage", "refresh"])(
     ctx.host.http.request.mockImplementation((options) =>
       options.url.includes("/v1/oauth/token") ? { status: 429, bodyText: "" } : request(options)
     )
+    if (endpoint === "refresh") ownCredentials(ctx)
     vi.resetModules()
     await import("./plugin.js")
     expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
@@ -373,14 +383,18 @@ it.each(["string", "race"])("blocks expired tokens during a refresh hold (%s)", 
     })
   )
   ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
+  ownCredentials(ctx)
   vi.resetModules()
   await import("./plugin.js")
   expect(() => globalThis.__openusage_plugin.probe(ctx)).toThrow("429")
   ctx.host.http.request.mockClear()
   const now = Date.now()
   const expiresAt = mode === "string" ? String(now - 1) : now + 1
-  ctx.host.keychain.readGenericPassword.mockReturnValue(
-    JSON.stringify({ claudeAiOauth: { accessToken: "test", refreshToken: "refresh", expiresAt } })
+  ctx.host.providerSecrets.read.mockReturnValue(
+    JSON.stringify({
+      usagebarCredentialOwner: "usagebar",
+      claudeAiOauth: { accessToken: "test", refreshToken: "refresh", expiresAt },
+    })
   )
   if (mode === "race") {
     let calls = 0
@@ -403,9 +417,11 @@ it.each(["web-", "refresh-", "WEB-", "REFRESH-"])(
         expiresAt: prefix.toLowerCase() === "refresh-" ? 1 : Date.now() + 3600000,
       },
     })
-    if (prefix.toLowerCase() === "refresh-")
+    if (prefix.toLowerCase() === "refresh-") {
       ctx.host.keychain.readGenericPassword.mockReturnValue(credentials)
-    else ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-test")
+      ownCredentials(ctx)
+      ctx.instanceRef = { providerId: "claude", instanceId: "default" }
+    } else ctx.host.providerSecrets.read.mockReturnValue("sessionKey=sk-ant-test")
     ctx.host.http.request.mockReturnValue({ status: 429, bodyText: "" })
     vi.resetModules()
     await import("./plugin.js")
