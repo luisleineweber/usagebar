@@ -124,3 +124,8 @@ Validation on Windows passed with synthetic credentials. All 276 focused plugin 
 
 - **Import current login** points to **Link current Claude Code login** when the verified login may belong to an older profile. It keeps the profile list and selection as they were.
 - If the profile registry write fails during a link, the host restores the previous credential under the store lock and reports the save error.
+
+The next review found that an existing duplicate could still hide the link prompt and that a shared
+organization could point to the wrong profile. The import checks the selected older profile first.
+Without that selection, a matching email takes priority. An ambiguous organization match asks the
+user to choose a profile instead of naming one. Linking still requires confirmation on that row.
