@@ -2,23 +2,39 @@
 
 ## 0.2.1
 
+### Highlights
+
+- Added an optional movable tray panel. Tray-anchored placement stays the default. The panel remembers its position and stays inside the monitor work area after display changes.
+- Added "This week" and "This month" usage history periods. The week starts on Monday (ISO 8601).
+- Added Cursor daily usage event history for the last 30 local days, grouped by model. List-price token cost and plan charges stay separate.
+- Added optional Factory API key authentication, stored in the Windows-protected local secret store. A saved key takes precedence over the local droid login.
+- Added the optional Claude weekly Fable metric. The bar is omitted when the usage window is missing or invalid.
+
+### Fixes
+
+- Claude shows auth, missing-scope, refresh, and network failures as separate causes instead of "Token expired".
+- Claude bounds repeated HTTP 429 responses with an increasing wait (5, 10, 20, then at most 30 minutes, or Retry-After up to 60 minutes). Usage, token refresh, and web holds keep separate deadlines, and usage holds survive token rotation and credential replacement.
+- Claude OAuth usage and refresh holds never read the shared web cookie or make web requests. A usage hold keeps HTTP 429 visible. A refresh hold skips token refresh; a valid access token can still request OAuth usage. The web session is used only when OAuth credentials are unavailable, no OAuth hold blocks it, and no managed profile is selected.
+- Claude keeps rotated credentials after a failed save and restart. Imported Claude Code profiles follow their linked sign-in.
+- Stopped using the Claude organization name as the subscription plan. The plan remains unknown (`null`).
+- Removed the Claude Designs and Daily Routines bars.
+- OpenCode history includes completed compaction usage and counts the period total once. Missing Codex day values stay unknown.
+- History filters include values from all selectable periods.
+
 ### Security
 
 - Updated rusqlite to 0.41.1 and libsqlite3-sys to 0.39.1 to address RUSTSEC-2026-0459 in bundled SQLite.
-- Updated quinn-udp to 0.5.16 to address RUSTSEC-2026-0538, which can cause a receive loop to spin after a truncated datagram on affected targets.
+- Updated quinn-udp to 0.5.16 to address RUSTSEC-2026-0538.
+- Updated url to 2.5.9 to address RUSTSEC-2026-0592.
+- Updated cookie to 0.18.3 to address RUSTSEC-2026-0594.
 
-### Changes
+### Known limitations
 
-- Added the optional Claude weekly Fable metric. The bar is omitted when the usage window is missing or invalid.
-- Removed the Claude Designs and Daily Routines bars.
-- Claude OAuth usage and refresh holds never read the shared web cookie or make web requests. A usage hold keeps HTTP 429 visible. A refresh hold skips token refresh; a valid access token can still request OAuth usage, while expired or missing tokens keep HTTP 429 visible. The web session is used only when OAuth credentials are unavailable, no OAuth hold blocks it, and no managed profile is selected.
-- Kept OAuth usage, token refresh, and web HTTP 429 retry deadlines separate. Usage holds survive token rotation and credential replacement.
-- Stopped using the Claude organization name as the subscription plan. The plan remains unknown (`null`).
+- Codex spawned-agent usage can still be undercounted for independent rollouts with identical usage until the upstream ccusage fix is released.
+- Native drag of the movable panel was not tested across live monitor and DPI changes.
 
 ### Notes
 
-- PRs #30 and #33 are included from main. The remaining v0.2.1 change set is not yet decided. Rebuild and test the combined final candidate before tagging; final integration and combined tests remain open.
-- Installer, update, SQLite, and identity checks must run against the combined final candidate before release.
 - Windows installers remain unsigned until the project gets an Authenticode certificate. Windows can show `Unknown publisher` or SmartScreen warnings. Stable releases use signed Tauri updater metadata.
 
 ## 0.2.0
